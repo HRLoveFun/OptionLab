@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Market Observation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* body {
+            font-size: 20 px;
+        } */
+
+
+        /* 新增样式，使输入框按行排列 */
+       .form-field {
+            display: block;
+            margin-bottom: 15px;
+        }
+
+        /* 新增布局样式 */
+        main {
+            display: flex;
+            gap: 20px;
+        }
+
+       .left-section {
+            flex: 1; /* Adjusted to make it equal to the right section */
+        }
+
+       .right-section {
+            flex: 1; /* Adjusted to make it equal to the left section */
+        }
+
+        /* 新增样式，使多选框横向排列 */
+       .multi-select-checkbox {
+            display: flex;
+            flex-wrap: nowrap; /* Ensure they stay in one row */
+            gap: 10px;
+        }
+
+        /* 表格样式，确保表格有合适的边框和间距 */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        /* 输入框样式，确保不超出表格单元格 */
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* 新增样式，用于对齐 Analysis 和 Assessment 部分 */
+       .aligned-section {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+       .aligned-section > div {
+            flex: 1;
+        }
+    </style>
+
+</head>
+
+<body>
+    <main>
+        <div class="left-section">
+            <h1>Parameter</h1>
+            <!-- Add error message display at the top of the form -->
+            <form method="post" id="option-form">
+                {% if error %}
+                <div class="error-message">
+                    <p>{{ error }}</p>
+                </div>
+                {% endif %}
+                <table>
+                    <tbody>
+                        <tr>
+                            <th>Ticker (Yahoo Code)</th>
+                            <td>
+                                <input type="text" id="ticker" name="ticker" value="{{ ticker }}" required>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Feature</th>
+                            <td>
+                                <select id="feature" name="feature">
+                                    <option value="Oscillation" {% if feature == 'Oscillation' %}selected{% endif %}>Oscillation</option>
+                                    <option value="Returns" {% if feature == 'Returns' %}selected{% endif %}>Returns</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Frequency</th>
+                            <td>
+                                <select id="frequency" name="frequency">
+                                    <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
+                                    <option value="ME" {% if frequency == 'ME' %}selected{% endif %}>Monthly</option>
+                                    <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Period</th>
+                            <td>
+                                <div class="multi-select-checkbox">
+                                    <input type="checkbox" id="period_1Y" name="period" value="1Y" checked>
+                                    <label for="period_1Y">1Y</label>
+                                    <input type="checkbox" id="period_3Y" name="period" value="3Y" checked>
+                                    <label for="period_3Y">3Y</label>
+                                    <input type="checkbox" id="period_5Y" name="period" value="5Y" checked>
+                                    <label for="period_5Y">5Y</label>
+                                    <input type="checkbox" id="period_ALL" name="period" value="ALL" checked>
+                                    <label for="period_ALL">ALL</label>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <input type="submit" value="Submit">
+
+                <input type="hidden" id="option_position" name="option_position">
+            </form>
+        </div>
+        <div class="right-section">
+            <h1>Positions</h1>
+            <table id="option-table">
+                <thead>
+                    <tr>
+                        <th>Option Type</th>
+                        <th>Strike</th>
+                        <th>Quantity</th>
+                        <th>Premium</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <select name="option_type">
+                                <option value="SC" selected>SC</option>
+                                <option value="SP">SP</option>
+                                <option value="LC">LC</option>
+                                <option value="LP">LP</option>
+                            </select>
+                        </td>
+                        <td><input type="number" name="strike"></td>
+                        <td><input type="number" name="quantity"></td>
+                        <td><input type="number" step="0.01" name="premium"></td>
+                        <td><button type="button" onclick="deleteRow(this)">Delete</button></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <select name="option_type">
+                                <option value="SC">SC</option>
+                                <option value="SP" selected>SP</option>
+                                <option value="LC">LC</option>
+                                <option value="LP">LP</option>
+                            </select>
+                        </td>
+                        <td><input type="number" name="strike"></td>
+                        <td><input type="number" name="quantity"></td>
+                        <td><input type="number" step="0.01" name="premium"></td>
+                        <td><button type="button" onclick="deleteRow(this)">Delete</button></td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5"><button type="button" onclick="addRow()">Add Row</button></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <input type="submit" form="option-form" value="Submit"> <!-- Moved submit button here -->
+        </div>
+    </main>
+    <div class="aligned-section">
+        <div>
+            <h1>Analysis</h1>
+            <!-- 移除 Refrequency Data 部分 -->
+            {% if tail_stats_result %}
+            <h2>Tail Statistics</h2>
+            <div class="table-container">
+                {{ tail_stats_result|safe }}
+            </div>
+            {% endif %}
+
+            {% if gap_stats_result %}
+            <h2>Gap Statistics</h2>
+            <div class="table-container">
+                {{ gap_stats_result|safe }}
+            </div>
+            {% endif %}
+
+            <!-- Add tail plot chart -->
+            {% if tail_plot_url %}
+            <h2>Tail Plot</h2>
+            <div class="plot-container">
+                <img src="data:image/png;base64,{{ tail_plot_url }}" alt="Tail Plot">
+            </div>
+            {% endif %}
+        </div>
+        <div>
+            <h1>Assessment</h1>
+            {% if option_matrix_result %}
+            <h2>Option Matrix</h2>
+            <div class="table-container">
+                {{ option_matrix_result|safe }}
+            </div>
+            {% endif %}
+
+            <!-- Improve plot display -->
+            {% if plot_url %}
+            <h2>Option PnL Chart</h2>
+            <div class="plot-container">
+                <img src="data:image/png;base64,{{ plot_url }}" alt="Option PnL Chart">
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <script>
+        function formatTableData() {
+            const tables = document.querySelectorAll('.table-container table');
+            tables.forEach(table => {
+                const rows = table.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td, th');
+                    cells.forEach(cell => {
+                        let text = cell.textContent.trim();
+                        // 移除可能存在的逗号，处理类似 1,000.5 这样的格式
+                        text = text.replace(/,/g, '');
+                        const value = parseFloat(text);
+                        if (!isNaN(value) && /^\d+(\.\d+)?$/.test(text)) {
+                            cell.textContent = value.toFixed(2);
+                        }
+                    });
+                });
+            });
+        }
+
+        function addRow() {
+            var table = document.getElementById('option-table');
+            var tbody = table.getElementsByTagName('tbody')[0];
+            var row = tbody.insertRow();
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
+            var cell3 = row.insertCell(2);
+            var cell4 = row.insertCell(3);
+            var cell5 = row.insertCell(4);
+
+            cell1.innerHTML = '<select name="option_type"><option value="SC">SC</option><option value="SP">SP</option><option value="LC">LC</option><option value="LP">LP</option></select>';
+            cell2.innerHTML = '<input type="number" name="strike">';
+            cell3.innerHTML = '<input type="number" name="quantity">';
+            cell4.innerHTML = '<input type="number" step="0.01" name="premium">';
+            cell5.innerHTML = '<button type="button" onclick="deleteRow(this)">Delete</button>';
+        }
+
+        function deleteRow(button) {
+            var row = button.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+        }
+
+        document.getElementById('option-form').addEventListener('submit', function (e) {
+            var rows = document.querySelectorAll('#option-table tbody tr');
+            var optionRows = [];
+            rows.forEach(function (row) {
+                var optionType = row.querySelector('select[name="option_type"]').value;
+                var strike = row.querySelector('input[name="strike"]').value;
+                var quantity = row.querySelector('input[name="quantity"]').value;
+                var premium = row.querySelector('input[name="premium"]').value;
+                if (optionType && strike && quantity && premium) {
+                    optionRows.push({
+                        optionType: optionType,
+                        strike: strike,
+                        quantity: quantity,
+                        premium: premium
+                    });
+                }
+            });
+            console.log("Option rows:", optionRows);  // Add this line for debugging
+            try {
+                document.getElementById('option_position').value = JSON.stringify(optionRows);
+            } catch (error) {
+                console.error('Error serializing option positions:', error);
+                e.preventDefault();
+            }
+        });
+
+        window.onload = function () {
+            formatTableData();
+        };
+    </script>
+
+</body>
+
+</html>    
