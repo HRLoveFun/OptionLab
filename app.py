@@ -54,6 +54,13 @@ def index():
                     return render_template('index.html', error=f"Failed to calculate oscillation for {ticker}.")
                 
                 tail_stats_result = tail_stats(feat_data, "OscillationPct", frequency=frequency)
+                if tail_stats_result is not None:
+                    tail_stats_result = tail_stats_result.apply(
+                        lambda row: row.apply(
+                          lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and all(s not in row.name for s in ["skew", "kurt", "p-value", "%th"]) else '{:.2f}'.format(x)
+                        ), axis=1
+                    )
+                
                 tail_plot_url = tail_plot(feat_data, "OscillationPct", frequency=frequency)
                 volatility_proj_pb0 = volatility_projection(data, "OscillationPct", frequency=frequency, prefer_bias=0)
                 
@@ -142,4 +149,4 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)

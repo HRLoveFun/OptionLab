@@ -481,9 +481,9 @@ def tail_plot(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_p
         ax.text(ax.get_xlim()[-1], y_val, f'{y_val * 100:.0f}th', ha='left', va='center', color='gray')
 
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax.set_title(f"Cumulative Distribution of {feature}")
+    ax.set_title(f"Cumulative Density of {feature}")
     ax.set_xlabel(f"{feature} (%)")
-    ax.set_ylabel("Cumulative Probability")
+    ax.set_ylabel("Cumulative Frequency")
     ax.grid(True, alpha=0.3)
 
     # 设置对数y轴
