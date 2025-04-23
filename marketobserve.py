@@ -13,7 +13,6 @@ import datetime as dt
 from matplotlib.ticker import PercentFormatter, LogFormatter
 from scipy.stats import ks_2samp, percentileofscore
 
-
 yf.enable_debug_mode()
 
 # 辅助函数：解析时间窗口
@@ -438,6 +437,7 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
         ]
 
         n, bins = np.histogram(data[feature], bins=bin_range, density=True)
+        bins = bins.round(2)
         cumulative_n = np.cumsum(n * np.diff(bins))
         n_diff = np.insert(np.diff(cumulative_n), 0, cumulative_n[0])
 
