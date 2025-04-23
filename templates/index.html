@@ -128,7 +128,7 @@
                     </tbody>
                 </table>
                 <input type="submit" value="Submit">
-
+                
                 <input type="hidden" id="option_position" name="option_position">
             </form>
         </div>
@@ -270,7 +270,31 @@
         }
 
         document.getElementById('option-form').addEventListener('submit', function (e) {
-            var rows = document.querySelectorAll('#option-table tbody tr');
+            // Save checkbox states
+            const checkboxes = document.querySelectorAll('.multi-select-checkbox input[type="checkbox"]');
+            const checkboxStates = {};
+            checkboxes.forEach(checkbox => {
+                checkboxStates[checkbox.id] = checkbox.checked;
+            });
+            localStorage.setItem('checkboxStates', JSON.stringify(checkboxStates));
+
+            // Save input values
+            const rows = document.querySelectorAll('#option-table tbody tr');
+            const inputValues = [];
+            rows.forEach(row => {
+                const optionType = row.querySelector('select[name="option_type"]').value;
+                const strike = row.querySelector('input[name="strike"]').value;
+                const quantity = row.querySelector('input[name="quantity"]').value;
+                const premium = row.querySelector('input[name="premium"]').value;
+                inputValues.push({
+                    optionType: optionType,
+                    strike: strike,
+                    quantity: quantity,
+                    premium: premium
+                });
+            });
+            localStorage.setItem('inputValues', JSON.stringify(inputValues));
+
             var optionRows = [];
             rows.forEach(function (row) {
                 var optionType = row.querySelector('select[name="option_type"]').value;
@@ -297,9 +321,34 @@
 
         window.onload = function () {
             formatTableData();
+
+            // Restore checkbox states
+            const checkboxStates = JSON.parse(localStorage.getItem('checkboxStates'));
+            if (checkboxStates) {
+                const checkboxes = document.querySelectorAll('.multi-select-checkbox input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    if (checkboxStates[checkbox.id] !== undefined) {
+                        checkbox.checked = checkboxStates[checkbox.id];
+                    }
+                });
+            }
+
+            // Restore input values
+            const inputValues = JSON.parse(localStorage.getItem('inputValues'));
+            if (inputValues) {
+                const rows = document.querySelectorAll('#option-table tbody tr');
+                rows.forEach((row, index) => {
+                    if (inputValues[index]) {
+                        row.querySelector('select[name="option_type"]').value = inputValues[index].optionType;
+                        row.querySelector('input[name="strike"]').value = inputValues[index].strike;
+                        row.querySelector('input[name="quantity"]').value = inputValues[index].quantity;
+                        row.querySelector('input[name="premium"]').value = inputValues[index].premium;
+                    }
+                });
+            }
         };
     </script>
 
 </body>
 
-</html>    
+</html>
