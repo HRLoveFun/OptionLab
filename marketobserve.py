@@ -10,7 +10,7 @@ import base64
 import numpy as np
 import seaborn as sns
 import datetime as dt
-from matplotlib.ticker import PercentFormatter
+from matplotlib.ticker import PercentFormatter, LogFormatter
 from scipy.stats import ks_2samp, percentileofscore
 
 
@@ -465,51 +465,41 @@ def tail_plot(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_p
     else:
         bin_range = list(np.arange(0, 0.25, 0.04))  # Default range for other frequencies
 
-    # Create a single figure with subplots for each period
-    num_periods = len(data_sources)
-    fig, axes = plt.subplots(num_periods, 1, figsize=(10, 6 * num_periods))
-    
-    # Handle case with only one period
-    if num_periods == 1:
-        axes = [axes]
-    
+    # Create a single figure
+    fig, ax = plt.subplots(figsize=(10, 6))
+
     sns.set_style("darkgrid")
-    
-    for i, (period_name, data) in enumerate(data_sources.items()):
-        ax = axes[i]
-        n, bins, patches = ax.hist(data[feature], bins=bin_range, alpha=0.5, color='skyblue', density=True,
-                                cumulative=True)
 
-        n_diff = np.insert(np.diff(n), 0, n[0])
-        for rect, h_diff, h in zip(patches, n_diff, n):
-            height = rect.get_height()
-            ax.text(rect.get_x() + rect.get_width() / 2, height, f'{h_diff:.0%}/{h:.0%}', ha='center', va='bottom',
-                     size=12)
+    for period_name, data in data_sources.items():
+        # 绘制累积密度曲线
+        sns.ecdfplot(data[feature], ax=ax, label=period_name)
 
-        percentiles = [data[feature].quantile(p, interpolation=interpolation) for p in [0.90, 0.95, 0.99]]
-        for p, val in zip([90, 95, 99], percentiles):
-            ax.axvline(val, color='red', linestyle=':', alpha=0.3, label=f'{p}th: {val:.1%}')
+    # 绘制 y=0.9, 0.95, 0.99 的横线
+    for y_val in [0.9, 0.95, 0.99]:
+        ax.axhline(y=y_val, color='gray', linestyle='--', alpha=0.7)
+        # 添加文本标注
+        ax.text(ax.get_xlim()[-1], y_val, f'{y_val * 100:.0f}th', ha='left', va='center', color='gray')
 
-        last_three = data[feature].iloc[-3:]
-        last_three_dates = last_three.index.strftime('%b%d')
-        for val, date, grayscale in zip(last_three, last_three_dates, np.arange(0.7, 0, -0.3)):
-            ax.scatter(val, 0, color=str(grayscale), s=100, zorder=5, label=f'{date}: {val:.1%}')
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.set_title(f"Cumulative Distribution of {feature}")
+    ax.set_xlabel(f"{feature} (%)")
+    ax.set_ylabel("Cumulative Probability")
+    ax.grid(True, alpha=0.3)
 
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax.set_title(f"Distribution of {feature} - {period_name}")
-        ax.set_xlabel(f"{feature} (%)")
-        ax.set_ylabel("Density")
-        ax.grid(True, alpha=0.3)
-
+    # 设置对数y轴
+    ax.set_yscale('log')
+    # 设置y轴范围
+    ax.set_ylim(bottom=0.8)
+ 
     plt.tight_layout()
-    
+
     # Save the combined figure
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format='png')
     img_buffer.seek(0)
     plot_url = base64.b64encode(img_buffer.getvalue()).decode()
     plt.close()
-    
+
     return plot_url
 
 # 计算波动率预测
