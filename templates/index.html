@@ -186,7 +186,14 @@
     <div class="aligned-section">
         <div>
             <h1>Analysis</h1>
-            <!-- 移除 Refrequency Data 部分 -->
+
+            {% if recent_stats_result %}
+            <h2>Recent Statistics</h2>
+            <div class="table-container">
+                {{ recent_stats_result|safe }}
+            </div>
+            {% endif %}
+
             {% if tail_stats_result %}
             <h2>Tail Statistics</h2>
             <div class="table-container">
@@ -203,7 +210,7 @@
 
             <!-- Add tail plot chart -->
             {% if tail_plot_url %}
-            <h2>Tail Plot</h2>
+            <h2>Tail Distribution</h2>
             <div class="plot-container">
                 <img src="data:image/png;base64,{{ tail_plot_url }}" alt="Tail Plot">
             </div>
