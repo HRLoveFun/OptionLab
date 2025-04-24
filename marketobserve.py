@@ -13,7 +13,138 @@ import datetime as dt
 from matplotlib.ticker import PercentFormatter, LogFormatter
 from scipy.stats import ks_2samp, percentileofscore
 
-yf.enable_debug_mode()
+# yf.enable_debug_mode()
+
+
+class PriceDynamic:
+    def __init__(self, ticker, frequency=None):
+        """
+        Initialize the PriceDynamic class.
+
+        :param ticker: Stock ticker symbol.
+        :param frequency: Data frequency, e.g., 'ME', 'W', 'QE'.
+        """
+        self.ticker = ticker
+        self.frequency = frequency
+        self.data = self._download_data()
+        self.oscillation_data = None
+
+    def _download_data(self):
+        """
+        Download stock data from Yahoo Finance.
+
+        :return: DataFrame containing stock data.
+        """
+        start_date = dt.date(2010,1,1)
+        # end_date = dt.date.today()
+
+        try:
+            df = yf.download(
+                self.ticker,
+                start=start_date,
+                # end=end_date,
+                interval='1d',
+                progress=True,
+                auto_adjust=False,
+            )
+            df.columns = df.columns.droplevel(1)
+            df.set_index(pd.DatetimeIndex(df.index), inplace=True)
+            df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
+            return df
+        except Exception as e:
+            print(f"Error downloading data: {e}")
+            return None
+
+    def _create_data_sources(self):
+        """
+        Create data sources for different periods.
+
+        :return: Dictionary of data sources.
+        """
+        current_date = dt.date.today()
+        if self.frequency == 'ME':
+            end_date = current_date.replace(day=1)
+        elif self.frequency == 'W':
+            end_date = current_date - pd.DateOffset(days=current_date.weekday())
+        elif self.frequency == 'QE':
+            end_date = current_date - pd.tseries.offsets.QuarterBegin()
+        else:
+            raise ValueError("Invalid frequency value. Allowed values are 'ME', 'W', 'QE'.")
+
+        df = self.data[self.data.index < end_date]
+        if df.empty:
+            print("DataFrame is empty. Cannot get the last date.")
+            return {}
+
+        last_date = df.index[-1]
+
+
+        data_sources = {}
+        for period in self.period:
+            if isinstance(period, int):
+                if self.frequency in ['ME', 'W']:
+                    start_date = last_date - pd.DateOffset(months=period - 1)
+                elif self.frequency == 'QE':
+                    start_date = last_date - pd.DateOffset(quarters=period - 1)
+                col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
+                data_sources[col_name] = df.loc[df.index >= start_date]
+            elif period == "ALL":
+                col_name = f"{pd.to_datetime(self.all_period_start).strftime('%y%b')}-{last_date.strftime('%y%b')}"
+                data_sources[col_name] = df.loc[df.index >= self.all_period_start]
+            else:
+                raise ValueError("Invalid period value")
+
+        return data_sources
+
+    def _refrequency(self, df):
+        """
+        Resample the data to the specified frequency.
+
+        :param df: DataFrame to be resampled.
+        :return: Resampled DataFrame.
+        """
+        if not isinstance(df.index, pd.DatetimeIndex):
+            raise ValueError("DataFrame index must be a DatetimeIndex")
+        if not {'Open', 'High', 'Low', 'Close'}.issubset(df.columns):
+            raise ValueError("DataFrame must contain OHLC columns")
+
+        try:
+            refrequency_df = df.resample(self.frequency).agg({
+                'Open': 'first',
+                'High': 'max',
+                'Low': 'min',
+                'Close': 'last',
+                'Adj Close': 'last',
+                'Volume': 'sum'
+            }).dropna()
+            return refrequency_df
+        except KeyError as e:
+            print(f"Missing column {e} in DataFrame")
+            return None
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            return None
+
+    def calculate_oscillation(self):
+        """
+        Calculate the oscillation data.
+
+        :return: DataFrame containing oscillation data.
+        """
+        data_sources = self._create_data_sources()
+        oscillation_data = {}
+        for period_name, data in data_sources.items():
+            resampled_data = self._refrequency(data)
+            if resampled_data is not None:
+                data = resampled_data[['Open', 'High', 'Low', 'Close']].copy()
+                data['LastClose'] = data["Close"].shift(1)
+                data["Oscillation"] = data["High"] - data["Low"]
+                data["OscillationPct"] = (data["Oscillation"] / data['LastClose'])
+                data = data.dropna()
+                oscillation_data[period_name] = data
+        self.oscillation_data = oscillation_data
+        return oscillation_data
+
 
 # 辅助函数：解析时间窗口
 def parse_time_window(window, latest_date):
@@ -392,6 +523,64 @@ def percentile_stats(df, feature, percentile, frequency, periods: list = [12, 36
     return combined_df
 
 
+
+
+def recent_stats(data, feature, frequency):
+    """
+    计算指定特征的最近统计信息。
+
+    参数:
+    data (pandas.DataFrame): 包含数据的数据框。
+    feature (str): 要分析的特征列名。
+    frequency (str): 频率，支持 'ME' 和 'W'。
+
+    返回:
+    pandas.DataFrame: 包含最近值、百分位数和分箱信息的 DataFrame。
+    """
+    # 根据频率设置分箱范围
+    if frequency == "ME":
+        bin_range = list(np.arange(0, 0.35, 0.05))
+    elif frequency == "W":
+        bin_range = list(np.arange(0, 0.18, 0.03))
+    else:
+        raise ValueError(f"Unsupported frequency: {frequency}. Supported frequencies are 'ME' and 'W'.")
+
+    # 检查数据长度
+    if len(data[feature]) < 3:
+        raise ValueError("The data must have at least 3 elements.")
+
+    # 计算最近的值和百分位数
+    recent_values = []
+    percentiles = []
+    for i in range(3):
+        value = data[feature].iloc[-(i + 1)]
+        recent_values.append(value)
+        percentiles.append(percentileofscore(data[feature], value))
+
+    # 计算直方图
+    hist, bins = np.histogram(data[feature], bins=bin_range, density=True)
+    bins = bins.round(2)
+
+    # 计算累积分布
+    cumulative_hist = np.cumsum(hist * np.diff(bins))
+    hist_diff = np.insert(np.diff(cumulative_hist), 0, cumulative_hist[0])
+
+    # 构建分箱信息
+    bin_intervals = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
+    bin_info = {}
+    for i in range(len(bin_intervals)):
+        bin_info[f"{bin_intervals[i]}"] = hist_diff[i]
+
+    # 创建 DataFrame
+    df = pd.DataFrame({
+        'Recent Values': recent_values,
+        'Percentiles': percentiles
+    })
+
+    return df
+
+
+
 # 计算尾部统计信息
 def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_period_start: str = None,
                interpolation: str = "linear"):
@@ -400,16 +589,7 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
     if not all(isinstance(p, (int, str)) for p in periods):
         raise ValueError("periods must contain integers or strings")
 
-    data_sources = create_data_sources(df, periods, all_period_start, frequency)
-
-    last_three_index_list = df.index[-3:].strftime('%b%d').tolist()
-    stats_index = pd.Index(
-        ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th"] +
-        [f'{last_three_index}_val' for last_three_index in last_three_index_list] +
-        [f'{last_three_index}_%th' for last_three_index in last_three_index_list]
-    )
-    stats_df = pd.DataFrame(index=stats_index)
-
+    # 根据频率设置分箱范围
     if frequency == "ME":
         bin_range = list(np.arange(0, 0.35, 0.05))
     elif frequency == "W":
@@ -417,9 +597,19 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
     else:
         raise ValueError(f"Unsupported frequency: {frequency}. Supported frequencies are 'ME' and 'W'.")
 
+
+    data_sources = create_data_sources(df, periods, all_period_start, frequency)
+
+    last_three_index_list = df.index[-3:].strftime('%b%d').tolist()
+    stats_index = pd.Index(
+        ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th"]
+    )
+
+    stats_df = pd.DataFrame(index=stats_index)
+
     interval_freq_dict = {}
     for period_name, data in data_sources.items():
-        stats_df[period_name] = [
+        tail_values = [
             data[feature].mean(),
             data[feature].std(),
             data[feature].skew(),
@@ -428,14 +618,10 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
             data[feature].quantile(0.99, interpolation=interpolation),
             data[feature].quantile(0.95, interpolation=interpolation),
             data[feature].quantile(0.90, interpolation=interpolation),
-            data[feature].iloc[-3],
-            data[feature].iloc[-2],
-            data[feature].iloc[-1],
-            percentileofscore(data[feature], data[feature].iloc[-3]),
-            percentileofscore(data[feature], data[feature].iloc[-2]),
-            percentileofscore(data[feature], data[feature].iloc[-1])
         ]
 
+        stats_df[period_name] = tail_values
+        
         n, bins = np.histogram(data[feature], bins=bin_range, density=True)
         bins = bins.round(2)
         cumulative_n = np.cumsum(n * np.diff(bins))
@@ -450,7 +636,9 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
 
     interval_freq_df = pd.DataFrame(interval_freq_dict)
     combined_df = pd.concat([stats_df, interval_freq_df])
+
     return combined_df
+
 
 
 # 绘制尾部特征值分布
@@ -640,10 +828,12 @@ def period_gap_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"]
 
 # 计算期权矩阵
 def option_matrix(ticker, option_position):
-    close = yf.download(ticker, start=dt.datetime.now().date())[["Close"]].iloc[-1, -1]
-    change_range = np.linspace(0.9, 1.1, 20)
+    px_last = yf.download(ticker, start=dt.date.today() - dt.timedelta(days=7) )[["Close"]].iloc[-1, -1]
+    # px_last = last price of the latest period-end 
+
+    change_range = np.linspace(0.9, 1.1, 21)
     option_matrix_df = pd.DataFrame(index=change_range)
-    option_matrix_df['price'] = (close * change_range).astype(int)
+    option_matrix_df['price'] = (px_last * change_range).astype(int)
     option_matrix_df['SC'] = 0.0
     option_matrix_df['SP'] = 0.0
     option_matrix_df['LC'] = 0.0
