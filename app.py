@@ -5,7 +5,7 @@ import datetime as dt
 import matplotlib.pyplot as plt
 import io
 import base64
-import json  # 添加这一行
+import json
 
 from marketobserve import *
 
@@ -39,6 +39,7 @@ def index():
                 return render_template('index.html', error=f"Failed to process data for {ticker} with frequency {frequency}.")
 
             # Initialize variables
+            recent_stats_result = None
             tail_stats_result = None
             tail_plot_url = None
             volatility_proj_pb0 = None
@@ -53,6 +54,8 @@ def index():
                     app.logger.error(f"Failed to calculate oscillation for {ticker}")
                     return render_template('index.html', error=f"Failed to calculate oscillation for {ticker}.")
                 
+                recent_stats_result = recent_stats(feat_data, "OscillationPct", frequency=frequency)
+
                 tail_stats_result = tail_stats(feat_data, "OscillationPct", frequency=frequency)
                 if tail_stats_result is not None:
                     tail_stats_result = tail_stats_result.apply(
@@ -129,6 +132,7 @@ def index():
                        feature=feature,
                        frequency=frequency,
                        refreq_data=refreq_data.to_html() if refreq_data is not None else None, 
+                       recent_stats_result=recent_stats_result.to_html() if recent_stats_result is not None else None,                        
                        tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None, 
                        gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
                        option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None, 
