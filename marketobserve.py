@@ -735,7 +735,7 @@ def volatility_projection(df, feature, frequency: str = 'ME', percentile: float 
             assumed_volatility = data[feature].quantile(percentile, interpolation=interpolation)
 
             if prefer_bias is not None:
-                proj_high_weights = np.linspace(0.1, 0.9, 90)
+                proj_high_weights = np.linspace(0.4, 0.6, 21)
                 min_error = float('inf')
                 best_proj_high_weight = 0
                 for proj_high_weight in proj_high_weights:

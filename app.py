@@ -134,6 +134,7 @@ def index():
                        refreq_data=refreq_data.to_html() if refreq_data is not None else None, 
                        recent_stats_result=recent_stats_result.to_html() if recent_stats_result is not None else None,                        
                        tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None, 
+                       volatility_proj_pb0=volatility_proj_pb0.to_html() if volatility_proj_pb0 is not None else None,                                               
                        gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
                        option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None, 
                        plot_url=plot_url,

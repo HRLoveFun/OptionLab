@@ -201,6 +201,14 @@
             </div>
             {% endif %}
 
+            {% if volatility_proj_pb0 %}
+            <h2>Volatility Projection (U/D Neutral)</h2>
+            <div class="table-container">
+                {{ volatility_proj_pb0|safe }}
+            </div>
+            {% endif %}
+
+
             {% if gap_stats_result %}
             <h2>Gap Statistics</h2>
             <div class="table-container">
