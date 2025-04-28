@@ -479,14 +479,7 @@ def oscillation(df):
 
 
 # 计算百分位数统计信息
-def percentile_stats(df, feature, percentile, frequency, periods: list = [12, 36, 60, "ALL"], all_period_start: str = None,
-                     interpolation: str = "linear"):
-    if not isinstance(periods, list):
-        raise TypeError("periods must be a list")
-    if not all(isinstance(p, (int, str)) for p in periods):
-        raise ValueError("periods must contain integers or strings")
-
-    data_sources = create_data_sources(df, periods, all_period_start, frequency)
+def percentile_stats(dict, percentile, interpolation: str = "linear"):
 
     last_three_index_list = df.index[-3:].strftime('%b%d').tolist()
     stats_index = pd.Index(
@@ -494,16 +487,9 @@ def percentile_stats(df, feature, percentile, frequency, periods: list = [12, 36
     )
     stats_df = pd.DataFrame(index=stats_index)
 
-    if frequency == "ME":
-        bin_range = list(np.arange(0, 21, 1))
-    elif frequency == "W":
-        bin_range = list(np.arange(1, 101, 10))
-    else:
-        raise ValueError(f"Unsupported frequency: {frequency}. Supported frequencies are 'ME' and 'W'.")
-
     interval_freq_dict = {}
-    for period_name, data in data_sources.items():
-        data["percentile"] = data[feature].apply(lambda x: percentileofscore(data[feature], x))
+    for period_name, data in dict.items():
+        data["percentile"] = data.apply(lambda x: percentileofscore(data, x))
         data["sequence"] = range(len(data))
         mask_percentile = data["percentile"] >= percentile
         mask_first_last = (data.index == data.index[0]) | (data.index == data.index[-1])
@@ -532,6 +518,8 @@ def percentile_stats(df, feature, percentile, frequency, periods: list = [12, 36
             prob_next_per
         ]
 
+        bin_range = list(np.arange(0, 21, 1))
+
         n, bins = np.histogram(data[col], bins=bin_range, density=True)
         if n.sum() == 0:
             cumulative_n = np.zeros_like(n)
@@ -550,8 +538,6 @@ def percentile_stats(df, feature, percentile, frequency, periods: list = [12, 36
     combined_df = pd.concat([stats_df, interval_freq_df])
     combined_df.index.names = [f"{percentile=}"]
     return combined_df
-
-
 
 
 def recent_stats(data, feature, frequency):
@@ -607,7 +593,6 @@ def recent_stats(data, feature, frequency):
     })
 
     return df
-
 
 
 # 计算尾部统计信息
@@ -667,7 +652,6 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
     combined_df = pd.concat([stats_df, interval_freq_df])
 
     return combined_df
-
 
 
 # 绘制尾部特征值分布
@@ -860,7 +844,8 @@ def option_matrix(ticker, option_position):
     px_last = yf.download(ticker, start=dt.date.today() - dt.timedelta(days=7) )[["Close"]].iloc[-1, -1]
     # px_last = last price of the latest period-end 
 
-    change_range = np.linspace(0.9, 1.1, 21)
+    change_range = np.linspace(0.85, 1.15, 11)
+    px_step = max((px_last * 0.02), 1)
     option_matrix_df = pd.DataFrame(index=change_range)
     option_matrix_df['price'] = (px_last * change_range).astype(int)
     option_matrix_df['SC'] = 0.0
