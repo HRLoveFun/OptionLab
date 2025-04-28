@@ -4,12 +4,12 @@ marketobserve.py
 
  - class PriceDynamic(self, ticker, start_date=dt.date(2010,01,01)):
  - "A DataFrame with Daily OHLC of a given ticker"
- -      | Open | High | Low | Close | Adj Close | Volume |
- - Index|                          ...                   |
- - Day1 |                          ...                   |
- - Day2 |                          ...                   |
- - ...  |                          ...                   |
- - DayN |                          ...                   |
+ - |     | Open | High | Low | Close | Adj Close | Volume |
+ - |Index|                          ...                   |
+ - |Day1 |                          ...                   |
+ - |Day2 |                          ...                   |
+ - |...  |                          ...                   |
+ - |DayN |                          ...                   |
    
    - ticker: necesary parameter when initialize the class.
    - start_date: the first date the record starts. 
