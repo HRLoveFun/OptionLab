@@ -17,84 +17,97 @@ from scipy.stats import ks_2samp, percentileofscore
 
 
 class PriceDynamic:
-    def __init__(self, ticker, frequency=None):
+    def __init__(self, ticker, start_date=dt.date(2010, 1, 1), frequency='D'):
         """
         Initialize the PriceDynamic class.
 
-        :param ticker: Stock ticker symbol.
-        :param frequency: Data frequency, e.g., 'ME', 'W', 'QE'.
+        :param ticker: Stock ticker symbol, a necessary parameter when initializing the class.
+        :param start_date: The first date the record starts.
+        :param frequency: Determine the frequency for sampling, allowed values are 'D', 'W', 'ME', 'QE'. Default is 'D'.
         """
         self.ticker = ticker
+        self.start_date = start_date
         self.frequency = frequency
-        self.data = self._download_data()
-        self.oscillation_data = None
+        # 假设 _download_data 和 _refrequency 方法存在
+        data = self._download_data()
+        if data is not None:
+            self._data = self._refrequency(data)
+        else:
+            self._data = None
+
+    def __getattr__(self, attr):
+        # 当访问实例属性时，若属性不存在，尝试从 _data 中获取
+        if self._data is not None:
+            return getattr(self._data, attr)
+        return None
+
+    def __getitem__(self, item):
+        # 支持索引操作，将操作转发给 _data
+        if self._data is not None:
+            return self._data[item]
+        return None
 
     def _download_data(self):
         """
         Download stock data from Yahoo Finance.
 
-        :return: DataFrame containing stock data.
+        :return: DataFrame containing stock data with columns 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'.
         """
-        start_date = dt.date(2010,1,1)
-        # end_date = dt.date.today()
-
         try:
             df = yf.download(
                 self.ticker,
-                start=start_date,
-                # end=end_date,
+                start=self.start_date,
                 interval='1d',
                 progress=True,
                 auto_adjust=False,
             )
-            df.columns = df.columns.droplevel(1)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.droplevel(1)
             df.set_index(pd.DatetimeIndex(df.index), inplace=True)
             df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
-            return df
-        except Exception as e:
-            print(f"Error downloading data: {e}")
-            return None
+            df['LastClose'] = df["Close"].shift(1)
 
-    def _create_data_sources(self):
+            return df
+
+        except yf.YFinanceError as e:
+            print(f"YFinance error downloading data: {e}")
+        except Exception as e:
+            print(f"Unexpected error downloading data: {e}")
+        return None
+
+    def stat_periods(self, periods):
         """
-        Create data sources for different periods.
+        Create data sources for different periods based on the frequency.
+        Param:
+            periods: list of integers and string, the integer represent the number of latest months.
 
         :return: Dictionary of data sources.
         """
-        current_date = dt.date.today()
-        if self.frequency == 'ME':
-            end_date = current_date.replace(day=1)
-        elif self.frequency == 'W':
-            end_date = current_date - pd.DateOffset(days=current_date.weekday())
-        elif self.frequency == 'QE':
-            end_date = current_date - pd.tseries.offsets.QuarterBegin()
-        else:
-            raise ValueError("Invalid frequency value. Allowed values are 'ME', 'W', 'QE'.")
-
-        df = self.data[self.data.index < end_date]
-        if df.empty:
-            print("DataFrame is empty. Cannot get the last date.")
+        if self._data is None:
             return {}
 
-        last_date = df.index[-1]
+        last_date = self._data.index[-1]
 
+        dict_stat_period_data = {}
+        if periods is None:
+            periods = [12, 36, 60, "ALL"]
 
-        data_sources = {}
-        for period in self.period:
+        for period in periods:
             if isinstance(period, int):
                 if self.frequency in ['ME', 'W']:
                     start_date = last_date - pd.DateOffset(months=period - 1)
                 elif self.frequency == 'QE':
-                    start_date = last_date - pd.DateOffset(quarters=period - 1)
+                    start_date = last_date - pd.DateOffset(quarters=period // 3 - 1)
+                start_date = max(start_date, self._data.index.min())
                 col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                data_sources[col_name] = df.loc[df.index >= start_date]
+                dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
             elif period == "ALL":
-                col_name = f"{pd.to_datetime(self.all_period_start).strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                data_sources[col_name] = df.loc[df.index >= self.all_period_start]
+                col_name = f"{pd.to_datetime(self.start_date).strftime('%y%b')}-{last_date.strftime('%y%b')}"
+                dict_stat_period_data[col_name] = self._data.loc[self._data.index >= self.start_date]
             else:
                 raise ValueError("Invalid period value")
 
-        return data_sources
+        return dict_stat_period_data
 
     def _refrequency(self, df):
         """
@@ -108,42 +121,58 @@ class PriceDynamic:
         if not {'Open', 'High', 'Low', 'Close'}.issubset(df.columns):
             raise ValueError("DataFrame must contain OHLC columns")
 
-        try:
-            refrequency_df = df.resample(self.frequency).agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Adj Close': 'last',
-                'Volume': 'sum'
-            }).dropna()
-            return refrequency_df
-        except KeyError as e:
-            print(f"Missing column {e} in DataFrame")
-            return None
-        except Exception as e:
-            print(f"Unexpected error: {str(e)}")
-            return None
+        if self.frequency == 'D':
+            return df
+        else:
+            try:
+                refrequency_df = df.resample(self.frequency).agg({
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last',
+                    'Adj Close': 'last',
+                    'Volume': 'sum'
+                }).dropna()
+                return refrequency_df
+            except KeyError as e:
+                print(f"Missing column {e} in DataFrame")
+                return None
+            except Exception as e:
+                print(f"Unexpected error: {str(e)}")
+                return None
 
-    def calculate_oscillation(self):
+    def osc(self):
         """
-        Calculate the oscillation data.
+        Calculate the oscillation of price.
 
         :return: DataFrame containing oscillation data.
         """
-        data_sources = self._create_data_sources()
-        oscillation_data = {}
-        for period_name, data in data_sources.items():
-            resampled_data = self._refrequency(data)
-            if resampled_data is not None:
-                data = resampled_data[['Open', 'High', 'Low', 'Close']].copy()
-                data['LastClose'] = data["Close"].shift(1)
-                data["Oscillation"] = data["High"] - data["Low"]
-                data["OscillationPct"] = (data["Oscillation"] / data['LastClose'])
-                data = data.dropna()
-                oscillation_data[period_name] = data
-        self.oscillation_data = oscillation_data
-        return oscillation_data
+        if self._data is None:
+            return None
+        osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
+        return osc_data
+
+    def ret(self):
+        """
+        Calculate the return of close price.
+
+        :return: DataFrame containing return data.
+        """
+        if self._data is None:
+            return None
+        ret_data = ((self._data["Close"] - self._data['LastClose']) / self._data['LastClose']) * 100
+        return ret_data
+
+    def dif(self):
+        """
+        Calculate the diff of close price.
+
+        :return: DataFrame containing diff data.
+        """
+        if self._data is None:
+            return None
+        dif_data = self._data["Close"] - self._data['LastClose']
+        return dif_data
 
 
 # 辅助函数：解析时间窗口
@@ -389,7 +418,7 @@ def create_data_sources(df, periods, all_period_start, frequency):
     df = df[df.index < end_date]
     if df.empty:
         print("DataFrame is empty. Cannot get the last date.")
-        return {}  # 修复此处
+        return {}
 
     last_date = df.index[-1]
 
@@ -573,7 +602,7 @@ def recent_stats(data, feature, frequency):
 
     # 创建 DataFrame
     df = pd.DataFrame({
-        'Recent Values': recent_values,
+        f'{feature}': recent_values,
         'Percentiles': percentiles
     })
 
