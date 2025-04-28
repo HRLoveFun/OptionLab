@@ -75,6 +75,7 @@ class PriceDynamic:
             print(f"Unexpected error downloading data: {e}")
         return None
 
+
     def stat_periods(self, periods):
         """
         Create data sources for different periods based on the frequency.
@@ -98,12 +99,17 @@ class PriceDynamic:
                     start_date = last_date - pd.DateOffset(months=period - 1)
                 elif self.frequency == 'QE':
                     start_date = last_date - pd.DateOffset(quarters=period // 3 - 1)
+                elif self.frequency == 'D':
+                    start_date = last_date - pd.DateOffset(days=30 * (period - 1))
+                # 将 start_date 转换为 datetime64[ns] 类型
+                start_date = pd.Timestamp(start_date)
                 start_date = max(start_date, self._data.index.min())
                 col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
                 dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
             elif period == "ALL":
-                col_name = f"{pd.to_datetime(self.start_date).strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                dict_stat_period_data[col_name] = self._data.loc[self._data.index >= self.start_date]
+                start_date = pd.Timestamp(self.start_date)
+                col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
+                dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
             else:
                 raise ValueError("Invalid period value")
 
@@ -481,7 +487,6 @@ def oscillation(df):
 # 计算百分位数统计信息
 def percentile_stats(dict, percentile, interpolation: str = "linear"):
 
-    last_three_index_list = df.index[-3:].strftime('%b%d').tolist()
     stats_index = pd.Index(
         ["mean", "std", "skew", "kurt", "max", "75th", "25th", "prob_next_per"]
     )
@@ -489,13 +494,28 @@ def percentile_stats(dict, percentile, interpolation: str = "linear"):
 
     interval_freq_dict = {}
     for period_name, data in dict.items():
+        # 明确创建 DataFrame 的副本
+        data = data.copy()
         data["percentile"] = data.apply(lambda x: percentileofscore(data, x))
         data["sequence"] = range(len(data))
+
+        # 确保布尔掩码长度和 data 一致
+        if len(data) == 0:
+            continue
+
         mask_percentile = data["percentile"] >= percentile
         mask_first_last = (data.index == data.index[0]) | (data.index == data.index[-1])
+
+        # 检查布尔掩码长度
+        if len(mask_percentile) != len(data) or len(mask_first_last) != len(data):
+            raise ValueError("布尔掩码的长度和 DataFrame 的长度不匹配，请检查数据处理逻辑。")
+
         data = data[mask_percentile | mask_first_last].copy()
         data["interval"] = data["sequence"].diff()
         data = data.dropna()
+
+        if len(data) == 0:
+            continue
 
         latest_interval = data["interval"].iloc[-1]
         mask_beyond_latest_interval = data["interval"] > latest_interval
@@ -518,26 +538,27 @@ def percentile_stats(dict, percentile, interpolation: str = "linear"):
             prob_next_per
         ]
 
-        bin_range = list(np.arange(0, 21, 1))
+    #     bin_range = list(np.arange(0, 21, 1))
 
-        n, bins = np.histogram(data[col], bins=bin_range, density=True)
-        if n.sum() == 0:
-            cumulative_n = np.zeros_like(n)
-        else:
-            cumulative_n = np.cumsum(n * np.diff(bins))
-        n_diff = np.insert(np.diff(cumulative_n), 0, cumulative_n[0])
+    #     n, bins = np.histogram(data[col], bins=bin_range, density=True)
+    #     if n.sum() == 0:
+    #         cumulative_n = np.zeros_like(n)
+    #     else:
+    #         cumulative_n = np.cumsum(n * np.diff(bins))
+    #     n_diff = np.insert(np.diff(cumulative_n), 0, cumulative_n[0])
 
-        bin_intervals = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
-        bin_info = {}
-        for i in range(len(bin_intervals)):
-            bin_info[f"{bin_intervals[i]}"] = n_diff[i]
+    #     bin_intervals = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
+    #     bin_info = {}
+    #     for i in range(len(bin_intervals)):
+    #         bin_info[f"{bin_intervals[i]}"] = n_diff[i]
 
-        interval_freq_dict[period_name] = bin_info
+    #     interval_freq_dict[period_name] = bin_info
 
-    interval_freq_df = pd.DataFrame(interval_freq_dict)
-    combined_df = pd.concat([stats_df, interval_freq_df])
-    combined_df.index.names = [f"{percentile=}"]
-    return combined_df
+    # interval_freq_df = pd.DataFrame(interval_freq_dict)
+    # combined_df = pd.concat([stats_df, interval_freq_df])
+    # combined_df.index.names = [f"{percentile=}"]
+    return stats_df
+    
 
 
 def recent_stats(data, feature, frequency):
