@@ -26,7 +26,7 @@ def index():
                 periods = [12, 36, 60, "ALL"]
 
             # Get stock data
-            start_date = dt.date(2000, 1, 1)
+            start_date = dt.date(2017, 1, 1)
             end_date = dt.date.today()
             data = yf_download(ticker, start_date, end_date)
             if data is None or data.empty:
@@ -38,6 +38,11 @@ def index():
                 app.logger.error(f"Failed to refrequency data for {ticker}")
                 return render_template('index.html', error=f"Failed to process data for {ticker} with frequency {frequency}.")
 
+            # Initialize PriceDynamic instance
+            pxdy = PriceDynamic(ticker, start_date, frequency)
+            osc = pxdy.osc().dropna()
+            ret = pxdy.ret().dropna()
+
             # Initialize variables
             recent_stats_result = None
             tail_stats_result = None
@@ -46,6 +51,7 @@ def index():
             gap_stats_result = None
             option_matrix_result = None
             plot_url = None
+            osc_ret_scatter_hist_url = None
 
             # Handle feature-specific calculations
             if feature == 'Oscillation':
@@ -53,30 +59,39 @@ def index():
                 if feat_data is None or feat_data.empty:
                     app.logger.error(f"Failed to calculate oscillation for {ticker}")
                     return render_template('index.html', error=f"Failed to calculate oscillation for {ticker}.")
-                
-                recent_stats_result = recent_stats(feat_data, "OscillationPct", frequency=frequency)
+
+                # Create scatter plot
+                fig, ax = scatter_hist(osc, ret)
+                # Save the plot to a buffer
+                img_buffer = io.BytesIO()
+                fig.savefig(img_buffer, format='png')
+                img_buffer.seek(0)
+                osc_ret_scatter_hist_url = base64.b64encode(img_buffer.getvalue()).decode()
+                plt.close(fig)
 
                 tail_stats_result = tail_stats(feat_data, "OscillationPct", frequency=frequency)
                 if tail_stats_result is not None:
                     tail_stats_result = tail_stats_result.apply(
                         lambda row: row.apply(
-                          lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and all(s not in row.name for s in ["skew", "kurt", "p-value", "%th"]) else '{:.2f}'.format(x)
+                            lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and all(
+                                s not in row.name for s in ["skew", "kurt", "p-value", "%th"]) else '{:.2f}'.format(x)
                         ), axis=1
                     )
-                
+
                 tail_plot_url = tail_plot(feat_data, "OscillationPct", frequency=frequency)
                 volatility_proj_pb0 = volatility_projection(data, "OscillationPct", frequency=frequency, prefer_bias=0)
-                
+
                 if "LastClose" in feat_data.columns and "PeriodGap" not in feat_data.columns:
                     # Calculate PeriodGap if it doesn't exist
                     feat_data["PeriodGap"] = feat_data["Open"] / feat_data["LastClose"] - 1
-                
+
                 if "PeriodGap" in feat_data.columns:
                     gap_stats_result = period_gap_stats(feat_data, "PeriodGap", frequency=frequency)
                     if gap_stats_result is not None:
                         gap_stats_result = gap_stats_result.apply(
                             lambda row: row.apply(
-                                lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and row.name not in ["skew", "kurt", "p-value"] else '{:.2f}'.format(x)
+                                lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and row.name not in [
+                                    "skew", "kurt", "p-value"] else '{:.2f}'.format(x)
                             ), axis=1
                         )
             elif feature == 'Returns':
@@ -104,11 +119,11 @@ def index():
                             'quantity': quantity,
                             'premium': premium
                         })
-                    
+
                     option_position = pd.DataFrame(option_data)
                     if not option_position.empty:
                         option_matrix_result = option_matrix(ticker, option_position)
-                        
+
                         # Generate PnL Chart
                         plt.figure(figsize=(10, 6))
                         plt.plot(option_matrix_result.index, option_matrix_result['PnL'])
@@ -116,7 +131,7 @@ def index():
                         plt.ylabel('PnL')
                         plt.title('Option PnL Chart')
                         plt.grid(True)
-                        
+
                         # Save the plot
                         with io.BytesIO() as img:
                             plt.savefig(img, format='png')
@@ -127,18 +142,18 @@ def index():
                     app.logger.error(f"Error processing option data: {e}", exc_info=True)
                     return render_template('index.html', error=f"Error processing option data: {str(e)}")
 
-            return render_template('index.html', 
-                       ticker=ticker,
-                       feature=feature,
-                       frequency=frequency,
-                       refreq_data=refreq_data.to_html() if refreq_data is not None else None, 
-                       recent_stats_result=recent_stats_result.to_html() if recent_stats_result is not None else None,                        
-                       tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None, 
-                       volatility_proj_pb0=volatility_proj_pb0.to_html() if volatility_proj_pb0 is not None else None,                                               
-                       gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
-                       option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None, 
-                       plot_url=plot_url,
-                       tail_plot_url=tail_plot_url)
+            return render_template('index.html',
+                                   ticker=ticker,
+                                   feature=feature,
+                                   frequency=frequency,
+                                   refreq_data=refreq_data.to_html() if refreq_data is not None else None,
+                                   osc_ret_scatter_hist_url=osc_ret_scatter_hist_url,
+                                   tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None,
+                                   volatility_proj_pb0=volatility_proj_pb0.to_html() if volatility_proj_pb0 is not None else None,
+                                   gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
+                                   option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None,
+                                   plot_url=plot_url,
+                                   tail_plot_url=tail_plot_url)
 
         return render_template('index.html')
 
