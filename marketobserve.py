@@ -17,7 +17,7 @@ from scipy.stats import ks_2samp, percentileofscore
 
 
 class PriceDynamic:
-    def __init__(self, ticker, start_date=dt.date(2017, 1, 1), frequency='D'):
+    def __init__(self, ticker, start_date=dt.date(2016, 12, 1), frequency='D'):
         """
         Initialize the PriceDynamic class.
 
@@ -73,44 +73,44 @@ class PriceDynamic:
         return None
 
 
-    def stat_periods(self, periods):
-        """
-        Create data sources for different periods based on the frequency.
-        Param:
-            periods: list of integers and string, the integer represent the number of latest months.
+    # def stat_periods(self, periods = [12, 36, 60, "ALL"]):
+    #     """
+    #     Create data sources for different periods based on the frequency.
+    #     Param:
+    #         periods: list of integers and string, the integer represent the number of latest months.
 
-        :return: Dictionary of data sources.
-        """
-        if self._data is None:
-            return {}
+    #     :return: Dictionary of data sources.
+    #     """
+    #     if self._data is None:
+    #         return {}
 
-        last_date = self._data.index[-1]
+    #     last_date = self._data.index[-1]
 
-        dict_stat_period_data = {}
-        if periods is None:
-            periods = [12, 36, 60, "ALL"]
+    #     dict_stat_period_data = {}
+    #     # if periods is None:
+    #     #     periods = [12, 36, 60, "ALL"]
 
-        for period in periods:
-            if isinstance(period, int):
-                if self.frequency in ['ME', 'W']:
-                    start_date = last_date - pd.DateOffset(months=period - 1)
-                elif self.frequency == 'QE':
-                    start_date = last_date - pd.DateOffset(quarters=period // 3 - 1)
-                elif self.frequency == 'D':
-                    start_date = last_date - pd.DateOffset(days=30 * (period - 1))
-                # 将 start_date 转换为 datetime64[ns] 类型
-                start_date = pd.Timestamp(start_date)
-                start_date = max(start_date, self._data.index.min())
-                col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
-            elif period == "ALL":
-                start_date = pd.Timestamp(self.start_date)
-                col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
-            else:
-                raise ValueError("Invalid period value")
+    #     for period in periods:
+    #         if isinstance(period, int):
+    #             if self.frequency in ['ME', 'W']:
+    #                 start_date = last_date - pd.DateOffset(months=period - 1)
+    #             elif self.frequency == 'QE':
+    #                 start_date = last_date - pd.DateOffset(quarters=period // 3 - 1)
+    #             elif self.frequency == 'D':
+    #                 start_date = last_date - pd.DateOffset(days=30 * (period - 1))
+    #             # 将 start_date 转换为 datetime64[ns] 类型
+    #             start_date = pd.Timestamp(start_date)
+    #             start_date = max(start_date, self._data.index.min())
+    #             col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
+    #             dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
+    #         elif period == "ALL":
+    #             start_date = pd.Timestamp(self.start_date)
+    #             col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
+    #             dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
+    #         else:
+    #             raise ValueError("Invalid period value")
 
-        return dict_stat_period_data
+    #     return dict_stat_period_data
 
     def _refrequency(self, df):
         """
@@ -184,6 +184,41 @@ class PriceDynamic:
         dif_data.name = 'difference'
 
         return dif_data
+
+
+def period_segment(df, periods = [12, 36, 60, "ALL"]):
+    """
+    Create data sources for different periods based on the frequency.
+    Param:
+        df/series:
+        periods: list of integers and string, the integer represent the number of latest months.
+
+    return: Dictionary of data sources.
+    """
+    if df is None:
+        return {}
+
+    last_date = df.index[-1]
+
+    dict_period_segment = {}
+    # if periods is None:
+    #     periods = [12, 36, 60, "ALL"]
+
+    for period in periods:
+        if isinstance(period, int):
+            start_date = last_date - pd.DateOffset(months=period)
+            # 将 start_date 转换为 datetime64[ns] 类型
+            start_date = pd.Timestamp(start_date)
+            col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
+            dict_period_segment[col_name] = df.loc[df.index >= start_date]
+        elif period == "ALL":
+            start_date = df.index[0]
+            col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
+            dict_period_segment[col_name] = df.loc[df.index >= start_date]
+        else:
+            raise ValueError("Invalid period value")
+
+    return dict_period_segment
 
 
 # 辅助函数：解析时间窗口
@@ -645,25 +680,9 @@ def scatter_hist(x, y):
 
 
 # 计算尾部统计信息
-def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_period_start: str = None,
-               interpolation: str = "linear"):
-    if not isinstance(periods, list):
-        raise TypeError("periods must be a list")
-    if not all(isinstance(p, (int, str)) for p in periods):
-        raise ValueError("periods must contain integers or strings")
-
-    # 根据频率设置分箱范围
-    if frequency == "ME":
-        bin_range = list(np.arange(0, 0.35, 0.05))
-    elif frequency == "W":
-        bin_range = list(np.arange(0, 0.18, 0.03))
-    else:
-        raise ValueError(f"Unsupported frequency: {frequency}. Supported frequencies are 'ME' and 'W'.")
+def tail_stats(data_sources, interpolation: str = "linear"):
 
 
-    data_sources = create_data_sources(df, periods, all_period_start, frequency)
-
-    last_three_index_list = df.index[-3:].strftime('%b%d').tolist()
     stats_index = pd.Index(
         ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th"]
     )
@@ -672,48 +691,25 @@ def tail_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_
 
     interval_freq_dict = {}
     for period_name, data in data_sources.items():
+        # check data if pd.Series
         tail_values = [
-            data[feature].mean(),
-            data[feature].std(),
-            data[feature].skew(),
-            data[feature].kurtosis(),
-            data[feature].max(),
-            data[feature].quantile(0.99, interpolation=interpolation),
-            data[feature].quantile(0.95, interpolation=interpolation),
-            data[feature].quantile(0.90, interpolation=interpolation),
+            data.mean(),
+            data.std(),
+            data.skew(),
+            data.kurtosis(),
+            data.max(),
+            data.quantile(0.99, interpolation=interpolation),
+            data.quantile(0.95, interpolation=interpolation),
+            data.quantile(0.90, interpolation=interpolation),
         ]
 
         stats_df[period_name] = tail_values
-        
-        n, bins = np.histogram(data[feature], bins=bin_range, density=True)
-        bins = bins.round(2)
-        cumulative_n = np.cumsum(n * np.diff(bins))
-        n_diff = np.insert(np.diff(cumulative_n), 0, cumulative_n[0])
-
-        bin_intervals = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
-        bin_info = {}
-        for i in range(len(bin_intervals)):
-            bin_info[f"{bin_intervals[i]}"] = n_diff[i]
-
-        interval_freq_dict[period_name] = bin_info
-
-    interval_freq_df = pd.DataFrame(interval_freq_dict)
-    combined_df = pd.concat([stats_df, interval_freq_df])
-
-    return combined_df
+    
+    return stats_df
 
 
 # 绘制尾部特征值分布
-def tail_plot(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_period_start: str = None,
-              interpolation: str = "linear"):
-    data_sources = create_data_sources(df, periods, all_period_start, frequency)
-
-    if frequency == "ME":
-        bin_range = list(np.arange(0, 0.35, 0.05))
-    elif frequency == "W":
-        bin_range = list(np.arange(0, 0.18, 0.03))
-    else:
-        bin_range = list(np.arange(0, 0.25, 0.04))  # Default range for other frequencies
+def tail_plot(data_sources, interpolation: str = "linear"):
 
     # Create a single figure
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -722,7 +718,7 @@ def tail_plot(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_p
 
     for period_name, data in data_sources.items():
         # 绘制累积密度曲线
-        sns.ecdfplot(data[feature], ax=ax, label=period_name)
+        sns.ecdfplot(data, ax=ax, label=period_name)
 
     # 绘制 y=0.9, 0.95, 0.99 的横线
     for y_val in [0.9, 0.95, 0.99]:
@@ -731,8 +727,8 @@ def tail_plot(df, feature, frequency, periods: list = [12, 36, 60, "ALL"], all_p
         ax.text(ax.get_xlim()[-1], y_val, f'{y_val * 100:.0f}th', ha='left', va='center', color='gray')
 
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    ax.set_title(f"Cumulative Density of {feature}")
-    ax.set_xlabel(f"{feature} (%)")
+    ax.set_title(f"Cumulative Density")
+    # ax.set_xlabel(f"{feature} (%)")
     ax.set_ylabel("Cumulative Frequency")
     ax.grid(True, alpha=0.3)
 
@@ -765,71 +761,38 @@ def calculate_projections(data, feature, percentile, interpolation, bias_weight)
     return realized_bias
 
 
-def volatility_projection(df, feature, frequency: str = 'ME', percentile: float = 0.90, prefer_bias: float = None,
-                          periods: list = [12, 36, 60, "ALL"], all_period_start: str = None,
-                          interpolation: str = "linear"):
-    if not isinstance(periods, list):
-        raise TypeError("periods must be a list")
-    if not all(isinstance(p, (int, str)) for p in periods):
-        raise ValueError("periods must contain integers or strings")
+def implied_osc_weight(df, percentile: float = 0.90, target_bias: float = None, interpolation: str = "linear"):
+    # Check if df has columns High Low Last Close Oscillation
 
-    if feature == "OscillationPct":
-        refrequency_data = refrequency(df, frequency=frequency)
-        refrequency_feature = oscillation(refrequency_data)
+        proj_high_weight = 0.5
 
-        data_sources = create_data_sources(refrequency_feature, periods, all_period_start, frequency)
+        if target_bias is not None:
+            proj_high_weights = np.linspace(0.4, 0.6, 21)
+            min_error = float('inf')
+            best_proj_high_weight = 0.5
 
-        volatility_projection_index = pd.Index(
-            [
-                f"Last: {refrequency_feature.index[-2].strftime('%y%b%d')}",
-                f"{percentile}th {feature}",
-                "RealizedBias%",
-                "ProjectedHighWeight%",
-                "ProjHigh",
-                "ProjLow",
-                f"Today: {df.index[-1].strftime('%y%b%d')}"
-            ]
-        )
-        volatility_projection_df = pd.DataFrame(index=volatility_projection_index)
+            for proj_high_weight in proj_high_weights:
+                realized_bias = calculate_projections(df.copy(), percentile, interpolation, proj_high_weight)
+                error = abs(realized_bias - target_bias)
+            
+                if error < min_error:
+            
+                    min_error = error
+            
+                    best_proj_high_weight = proj_high_weight
+            
+            proj_high_weight = best_proj_high_weight
+        
 
-        for period_name, data in data_sources.items():
-            period_end_close = data["Close"].iloc[-1]
-            assumed_volatility = data[feature].quantile(percentile, interpolation=interpolation)
+        realized_bias = calculate_projections(data, feature, percentile, interpolation, proj_high_weight)
 
-            if prefer_bias is not None:
-                proj_high_weights = np.linspace(0.4, 0.6, 21)
-                min_error = float('inf')
-                best_proj_high_weight = 0
-                for proj_high_weight in proj_high_weights:
-                    realized_bias = calculate_projections(data.copy(), feature, percentile, interpolation,
-                                                          proj_high_weight)
-                    error = abs(realized_bias - prefer_bias)
-                    if error < min_error:
-                        min_error = error
-                        best_proj_high_weight = proj_high_weight
-                proj_high_weight = best_proj_high_weight
-            else:
-                proj_high_weight = 0.5
+        proj_high = period_end_close + period_end_close * assumed_volatility * proj_high_weight
+        proj_low = period_end_close - period_end_close * assumed_volatility * (1 - proj_high_weight)
 
-            realized_bias = calculate_projections(data, feature, percentile, interpolation, proj_high_weight)
+        last_close = df["Close"].iloc[-1]
 
-            proj_high = period_end_close + period_end_close * assumed_volatility * proj_high_weight
-            proj_low = period_end_close - period_end_close * assumed_volatility * (1 - proj_high_weight)
 
-            last_close = df["Close"].iloc[-1]
-
-            volatility_projection_df[period_name] = [
-                period_end_close,
-                assumed_volatility,
-                realized_bias * 100,
-                proj_high_weight * 100,
-                proj_high,
-                proj_low,
-                last_close
-            ]
-        return volatility_projection_df
-    else:
-        raise ValueError("Invalid feature value")
+    return volatility_projection_df
 
 
 # 计算每个频率对应的天数
