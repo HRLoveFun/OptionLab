@@ -187,13 +187,13 @@
         <div>
             <h1>Analysis</h1>
 
-            {% if recent_stats_result %}
-            <h2>Recent Statistics</h2>
-            <div class="table-container">
-                {{ recent_stats_result|safe }}
+            {% if osc_ret_scatter_hist_url %}
+            <h2>Oscillation vs Return </h2>
+            <div class="plot-container">
+                <img src="data:image/png;base64,{{ osc_ret_scatter_hist_url }}" alt="Oscillation vs Return Scatter Plot">
             </div>
             {% endif %}
-
+            
             {% if tail_stats_result %}
             <h2>Tail Statistics</h2>
             <div class="table-container">
