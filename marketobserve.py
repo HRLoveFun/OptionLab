@@ -17,7 +17,7 @@ from scipy.stats import ks_2samp, percentileofscore
 
 
 class PriceDynamic:
-    def __init__(self, ticker, start_date=dt.date(2010, 1, 1), frequency='D'):
+    def __init__(self, ticker, start_date=dt.date(2017, 1, 1), frequency='D'):
         """
         Initialize the PriceDynamic class.
 
@@ -28,12 +28,10 @@ class PriceDynamic:
         self.ticker = ticker
         self.start_date = start_date
         self.frequency = frequency
-        # 假设 _download_data 和 _refrequency 方法存在
+
         data = self._download_data()
-        if data is not None:
-            self._data = self._refrequency(data)
-        else:
-            self._data = None
+        self._data = self._refrequency(data)
+
 
     def __getattr__(self, attr):
         # 当访问实例属性时，若属性不存在，尝试从 _data 中获取
@@ -65,7 +63,6 @@ class PriceDynamic:
                 df.columns = df.columns.droplevel(1)
             df.set_index(pd.DatetimeIndex(df.index), inplace=True)
             df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
-            df['LastClose'] = df["Close"].shift(1)
 
             return df
 
@@ -128,6 +125,7 @@ class PriceDynamic:
             raise ValueError("DataFrame must contain OHLC columns")
 
         if self.frequency == 'D':
+            df['LastClose'] = df["Close"].shift(1)
             return df
         else:
             try:
@@ -137,8 +135,10 @@ class PriceDynamic:
                     'Low': 'min',
                     'Close': 'last',
                     'Adj Close': 'last',
-                    'Volume': 'sum'
+                    'Volume': 'sum',
                 }).dropna()
+                refrequency_df['LastClose'] = refrequency_df["Close"].shift(1)
+
                 return refrequency_df
             except KeyError as e:
                 print(f"Missing column {e} in DataFrame")
@@ -156,6 +156,7 @@ class PriceDynamic:
         if self._data is None:
             return None
         osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
+        osc_data.name = 'oscillation'
         return osc_data
 
     def ret(self):
@@ -167,6 +168,8 @@ class PriceDynamic:
         if self._data is None:
             return None
         ret_data = ((self._data["Close"] - self._data['LastClose']) / self._data['LastClose']) * 100
+        ret_data.name = 'returns'
+
         return ret_data
 
     def dif(self):
@@ -178,6 +181,8 @@ class PriceDynamic:
         if self._data is None:
             return None
         dif_data = self._data["Close"] - self._data['LastClose']
+        dif_data.name = 'difference'
+
         return dif_data
 
 
@@ -559,61 +564,84 @@ def percentile_stats(dict, percentile, interpolation: str = "linear"):
     # combined_df.index.names = [f"{percentile=}"]
     return stats_df
     
-
-
-def recent_stats(data, feature, frequency):
+#绘制带直方图的散点图
+def scatter_hist(x, y):
     """
-    计算指定特征的最近统计信息。
+    绘制一个带有 x 和 y 数据直方图的散点图。
 
     参数:
-    data (pandas.DataFrame): 包含数据的数据框。
-    feature (str): 要分析的特征列名。
-    frequency (str): 频率，支持 'ME' 和 'W'。
+    x (array-like): 散点图中各点的 x 坐标数据。
+    y (array-like): 散点图中各点的 y 坐标数据。
 
     返回:
-    pandas.DataFrame: 包含最近值、百分位数和分箱信息的 DataFrame。
+    fig (matplotlib.figure.Figure): 包含图形的 Figure 对象。
+    ax (matplotlib.axes.Axes): 包含散点图的 Axes 对象。
     """
-    # 根据频率设置分箱范围
-    if frequency == "ME":
-        bin_range = list(np.arange(0, 0.35, 0.05))
-    elif frequency == "W":
-        bin_range = list(np.arange(0, 0.18, 0.03))
-    else:
-        raise ValueError(f"Unsupported frequency: {frequency}. Supported frequencies are 'ME' and 'W'.")
+    # 检查输入数据长度是否一致
+    if len(x) != len(y):
+        raise ValueError("输入的 x 和 y 数据长度必须一致。")
 
-    # 检查数据长度
-    if len(data[feature]) < 3:
-        raise ValueError("The data must have at least 3 elements.")
+    # 创建画布和子图布局
+    fig = plt.figure(figsize=(8, 8))
+    gs = fig.add_gridspec(2, 2, width_ratios=(4, 1), height_ratios=(1, 4),
+                          left=0.1, right=0.9, bottom=0.1, top=0.9,
+                          wspace=0.05, hspace=0.05)
+    ax = fig.add_subplot(gs[1, 0])
+    ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
+    ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
 
-    # 计算最近的值和百分位数
-    recent_values = []
-    percentiles = []
-    for i in range(3):
-        value = data[feature].iloc[-(i + 1)]
-        recent_values.append(value)
-        percentiles.append(percentileofscore(data[feature], value))
+    # 不显示直方图的标签
+    ax_histx.tick_params(axis="x", labelbottom=False)
+    ax_histy.tick_params(axis="y", labelleft=False)
 
-    # 计算直方图
-    hist, bins = np.histogram(data[feature], bins=bin_range, density=True)
-    bins = bins.round(2)
+    # 绘制散点图
+    ax.scatter(x, y)
 
-    # 计算累积分布
-    cumulative_hist = np.cumsum(hist * np.diff(bins))
-    hist_diff = np.insert(np.diff(cumulative_hist), 0, cumulative_hist[0])
+    # 绘制辅助线
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    ax.plot(xlim, xlim, 'k--', label='y = x')
+    ax.plot(xlim, [-i for i in xlim], 'k--', label='y = -x')
+    ax.axhline(y=0, color='k', linestyle='--', label='y = 0')
 
-    # 构建分箱信息
-    bin_intervals = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
-    bin_info = {}
-    for i in range(len(bin_intervals)):
-        bin_info[f"{bin_intervals[i]}"] = hist_diff[i]
+    # 当 x 为 pandas.Series 且索引为时间格式时，高亮显示最后一个点
+    if isinstance(x, pd.Series) and pd.api.types.is_datetime64_any_dtype(x.index):
+        ax.scatter(x.iloc[-1], y.iloc[-1], color='red', s=100, zorder=5)
 
-    # 创建 DataFrame
-    df = pd.DataFrame({
-        f'{feature}': recent_values,
-        'Percentiles': percentiles
-    })
+    # 根据 x 和 y 的取值范围自动调整坐标轴范围
+    x_min, x_max = min(x), max(x)
+    y_min, y_max = min(y), max(y)
+    ax.set_xlim(x_min - 1, x_max + 1)
+    ax.set_ylim(y_min - 1, y_max + 1)
 
-    return df
+    # 绘制5的倍数的垂直和水平辅助线
+    for x_val in np.arange(round(x_min / 5) * 5, x_max + 1, 5):
+        ax.axvline(x=x_val, color='green', linestyle='--', alpha=0.5)
+    for y_val in np.arange(round(y_min / 5) * 5, y_max + 1, 5):
+        ax.axhline(y=y_val, color='green', linestyle='--', alpha=0.5)
+
+    # 增加坐标轴标签
+    ax.set_xlabel(x.name)
+    ax.set_ylabel(y.name)
+
+    # 找出分位数超过mark_percentile的散点并标注索引
+    mark_percentile = 0.90
+    mark_x = np.quantile(x, mark_percentile)
+    for (x_val, y_val) in zip(x, y):
+        if x_val > mark_x:
+            if isinstance(x, pd.Series):
+                index_time = x[x == x_val].index[0].strftime('%y%b')
+                ax.annotate(index_time, (x_val, y_val), textcoords="offset points",
+                            xytext=(0, 10), ha='center')
+            else:
+                ax.annotate(str(x.tolist().index(x_val)), (x_val, y_val), textcoords="offset points",
+                            xytext=(0, 0), ha='center')
+
+    # 绘制直方图
+    ax_histx.hist(x, bins='auto')
+    ax_histy.hist(y, bins='auto', orientation='horizontal')
+
+    return fig, ax
 
 
 # 计算尾部统计信息
