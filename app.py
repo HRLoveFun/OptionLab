@@ -26,7 +26,7 @@ def index():
                 periods = [12, 36, 60, "ALL"]
 
             # Get stock data
-            start_date = dt.date(2017, 1, 1)
+            start_date = dt.date(2016, 12, 1)
             end_date = dt.date.today()
             data = yf_download(ticker, start_date, end_date)
             if data is None or data.empty:
@@ -69,16 +69,9 @@ def index():
                 osc_ret_scatter_hist_url = base64.b64encode(img_buffer.getvalue()).decode()
                 plt.close(fig)
 
-                tail_stats_result = tail_stats(feat_data, "OscillationPct", frequency=frequency)
-                if tail_stats_result is not None:
-                    tail_stats_result = tail_stats_result.apply(
-                        lambda row: row.apply(
-                            lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and all(
-                                s not in row.name for s in ["skew", "kurt", "p-value", "%th"]) else '{:.2f}'.format(x)
-                        ), axis=1
-                    )
-
-                tail_plot_url = tail_plot(feat_data, "OscillationPct", frequency=frequency)
+                osc_period_segment = period_segment(osc)
+                tail_stats_result = tail_stats(osc_period_segment)
+                tail_plot_url = tail_plot(osc_period_segment)
                 volatility_proj_pb0 = volatility_projection(data, "OscillationPct", frequency=frequency, prefer_bias=0)
 
                 if "LastClose" in feat_data.columns and "PeriodGap" not in feat_data.columns:
