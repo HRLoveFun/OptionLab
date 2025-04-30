@@ -221,10 +221,10 @@
         <div>
             <h1>Assessment</h1>
 
-            {% if volatility_proj_pb0 %}
-            <h2>Volatility Projection (Direction Neutral)</h2>
-            <div class="table-container">
-                {{ volatility_proj_pb0|safe }}
+            {% if oscillation_projection %}
+            <h2>Oscillation Projection (Side Bias Neutral)</h2>
+            <div class="plot-container">
+                <img src="data:image/png;base64,{{ oscillation_projection }}" alt="Volatility Projection">
             </div>
             {% endif %}
 
