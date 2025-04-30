@@ -15,6 +15,8 @@ from scipy.stats import ks_2samp, percentileofscore
 
 # yf.enable_debug_mode()
 
+PERIODS = [12, 36, 60, "ALL"]
+
 
 class PriceDynamic:
     def __init__(self, ticker, start_date=dt.date(2016, 12, 1), frequency='D'):
@@ -72,45 +74,6 @@ class PriceDynamic:
             print(f"Unexpected error downloading data: {e}")
         return None
 
-
-    # def stat_periods(self, periods = [12, 36, 60, "ALL"]):
-    #     """
-    #     Create data sources for different periods based on the frequency.
-    #     Param:
-    #         periods: list of integers and string, the integer represent the number of latest months.
-
-    #     :return: Dictionary of data sources.
-    #     """
-    #     if self._data is None:
-    #         return {}
-
-    #     last_date = self._data.index[-1]
-
-    #     dict_stat_period_data = {}
-    #     # if periods is None:
-    #     #     periods = [12, 36, 60, "ALL"]
-
-    #     for period in periods:
-    #         if isinstance(period, int):
-    #             if self.frequency in ['ME', 'W']:
-    #                 start_date = last_date - pd.DateOffset(months=period - 1)
-    #             elif self.frequency == 'QE':
-    #                 start_date = last_date - pd.DateOffset(quarters=period // 3 - 1)
-    #             elif self.frequency == 'D':
-    #                 start_date = last_date - pd.DateOffset(days=30 * (period - 1))
-    #             # 将 start_date 转换为 datetime64[ns] 类型
-    #             start_date = pd.Timestamp(start_date)
-    #             start_date = max(start_date, self._data.index.min())
-    #             col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-    #             dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
-    #         elif period == "ALL":
-    #             start_date = pd.Timestamp(self.start_date)
-    #             col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-    #             dict_stat_period_data[col_name] = self._data.loc[self._data.index >= start_date]
-    #         else:
-    #             raise ValueError("Invalid period value")
-
-    #     return dict_stat_period_data
 
     def _refrequency(self, df):
         """
@@ -186,7 +149,7 @@ class PriceDynamic:
         return dif_data
 
 
-def period_segment(df, periods = [12, 36, 60, "ALL"]):
+def period_segment(df, periods = PERIODS):
     """
     Create data sources for different periods based on the frequency.
     Param:
@@ -201,9 +164,6 @@ def period_segment(df, periods = [12, 36, 60, "ALL"]):
     last_date = df.index[-1]
 
     dict_period_segment = {}
-    # if periods is None:
-    #     periods = [12, 36, 60, "ALL"]
-
     for period in periods:
         if isinstance(period, int):
             start_date = last_date - pd.DateOffset(months=period)
@@ -429,24 +389,24 @@ def ChangeDistPlot(data, time_windows=[1], frequencies=['W', 'M', 'Q', 'Y']):
     plt.show()
 
 
-# 从雅虎财经下载股票数据
-def yf_download(ticker, start_date, end_date, interval='1d', progress=True, auto_adjust=False):
-    try:
-        df = yf.download(
-            ticker,
-            start=start_date,
-            end=end_date,
-            interval=interval,
-            progress=progress,
-            auto_adjust=auto_adjust,
-        )
-        df.columns = df.columns.droplevel(1)
-        df.set_index(pd.DatetimeIndex(df.index), inplace=True)
-        df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
-        return df
-    except Exception as e:
-        print(f"Error downloading data: {e}")
-        return None
+# # 从雅虎财经下载股票数据
+# def yf_download(ticker, start_date, end_date, interval='1d', progress=True, auto_adjust=False):
+#     try:
+#         df = yf.download(
+#             ticker,
+#             start=start_date,
+#             end=end_date,
+#             interval=interval,
+#             progress=progress,
+#             auto_adjust=auto_adjust,
+#         )
+#         df.columns = df.columns.droplevel(1)
+#         df.set_index(pd.DatetimeIndex(df.index), inplace=True)
+#         df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
+#         return df
+#     except Exception as e:
+#         print(f"Error downloading data: {e}")
+#         return None
 
 
 # 创建不同时间周期的数据来源
