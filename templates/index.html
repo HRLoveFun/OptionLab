@@ -221,10 +221,10 @@
         <div>
             <h1>Assessment</h1>
 
-            {% if oscillation_projection %}
+            {% if oscillation_projection_url %}
             <h2>Oscillation Projection (Side Bias Neutral)</h2>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ oscillation_projection }}" alt="Volatility Projection">
+                <img src="data:image/png;base64,{{ oscillation_projection_url }}" alt="Volatility Projection">
             </div>
             {% endif %}
 
