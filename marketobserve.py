@@ -761,45 +761,42 @@ def calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight):
 
 # 波动率预测
 def osc_projection(data, percentile: float = 0.90, target_bias: float = None, interpolation: str = "linear"):
+    """"
+    returns: a scatter charts with "Last Close", "Last", "Current Projection", "Next Projection"
+    """
     # 检查数据是否包含所需的列
     required_columns = ['High', 'Low', 'LastClose', 'Oscillation', 'Close']
     for col in required_columns:
         if col not in data.columns:
             raise ValueError(f"数据中缺少列: {col}")
 
-
     df = data[['High', 'Low', 'LastClose', 'Oscillation', 'Close']].copy().iloc[:-1]
-
 
     proj_high_weight = 0.5
     proj_volatility = data["Oscillation"].quantile(percentile, interpolation=interpolation)
-
 
     if target_bias is not None:
         proj_high_weights = np.linspace(0.4, 0.6, 21)
         min_error = float('inf')
         best_proj_high_weight = 0.5
 
-
         for proj_high_weight in proj_high_weights:
             # 这里假设 calculate_projections 函数已经定义
             realized_bias = calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight)
             error = abs(realized_bias - target_bias)
 
-
             if error < min_error:
                 min_error = error
                 best_proj_high_weight = proj_high_weight
-
 
         proj_high_weight = best_proj_high_weight
 
     realized_bias = calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight)
 
-
     px_lastClose = data["LastClose"].iloc[-1]
+    px_high = data["High"].iloc[-1]
+    px_low = data["Low"].iloc[-1]
     px_last = data["Close"].iloc[-1]
-
 
     # 计算 proj_high 和 proj_low
     proj_highCurrentClose = px_lastClose + px_lastClose * proj_volatility / 100 * proj_high_weight
@@ -807,37 +804,39 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     proj_highNextClose = px_last + px_last * proj_volatility / 100 * proj_high_weight
     proj_lowNextClose = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
 
-
     # 准备绘图数据
-    x = [1, 2, 3, 3, 4, 4]
-    y = [px_lastClose, px_last, proj_highCurrentClose, proj_lowCurrentClose, proj_highNextClose, proj_lowNextClose]
+    x = [1, 2, 2, 2, 3, 3, 4, 4]
+    y = [px_lastClose, px_high, px_last, px_low, proj_highCurrentClose, proj_lowCurrentClose, proj_highNextClose, proj_lowNextClose]
 
     # 定义不同 tick 的颜色
-    colors = ['y', 'g', 'b', 'b', 'c', 'c']
+    colors = ['y', 'c', 'c', 'c', 'y', 'y', 'c', 'c']
 
     # 绘制散点图，使用不同颜色
-    plt.scatter(x, y, c=colors, marker='^', s=50)
+    plt.scatter(x, y, c=colors, marker='s', s=50, alpha=0.3)
 
     # 显示每个点的数值
     for xi, yi in zip(x, y):
         plt.text(xi, yi, f'{yi:.0f}', ha='center', va='bottom')
 
     # 计算并显示百分比变化
-    pairs = [(0, 1), (0, 2), (0, 3), (1, 4), (1, 5)]
+    pairs = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (2, 6), (2, 7)]
     for start, end in pairs:
         percent_change = ((y[end] - y[start]) / y[start]) * 100
         plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
 
     plt.xticks([1, 2, 3, 4], ["Last Close", "Last", "Current Projection", "Next Projection"])
-    plt.xlabel('Time')
+    plt.xlabel('Price Dynamic')
     plt.ylabel('Price')
     plt.title(f'Oscillation Projection ({realized_bias=})')
-    plt.savefig('price_projection_scatter.png')
 
-    # plt.show()
+    # Save the plot to a buffer
+    img_buffer = io.BytesIO()
+    plt.savefig(img_buffer, format='png')
+    img_buffer.seek(0)
+    plot_url = base64.b64encode(img_buffer.getvalue()).decode()
+    plt.close()
 
-    return None
-
+    return plot_url
 
 # 计算每个频率对应的天数
 def days_of_frequency(frequency):
