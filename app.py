@@ -44,10 +44,9 @@ def index():
             ret = pxdy.ret().dropna()
 
             # Initialize variables
-            recent_stats_result = None
             tail_stats_result = None
             tail_plot_url = None
-            volatility_proj_pb0 = None
+            oscillation_projection = None
             gap_stats_result = None
             option_matrix_result = None
             plot_url = None
@@ -72,7 +71,8 @@ def index():
                 osc_period_segment = period_segment(osc)
                 tail_stats_result = tail_stats(osc_period_segment)
                 tail_plot_url = tail_plot(osc_period_segment)
-                volatility_proj_pb0 = volatility_projection(data, "OscillationPct", frequency=frequency, prefer_bias=0)
+
+                volatility_proj_pb0 = osc_projection(data, target_bias=0)
 
                 if "LastClose" in feat_data.columns and "PeriodGap" not in feat_data.columns:
                     # Calculate PeriodGap if it doesn't exist
