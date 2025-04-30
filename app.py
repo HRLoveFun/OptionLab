@@ -1,16 +1,17 @@
-from flask import Flask, render_template, request
 import pandas as pd
-import logging
-import datetime as dt
 import matplotlib.pyplot as plt
 import io
 import base64
+import numpy as np
+import seaborn as sns
+import datetime as dt
+from flask import Flask, request, render_template
 import json
 
-from marketobserve import *
+
+from marketobserve import * 
 
 app = Flask(__name__)
-app.logger.setLevel(logging.DEBUG)
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -25,21 +26,20 @@ def index():
             if not periods:
                 periods = [12, 36, 60, "ALL"]
 
-            # Get stock data
+            # Initialize PriceDynamic instance
             start_date = dt.date(2016, 12, 1)
-            end_date = dt.date.today()
-            data = yf_download(ticker, start_date, end_date)
+            pxdy = PriceDynamic(ticker, start_date, frequency)
+            data = pxdy._data
             if data is None or data.empty:
                 app.logger.error(f"Failed to download data for {ticker}")
                 return render_template('index.html', error=f"Failed to download data for {ticker}. Please check the ticker symbol.")
 
-            refreq_data = refrequency(data, frequency=frequency)
+            refreq_data = data
             if refreq_data is None or refreq_data.empty:
                 app.logger.error(f"Failed to refrequency data for {ticker}")
                 return render_template('index.html', error=f"Failed to process data for {ticker} with frequency {frequency}.")
 
-            # Initialize PriceDynamic instance
-            pxdy = PriceDynamic(ticker, start_date, frequency)
+            # Calculate osc and ret using PriceDynamic methods
             osc = pxdy.osc().dropna()
             ret = pxdy.ret().dropna()
             dif = pxdy.dif().dropna()
@@ -49,13 +49,12 @@ def index():
                 'Diff': dif
             })
             
-            pxdy = pd.concat([pxdy,df_features],axis=1)
-
+            data = pd.concat([data,df_features],axis=1)
 
             # Initialize variables
             tail_stats_result = None
             tail_plot_url = None
-            oscillation_projection = None
+            oscillation_projection_url = None
             gap_stats_result = None
             option_matrix_result = None
             plot_url = None
@@ -81,8 +80,7 @@ def index():
                 tail_stats_result = tail_stats(osc_period_segment)
                 tail_plot_url = tail_plot(osc_period_segment)
 
-                # Update this part to get the base64-encoded image
-                oscillation_projection = osc_projection(pxdy, target_bias=0)
+                oscillation_projection_url = osc_projection(data, target_bias=0)
 
                 if "LastClose" in feat_data.columns and "PeriodGap" not in feat_data.columns:
                     # Calculate PeriodGap if it doesn't exist
@@ -152,7 +150,7 @@ def index():
                                    refreq_data=refreq_data.to_html() if refreq_data is not None else None,
                                    osc_ret_scatter_hist_url=osc_ret_scatter_hist_url,
                                    tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None,
-                                   oscillation_projection=oscillation_projection,  
+                                   oscillation_projection_url=oscillation_projection_url,
                                    gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
                                    option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None,
                                    plot_url=plot_url,
@@ -168,7 +166,8 @@ def index():
         return render_template('index.html', error=f"Value error occurred: {str(ve)}. Please check your input.")
     except Exception as e:
         app.logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-        return render_template('index.html', error=f"An unexpected error occurred: {str(e)}.")
+        return render_template('index.html', error=f"An unexpected error occurred: {str(e)}. Please try again.")
+
 
 if __name__ == '__main__':
     app.run(debug=True)
