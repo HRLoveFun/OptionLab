@@ -53,7 +53,7 @@ class PriceDynamic:
 
         :return: DataFrame containing stock data with columns 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'.
         """
-        # try to import data via local database, if failed, try next method
+
         # try:
         #     local_data = pd.read_excel(f"PriceDynamic.xlsx", sheet_name=self.ticker, index_col=0)
         #     local_data = local_data[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
