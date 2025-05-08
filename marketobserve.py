@@ -19,7 +19,7 @@ PERIODS = [12, 36, 60, "ALL"]
 
 
 class PriceDynamic:
-    def __init__(self, ticker, start_date=dt.date(2016, 12, 1), frequency='D'):
+    def __init__(self, ticker: str, start_date = dt.date(2016, 12, 1), frequency='D'):
         """
         Initialize the PriceDynamic class.
 
@@ -27,6 +27,10 @@ class PriceDynamic:
         :param start_date: The first date the record starts.
         :param frequency: Determine the frequency for sampling, allowed values are 'D', 'W', 'ME', 'QE'. Default is 'D'.
         """
+
+        assert isinstance(start_date, dt.date)
+        assert frequency in ['D', 'W', 'ME', 'QE']
+
         self.ticker = ticker
         self.start_date = start_date
         self.frequency = frequency
