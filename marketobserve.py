@@ -49,10 +49,23 @@ class PriceDynamic:
 
     def _download_data(self):
         """
-        Download stock data from Yahoo Finance.
+        Download stock data from Local, Yahoo Finance, BBG, Futu, etc.
 
         :return: DataFrame containing stock data with columns 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'.
         """
+        # try to import data via local database, if failed, try next method
+        # try:
+        #     local_data = pd.read_excel(f"PriceDynamic.xlsx", sheet_name=self.ticker, index_col=0)
+        #     local_data = local_data[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
+        #     print("Data loaded from local database.")
+        #     return local_data
+        # except FileNotFoundError:
+        #     print("Local data file not found.")
+        # except KeyError as e:
+        #     print(f"Missing column {e} in local data.")
+        # except Exception as e:
+        #     print(f"Unexpected error loading local data: {e}")
+
         try:
             df = yf.download(
                 self.ticker,
@@ -67,13 +80,9 @@ class PriceDynamic:
             df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
 
             return df
-
-        except yf.YFinanceError as e:
-            print(f"YFinance error downloading data: {e}")
         except Exception as e:
             print(f"Unexpected error downloading data: {e}")
         return None
-
 
     def _refrequency(self, df):
         """
