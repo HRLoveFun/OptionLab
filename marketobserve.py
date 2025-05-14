@@ -402,25 +402,6 @@ def ChangeDistPlot(data, time_windows=[1], frequencies=['W', 'M', 'Q', 'Y']):
     plt.show()
 
 
-# # 从雅虎财经下载股票数据
-# def yf_download(ticker, start_date, end_date, interval='1d', progress=True, auto_adjust=False):
-#     try:
-#         df = yf.download(
-#             ticker,
-#             start=start_date,
-#             end=end_date,
-#             interval=interval,
-#             progress=progress,
-#             auto_adjust=auto_adjust,
-#         )
-#         df.columns = df.columns.droplevel(1)
-#         df.set_index(pd.DatetimeIndex(df.index), inplace=True)
-#         df = df[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']]
-#         return df
-#     except Exception as e:
-#         print(f"Error downloading data: {e}")
-#         return None
-
 
 # 创建不同时间周期的数据来源
 def create_data_sources(df, periods, all_period_start, frequency):
@@ -491,8 +472,8 @@ def refrequency(df, frequency: str):
 def oscillation(df):
     data = df[['Open', 'High', 'Low', 'Close']].copy()
     data['LastClose'] = data["Close"].shift(1)
-    data["Oscillation"] = data["High"] - data["Low"]
-    data["OscillationPct"] = (data["Oscillation"] / data['LastClose'])
+    # data["Oscillation"] = data["High"] - data["Low"]
+    data["Oscillation"] = (data["High"] - data["Low"] / data['LastClose'])
     data = data.dropna()
     return data
 

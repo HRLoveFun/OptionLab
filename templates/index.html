@@ -102,7 +102,7 @@
                             <td>
                                 <select id="feature" name="feature">
                                     <option value="Oscillation" {% if feature == 'Oscillation' %}{% endif %}>Oscillation</option>
-                                    <option value="Difference" {% if feature == 'Difference' %}{% endif %}>Difference</option>
+                                    <!-- <option value="Difference" {% if feature == 'Difference' %}{% endif %}>Difference</option> -->
                                 </select>
                             </td>
                         </tr>
@@ -193,10 +193,10 @@
         <div>
             <h1>Analysis</h1>
 
-            {% if osc_ret_scatter_hist_url %}
-            <h2>Oscillation vs Return </h2>
+            {% if feat_ret_scatter_hist_url %}
+            <h2>{{ feature }} vs Return </h2>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ osc_ret_scatter_hist_url }}" alt="Oscillation vs Return Scatter Plot">
+                <img src="data:image/png;base64,{{ feat_ret_scatter_hist_url }}" alt="{{ feature }} vs Return Scatter Plot">
             </div>
             {% endif %}
             
@@ -227,10 +227,10 @@
         <div>
             <h1>Assessment</h1>
 
-            {% if oscillation_projection_url %}
-            <h2>Oscillation Projection (Side Bias Neutral)</h2>
+            {% if feat_projection_url %}
+            <h2>{{ feature }} Projection (Side Bias Neutral)</h2>
             <div class="plot-container">
-                <img src="data:image/png;base64,{{ oscillation_projection_url }}" alt="Volatility Projection">
+                <img src="data:image/png;base64,{{ feat_projection_url }}" alt="Volatility Projection">
             </div>
             {% endif %}
 

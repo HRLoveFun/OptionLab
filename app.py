@@ -69,46 +69,53 @@ def index():
 
             # Handle feature-specific calculations
             if feature == 'Oscillation':
-                feat_data = oscillation(refreq_data)
-                if feat_data is None or feat_data.empty:
-                    app.logger.error(f"Failed to calculate oscillation for {ticker}")
-                    return render_template('index.html', error=f"Failed to calculate oscillation for {ticker}.")
+                feat_df= oscillation(refreq_data)
+                feat_data = osc
 
-                # Create scatter plot
-                fig, ax = scatter_hist(osc, ret)
-                # Save the plot to a buffer
-                img_buffer = io.BytesIO()
-                fig.savefig(img_buffer, format='png')
-                img_buffer.seek(0)
-                osc_ret_scatter_hist_url = base64.b64encode(img_buffer.getvalue()).decode()
-                plt.close(fig)
+            # elif feature == '':
 
-                osc_period_segment = period_segment(osc)
-                tail_stats_result = tail_stats(osc_period_segment)
-                tail_plot_url = tail_plot(osc_period_segment)
-
-                oscillation_projection_url = osc_projection(data, target_bias=0)
-
-                if "LastClose" in feat_data.columns and "PeriodGap" not in feat_data.columns:
-                    # Calculate PeriodGap if it doesn't exist
-                    feat_data["PeriodGap"] = feat_data["Open"] / feat_data["LastClose"] - 1
-
-                if "PeriodGap" in feat_data.columns:
-                    gap_stats_result = period_gap_stats(feat_data, "PeriodGap", frequency=frequency)
-                    if gap_stats_result is not None:
-                        gap_stats_result = gap_stats_result.apply(
-                            lambda row: row.apply(
-                                lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and row.name not in [
-                                    "skew", "kurt", "p-value"] else '{:.2f}'.format(x)
-                            ), axis=1
-                        )
-            elif feature == 'Returns':
-                # Placeholder for future implementation of Returns feature
-                app.logger.warning("Returns feature not fully implemented yet")
-                return render_template('index.html', error="The Returns feature is not fully implemented yet.")
             else:
                 app.logger.error(f"Invalid feature: {feature}")
                 return render_template('index.html', error=f"Invalid feature selected: {feature}")
+
+            if feat_df is None or feat_df.empty:
+                app.logger.error(f"Failed to calculate oscillation for {ticker}")
+                return render_template('index.html', error=f"Failed to calculate oscillation for {ticker}.")
+
+            # Create scatter plot
+            fig, _ = scatter_hist(feat_data, ret)
+            # Save the plot to a buffer
+            img_buffer = io.BytesIO()
+            fig.savefig(img_buffer, format='png')
+            img_buffer.seek(0)
+            feat_ret_scatter_hist_url = base64.b64encode(img_buffer.getvalue()).decode()
+            plt.close(fig)
+
+            feat_period_segment = period_segment(feat_data)
+            tail_stats_result = tail_stats(feat_period_segment)
+            tail_plot_url = tail_plot(feat_period_segment)
+
+            if feature == 'Oscillation':
+                feat_projection_url = osc_projection(data, target_bias=0)
+
+            # elif feature == '':
+
+            else:
+                pass
+
+            if "LastClose" in feat_df.columns and "PeriodGap" not in feat_df.columns:
+                # Calculate PeriodGap if it doesn't exist
+                feat_df["PeriodGap"] = feat_df["Open"] / feat_df["LastClose"] - 1
+
+            if "PeriodGap" in feat_df.columns:
+                gap_stats_result = period_gap_stats(feat_df, "PeriodGap", frequency=frequency)
+                if gap_stats_result is not None:
+                    gap_stats_result = gap_stats_result.apply(
+                        lambda row: row.apply(
+                            lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and row.name not in [
+                                "skew", "kurt", "p-value"] else '{:.2f}'.format(x)
+                            ), axis=1
+                        )
 
             # Handle option matrix
             option_position_str = request.form.get('option_position')
@@ -155,9 +162,9 @@ def index():
                                    feature=feature,
                                    frequency=frequency,
                                    refreq_data=refreq_data.to_html() if refreq_data is not None else None,
-                                   osc_ret_scatter_hist_url=osc_ret_scatter_hist_url,
+                                   feat_ret_scatter_hist_url=feat_ret_scatter_hist_url,
                                    tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None,
-                                   oscillation_projection_url=oscillation_projection_url,
+                                   feat_projection_url=feat_projection_url,
                                    gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
                                    option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None,
                                    plot_url=plot_url,
