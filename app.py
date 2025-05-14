@@ -26,8 +26,15 @@ def index():
             if not periods:
                 periods = [12, 36, 60, "ALL"]
 
+            # Get start time from user input
+            start_time_str = request.form.get('start_time')
+            try:
+                start_date = dt.datetime.strptime(start_time_str, '%Y%m').date()
+            except ValueError:
+                app.logger.error(f"Invalid start time format: {start_time_str}. Please use YYYYMM.")
+                return render_template('index.html', error=f"Invalid start time format: {start_time_str}. Please use YYYYMM.")
+
             # Initialize PriceDynamic instance
-            start_date = dt.date(2016, 12, 1)
             pxdy = PriceDynamic(ticker, start_date, frequency)
             data = pxdy._data
             if data is None or data.empty:

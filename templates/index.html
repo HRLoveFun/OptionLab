@@ -86,17 +86,23 @@
                 <table>
                     <tbody>
                         <tr>
-                            <th>Ticker (Yahoo Code)</th>
+                            <th>Ticker</th>
                             <td>
-                                <input type="text" id="ticker" name="ticker" value="{{ ticker }}" required>
+                                <input type="text" id="ticker" name="ticker" value="{{ ticker }}" placeholder="Yahoo Code" required>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Start Time</th>
+                            <td>
+                                <input type="number" id="start_time" name="start_time" min="190001" max="210012" placeholder="YYYYMM" required>
                             </td>
                         </tr>
                         <tr>
                             <th>Feature</th>
                             <td>
                                 <select id="feature" name="feature">
-                                    <option value="Oscillation" {% if feature == 'Oscillation' %}selected{% endif %}>Oscillation</option>
-                                    <option value="Returns" {% if feature == 'Returns' %}selected{% endif %}>Returns</option>
+                                    <option value="Oscillation" {% if feature == 'Oscillation' %}{% endif %}>Oscillation</option>
+                                    <option value="Difference" {% if feature == 'Difference' %}{% endif %}>Difference</option>
                                 </select>
                             </td>
                         </tr>
@@ -104,9 +110,9 @@
                             <th>Frequency</th>
                             <td>
                                 <select id="frequency" name="frequency">
-                                    <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
-                                    <option value="ME" {% if frequency == 'ME' %}selected{% endif %}>Monthly</option>
-                                    <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
+                                    <option value="W" {% if frequency == 'W' %} {% endif %}>Weekly</option>
+                                    <option value="ME" {% if frequency == 'ME' %} selected {% endif %}>Monthly</option>
+                                    <option value="QE" {% if frequency == 'QE' %} {% endif %}>Quarterly</option>
                                 </select>
                             </td>
                         </tr>
@@ -253,7 +259,6 @@
                     const cells = row.querySelectorAll('td, th');
                     cells.forEach(cell => {
                         let text = cell.textContent.trim();
-                        // 移除可能存在的逗号，处理类似 1,000.5 这样的格式
                         text = text.replace(/,/g, '');
                         const value = parseFloat(text);
                         if (!isNaN(value) && /^\d+(\.\d+)?$/.test(text)) {
@@ -287,7 +292,10 @@
         }
 
         document.getElementById('option-form').addEventListener('submit', function (e) {
-            // Save checkbox states
+            
+            const startTime = document.getElementById('start_time').value;
+            localStorage.setItem('start_time', startTime);
+
             const checkboxes = document.querySelectorAll('.multi-select-checkbox input[type="checkbox"]');
             const checkboxStates = {};
             checkboxes.forEach(checkbox => {
@@ -338,6 +346,11 @@
 
         window.onload = function () {
             formatTableData();
+
+            const startTime = localStorage.getItem('start_time');
+            if (startTime) {
+                document.getElementById('start_time').value = startTime;
+            }
 
             // Restore checkbox states
             const checkboxStates = JSON.parse(localStorage.getItem('checkboxStates'));
