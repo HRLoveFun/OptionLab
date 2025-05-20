@@ -745,7 +745,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
 
         proj_high_weight = best_proj_high_weight
 
-    realized_bias = calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight)
+    realized_bias = calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight).round(2)
 
     px_lastClose = data["LastClose"].iloc[-1]
     px_high = data["High"].iloc[-1]
@@ -759,14 +759,14 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     proj_lowNextPrd = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
 
     # 准备绘图数据
-    x = [1, 2, 2, 2, 2, 3, 4, 4]
-    y = [px_lastClose, px_high, px_low, proj_highCurPrd, proj_lowCurPrd, px_last, proj_highNextPrd, proj_lowNextPrd]
+    x = [1, 2, 2, 3, 3, 4, 5, 5]
+    y = [px_lastClose, proj_highCurPrd, proj_lowCurPrd, px_high, px_low, px_last, proj_highNextPrd, proj_lowNextPrd]
 
     # 定义不同 tick 的颜色
-    colors = ['y', 'c', 'c', 'y', 'y', 'c', 'c', 'c']
+    colors = ['y', 'c', 'c', 'y', 'y', 'y', 'c', 'c']
 
     # 定义标签
-    labels = ["Last Prd Close", "HH", "HL", "IH", "IL", "Last Price", "IH*", "IL*"]
+    labels = ["Last Prd Close", "IH", "IL", "HH", "HL", "Last Price", "IH*", "IL*"]
     
     # 绘制散点图，使用不同颜色
     plt.scatter(x, y, c=colors, marker='s', s=50, alpha=0.3)
@@ -781,7 +781,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
             plt.text(xi, yi - 0.05 * (max(y) - min(y)), labels[i],  ha='center', va='top', fontsize=9, color='black')
     
     # 计算并显示百分比变化
-    pairs = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (2, 6), (2, 7)]
+    pairs = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (5, 6), (5, 7)]
     for start, end in pairs:
         percent_change = ((y[end] - y[start]) / y[start]) * 100
         plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
