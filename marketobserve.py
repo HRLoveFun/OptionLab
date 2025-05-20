@@ -13,7 +13,7 @@ import datetime as dt
 from matplotlib.ticker import PercentFormatter, LogFormatter
 from scipy.stats import ks_2samp, percentileofscore
 
-yf.enable_debug_mode()
+# yf.enable_debug_mode()
 
 PERIODS = [12, 36, 60, "ALL"]
 
