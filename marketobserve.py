@@ -759,8 +759,8 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     proj_lowNextClose = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
 
     # 准备绘图数据
-    x = [1, 2, 2, 2, 3, 3, 4, 4]
-    y = [px_lastClose, px_high, px_last, px_low, proj_highCurrentClose, proj_lowCurrentClose, proj_highNextClose, proj_lowNextClose]
+    x = [1, 1, 2, 2, 3, 3, 4, 4]
+    y = [px_lastClose, px_last, px_high, px_low, proj_highCurrentClose, proj_lowCurrentClose, proj_highNextClose, proj_lowNextClose]
 
     # 定义不同 tick 的颜色
     colors = ['y', 'c', 'c', 'c', 'y', 'y', 'c', 'c']
@@ -778,7 +778,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
         percent_change = ((y[end] - y[start]) / y[start]) * 100
         plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
 
-    plt.xticks([1, 2, 3, 4], ["Last Close", "Last", "Current Projection", "Next Projection"])
+    plt.xticks([1, 2, 3, 4], ["Last Period Close\n Last Price", "Current Period High/Low", "Current Period Projection", "Next Period Projection"])
     plt.xlabel('Price Dynamic')
     plt.ylabel('Price')
     plt.title(f'Oscillation Projection ({realized_bias=})')
