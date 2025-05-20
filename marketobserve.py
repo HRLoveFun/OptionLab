@@ -786,7 +786,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
         percent_change = ((y[end] - y[start]) / y[start]) * 100
         plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
     
-    plt.xticks([1, 2, 3, 4，5], ["Last Close", "Implied\n High/Low", "Historical\n High/Low", "Last Price", "Next Implied\n High/Low"])
+    plt.xticks([1, 2, 3, 4, 5], ["Last Close", "Implied\n High/Low", "Historical\n High/Low", "Last Price", "Next Implied\n High/Low"])
     plt.xlabel('Price Dynamic')
     plt.ylabel('Price')
     plt.title(f'Oscillation Projection ({realized_bias=})')
