@@ -753,20 +753,20 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     px_last = data["Close"].iloc[-1]
 
     # 计算 proj_high 和 proj_low
-    proj_highCurrentClose = px_lastClose + px_lastClose * proj_volatility / 100 * proj_high_weight
-    proj_lowCurrentClose = px_lastClose - px_lastClose * proj_volatility / 100 * (1 - proj_high_weight)
-    proj_highNextClose = px_last + px_last * proj_volatility / 100 * proj_high_weight
-    proj_lowNextClose = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
+    proj_highCurPrd = px_lastClose + px_lastClose * proj_volatility / 100 * proj_high_weight
+    proj_lowCurPrd = px_lastClose - px_lastClose * proj_volatility / 100 * (1 - proj_high_weight)
+    proj_highNextPrd = px_last + px_last * proj_volatility / 100 * proj_high_weight
+    proj_lowNextPrd = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
 
     # 准备绘图数据
-    x = [1, 1, 2, 2, 3, 3, 4, 4]
-    y = [px_lastClose, px_last, px_high, px_low, proj_highCurrentClose, proj_lowCurrentClose, proj_highNextClose, proj_lowNextClose]
+    x = [1, 2, 2, 2, 2, 3, 4, 4]
+    y = [px_lastClose, px_high, px_low, proj_highCurPrd, proj_lowCurPrd, px_last, proj_highNextPrd, proj_lowNextPrd]
 
     # 定义不同 tick 的颜色
-    colors = ['y', 'c', 'c', 'c', 'y', 'y', 'c', 'c']
+    colors = ['y', 'c', 'c', 'y', 'y', 'c', 'c', 'c']
 
     # 定义标签
-    labels = ["Last Prd Close", "Last Price", "HH", "HL", "IH", "IV", "IH*", "IV*"]
+    labels = ["Last Prd Close", "HH", "HL", "IH", "IL", "Last Price", "IH*", "IL*"]
     
     # 绘制散点图，使用不同颜色
     plt.scatter(x, y, c=colors, marker='s', s=50, alpha=0.3)
@@ -786,7 +786,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
         percent_change = ((y[end] - y[start]) / y[start]) * 100
         plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
     
-    plt.xticks([1, 2, 3, 4], ["Last Period Close\n Last Price", "Current Period\n High/Low", "Current Period\n Projection", "Next Period\n Projection"])
+    plt.xticks([1, 2, 3, 4], ["Last Close", "Historical/Implied\n High/Low", "Last Price", "Next Period\n Implied High/Low"])
     plt.xlabel('Price Dynamic')
     plt.ylabel('Price')
     plt.title(f'Oscillation Projection ({realized_bias=})')
