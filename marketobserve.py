@@ -774,11 +774,11 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     # 显示每个点的数值和标签
     for i, (xi, yi) in enumerate(zip(x, y)):
         # 显示价格值
-        plt.text(xi, yi, f'{yi:.0f}\n{labels[i]}', ha='center', va='bottom')
+        plt.text(xi, yi, f'{yi:.0f}', ha='center', va='bottom')
         
         # 添加对应标签（如果存在）
         if i < len(labels):
-            plt.text(xi, yi - 0.02 * (max(y) - min(y)), ha='center', va='top', fontsize=9, color='black')
+            plt.text(xi, yi - 0.05 * (max(y) - min(y)), labels[i],  ha='center', va='top', fontsize=9, color='black')
     
     # 计算并显示百分比变化
     pairs = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (2, 6), (2, 7)]
