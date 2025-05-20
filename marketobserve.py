@@ -765,24 +765,32 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     # 定义不同 tick 的颜色
     colors = ['y', 'c', 'c', 'c', 'y', 'y', 'c', 'c']
 
+    # 定义标签
+    labels = ["Last Prd Close, Last Price", "HH", "HL", "IH", "IV", "IH*", "IV*"]
+    
     # 绘制散点图，使用不同颜色
     plt.scatter(x, y, c=colors, marker='s', s=50, alpha=0.3)
-
-    # 显示每个点的数值
-    for xi, yi in zip(x, y):
+    
+    # 显示每个点的数值和标签
+    for i, (xi, yi) in enumerate(zip(x, y)):
+        # 显示价格值
         plt.text(xi, yi, f'{yi:.0f}', ha='center', va='bottom')
-
+        
+        # 添加对应标签（如果存在）
+        if i < len(labels):
+            plt.text(xi, yi - 0.02 * (max(y) - min(y)), labels[i], ha='center', va='top', fontsize=9, color='black')
+    
     # 计算并显示百分比变化
     pairs = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (2, 6), (2, 7)]
     for start, end in pairs:
         percent_change = ((y[end] - y[start]) / y[start]) * 100
         plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
-
-    plt.xticks([1, 2, 3, 4], ["Last Period Close\n Last Price", "Current Period High/Low", "Current Period Projection", "Next Period Projection"])
+    
+    plt.xticks([1, 2, 3, 4], ["Last Period Close\n Last Price", "Current Period\n High/Low", "Current Period\n Projection", "Next Period\n Projection"])
     plt.xlabel('Price Dynamic')
     plt.ylabel('Price')
     plt.title(f'Oscillation Projection ({realized_bias=})')
-
+    
     # Save the plot to a buffer
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format='png')
