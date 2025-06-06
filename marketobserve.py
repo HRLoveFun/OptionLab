@@ -886,50 +886,86 @@ def period_gap_stats(df, feature, frequency, periods: list = [12, 36, 60, "ALL"]
     return gap_return_stats_df
 
 
-# 计算期权矩阵
+# Calculate options matrix
 def option_matrix(ticker, option_position):
-    px_last = yf.download(ticker, start=dt.date.today() - dt.timedelta(days=7) )[["Close"]].iloc[-1, -1]
-    # px_last = last price of the latest period-end 
-
-    change_range = np.linspace(0.85, 1.15, 11)
-    px_step = max((px_last * 0.02), 1)
+    """
+    Calculate the profit and loss matrix for an options portfolio under different stock price movements
+    
+    Parameters:
+    ticker (str): Stock ticker symbol
+    option_position (pd.DataFrame): Options position data with columns: option_type, strike, quantity, premium
+    
+    Returns:
+    pd.DataFrame: Matrix showing P&L for different price scenarios
+    """
+    # Fetch latest closing price
+    try:
+        px_last = yf.download(ticker, start=dt.date.today() - dt.timedelta(days=7))[["Close"]].iloc[-1, -1]
+    except Exception as e:
+        print(f"Failed to retrieve stock data: {e}")
+        return None
+    
+    # Price change range (-15% to +15%)
+    change_range = np.linspace(-15, 15, 11)
+    
+    # Calculate price step (using percentage instead of fixed value)
+    px_step = int(px_last) * 0.01  # 1% price change
+    
+    # Initialize matrix framework
     option_matrix_df = pd.DataFrame(index=change_range)
-    option_matrix_df['price'] = (px_last * change_range).astype(int)
-    option_matrix_df['SC'] = 0.0
-    option_matrix_df['SP'] = 0.0
-    option_matrix_df['LC'] = 0.0
-    option_matrix_df['LP'] = 0.0
-
+    option_matrix_df['price'] = px_last + px_step*change_range
+    option_matrix_df['SC'] = 0.0  # Short Call
+    option_matrix_df['SP'] = 0.0  # Short Put
+    option_matrix_df['LC'] = 0.0  # Long Call
+    option_matrix_df['LP'] = 0.0  # Long Put
+    
+    # Calculate P&L for each option
     for _, row in option_position.iterrows():
         option_type = row["option_type"]
         strike = row["strike"]
         quantity = row["quantity"]
         premium = row["premium"]
-
+        
+        # Short Call
         if option_type == 'SC':
-            option_matrix_df.loc[option_matrix_df['price'] < strike, 'SC'] = premium
-            option_matrix_df.loc[option_matrix_df['price'] >= strike, 'SC'] = premium + (
-                    strike - option_matrix_df.loc[option_matrix_df['price'] >= strike, 'price'])
-            option_matrix_df['SC'] *= quantity
+            in_the_money = option_matrix_df['price'] >= strike
+            option_matrix_df['SC'] += np.where(
+                in_the_money,
+                (premium + (strike - option_matrix_df['price'])) * quantity,
+                premium * quantity
+            )
+        
+        # Short Put
         elif option_type == 'SP':
-            option_matrix_df.loc[option_matrix_df['price'] > strike, 'SP'] = premium
-            option_matrix_df.loc[option_matrix_df['price'] <= strike, 'SP'] = premium - (
-                    strike - option_matrix_df.loc[option_matrix_df['price'] <= strike, 'price'])
-            option_matrix_df['SP'] *= quantity
+            in_the_money = option_matrix_df['price'] <= strike
+            option_matrix_df['SP'] += np.where(
+                in_the_money,
+                (premium - (strike - option_matrix_df['price'])) * quantity,
+                premium * quantity
+            )
+        
+        # Long Call
         elif option_type == 'LC':
-            option_matrix_df.loc[option_matrix_df['price'] > strike, 'LC'] = option_matrix_df.loc[
-                                                                                 option_matrix_df['price'] > strike,
-                                                                                 'price'] - strike - premium
-            option_matrix_df.loc[option_matrix_df['price'] <= strike, 'LC'] = - premium
-            option_matrix_df['LC'] *= quantity
+            in_the_money = option_matrix_df['price'] > strike
+            option_matrix_df['LC'] += np.where(
+                in_the_money,
+                (option_matrix_df['price'] - strike - premium) * quantity,
+                -premium * quantity
+            )
+        
+        # Long Put
         elif option_type == 'LP':
-            option_matrix_df.loc[option_matrix_df['price'] > strike, 'LP'] = - premium
-            option_matrix_df.loc[option_matrix_df['price'] <= strike, 'LP'] = - option_matrix_df.loc[
-                                                                                 option_matrix_df['price'] <= strike,
-                                                                                 'price'] + strike - premium
-            option_matrix_df['LP'] *= quantity
+            in_the_money = option_matrix_df['price'] <= strike
+            option_matrix_df['LP'] += np.where(
+                in_the_money,
+                (-option_matrix_df['price'] + strike - premium) * quantity,
+                -premium * quantity
+            )
+        
         else:
-            raise ValueError("Invalid option type")
-
+            raise ValueError(f"Invalid option type: {option_type}")
+    
+    # Calculate total P&L
     option_matrix_df['PnL'] = option_matrix_df[['SC', 'SP', 'LC', 'LP']].sum(axis=1)
+    
     return option_matrix_df
