@@ -8,8 +8,6 @@ TO DO
 
 - Add a Parameter "Side Bias": Natural, Netural (Default)
 
-- Add a feature "TrueRange"
-
 - Modify Oscillation Projection
   spot line for price movement prediction
 - Fix parameter selection record
