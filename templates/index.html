@@ -292,10 +292,6 @@
         }
 
         document.getElementById('option-form').addEventListener('submit', function (e) {
-            // Save frequency selection
-            const frequency = document.getElementById('frequency').value;
-            localStorage.setItem('frequency', frequency);
-            
             const startTime = document.getElementById('start_time').value;
             localStorage.setItem('start_time', startTime);
 
@@ -306,22 +302,22 @@
             });
             localStorage.setItem('checkboxStates', JSON.stringify(checkboxStates));
 
-            // Save input values and option types from Positions module
+            // 保存输入值
             const rows = document.querySelectorAll('#option-table tbody tr');
-            const positionData = [];
+            const inputValues = [];
             rows.forEach(row => {
                 const optionType = row.querySelector('select[name="option_type"]').value;
                 const strike = row.querySelector('input[name="strike"]').value;
                 const quantity = row.querySelector('input[name="quantity"]').value;
                 const premium = row.querySelector('input[name="premium"]').value;
-                positionData.push({
+                inputValues.push({
                     optionType: optionType,
                     strike: strike,
                     quantity: quantity,
                     premium: premium
                 });
             });
-            localStorage.setItem('positionData', JSON.stringify(positionData));
+            localStorage.setItem('inputValues', JSON.stringify(inputValues));
 
             var optionRows = [];
             rows.forEach(function (row) {
@@ -338,7 +334,6 @@
                     });
                 }
             });
-            console.log("Option rows:", optionRows);  // Add this line for debugging
             try {
                 document.getElementById('option_position').value = JSON.stringify(optionRows);
             } catch (error) {
@@ -350,18 +345,12 @@
         window.onload = function () {
             formatTableData();
 
-            // Restore frequency selection
-            const frequency = localStorage.getItem('frequency');
-            if (frequency) {
-                document.getElementById('frequency').value = frequency;
-            }
-
             const startTime = localStorage.getItem('start_time');
             if (startTime) {
                 document.getElementById('start_time').value = startTime;
             }
 
-            // Restore checkbox states
+            // 恢复复选框状态
             const checkboxStates = JSON.parse(localStorage.getItem('checkboxStates'));
             if (checkboxStates) {
                 const checkboxes = document.querySelectorAll('.multi-select-checkbox input[type="checkbox"]');
@@ -372,24 +361,68 @@
                 });
             }
 
-            // Restore position data including option types
-            const positionData = JSON.parse(localStorage.getItem('positionData'));
-            if (positionData) {
-                const rows = document.querySelectorAll('#option-table tbody tr');
-                rows.forEach((row, index) => {
-                    if (positionData[index]) {
-                        // Restore option type selection
-                        row.querySelector('select[name="option_type"]').value = positionData[index].optionType;
-                        // Restore input values
-                        row.querySelector('input[name="strike"]').value = positionData[index].strike;
-                        row.querySelector('input[name="quantity"]').value = positionData[index].quantity;
-                        row.querySelector('input[name="premium"]').value = positionData[index].premium;
-                    }
+            // 恢复输入值
+            const inputValues = JSON.parse(localStorage.getItem('inputValues'));
+            if (inputValues) {
+                const table = document.getElementById('option-table');
+                const tbody = table.getElementsByTagName('tbody')[0];
+                // 清空现有的行
+                while (tbody.firstChild) {
+                    tbody.removeChild(tbody.firstChild);
+                }
+                // 重新插入保存的行
+                inputValues.forEach(value => {
+                    const row = tbody.insertRow();
+                    const cell1 = row.insertCell(0);
+                    const cell2 = row.insertCell(1);
+                    const cell3 = row.insertCell(2);
+                    const cell4 = row.insertCell(3);
+                    const cell5 = row.insertCell(4);
+
+                    const select = document.createElement('select');
+                    select.name = 'option_type';
+                    const options = ['SC', 'SP', 'LC', 'LP'];
+                    options.forEach(option => {
+                        const opt = document.createElement('option');
+                        opt.value = option;
+                        opt.textContent = option;
+                        if (option === value.optionType) {
+                            opt.selected = true;
+                        }
+                        select.appendChild(opt);
+                    });
+                    cell1.appendChild(select);
+
+                    const strikeInput = document.createElement('input');
+                    strikeInput.type = 'number';
+                    strikeInput.name = 'strike';
+                    strikeInput.value = value.strike;
+                    cell2.appendChild(strikeInput);
+
+                    const quantityInput = document.createElement('input');
+                    quantityInput.type = 'number';
+                    quantityInput.name = 'quantity';
+                    quantityInput.value = value.quantity;
+                    cell3.appendChild(quantityInput);
+
+                    const premiumInput = document.createElement('input');
+                    premiumInput.type = 'number';
+                    premiumInput.step = '0.01';
+                    premiumInput.name = 'premium';
+                    premiumInput.value = value.premium;
+                    cell4.appendChild(premiumInput);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.type = 'button';
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.onclick = function () {
+                        deleteRow(this);
+                    };
+                    cell5.appendChild(deleteButton);
                 });
             }
         };
     </script>
-
 </body>
 
 </html>
