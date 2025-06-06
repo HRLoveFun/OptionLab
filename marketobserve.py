@@ -13,7 +13,7 @@ import datetime as dt
 from matplotlib.ticker import PercentFormatter, LogFormatter
 from scipy.stats import ks_2samp, percentileofscore
 
-# yf.enable_debug_mode()
+yf.enable_debug_mode()
 
 PERIODS = [12, 36, 60, "ALL"]
 
@@ -123,17 +123,47 @@ class PriceDynamic:
                 print(f"Unexpected error: {str(e)}")
                 return None
 
-    def osc(self):
+    def osc(self, on_effect=False):
         """
         Calculate the oscillation of price.
-
-        :return: DataFrame containing oscillation data.
+        parameters:
+            on_effect: the overnight effect, i.e. price gap between open and last close.   
+        return: DataFrame containing oscillation data.
         """
         if self._data is None:
             return None
-        osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
+        if on_effect:
+            osc_data = ( 
+                (
+                    self._data["High"] + self._data["LastClose"] + abs(self._data["High"] - self._data["LastClose"]) 
+                    )/2 
+                - 
+                (
+                    self._data["Low"] + self._data["LastClose"] - abs(self._data["Low"] - self._data["LastClose"]) 
+                    )/2 
+                ) / self._data['LastClose'] * 100
+        else:
+            osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
+
         osc_data.name = 'oscillation'
+
         return osc_data
+
+    # def tr(self):
+    #     """
+    #     Calculate the true range of price.
+
+    #     :return: DataFrame containing oscillation data.
+    #     """
+    #     if self._data is None:
+    #         return None
+    #     tr_data = np.max(
+    #         (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100,
+    #         abs((self._data["LastClose"] - self._data["Low"]) / self._data['LastClose'] * 100),
+    #         abs((self._data["High"] - self._data["LastClose"]) / self._data['LastClose'] * 100),
+    #         )
+    #     tr_data.name = 'truerange'
+    #     return tr_data
 
     def ret(self):
         """
