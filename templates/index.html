@@ -101,7 +101,7 @@
                             <th>Feature</th>
                             <td>
                                 <select id="feature" name="feature">
-                                    <option value="Oscillation" {% if feature == 'Oscillation' %}{% endif %}>Oscillation</option>
+                                    <option value="Oscillation" {% if feature == 'Oscillation' %}selected{% endif %}>Oscillation</option>
                                     <!-- <option value="Difference" {% if feature == 'Difference' %}{% endif %}>Difference</option> -->
                                 </select>
                             </td>
@@ -110,9 +110,9 @@
                             <th>Frequency</th>
                             <td>
                                 <select id="frequency" name="frequency">
-                                    <option value="W">Weekly</option>
-                                    <option value="ME" selected>Monthly</option> 
-                                    <option value="QE">Quarterly</option>
+                                    <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
+                                    <option value="ME" {% if frequency == 'ME' %}selected{% endif %}>Monthly</option> 
+                                    <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
                                 </select>
                             </td>
                         </tr>
@@ -292,6 +292,9 @@
         }
 
         document.getElementById('option-form').addEventListener('submit', function (e) {
+            // Save frequency selection
+            const frequency = document.getElementById('frequency').value;
+            localStorage.setItem('frequency', frequency);
             
             const startTime = document.getElementById('start_time').value;
             localStorage.setItem('start_time', startTime);
@@ -303,22 +306,22 @@
             });
             localStorage.setItem('checkboxStates', JSON.stringify(checkboxStates));
 
-            // Save input values
+            // Save input values and option types from Positions module
             const rows = document.querySelectorAll('#option-table tbody tr');
-            const inputValues = [];
+            const positionData = [];
             rows.forEach(row => {
                 const optionType = row.querySelector('select[name="option_type"]').value;
                 const strike = row.querySelector('input[name="strike"]').value;
                 const quantity = row.querySelector('input[name="quantity"]').value;
                 const premium = row.querySelector('input[name="premium"]').value;
-                inputValues.push({
+                positionData.push({
                     optionType: optionType,
                     strike: strike,
                     quantity: quantity,
                     premium: premium
                 });
             });
-            localStorage.setItem('inputValues', JSON.stringify(inputValues));
+            localStorage.setItem('positionData', JSON.stringify(positionData));
 
             var optionRows = [];
             rows.forEach(function (row) {
@@ -347,6 +350,12 @@
         window.onload = function () {
             formatTableData();
 
+            // Restore frequency selection
+            const frequency = localStorage.getItem('frequency');
+            if (frequency) {
+                document.getElementById('frequency').value = frequency;
+            }
+
             const startTime = localStorage.getItem('start_time');
             if (startTime) {
                 document.getElementById('start_time').value = startTime;
@@ -363,16 +372,18 @@
                 });
             }
 
-            // Restore input values
-            const inputValues = JSON.parse(localStorage.getItem('inputValues'));
-            if (inputValues) {
+            // Restore position data including option types
+            const positionData = JSON.parse(localStorage.getItem('positionData'));
+            if (positionData) {
                 const rows = document.querySelectorAll('#option-table tbody tr');
                 rows.forEach((row, index) => {
-                    if (inputValues[index]) {
-                        row.querySelector('select[name="option_type"]').value = inputValues[index].optionType;
-                        row.querySelector('input[name="strike"]').value = inputValues[index].strike;
-                        row.querySelector('input[name="quantity"]').value = inputValues[index].quantity;
-                        row.querySelector('input[name="premium"]').value = inputValues[index].premium;
+                    if (positionData[index]) {
+                        // Restore option type selection
+                        row.querySelector('select[name="option_type"]').value = positionData[index].optionType;
+                        // Restore input values
+                        row.querySelector('input[name="strike"]').value = positionData[index].strike;
+                        row.querySelector('input[name="quantity"]').value = positionData[index].quantity;
+                        row.querySelector('input[name="premium"]').value = positionData[index].premium;
                     }
                 });
             }
