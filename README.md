@@ -10,7 +10,6 @@ TO DO
 
 - Modify Oscillation Projection
   spot line for price movement prediction
-- Fix parameter selection record
 - Fix Position rows.
 
 marketobserve.py
