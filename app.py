@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
+import os
 import base64
 import numpy as np
 import seaborn as sns
@@ -47,7 +48,7 @@ def index():
                 return render_template('index.html', error=f"Failed to process data for {ticker} with frequency {frequency}.")
 
             # Calculate osc and ret using PriceDynamic methods
-            osc = pxdy.osc().dropna()
+            osc = pxdy.osc(on_effect=True).dropna()
             ret = pxdy.ret().dropna()
             dif = pxdy.dif().dropna()
             df_features = pd.DataFrame({
