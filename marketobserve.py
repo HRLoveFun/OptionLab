@@ -17,8 +17,8 @@ yf.enable_debug_mode()
 
 PERIODS = [12, 36, 60, "ALL"]
 
-
 class PriceDynamic:
+
     def __init__(self, ticker: str, start_date = dt.date(2016, 12, 1), frequency='D'):
         """
         Initialize the PriceDynamic class.
@@ -191,7 +191,6 @@ class PriceDynamic:
 
         return dif_data
 
-
 def period_segment(df, periods = PERIODS):
     """
     Create data sources for different periods based on the frequency.
@@ -223,7 +222,6 @@ def period_segment(df, periods = PERIODS):
 
     return dict_period_segment
 
-
 # 辅助函数：解析时间窗口
 def parse_time_window(window, latest_date):
     if isinstance(window, str):
@@ -246,7 +244,6 @@ def parse_time_window(window, latest_date):
         return start_date, end_date
     else:
         raise ValueError("Invalid time window format. Expected string or tuple.")
-
 
 # 绘制牛市熊市趋势图
 def BullBearPlot(data, time_window):
@@ -312,7 +309,6 @@ def BullBearPlot(data, time_window):
     fig.update_layout(height=400 * n)
     fig.show()
 
-
 # 获取期权链数据
 def options_chain(symbol):
     tk = yf.Ticker(symbol)
@@ -333,7 +329,6 @@ def options_chain(symbol):
     options['mark'] = (options['bid'] + options['ask']) / 2
     options = options.drop(columns=['contractSize', 'currency', 'change', 'percentChange', 'lastTradeDate', 'lastPrice'])
     return options
-
 
 # 绘制价格变化分布图表
 def ChangeDistPlot(data, time_windows=[1], frequencies=['W', 'M', 'Q', 'Y']):
@@ -431,8 +426,6 @@ def ChangeDistPlot(data, time_windows=[1], frequencies=['W', 'M', 'Q', 'Y']):
     plt.tight_layout()
     plt.show()
 
-
-
 # 创建不同时间周期的数据来源
 def create_data_sources(df, periods, all_period_start, frequency):
     current_date = pd.Timestamp.now()
@@ -471,7 +464,6 @@ def create_data_sources(df, periods, all_period_start, frequency):
             raise ValueError("Invalid period value")
 
     return data_sources
-
 
 # 对数据进行重采样
 def refrequency(df, frequency: str):
@@ -562,25 +554,6 @@ def percentile_stats(dict, percentile, interpolation: str = "linear"):
             prob_next_per
         ]
 
-    #     bin_range = list(np.arange(0, 21, 1))
-
-    #     n, bins = np.histogram(data[col], bins=bin_range, density=True)
-    #     if n.sum() == 0:
-    #         cumulative_n = np.zeros_like(n)
-    #     else:
-    #         cumulative_n = np.cumsum(n * np.diff(bins))
-    #     n_diff = np.insert(np.diff(cumulative_n), 0, cumulative_n[0])
-
-    #     bin_intervals = [(bins[i], bins[i + 1]) for i in range(len(bins) - 1)]
-    #     bin_info = {}
-    #     for i in range(len(bin_intervals)):
-    #         bin_info[f"{bin_intervals[i]}"] = n_diff[i]
-
-    #     interval_freq_dict[period_name] = bin_info
-
-    # interval_freq_df = pd.DataFrame(interval_freq_dict)
-    # combined_df = pd.concat([stats_df, interval_freq_df])
-    # combined_df.index.names = [f"{percentile=}"]
     return stats_df
     
 #绘制带直方图的散点图
