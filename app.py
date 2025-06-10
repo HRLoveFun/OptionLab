@@ -167,7 +167,7 @@ def index():
                                    tail_stats_result=tail_stats_result.to_html() if tail_stats_result is not None else None,
                                    feat_projection_url=feat_projection_url,
                                    gap_stats_result=gap_stats_result.to_html() if gap_stats_result is not None else None,
-                                   option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None,
+                                #    option_matrix_result=option_matrix_result.to_html() if option_matrix_result is not None else None,
                                    plot_url=plot_url,
                                    tail_plot_url=tail_plot_url)
 
