@@ -878,15 +878,14 @@ def option_matrix(ticker, option_position):
         print(f"Failed to retrieve stock data: {e}")
         return None
     
-    # Price change range (-15% to +15%)
-    change_range = np.linspace(-15, 15, 11)
+    change_range = np.linspace(-15, 15, 301)
     
     # Calculate price step (using percentage instead of fixed value)
-    px_step = int(px_last) * 0.01  # 1% price change
+    px_step = px_last * 0.01  # 1% price change
     
     # Initialize matrix framework
     option_matrix_df = pd.DataFrame(index=change_range)
-    option_matrix_df['price'] = px_last + px_step*change_range
+    option_matrix_df['price'] = px_last * (1 + change_range / 100)
     option_matrix_df['SC'] = 0.0  # Short Call
     option_matrix_df['SP'] = 0.0  # Short Put
     option_matrix_df['LC'] = 0.0  # Long Call
