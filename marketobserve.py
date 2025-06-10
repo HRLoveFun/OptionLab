@@ -38,7 +38,6 @@ class PriceDynamic:
         data = self._download_data()
         self._data = self._refrequency(data)
 
-
     def __getattr__(self, attr):
         # 当访问实例属性时，若属性不存在，尝试从 _data 中获取
         if self._data is not None:
@@ -112,8 +111,16 @@ class PriceDynamic:
                     'Close': 'last',
                     'Adj Close': 'last',
                     'Volume': 'sum',
+                    # 'OpenDate': lambda x: x['Open'].index[0],
+                    # 'HighDate': lambda x: x['High'].index[x['High'].argmax()],
+                    # 'LowDate': lambda x: x['Low'].index[x['Low'].argmin()],
+                    # 'CloseDate': lambda x: x['Close'].index[-1]
                 }).dropna()
                 refrequency_df['LastClose'] = refrequency_df["Close"].shift(1)
+                refrequency_df['OpenDate'] = df.resample(self.frequency).agg({'Open': lambda x: x.index[0]})
+                refrequency_df['HighDate'] = df.resample(self.frequency).agg({'High': lambda x: x.index[x.argmax()]})
+                refrequency_df['LowDate'] = df.resample(self.frequency).agg({'Low': lambda x: x.index[x.argmin()]})
+                refrequency_df['CloseDate'] = df.resample(self.frequency).agg({'Close': lambda x: x.index[-1]})       
 
                 return refrequency_df
             except KeyError as e:
