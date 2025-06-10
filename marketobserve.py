@@ -729,7 +729,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     returns: a scatter charts with "Last Close", "Last", "Current Projection", "Next Projection"
     """
     # 检查数据是否包含所需的列
-    required_columns = ['High', 'Low', 'LastClose', 'Oscillation', 'Close']
+    required_columns = ['High', 'Low', 'LastClose', 'Oscillation', 'Close', 'HighDate', 'LowDate', 'CloseDate']
     for col in required_columns:
         if col not in data.columns:
             raise ValueError(f"数据中缺少列: {col}")
@@ -767,6 +767,12 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     proj_lowCurPrd = px_lastClose - px_lastClose * proj_volatility / 100 * (1 - proj_high_weight)
     proj_highNextPrd = px_last + px_last * proj_volatility / 100 * proj_high_weight
     proj_lowNextPrd = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
+
+    # generate a dataframe df_proj: index = last_month_end + all weekdays in the two months following last_month_end, columns = ["Close","High","Low"]
+    # df_proj.iloc[last_month_end,"Close"] = px_lastClose
+    # df_proj.iloc[today,"Close"] = px_last
+    # df_proj.iloc[today,"Close"] = px_last
+
 
     # 准备绘图数据
     x = [1, 2, 2, 3, 3, 4, 5, 5]
