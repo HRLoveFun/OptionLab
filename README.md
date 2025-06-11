@@ -4,14 +4,12 @@ TO DO
 - Volatility Dynamic
   x: time, y: volatility
 
-- PnL Chart x unit: adjust the unit to be spot price * 0.01
-
 - Add a Parameter "Side Bias": Natural, Netural (Default)
 
 - Modify Oscillation Projection
   spot line for price movement prediction
-- Fix Position rows.
-
+  is the calculation good for every frequency?
+  
 marketobserve.py
 
 - class PriceDynamic(self, ticker, start_date=dt.date(2010,01,01)):
