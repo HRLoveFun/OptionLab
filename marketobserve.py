@@ -723,10 +723,18 @@ def calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight):
     realized_bias = ((df["ActualClosingStatus"] == 1).sum() - ((df["ActualClosingStatus"] == -1).sum())) / len(df)
     return realized_bias
 
-# 波动率预测
 def osc_projection(data, percentile: float = 0.90, target_bias: float = None, interpolation: str = "linear"):
-    """"
-    returns: a scatter charts with "Last Close", "Last", "Current Projection", "Next Projection"
+    """
+    波动率预测函数
+    
+    参数:
+    data: 包含必要价格数据的DataFrame
+    percentile: 用于计算预测波动率的百分位数，默认0.90
+    target_bias: 目标偏差值，如指定将优化权重以接近此值
+    interpolation: 百分位数计算的插值方法
+    
+    返回:
+    包含预测结果的散点图的Base64编码字符串
     """
     # 检查数据是否包含所需的列
     required_columns = ['High', 'Low', 'LastClose', 'Oscillation', 'Close', 'HighDate', 'LowDate', 'CloseDate']
@@ -734,85 +742,157 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
         if col not in data.columns:
             raise ValueError(f"数据中缺少列: {col}")
 
-    df = data[['High', 'Low', 'LastClose', 'Oscillation', 'Close']].copy().iloc[:-1]
-
-    proj_high_weight = 0.5
+    # 准备数据
+    df = data[required_columns].copy().iloc[:-1]
     proj_volatility = data["Oscillation"].quantile(percentile, interpolation=interpolation)
 
+    # 确定最佳的高点权重
+    proj_high_weight = 0.5  # 默认值
+    
     if target_bias is not None:
         proj_high_weights = np.linspace(0.4, 0.6, 21)
         min_error = float('inf')
         best_proj_high_weight = 0.5
 
-        for proj_high_weight in proj_high_weights:
-            # 这里假设 calculate_projections 函数已经定义
-            realized_bias = calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight)
+        for weight in proj_high_weights:
+            realized_bias = calculate_oscillation(df, proj_volatility, interpolation, weight)
             error = abs(realized_bias - target_bias)
 
             if error < min_error:
                 min_error = error
-                best_proj_high_weight = proj_high_weight
+                best_proj_high_weight = weight
 
         proj_high_weight = best_proj_high_weight
 
+    # 计算实际偏差
     realized_bias = calculate_oscillation(df, proj_volatility, interpolation, proj_high_weight).round(2)
 
+    # 获取价格和日期数据
     px_lastClose = data["LastClose"].iloc[-1]
     px_high = data["High"].iloc[-1]
     px_low = data["Low"].iloc[-1]
     px_last = data["Close"].iloc[-1]
 
-    # 计算 proj_high 和 proj_low
+    date_lastClose = data["CloseDate"].iloc[-2]
+    date_high = data["HighDate"].iloc[-1]
+    date_low = data["LowDate"].iloc[-1]
+    date_last = data["CloseDate"].iloc[-1]
+
+    # 计算预测高点和低点
     proj_highCurPrd = px_lastClose + px_lastClose * proj_volatility / 100 * proj_high_weight
     proj_lowCurPrd = px_lastClose - px_lastClose * proj_volatility / 100 * (1 - proj_high_weight)
     proj_highNextPrd = px_last + px_last * proj_volatility / 100 * proj_high_weight
     proj_lowNextPrd = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
 
-    # generate a dataframe df_proj: index = last_month_end + all weekdays in the two months following last_month_end, columns = ["Close","High","Low"]
-    # df_proj.iloc[last_month_end,"Close"] = px_lastClose
-    # df_proj.iloc[today,"Close"] = px_last
-    # df_proj.iloc[today,"Close"] = px_last
+    # 生成预测数据框
+    end_date = date_lastClose + pd.DateOffset(months=2)
+    all_weekdays = pd.date_range(start=date_lastClose, end=end_date, freq='B')
+    df_proj = pd.DataFrame(index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow"])
 
+    # 填充已知数据
+    df_proj.loc[date_lastClose, "Close"] = px_lastClose
+    df_proj.loc[date_high, "High"] = px_high
+    df_proj.loc[date_low, "Low"] = px_low
+    df_proj.loc[date_last, "Close"] = px_last
 
-    # 准备绘图数据
-    x = [1, 2, 2, 3, 3, 4, 5, 5]
-    y = [px_lastClose, proj_highCurPrd, proj_lowCurPrd, px_high, px_low, px_last, proj_highNextPrd, proj_lowNextPrd]
+    # 获取当前月份的工作日
+    today = dt.datetime.now()
+    if today.month < 12:
+        date_NextMonthEnd = dt.datetime(today.year, today.month + 1, 1) - pd.Timedelta(days=1)
+    else:
+        date_NextMonthEnd = dt.datetime(today.year + 1, 1, 1) - pd.Timedelta(days=1)
+    
+    weekdays_this_month = pd.date_range(start=date_lastClose, end=date_NextMonthEnd, freq='B')
+    last_weekday_this_month = weekdays_this_month[-1]                           
+    current_month_dates = pd.date_range(start=date_lastClose, end=last_weekday_this_month, freq='B')[1:]
+    
+    # 填充预测数据
+    for i, date in enumerate(current_month_dates):
+        progress = (i+1) / len(current_month_dates)
+    
+        df_proj.loc[date, "iHigh"] = np.sqrt(progress) * (proj_highCurPrd - px_lastClose) + px_lastClose
+        df_proj.loc[date, "iLow"] = np.sqrt(progress) * (proj_lowCurPrd - px_lastClose) + px_lastClose
 
-    # 定义不同 tick 的颜色
-    colors = ['y', 'c', 'c', 'y', 'y', 'y', 'c', 'c']
+    # 绘制图表
+    fig, ax = plt.subplots(figsize=(14, 7))
+    
+    # 创建连续的索引用于绘图
+    x_values = np.arange(len(df_proj.index))
+    
+    # 绘制历史数据（实心点）
+    ax.scatter(x_values, df_proj["Close"], label="Close", color='black', s=60, zorder=3)
+    ax.scatter(x_values, df_proj["High"], label="High", color='purple', s=60, zorder=3)
+    ax.scatter(x_values, df_proj["Low"], label="Low", color='purple', s=60, zorder=3)
 
-    # 定义标签
-    labels = ["Last Prd Close", "IH", "IL", "HH", "HL", "Last Price", "IH*", "IL*"]
+    # 绘制预测数据（空心点）
+    ax.scatter(x_values, df_proj["iHigh"], label="Projection High", color='red', facecolors='none', edgecolors='red', s=60, zorder=3)
+    ax.scatter(x_values, df_proj["iLow"], label="Projection Low", color='red', facecolors='none', edgecolors='red', s=60, zorder=3)
     
-    # 绘制散点图，使用不同颜色
-    plt.scatter(x, y, c=colors, marker='s', s=50, alpha=0.3)
-    
-    # 显示每个点的数值和标签
-    for i, (xi, yi) in enumerate(zip(x, y)):
-        # 显示价格值
-        plt.text(xi, yi, f'{yi:.0f}', ha='center', va='bottom')
-        
-        # 添加对应标签（如果存在）
-        if i < len(labels):
-            plt.text(xi, yi - 0.05 * (max(y) - min(y)), labels[i],  ha='center', va='top', fontsize=9, color='black')
-    
-    # 计算并显示百分比变化
-    pairs = [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (5, 6), (5, 7)]
-    for start, end in pairs:
-        percent_change = ((y[end] - y[start]) / y[start]) * 100
-        plt.text(x[end], y[end], f'{percent_change:.1f}%', ha='center', va='top')
-    
-    plt.xticks([1, 2, 3, 4, 5], ["Last Close", "Implied\n High/Low", "Historical\n High/Low", "Last Price", "Next Implied\n High/Low"])
-    plt.xlabel('Price Dynamic')
-    plt.ylabel('Price')
-    plt.title(f'Oscillation Projection ({realized_bias=})')
-    
-    # Save the plot to a buffer
+
+    # 显示 High, Low, LastClose, Close 的具体值，位置在对应数据点的下方
+    for i, date in enumerate(df_proj.index):
+        if not np.isnan(df_proj.loc[date, "Close"]):
+            ax.annotate(f"{df_proj.loc[date, 'Close']:.0f}",
+                        (i, df_proj.loc[date, "Close"]),
+                        xytext=(0, -15),
+                        textcoords="offset points",
+                        ha='center', va='top',
+                        fontsize=9, color='black')
+
+        if not np.isnan(df_proj.loc[date, "High"]):
+            ax.annotate(f"{df_proj.loc[date, 'High']:.0f}",
+                        (i, df_proj.loc[date, "High"]),
+                        xytext=(0, -15),
+                        textcoords="offset points",
+                        ha='center', va='top',
+                        fontsize=9, color='purple')
+
+        if not np.isnan(df_proj.loc[date, "Low"]):
+            ax.annotate(f"{df_proj.loc[date, 'Low']:.0f}",
+                        (i, df_proj.loc[date, "Low"]),
+                        xytext=(0, -15),
+                        textcoords="offset points",
+                        ha='center', va='top',
+                        fontsize=9, color='purple')
+
+    # 只显示最后三个日期的 iHigh 和 iLow 的具体值，位置在对应数据点的下方
+    last_three_dates = df_proj[["iHigh","iLow"]].dropna().index[-3:]
+    for i, date in enumerate(df_proj.index):
+        if date in last_three_dates:
+            if not np.isnan(df_proj.loc[date, "iHigh"]):
+                ax.annotate(f"{df_proj.loc[date, 'iHigh']:.0f}",
+                            (i, df_proj.loc[date, "iHigh"]),
+                            xytext=(0, -15),
+                            textcoords="offset points",
+                            ha='center', va='top',
+                            fontsize=9, color='red')
+
+            if not np.isnan(df_proj.loc[date, "iLow"]):
+                ax.annotate(f"{df_proj.loc[date, 'iLow']:.0f}",
+                            (i, df_proj.loc[date, "iLow"]),
+                            xytext=(0, -15),
+                            textcoords="offset points",
+                            ha='center', va='top',
+                            fontsize=9, color='red')
+
+    # 设置 x 轴标签为日期
+    ax.set_xticks(x_values[::1])  # 每 3 天显示一个标签，可根据需要调整
+    ax.set_xticklabels([date.strftime('%b%d') for date in df_proj.index], rotation=90)
+
+    # 图表格式优化
+    ax.set_title(f"Oscillation Projection (Percentile: {percentile}, Bias: {realized_bias})", fontsize=14)
+    ax.set_xlabel("Date", fontsize=12)
+    ax.set_ylabel("Price", fontsize=12)
+    ax.grid(True, linestyle='--', alpha=0.6, zorder=0)
+    ax.legend(fontsize=11, loc='best')
+    plt.tight_layout()
+
+    # 保存图表
     img_buffer = io.BytesIO()
-    plt.savefig(img_buffer, format='png')
+    fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
     img_buffer.seek(0)
     plot_url = base64.b64encode(img_buffer.getvalue()).decode()
-    plt.close()
+    plt.close(fig)
 
     return plot_url
 
