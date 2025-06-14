@@ -787,7 +787,7 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     # 生成预测数据框
     end_date = date_lastClose + pd.DateOffset(months=2)
     all_weekdays = pd.date_range(start=date_lastClose, end=end_date, freq='B')
-    df_proj = pd.DataFrame(index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow"])
+    df_proj = pd.DataFrame(index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow", "iHigh1", "iLow1"])
 
     # 填充已知数据
     df_proj.loc[date_lastClose, "Close"] = px_lastClose
@@ -796,15 +796,20 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     df_proj.loc[date_last, "Close"] = px_last
 
     # 获取当前月份的工作日
-    today = dt.datetime.now()
-    if today.month < 12:
-        date_NextMonthEnd = dt.datetime(today.year, today.month + 1, 1) - pd.Timedelta(days=1)
+    # today = dt.datetime.now()
+    if date_last.month < 12:
+        date_CurrentMonthEnd = dt.datetime(date_last.year, date_last.month + 1, 1) - pd.Timedelta(days=1)
     else:
-        date_NextMonthEnd = dt.datetime(today.year + 1, 1, 1) - pd.Timedelta(days=1)
+        date_CurrentMonthEnd = dt.datetime(date_last.year + 1, 1, 1) - pd.Timedelta(days=1)    
+    date_NextTwenty = date_last + pd.Timedelta(days=4*7)
     
-    weekdays_this_month = pd.date_range(start=date_lastClose, end=date_NextMonthEnd, freq='B')
-    last_weekday_this_month = weekdays_this_month[-1]                           
-    current_month_dates = pd.date_range(start=date_lastClose, end=last_weekday_this_month, freq='B')[1:]
+    weekdays_current_month = pd.date_range(start=date_lastClose, end=date_CurrentMonthEnd, freq='B')
+    weekdays_next_twenty = pd.date_range(start=date_last, end=date_NextTwenty, freq='B')
+    
+    last_weekday_current_month = weekdays_current_month[-1]                           
+    current_month_dates = pd.date_range(start=date_lastClose, end=last_weekday_current_month, freq='B')[1:]
+
+    next_twenty_dates = pd.date_range(start=date_last, end=date_NextTwenty, freq='B')[1:]
     
     # 填充预测数据
     for i, date in enumerate(current_month_dates):
@@ -812,6 +817,13 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     
         df_proj.loc[date, "iHigh"] = np.sqrt(progress) * (proj_highCurPrd - px_lastClose) + px_lastClose
         df_proj.loc[date, "iLow"] = np.sqrt(progress) * (proj_lowCurPrd - px_lastClose) + px_lastClose
+
+    for i, date in enumerate(next_twenty_dates):
+        progress = (i+1) / len(next_twenty_dates)
+    
+        df_proj.loc[date, "iHigh1"] = np.sqrt(progress) * (proj_highNextPrd - px_last) + px_last
+        df_proj.loc[date, "iLow1"] = np.sqrt(progress) * (proj_lowNextPrd - px_last) + px_last
+
 
     # 绘制图表
     fig, ax = plt.subplots(figsize=(14, 7))
@@ -825,9 +837,13 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
     ax.scatter(x_values, df_proj["Low"], label="Low", color='purple', s=60, zorder=3)
 
     # 绘制预测数据（空心点）
-    ax.scatter(x_values, df_proj["iHigh"], label="Projection High", color='red', facecolors='none', edgecolors='red', s=60, zorder=3)
-    ax.scatter(x_values, df_proj["iLow"], label="Projection Low", color='red', facecolors='none', edgecolors='red', s=60, zorder=3)
+    ax.scatter(x_values, df_proj["iHigh"], label="iHigh", color='red', facecolors='none', edgecolors='red', s=60, zorder=3)
+    ax.scatter(x_values, df_proj["iLow"], label="iLow", color='red', facecolors='none', edgecolors='red', s=60, zorder=3)
     
+    ax.scatter(x_values, df_proj["iHigh1"], label="iHigh*", color='orange', facecolors='none', edgecolors='orange', s=60, zorder=3)
+    ax.scatter(x_values, df_proj["iLow1"], label="iLow*", color='orange', facecolors='none', edgecolors='orange', s=60, zorder=3)
+
+
 
     # 显示 High, Low, LastClose, Close 的具体值，位置在对应数据点的下方
     for i, date in enumerate(df_proj.index):
@@ -856,9 +872,9 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
                         fontsize=9, color='purple')
 
     # 只显示最后三个日期的 iHigh 和 iLow 的具体值，位置在对应数据点的下方
-    last_three_dates = df_proj[["iHigh","iLow"]].dropna().index[-3:]
+    dates_CurrentMonthEnd = df_proj[["iHigh","iLow"]].dropna().index[-3:]
     for i, date in enumerate(df_proj.index):
-        if date in last_three_dates:
+        if date in dates_CurrentMonthEnd:
             if not np.isnan(df_proj.loc[date, "iHigh"]):
                 ax.annotate(f"{df_proj.loc[date, 'iHigh']:.0f}",
                             (i, df_proj.loc[date, "iHigh"]),
@@ -875,8 +891,30 @@ def osc_projection(data, percentile: float = 0.90, target_bias: float = None, in
                             ha='center', va='top',
                             fontsize=9, color='red')
 
+    # 只显示最后三个日期的 iHigh1 和 iLow1 的具体值，位置在对应数据点的下方
+    dates_NextTwentyEnd = df_proj[["iHigh1","iLow1"]].dropna().index[-3:]
+    for i, date in enumerate(df_proj.index):
+        if date in dates_NextTwentyEnd:
+            if not np.isnan(df_proj.loc[date, "iHigh1"]):
+                ax.annotate(f"{df_proj.loc[date, 'iHigh1']:.0f}",
+                            (i, df_proj.loc[date, "iHigh1"]),
+                            xytext=(0, -15),
+                            textcoords="offset points",
+                            ha='center', va='top',
+                            fontsize=9, color='orange')
+
+            if not np.isnan(df_proj.loc[date, "iLow1"]):
+                ax.annotate(f"{df_proj.loc[date, 'iLow1']:.0f}",
+                            (i, df_proj.loc[date, "iLow1"]),
+                            xytext=(0, -15),
+                            textcoords="offset points",
+                            ha='center', va='top',
+                            fontsize=9, color='orange')
+
+
+
     # 设置 x 轴标签为日期
-    ax.set_xticks(x_values[::1])  # 每 3 天显示一个标签，可根据需要调整
+    ax.set_xticks(x_values[::1])  # 每天显示一个标签，可根据需要调整
     ax.set_xticklabels([date.strftime('%b%d') for date in df_proj.index], rotation=90)
 
     # 图表格式优化
