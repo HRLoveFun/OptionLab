@@ -10,7 +10,7 @@ import base64
 import numpy as np
 import seaborn as sns
 import datetime as dt
-from matplotlib.ticker import PercentFormatter
+from matplotlib.ticker import PercentFormatter, MultipleLocator
 from scipy.stats import ks_2samp, percentileofscore
 import logging
 
@@ -619,9 +619,14 @@ class MarketAnalyzer:
         """Create DataFrame for projection visualization"""
         try:
             # Get relevant dates
-            date_last_close = data.get("CloseDate", [])[-2] if isinstance(data.get("CloseDate"), (list, pd.Series)) and len(data.get("CloseDate", [])) >= 2 else None
-            date_last = data.get("CloseDate", [])[-1]
-            
+            close_dates = data.get("CloseDate")
+            if isinstance(close_dates, pd.Series) and len(close_dates) >= 2:
+                date_last_close = close_dates.iloc[-2]
+                date_last = close_dates.iloc[-1]
+            else:
+                date_last_close = None
+                date_last = None            
+
             # Create date range for projection
             end_date = date_last + pd.DateOffset(months=2)
             all_weekdays = pd.date_range(start=date_last_close, end=end_date, freq='B')
@@ -648,7 +653,6 @@ class MarketAnalyzer:
             
             self._fill_projection_data(proj_df, date_last, next_twenty_days, 
                                      proj_high_next, proj_low_next, "iHigh1", "iLow1")
-            
             return proj_df
             
         except Exception as e:
@@ -873,13 +877,13 @@ class MarketAnalyzer:
             max_loss = matrix_df['PnL'].min()
             breakeven_points = self._find_breakeven_points(matrix_df)
             
-            stats_text = f'Max Profit: ${max_profit:.2f}\nMax Loss: ${max_loss:.2f}'
+            stats_text = f'Max Profit: ${max_profit:.0f}\nMax Loss: ${max_loss:.0f}'
             if breakeven_points:
-                stats_text += f'\nBreakeven: ${breakeven_points[0]:.2f}'
+                stats_text += f'\nBreakeven: ${breakeven_points[0]:.0f}'
                 if len(breakeven_points) > 1:
-                    stats_text += f', ${breakeven_points[1]:.2f}'
+                    stats_text += f', ${breakeven_points[1]:.0f}'
             
-            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=10,
+            ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=12,
                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
             
             plt.tight_layout()
