@@ -619,8 +619,8 @@ class MarketAnalyzer:
         """Create DataFrame for projection visualization"""
         try:
             # Get relevant dates
-            date_last_close = data.index[-2] if len(data) > 1 else data.index[-1]
-            date_last = data.index[-1]
+            date_last_close = data.get("CloseDate", [])[-2] if isinstance(data.get("CloseDate"), (list, pd.Series)) and len(data.get("CloseDate", [])) >= 2 else None
+            date_last = data.get("CloseDate", [])[-1]
             
             # Create date range for projection
             end_date = date_last + pd.DateOffset(months=2)
@@ -640,7 +640,7 @@ class MarketAnalyzer:
             
             # Calculate projection periods
             current_month_end = self._get_current_month_end(date_last)
-            next_twenty_days = date_last + pd.Timedelta(days=20)
+            next_twenty_days = date_last + pd.Timedelta(days=4*7)
             
             # Fill projection data
             self._fill_projection_data(proj_df, date_last_close, current_month_end, 
