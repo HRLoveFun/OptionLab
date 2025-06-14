@@ -2,6 +2,11 @@
 
 A comprehensive market analysis tool for measuring statistics of index returns and oscillations across different frequencies, with integrated options strategy analysis.
 
+## To-Do
+  - Volatility Dynamic x: time, y: volatility
+  - Add a Parameter "Side Bias": Natural, Netural (Default)
+  - Modify Oscillation Projection spot line for price movement prediction is the calculation good for every frequency?
+
 ## Features
 
 ### Market Analysis
