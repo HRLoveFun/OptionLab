@@ -3,425 +3,460 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Market Observation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Observation Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        /* body {
-            font-size: 20 px;
-        } */
-
-
-        /* 新增样式，使输入框按行排列 */
-       .form-field {
-            display: block;
-            margin-bottom: 15px;
-        }
-
-        /* 新增布局样式 */
-        main {
-            display: flex;
-            gap: 20px;
-        }
-
-       .left-section {
-            flex: 1; /* Adjusted to make it equal to the right section */
-        }
-
-       .right-section {
-            flex: 1; /* Adjusted to make it equal to the left section */
-        }
-
-        /* 新增样式，使多选框横向排列 */
-       .multi-select-checkbox {
-            display: flex;
-            flex-wrap: nowrap; /* Ensure they stay in one row */
-            gap: 10px;
-        }
-
-        /* 表格样式，确保表格有合适的边框和间距 */
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-
-        /* 输入框样式，确保不超出表格单元格 */
-        input[type="text"],
-        input[type="number"],
-        select {
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        /* 新增样式，用于对齐 Analysis 和 Assessment 部分 */
-       .aligned-section {
-            display: flex;
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-       .aligned-section > div {
-            flex: 1;
-        }
-    </style>
-
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 
 <body>
-    <main>
-        <div class="left-section">
-            <h1>Parameter</h1>
-            <!-- Add error message display at the top of the form -->
-            <form method="post" id="option-form">
+    <header>
+        <h1><i class="fas fa-chart-line"></i> Market Observation Dashboard</h1>
+        <p class="subtitle">Advanced Market Analysis & Options Strategy Tool</p>
+    </header>
+
+    <main class="dashboard-container">
+        <!-- Parameters Section -->
+        <section class="parameters-section">
+            <div class="section-header">
+                <h2><i class="fas fa-cog"></i> Parameters</h2>
+            </div>
+            
+            <form method="post" id="analysis-form" class="parameter-form">
                 {% if error %}
                 <div class="error-message">
-                    <p>{{ error }}</p>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>{{ error }}</span>
                 </div>
                 {% endif %}
-                <table>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="ticker">
+                            <i class="fas fa-tag"></i> Ticker Symbol
+                        </label>
+                        <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}" 
+                               placeholder="e.g., AAPL, ^GSPC" required>
+                        <div class="ticker-validation" id="ticker-validation"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="start_time">
+                            <i class="fas fa-calendar"></i> Start Date
+                        </label>
+                        <input type="text" id="start_time" name="start_time" 
+                               placeholder="YYYYMM (e.g., 202001)" pattern="[0-9]{6}" required>
+                        <small class="form-help">Format: YYYYMM</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="feature">
+                            <i class="fas fa-chart-bar"></i> Analysis Feature
+                        </label>
+                        <select id="feature" name="feature">
+                            <option value="Oscillation" {% if feature == 'Oscillation' %}selected{% endif %}>
+                                Price Oscillation
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="frequency">
+                            <i class="fas fa-clock"></i> Frequency
+                        </label>
+                        <select id="frequency" name="frequency">
+                            <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
+                            <option value="ME" {% if frequency == 'ME' %}selected{% endif %}>Monthly</option>
+                            <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group period-group">
+                        <label>
+                            <i class="fas fa-history"></i> Analysis Periods
+                        </label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="period" value="12" checked>
+                                <span class="checkmark"></span>
+                                1 Year
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="period" value="36" checked>
+                                <span class="checkmark"></span>
+                                3 Years
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="period" value="60" checked>
+                                <span class="checkmark"></span>
+                                5 Years
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="period" value="ALL" checked>
+                                <span class="checkmark"></span>
+                                All Data
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-play"></i> Run Analysis
+                </button>
+
+                <input type="hidden" id="option_position" name="option_position">
+            </form>
+        </section>
+
+        <!-- Options Strategy Section -->
+        <section class="options-section">
+            <div class="section-header">
+                <h2><i class="fas fa-coins"></i> Options Strategy</h2>
+                <button type="button" class="btn-secondary" onclick="addOptionRow()">
+                    <i class="fas fa-plus"></i> Add Position
+                </button>
+            </div>
+
+            <div class="options-table-container">
+                <table id="options-table" class="options-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Strike</th>
+                            <th>Quantity</th>
+                            <th>Premium</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         <tr>
-                            <th>Ticker</th>
                             <td>
-                                <input type="text" id="ticker" name="ticker" value="{{ ticker }}" placeholder="Yahoo Code" required>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Start Time</th>
-                            <td>
-                                <input type="number" id="start_time" name="start_time" min="190001" max="210012" placeholder="YYYYMM" required>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Feature</th>
-                            <td>
-                                <select id="feature" name="feature">
-                                    <option value="Oscillation" {% if feature == 'Oscillation' %}selected{% endif %}>Oscillation</option>
-                                    <!-- <option value="Difference" {% if feature == 'Difference' %}{% endif %}>Difference</option> -->
+                                <select name="option_type" class="option-select">
+                                    <option value="SC" selected>Short Call</option>
+                                    <option value="SP">Short Put</option>
+                                    <option value="LC">Long Call</option>
+                                    <option value="LP">Long Put</option>
                                 </select>
                             </td>
-                        </tr>
-                        <tr>
-                            <th>Frequency</th>
+                            <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
+                            <td><input type="number" name="quantity" placeholder="Contracts"></td>
+                            <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
                             <td>
-                                <select id="frequency" name="frequency">
-                                    <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
-                                    <option value="ME" {% if frequency == 'ME' %}selected{% endif %}>Monthly</option> 
-                                    <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
-                                </select>
+                                <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </td>
                         </tr>
                         <tr>
-                            <th>Period</th>
                             <td>
-                                <div class="multi-select-checkbox">
-                                    <input type="checkbox" id="period_1Y" name="period" value="1Y" checked>
-                                    <label for="period_1Y">1Y</label>
-                                    <input type="checkbox" id="period_3Y" name="period" value="3Y" checked>
-                                    <label for="period_3Y">3Y</label>
-                                    <input type="checkbox" id="period_5Y" name="period" value="5Y" checked>
-                                    <label for="period_5Y">5Y</label>
-                                    <input type="checkbox" id="period_ALL" name="period" value="ALL" checked>
-                                    <label for="period_ALL">ALL</label>
-                                </div>
+                                <select name="option_type" class="option-select">
+                                    <option value="SC">Short Call</option>
+                                    <option value="SP" selected>Short Put</option>
+                                    <option value="LC">Long Call</option>
+                                    <option value="LP">Long Put</option>
+                                </select>
+                            </td>
+                            <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
+                            <td><input type="number" name="quantity" placeholder="Contracts"></td>
+                            <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
+                            <td>
+                                <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </td>
                         </tr>
                     </tbody>
                 </table>
-                <input type="submit" value="Submit">
-                
-                <input type="hidden" id="option_position" name="option_position">
-            </form>
-        </div>
-        <div class="right-section">
-            <h1>Positions</h1>
-            <table id="option-table">
-                <thead>
-                    <tr>
-                        <th>Option Type</th>
-                        <th>Strike</th>
-                        <th>Quantity</th>
-                        <th>Premium</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>
-                            <select name="option_type">
-                                <option value="SC" selected>SC</option>
-                                <option value="SP">SP</option>
-                                <option value="LC">LC</option>
-                                <option value="LP">LP</option>
-                            </select>
-                        </td>
-                        <td><input type="number" name="strike"></td>
-                        <td><input type="number" name="quantity"></td>
-                        <td><input type="number" step="0.01" name="premium"></td>
-                        <td><button type="button" onclick="deleteRow(this)">Delete</button></td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <select name="option_type">
-                                <option value="SC">SC</option>
-                                <option value="SP" selected>SP</option>
-                                <option value="LC">LC</option>
-                                <option value="LP">LP</option>
-                            </select>
-                        </td>
-                        <td><input type="number" name="strike"></td>
-                        <td><input type="number" name="quantity"></td>
-                        <td><input type="number" step="0.01" name="premium"></td>
-                        <td><button type="button" onclick="deleteRow(this)">Delete</button></td>
-                    </tr>
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="5"><button type="button" onclick="addRow()">Add Row</button></td>
-                    </tr>
-                </tfoot>
-            </table>
-            <input type="submit" form="option-form" value="Submit"> <!-- Moved submit button here -->
-        </div>
+            </div>
+        </section>
     </main>
-    <div class="aligned-section">
-        <div>
-            <h1>Analysis</h1>
 
-            {% if feat_ret_scatter_hist_url %}
-            <h2>{{ feature }} vs Return </h2>
-            <div class="plot-container">
-                <img src="data:image/png;base64,{{ feat_ret_scatter_hist_url }}" alt="{{ feature }} vs Return Scatter Plot">
+    <!-- Results Section -->
+    {% if ticker %}
+    <section class="results-section">
+        <div class="results-header">
+            <h2><i class="fas fa-chart-area"></i> Analysis Results for {{ ticker }}</h2>
+            <div class="results-meta">
+                <span class="meta-item">
+                    <i class="fas fa-calendar-alt"></i> 
+                    Frequency: {{ frequency_display or frequency }}
+                </span>
+                <span class="meta-item">
+                    <i class="fas fa-chart-line"></i> 
+                    Feature: {{ feature }}
+                </span>
             </div>
-            {% endif %}
-            
-            {% if tail_stats_result %}
-            <h2>Tail Statistics</h2>
-            <div class="table-container">
-                {{ tail_stats_result|safe }}
-            </div>
-            {% endif %}
-
-
-            {% if tail_plot_url %}
-            <h2>Tail Distribution</h2>
-            <div class="plot-container">
-                <img src="data:image/png;base64,{{ tail_plot_url }}" alt="Tail Plot">
-            </div>
-            {% endif %}
-
-            {% if gap_stats_result %}
-            <h2>Gap Statistics</h2>
-            <div class="table-container">
-                {{ gap_stats_result|safe }}
-            </div>
-            {% endif %}
-
         </div>
 
-        <div>
-            <h1>Assessment</h1>
+        <div class="results-grid">
+            <!-- Analysis Column -->
+            <div class="analysis-column">
+                <h3><i class="fas fa-microscope"></i> Statistical Analysis</h3>
 
-            {% if feat_projection_url %}
-            <h2>{{ feature }} Projection (Side Bias Neutral)</h2>
-            <div class="plot-container">
-                <img src="data:image/png;base64,{{ feat_projection_url }}" alt="Volatility Projection">
-            </div>
-            {% endif %}
+                {% if feat_ret_scatter_hist_url %}
+                <div class="chart-container">
+                    <h4>{{ feature }} vs Returns Correlation</h4>
+                    <div class="chart-wrapper">
+                        <img src="data:image/png;base64,{{ feat_ret_scatter_hist_url }}" 
+                             alt="{{ feature }} vs Returns Analysis" class="analysis-chart">
+                    </div>
+                </div>
+                {% endif %}
 
-            <!-- {% if option_matrix_result %}
-            <h2>Option Matrix</h2>
-            <div class="table-container">
-                {{ option_matrix_result|safe }}
-            </div>
-            {% endif %} -->
+                {% if tail_stats_result %}
+                <div class="stats-container">
+                    <h4>Tail Statistics Summary</h4>
+                    <div class="table-wrapper">
+                        {{ tail_stats_result|safe }}
+                    </div>
+                </div>
+                {% endif %}
 
-            <!-- Improve plot display -->
-            {% if plot_url %}
-            <h2>Option PnL Chart</h2>
-            <div class="plot-container">
-                <img src="data:image/png;base64,{{ plot_url }}" alt="Option PnL Chart">
+                {% if tail_plot_url %}
+                <div class="chart-container">
+                    <h4>Cumulative Distribution Analysis</h4>
+                    <div class="chart-wrapper">
+                        <img src="data:image/png;base64,{{ tail_plot_url }}" 
+                             alt="Tail Distribution Plot" class="analysis-chart">
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if gap_stats_result %}
+                <div class="stats-container">
+                    <h4>Gap Statistics Analysis</h4>
+                    <div class="table-wrapper">
+                        {{ gap_stats_result|safe }}
+                    </div>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
+
+            <!-- Assessment Column -->
+            <div class="assessment-column">
+                <h3><i class="fas fa-crystal-ball"></i> Market Assessment</h3>
+
+                {% if feat_projection_url %}
+                <div class="chart-container">
+                    <h4>{{ feature }} Projection (Neutral Bias)</h4>
+                    <div class="chart-wrapper">
+                        <img src="data:image/png;base64,{{ feat_projection_url }}" 
+                             alt="Market Projection" class="analysis-chart">
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if plot_url %}
+                <div class="chart-container">
+                    <h4>Options Portfolio P&L Analysis</h4>
+                    <div class="chart-wrapper">
+                        <img src="data:image/png;base64,{{ plot_url }}" 
+                             alt="Options P&L Chart" class="analysis-chart">
+                    </div>
+                </div>
+                {% endif %}
+            </div>
         </div>
-    </div>
+    </section>
+    {% endif %}
+
+    <footer>
+        <p>&copy; 2024 Market Observation Dashboard. Advanced analytics for informed trading decisions.</p>
+    </footer>
+
     <script>
-        function formatTableData() {
-            const tables = document.querySelectorAll('.table-container table');
-            tables.forEach(table => {
-                const rows = table.querySelectorAll('tr');
-                rows.forEach(row => {
-                    const cells = row.querySelectorAll('td, th');
-                    cells.forEach(cell => {
-                        let text = cell.textContent.trim();
-                        text = text.replace(/,/g, '');
-                        const value = parseFloat(text);
-                        if (!isNaN(value) && /^\d+(\.\d+)?$/.test(text)) {
-                            cell.textContent = value.toFixed(2);
-                        }
+        // Form state management
+        const FormManager = {
+            saveState() {
+                const formData = {
+                    ticker: document.getElementById('ticker').value,
+                    start_time: document.getElementById('start_time').value,
+                    feature: document.getElementById('feature').value,
+                    frequency: document.getElementById('frequency').value,
+                    periods: Array.from(document.querySelectorAll('input[name="period"]:checked')).map(cb => cb.value),
+                    options: this.getOptionsData()
+                };
+                localStorage.setItem('marketAnalysisForm', JSON.stringify(formData));
+            },
+
+            loadState() {
+                const saved = localStorage.getItem('marketAnalysisForm');
+                if (!saved) return;
+
+                try {
+                    const formData = JSON.parse(saved);
+                    
+                    // Restore form fields
+                    if (formData.ticker) document.getElementById('ticker').value = formData.ticker;
+                    if (formData.start_time) document.getElementById('start_time').value = formData.start_time;
+                    if (formData.feature) document.getElementById('feature').value = formData.feature;
+                    if (formData.frequency) document.getElementById('frequency').value = formData.frequency;
+                    
+                    // Restore period checkboxes
+                    document.querySelectorAll('input[name="period"]').forEach(cb => {
+                        cb.checked = formData.periods && formData.periods.includes(cb.value);
                     });
-                });
-            });
-        }
 
-        function addRow() {
-            var table = document.getElementById('option-table');
-            var tbody = table.getElementsByTagName('tbody')[0];
-            var row = tbody.insertRow();
-            var cell1 = row.insertCell(0);
-            var cell2 = row.insertCell(1);
-            var cell3 = row.insertCell(2);
-            var cell4 = row.insertCell(3);
-            var cell5 = row.insertCell(4);
-
-            cell1.innerHTML = '<select name="option_type"><option value="SC">SC</option><option value="SP">SP</option><option value="LC">LC</option><option value="LP">LP</option></select>';
-            cell2.innerHTML = '<input type="number" name="strike">';
-            cell3.innerHTML = '<input type="number" name="quantity">';
-            cell4.innerHTML = '<input type="number" step="0.01" name="premium">';
-            cell5.innerHTML = '<button type="button" onclick="deleteRow(this)">Delete</button>';
-        }
-
-        function deleteRow(button) {
-            var row = button.parentNode.parentNode;
-            row.parentNode.removeChild(row);
-        }
-
-        document.getElementById('option-form').addEventListener('submit', function (e) {
-            const startTime = document.getElementById('start_time').value;
-            localStorage.setItem('start_time', startTime);
-
-            const checkboxes = document.querySelectorAll('.multi-select-checkbox input[type="checkbox"]');
-            const checkboxStates = {};
-            checkboxes.forEach(checkbox => {
-                checkboxStates[checkbox.id] = checkbox.checked;
-            });
-            localStorage.setItem('checkboxStates', JSON.stringify(checkboxStates));
-
-            // 保存输入值
-            const rows = document.querySelectorAll('#option-table tbody tr');
-            const inputValues = [];
-            rows.forEach(row => {
-                const optionType = row.querySelector('select[name="option_type"]').value;
-                const strike = row.querySelector('input[name="strike"]').value;
-                const quantity = row.querySelector('input[name="quantity"]').value;
-                const premium = row.querySelector('input[name="premium"]').value;
-                inputValues.push({
-                    optionType: optionType,
-                    strike: strike,
-                    quantity: quantity,
-                    premium: premium
-                });
-            });
-            localStorage.setItem('inputValues', JSON.stringify(inputValues));
-
-            var optionRows = [];
-            rows.forEach(function (row) {
-                var optionType = row.querySelector('select[name="option_type"]').value;
-                var strike = row.querySelector('input[name="strike"]').value;
-                var quantity = row.querySelector('input[name="quantity"]').value;
-                var premium = row.querySelector('input[name="premium"]').value;
-                if (optionType && strike && quantity && premium) {
-                    optionRows.push({
-                        optionType: optionType,
-                        strike: strike,
-                        quantity: quantity,
-                        premium: premium
-                    });
-                }
-            });
-            try {
-                document.getElementById('option_position').value = JSON.stringify(optionRows);
-            } catch (error) {
-                console.error('Error serializing option positions:', error);
-                e.preventDefault();
-            }
-        });
-
-        window.onload = function () {
-            formatTableData();
-
-            const startTime = localStorage.getItem('start_time');
-            if (startTime) {
-                document.getElementById('start_time').value = startTime;
-            }
-
-            // 恢复复选框状态
-            const checkboxStates = JSON.parse(localStorage.getItem('checkboxStates'));
-            if (checkboxStates) {
-                const checkboxes = document.querySelectorAll('.multi-select-checkbox input[type="checkbox"]');
-                checkboxes.forEach(checkbox => {
-                    if (checkboxStates[checkbox.id] !== undefined) {
-                        checkbox.checked = checkboxStates[checkbox.id];
+                    // Restore options table
+                    if (formData.options && formData.options.length > 0) {
+                        this.restoreOptionsTable(formData.options);
                     }
-                });
-            }
-
-            // 恢复输入值
-            const inputValues = JSON.parse(localStorage.getItem('inputValues'));
-            if (inputValues) {
-                const table = document.getElementById('option-table');
-                const tbody = table.getElementsByTagName('tbody')[0];
-                // 清空现有的行
-                while (tbody.firstChild) {
-                    tbody.removeChild(tbody.firstChild);
+                } catch (e) {
+                    console.error('Error loading saved form state:', e);
                 }
-                // 重新插入保存的行
-                inputValues.forEach(value => {
-                    const row = tbody.insertRow();
-                    const cell1 = row.insertCell(0);
-                    const cell2 = row.insertCell(1);
-                    const cell3 = row.insertCell(2);
-                    const cell4 = row.insertCell(3);
-                    const cell5 = row.insertCell(4);
+            },
 
-                    const select = document.createElement('select');
-                    select.name = 'option_type';
-                    const options = ['SC', 'SP', 'LC', 'LP'];
-                    options.forEach(option => {
-                        const opt = document.createElement('option');
-                        opt.value = option;
-                        opt.textContent = option;
-                        if (option === value.optionType) {
-                            opt.selected = true;
-                        }
-                        select.appendChild(opt);
-                    });
-                    cell1.appendChild(select);
+            getOptionsData() {
+                const rows = document.querySelectorAll('#options-table tbody tr');
+                return Array.from(rows).map(row => ({
+                    option_type: row.querySelector('select[name="option_type"]').value,
+                    strike: row.querySelector('input[name="strike"]').value,
+                    quantity: row.querySelector('input[name="quantity"]').value,
+                    premium: row.querySelector('input[name="premium"]').value
+                }));
+            },
 
-                    const strikeInput = document.createElement('input');
-                    strikeInput.type = 'number';
-                    strikeInput.name = 'strike';
-                    strikeInput.value = value.strike;
-                    cell2.appendChild(strikeInput);
-
-                    const quantityInput = document.createElement('input');
-                    quantityInput.type = 'number';
-                    quantityInput.name = 'quantity';
-                    quantityInput.value = value.quantity;
-                    cell3.appendChild(quantityInput);
-
-                    const premiumInput = document.createElement('input');
-                    premiumInput.type = 'number';
-                    premiumInput.step = '0.01';
-                    premiumInput.name = 'premium';
-                    premiumInput.value = value.premium;
-                    cell4.appendChild(premiumInput);
-
-                    const deleteButton = document.createElement('button');
-                    deleteButton.type = 'button';
-                    deleteButton.textContent = 'Delete';
-                    deleteButton.onclick = function () {
-                        deleteRow(this);
-                    };
-                    cell5.appendChild(deleteButton);
+            restoreOptionsTable(optionsData) {
+                const tbody = document.querySelector('#options-table tbody');
+                tbody.innerHTML = '';
+                
+                optionsData.forEach(option => {
+                    const row = this.createOptionRow();
+                    row.querySelector('select[name="option_type"]').value = option.option_type;
+                    row.querySelector('input[name="strike"]').value = option.strike;
+                    row.querySelector('input[name="quantity"]').value = option.quantity;
+                    row.querySelector('input[name="premium"]').value = option.premium;
+                    tbody.appendChild(row);
                 });
+            },
+
+            createOptionRow() {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <select name="option_type" class="option-select">
+                            <option value="SC">Short Call</option>
+                            <option value="SP">Short Put</option>
+                            <option value="LC">Long Call</option>
+                            <option value="LP">Long Put</option>
+                        </select>
+                    </td>
+                    <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
+                    <td><input type="number" name="quantity" placeholder="Contracts"></td>
+                    <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
+                    <td>
+                        <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                return row;
             }
         };
+
+        // Options table management
+        function addOptionRow() {
+            const tbody = document.querySelector('#options-table tbody');
+            const row = FormManager.createOptionRow();
+            tbody.appendChild(row);
+            FormManager.saveState();
+        }
+
+        function deleteOptionRow(button) {
+            const row = button.closest('tr');
+            row.remove();
+            FormManager.saveState();
+        }
+
+        // Ticker validation
+        let validationTimeout;
+        function validateTicker() {
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+            const validationDiv = document.getElementById('ticker-validation');
+            
+            if (!ticker) {
+                validationDiv.innerHTML = '';
+                return;
+            }
+
+            clearTimeout(validationTimeout);
+            validationTimeout = setTimeout(() => {
+                validationDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
+                
+                fetch('/api/validate_ticker', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ticker: ticker })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.valid) {
+                        validationDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> Valid ticker';
+                        validationDiv.className = 'ticker-validation valid';
+                    } else {
+                        validationDiv.innerHTML = '<i class="fas fa-exclamation-circle text-error"></i> ' + data.message;
+                        validationDiv.className = 'ticker-validation invalid';
+                    }
+                })
+                .catch(error => {
+                    validationDiv.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Validation error';
+                    validationDiv.className = 'ticker-validation warning';
+                });
+            }, 500);
+        }
+
+        // Form submission
+        document.getElementById('analysis-form').addEventListener('submit', function(e) {
+            // Save form state
+            FormManager.saveState();
+            
+            // Prepare options data
+            const optionsData = FormManager.getOptionsData().filter(option => 
+                option.option_type && option.strike && option.quantity && option.premium
+            );
+            
+            document.getElementById('option_position').value = JSON.stringify(optionsData);
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+            submitBtn.disabled = true;
+            
+            // Re-enable button after a delay (in case of errors)
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }, 30000);
+        });
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            FormManager.loadState();
+            
+            // Add ticker validation
+            document.getElementById('ticker').addEventListener('input', validateTicker);
+            
+            // Auto-save form state on changes
+            document.querySelectorAll('input, select').forEach(element => {
+                element.addEventListener('change', FormManager.saveState.bind(FormManager));
+            });
+        });
+
+        // Smooth scrolling to results
+        function scrollToResults() {
+            const resultsSection = document.querySelector('.results-section');
+            if (resultsSection) {
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        // Auto-scroll to results if they exist
+        if (document.querySelector('.results-section')) {
+            setTimeout(scrollToResults, 500);
+        }
     </script>
 </body>
 
