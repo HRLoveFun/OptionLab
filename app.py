@@ -86,7 +86,7 @@ def extract_form_data(request):
             option_rows = json.loads(option_position_str)
             for row in option_rows:
                 option_data.append({
-                    'option_type': row['optionType'],
+                    'option_type': row['option_type'],
                     'strike': float(row['strike']),
                     'quantity': int(row['quantity']),
                     'premium': float(row['premium'])
