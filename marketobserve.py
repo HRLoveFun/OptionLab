@@ -351,6 +351,52 @@ class MarketAnalyzer:
         
         return fig
 
+    def generate_volatility_dynamics(self):
+        """Generate volatility dynamics plot over time"""
+        if not self.is_data_valid():
+            return None
+        
+        try:
+            # Calculate rolling volatility
+            oscillation_data = self.features_df['Oscillation']
+            
+            # Calculate different rolling windows
+            windows = [20, 60, 120]  # Different periods for volatility calculation
+            
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            colors = ['blue', 'red', 'green']
+            
+            for i, window in enumerate(windows):
+                if len(oscillation_data) > window:
+                    rolling_vol = oscillation_data.rolling(window=window).std()
+                    ax.plot(rolling_vol.index, rolling_vol, 
+                           label=f'{window}-Period Rolling Volatility', 
+                           color=colors[i], linewidth=2, alpha=0.8)
+            
+            # Add current volatility level
+            current_vol = oscillation_data.std()
+            ax.axhline(y=current_vol, color='orange', linestyle='--', 
+                      label=f'Overall Volatility: {current_vol:.2f}%', linewidth=2)
+            
+            # Formatting
+            ax.set_xlabel('Date', fontsize=12)
+            ax.set_ylabel('Volatility (%)', fontsize=12)
+            ax.set_title(f'{self.ticker} - Volatility Dynamics Over Time', 
+                        fontsize=14, fontweight='bold')
+            ax.legend(fontsize=11)
+            ax.grid(True, alpha=0.3)
+            
+            # Format x-axis
+            ax.tick_params(axis='x', rotation=45)
+            
+            plt.tight_layout()
+            return self._fig_to_base64(fig)
+            
+        except Exception as e:
+            logger.error(f"Error generating volatility dynamics: {e}")
+            return None
+
     def calculate_tail_statistics(self, feature_name):
         """Calculate tail statistics for different periods"""
         segments = self.get_period_segments(feature_name)
@@ -518,8 +564,8 @@ class MarketAnalyzer:
         
         return data_sources
 
-    def generate_oscillation_projection(self, percentile=0.90, target_bias=0):
-        """Generate oscillation projection plot"""
+    def generate_oscillation_projection(self, percentile=0.90, target_bias=None):
+        """Generate oscillation projection plot with enhanced bias handling"""
         if not self.is_data_valid():
             return None
         
@@ -542,13 +588,18 @@ class MarketAnalyzer:
             return None
 
     def _create_oscillation_projection_plot(self, data, percentile, target_bias):
-        """Create the oscillation projection visualization"""
+        """Create the oscillation projection visualization with improved bias handling"""
         try:
             # Calculate projection volatility
             proj_volatility = data["Oscillation"].quantile(percentile)
             
-            # Optimize projection weights if target bias specified
-            proj_high_weight = self._optimize_projection_weight(data, proj_volatility, target_bias)
+            # Optimize projection weights based on target bias
+            if target_bias is None:
+                # Natural bias - use historical data to determine optimal weight
+                proj_high_weight = self._calculate_natural_bias_weight(data, proj_volatility)
+            else:
+                # Neutral bias (target_bias = 0) or specific bias
+                proj_high_weight = self._optimize_projection_weight(data, proj_volatility, target_bias)
             
             # Get current price data
             px_last_close = data["LastClose"].iloc[-1]
@@ -565,13 +616,45 @@ class MarketAnalyzer:
                                                        proj_high_next, proj_low_next)
             
             # Create visualization
-            fig = self._plot_oscillation_projection(proj_df, percentile, proj_volatility)
+            fig = self._plot_oscillation_projection(proj_df, percentile, proj_volatility, target_bias)
             
             return self._fig_to_base64(fig)
             
         except Exception as e:
             logger.error(f"Error creating oscillation projection plot: {e}")
             return None
+
+    def _calculate_natural_bias_weight(self, data, proj_volatility):
+        """Calculate natural bias weight based on historical performance"""
+        try:
+            # Analyze historical performance to determine natural bias
+            df = data.iloc[:-1].copy()  # Exclude last row
+            
+            df["ProjHigh"] = df["LastClose"] + df["LastClose"] * proj_volatility / 100 * 0.5
+            df["ProjLow"] = df["LastClose"] - df["LastClose"] * proj_volatility / 100 * 0.5
+            
+            # Calculate hit rates for different weight scenarios
+            weights = np.linspace(0.3, 0.7, 21)
+            best_weight = 0.5
+            best_accuracy = 0
+            
+            for weight in weights:
+                df["ProjHighTest"] = df["LastClose"] + df["LastClose"] * proj_volatility / 100 * weight
+                df["ProjLowTest"] = df["LastClose"] - df["LastClose"] * proj_volatility / 100 * (1 - weight)
+                
+                # Calculate accuracy
+                within_range = ((df["Close"] >= df["ProjLowTest"]) & (df["Close"] <= df["ProjHighTest"])).sum()
+                accuracy = within_range / len(df)
+                
+                if accuracy > best_accuracy:
+                    best_accuracy = accuracy
+                    best_weight = weight
+            
+            return best_weight
+            
+        except Exception as e:
+            logger.error(f"Error calculating natural bias weight: {e}")
+            return 0.5
 
     def _optimize_projection_weight(self, data, proj_volatility, target_bias):
         """Optimize projection weight to achieve target bias"""
@@ -682,8 +765,8 @@ class MarketAnalyzer:
         except Exception as e:
             logger.error(f"Error filling projection data: {e}")
 
-    def _plot_oscillation_projection(self, proj_df, percentile, proj_volatility):
-        """Create the oscillation projection plot"""
+    def _plot_oscillation_projection(self, proj_df, percentile, proj_volatility, target_bias):
+        """Create the oscillation projection plot with bias information"""
         fig, ax = plt.subplots(figsize=(16, 10))
         
         try:
@@ -696,7 +779,8 @@ class MarketAnalyzer:
             self._add_projection_annotations(ax, x_values, proj_df)
             
             # Format plot
-            self._format_projection_plot(ax, proj_df, percentile, proj_volatility)
+            bias_text = "Natural" if target_bias is None else f"Neutral ({target_bias})"
+            self._format_projection_plot(ax, proj_df, percentile, proj_volatility, bias_text)
             
             return fig
             
@@ -746,8 +830,8 @@ class MarketAnalyzer:
                                xytext=(0, -20), textcoords="offset points",
                                ha='center', va='top', fontsize=10, color=color, fontweight='bold')
 
-    def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility):
-        """Format the projection plot"""
+    def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility, bias_text):
+        """Format the projection plot with bias information"""
         # Set x-axis labels
         ax.set_xticks(range(0, len(proj_df.index), max(1, len(proj_df.index)//20)))
         ax.set_xticklabels([proj_df.index[i].strftime('%m/%d') 
@@ -757,7 +841,7 @@ class MarketAnalyzer:
         # Labels and title
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel('Price', fontsize=12)
-        ax.set_title(f'Oscillation Projection (Percentile: {percentile:.0%}, Volatility: {proj_volatility:.1f}%)', 
+        ax.set_title(f'Oscillation Projection (Threshold: {percentile:.0%}, Volatility: {proj_volatility:.1f}%, Bias: {bias_text})', 
                     fontsize=14, fontweight='bold')
         
         # Grid and legend
