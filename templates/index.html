@@ -10,6 +10,11 @@
 </head>
 
 <body>
+    <header>
+        <h1><i class="fas fa-chart-line"></i> Market Observation Dashboard</h1>
+        <p class="subtitle">Advanced Market Analysis & Options Strategy Tool</p>
+    </header>
+
     <!-- Fixed Top Parameter Bar -->
     <div class="parameter-bar">
         <form method="post" id="analysis-form" class="parameter-form">
@@ -22,28 +27,27 @@
 
             <div class="parameter-grid">
                 <div class="form-group">
-                    <label for="ticker">Yahoo Code</label>
+                    <label for="ticker">
+                        <i class="fas fa-tag"></i> Ticker
+                    </label>
                     <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}" 
                            placeholder="AAPL, ^GSPC" required>
                     <div class="ticker-validation" id="ticker-validation"></div>
                 </div>
 
                 <div class="form-group">
-                    <label for="start_date">Start Date</label>
-                    <input type="text" id="start_date" name="start_date" 
-                           value="{{ start_date or '' }}"
-                           placeholder="20240101" pattern="[0-9]{8}" required>
+                    <label for="start_time">
+                        <i class="fas fa-calendar"></i> Start Date
+                    </label>
+                    <input type="text" id="start_time" name="start_time" 
+                           value="{{ start_time_str or '' }}"
+                           placeholder="202001" pattern="[0-9]{6}" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="end_date">End Date</label>
-                    <input type="text" id="end_date" name="end_date" 
-                           value="{{ end_date or '' }}"
-                           placeholder="Today" pattern="[0-9]{8}">
-                </div>
-
-                <div class="form-group">
-                    <label for="frequency">Frequency</label>
+                    <label for="frequency">
+                        <i class="fas fa-clock"></i> Frequency
+                    </label>
                     <select id="frequency" name="frequency">
                         <option value="D" {% if frequency == 'D' %}selected{% endif %}>Daily</option>
                         <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
@@ -53,13 +57,41 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="risk_threshold">Risk Threshold (%)</label>
+                    <label>
+                        <i class="fas fa-history"></i> Periods
+                    </label>
+                    <div class="period-checkboxes">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="period" value="12" checked>
+                            1Y
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="period" value="36" checked>
+                            3Y
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="period" value="60" checked>
+                            5Y
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="period" value="ALL" checked>
+                            All
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="risk_threshold">
+                        <i class="fas fa-shield-alt"></i> Risk Threshold (%)
+                    </label>
                     <input type="number" id="risk_threshold" name="risk_threshold" 
                            min="0" max="100" step="1" value="{{ risk_threshold or 90 }}" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="side_bias">Side Bias</label>
+                    <label for="side_bias">
+                        <i class="fas fa-balance-scale"></i> Side Bias
+                    </label>
                     <select id="side_bias" name="side_bias">
                         <option value="Natural" {% if side_bias == 'Natural' %}selected{% endif %}>Natural</option>
                         <option value="Neutral" {% if side_bias == 'Neutral' %}selected{% endif %}>Neutral</option>
@@ -67,7 +99,9 @@
                 </div>
 
                 <div class="form-group">
-                    <button type="submit" class="btn-primary">Analyze</button>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-play"></i> Analyze
+                    </button>
                 </div>
             </div>
 
@@ -75,34 +109,64 @@
         </form>
     </div>
 
-    <!-- Positions Toggle Section -->
-    <div class="positions-toggle-section">
-        <div class="toggle-header" onclick="togglePositionsSection()">
-            <h3>Positions</h3>
+    <!-- Options Toggle Section -->
+    <div class="options-toggle-section">
+        <div class="toggle-header" onclick="toggleOptionsSection()">
+            <h3><i class="fas fa-coins"></i> Options Strategy</h3>
             <div class="toggle-controls">
-                <button type="button" class="btn-create" onclick="addOptionRow(); event.stopPropagation();">
-                    Create
+                <button type="button" class="btn-secondary" onclick="addOptionRow(); event.stopPropagation();">
+                    <i class="fas fa-plus"></i> Add Position
                 </button>
-                <i class="fas fa-chevron-down toggle-icon" id="positions-toggle-icon"></i>
+                <i class="fas fa-chevron-down toggle-icon" id="options-toggle-icon"></i>
             </div>
         </div>
 
-        <div class="positions-content" id="positions-content">
-            <div class="positions-table-container">
-                <table id="positions-table" class="positions-table">
+        <div class="options-content" id="options-content">
+            <div class="options-table-container">
+                <table id="options-table" class="options-table">
                     <thead>
                         <tr>
                             <th>Type</th>
                             <th>Strike</th>
                             <th>Quantity</th>
                             <th>Premium</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr class="add-row">
-                            <td colspan="4">
-                                <button type="button" class="btn-add" onclick="addOptionRow()">
-                                    <i class="fas fa-plus"></i> Add Position
+                        <tr>
+                            <td>
+                                <select name="option_type" class="option-select">
+                                    <option value="SC" selected>Short Call</option>
+                                    <option value="SP">Short Put</option>
+                                    <option value="LC">Long Call</option>
+                                    <option value="LP">Long Put</option>
+                                </select>
+                            </td>
+                            <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
+                            <td><input type="number" name="quantity" placeholder="Contracts"></td>
+                            <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
+                            <td>
+                                <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <select name="option_type" class="option-select">
+                                    <option value="SC">Short Call</option>
+                                    <option value="SP" selected>Short Put</option>
+                                    <option value="LC">Long Call</option>
+                                    <option value="LP">Long Put</option>
+                                </select>
+                            </td>
+                            <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
+                            <td><input type="number" name="quantity" placeholder="Contracts"></td>
+                            <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
+                            <td>
+                                <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
+                                    <i class="fas fa-trash"></i>
                                 </button>
                             </td>
                         </tr>
@@ -118,41 +182,32 @@
         {% if ticker %}
         <section class="results-section">
             <div class="results-header">
-                <h2>Analysis Results for {{ ticker }}</h2>
+                <h2><i class="fas fa-chart-area"></i> Analysis Results for {{ ticker }}</h2>
                 <div class="results-meta">
-                    <span class="meta-item">Frequency: {{ frequency_display or frequency }}</span>
-                    <span class="meta-item">Risk Threshold: {{ risk_threshold or 90 }}%</span>
-                    <span class="meta-item">Bias: {{ side_bias or 'Natural' }}</span>
+                    <span class="meta-item">
+                        <i class="fas fa-calendar-alt"></i> 
+                        Frequency: {{ frequency_display or frequency }}
+                    </span>
+                    <span class="meta-item">
+                        <i class="fas fa-chart-line"></i> 
+                        Feature: Oscillation Analysis
+                    </span>
+                    <span class="meta-item">
+                        <i class="fas fa-shield-alt"></i> 
+                        Risk Threshold: {{ risk_threshold or 90 }}%
+                    </span>
+                    <span class="meta-item">
+                        <i class="fas fa-balance-scale"></i> 
+                        Bias: {{ side_bias or 'Natural' }}
+                    </span>
                 </div>
             </div>
 
-            <!-- Analysis Section -->
+            <!-- Statistical Analysis Section -->
             <div class="analysis-section">
-                <h3>Analysis</h3>
+                <h3><i class="fas fa-microscope"></i> Statistical Analysis</h3>
                 
-                <!-- Market Statistics -->
-                {% if market_stats %}
-                <div class="stats-container">
-                    <h4>Market Statistics</h4>
-                    <div class="table-wrapper">
-                        {{ market_stats|safe }}
-                    </div>
-                </div>
-                {% endif %}
-
                 <div class="charts-grid">
-                    <!-- Volatility Dynamics -->
-                    {% if volatility_dynamic_url %}
-                    <div class="chart-container">
-                        <h4>Volatility Dynamics</h4>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ volatility_dynamic_url }}" 
-                                 alt="Volatility Dynamics" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- Oscillation vs Returns Correlation -->
                     {% if feat_ret_scatter_hist_url %}
                     <div class="chart-container">
                         <h4>Oscillation vs Returns Correlation</h4>
@@ -163,30 +218,37 @@
                     </div>
                     {% endif %}
 
-                    <!-- Tail Distribution -->
                     {% if tail_plot_url %}
                     <div class="chart-container">
-                        <h4>Tail Distribution</h4>
+                        <h4>Cumulative Distribution Analysis</h4>
                         <div class="chart-wrapper">
                             <img src="data:image/png;base64,{{ tail_plot_url }}" 
                                  alt="Tail Distribution Plot" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
+
+                    {% if volatility_dynamic_url %}
+                    <div class="chart-container">
+                        <h4>Volatility Dynamics Over Time</h4>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ volatility_dynamic_url }}" 
+                                 alt="Volatility Dynamics" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="stats-grid">
-                    <!-- Tail Statistics -->
                     {% if tail_stats_result %}
                     <div class="stats-container">
-                        <h4>Tail Statistics</h4>
+                        <h4>Tail Statistics Summary</h4>
                         <div class="table-wrapper">
                             {{ tail_stats_result|safe }}
                         </div>
                     </div>
                     {% endif %}
 
-                    <!-- Gap Statistics Analysis -->
                     {% if gap_stats_result %}
                     <div class="stats-container">
                         <h4>Gap Statistics Analysis</h4>
@@ -198,15 +260,14 @@
                 </div>
             </div>
 
-            <!-- Assessment Section -->
+            <!-- Market Assessment Section -->
             <div class="assessment-section">
-                <h3>Assessment</h3>
+                <h3><i class="fas fa-crystal-ball"></i> Market Assessment & Projections</h3>
                 
                 <div class="charts-grid">
-                    <!-- Oscillation Projection -->
                     {% if feat_projection_url %}
                     <div class="chart-container full-width">
-                        <h4>Oscillation Projection</h4>
+                        <h4>Oscillation Projection ({{ side_bias or 'Natural' }} Bias, {{ risk_threshold or 90 }}% Threshold)</h4>
                         <div class="chart-wrapper">
                             <img src="data:image/png;base64,{{ feat_projection_url }}" 
                                  alt="Market Projection" class="analysis-chart">
@@ -214,79 +275,30 @@
                     </div>
                     {% endif %}
 
-                    <!-- Strategy PnL Chart -->
-                    {% if strategy_pnl_url %}
-                    <div class="chart-container">
-                        <h4>Price-PnL Chart</h4>
+                    {% if plot_url %}
+                    <div class="chart-container full-width">
+                        <h4>Options Portfolio P&L Analysis</h4>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ strategy_pnl_url }}" 
-                                 alt="Strategy P&L Chart" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- Price Probability Chart -->
-                    {% if price_probability_url %}
-                    <div class="chart-container">
-                        <h4>Price Probability Chart</h4>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ price_probability_url }}" 
-                                 alt="Price Probability Chart" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ plot_url }}" 
+                                 alt="Options P&L Chart" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
                 </div>
-
-                <!-- Kelly Criterion Analysis -->
-                {% if kelly_analysis %}
-                <div class="stats-container">
-                    <h4>Kelly Criterion Analysis</h4>
-                    <div class="table-wrapper">
-                        {{ kelly_analysis|safe }}
-                    </div>
-                </div>
-                {% endif %}
             </div>
         </section>
         {% endif %}
     </main>
 
+    <footer>
+        <p>&copy; 2024 Market Observation Dashboard. Advanced analytics for informed trading decisions.</p>
+    </footer>
+
     <script>
-        // Get current date in YYYYMMDD format
-        function getCurrentDate() {
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-            return year + month + day;
-        }
-
-        // Set default end date to today
-        document.addEventListener('DOMContentLoaded', function() {
-            const endDateInput = document.getElementById('end_date');
-            if (!endDateInput.value) {
-                endDateInput.placeholder = getCurrentDate();
-            }
-            
-            // Initialize positions section as collapsed
-            const content = document.getElementById('positions-content');
-            content.style.display = 'none';
-            
-            FormManager.loadState();
-            
-            // Add ticker validation
-            document.getElementById('ticker').addEventListener('input', validateTicker);
-            
-            // Auto-save form state on changes
-            document.querySelectorAll('input, select').forEach(element => {
-                element.addEventListener('change', FormManager.saveState.bind(FormManager));
-            });
-        });
-
-        // Positions toggle functionality
-        function togglePositionsSection() {
-            const content = document.getElementById('positions-content');
-            const icon = document.getElementById('positions-toggle-icon');
+        // Options toggle functionality
+        function toggleOptionsSection() {
+            const content = document.getElementById('options-content');
+            const icon = document.getElementById('options-toggle-icon');
             
             if (content.style.display === 'none' || content.style.display === '') {
                 content.style.display = 'block';
@@ -299,16 +311,22 @@
             }
         }
 
+        // Initialize options section as collapsed
+        document.addEventListener('DOMContentLoaded', function() {
+            const content = document.getElementById('options-content');
+            content.style.display = 'none';
+        });
+
         // Form state management
         const FormManager = {
             saveState() {
                 const formData = {
                     ticker: document.getElementById('ticker').value,
-                    start_date: document.getElementById('start_date').value,
-                    end_date: document.getElementById('end_date').value,
+                    start_time: document.getElementById('start_time').value,
                     frequency: document.getElementById('frequency').value,
                     risk_threshold: document.getElementById('risk_threshold').value,
                     side_bias: document.getElementById('side_bias').value,
+                    periods: Array.from(document.querySelectorAll('input[name="period"]:checked')).map(cb => cb.value),
                     options: this.getOptionsData()
                 };
                 localStorage.setItem('marketAnalysisForm', JSON.stringify(formData));
@@ -323,11 +341,15 @@
                     
                     // Restore form fields
                     if (formData.ticker) document.getElementById('ticker').value = formData.ticker;
-                    if (formData.start_date) document.getElementById('start_date').value = formData.start_date;
-                    if (formData.end_date) document.getElementById('end_date').value = formData.end_date;
+                    if (formData.start_time) document.getElementById('start_time').value = formData.start_time;
                     if (formData.frequency) document.getElementById('frequency').value = formData.frequency;
                     if (formData.risk_threshold) document.getElementById('risk_threshold').value = formData.risk_threshold;
                     if (formData.side_bias) document.getElementById('side_bias').value = formData.side_bias;
+                    
+                    // Restore period checkboxes
+                    document.querySelectorAll('input[name="period"]').forEach(cb => {
+                        cb.checked = formData.periods && formData.periods.includes(cb.value);
+                    });
 
                     // Restore options table
                     if (formData.options && formData.options.length > 0) {
@@ -339,33 +361,26 @@
             },
 
             getOptionsData() {
-                const rows = document.querySelectorAll('#positions-table tbody tr:not(.add-row)');
+                const rows = document.querySelectorAll('#options-table tbody tr');
                 return Array.from(rows).map(row => ({
-                    option_type: row.querySelector('select[name="option_type"]')?.value || '',
-                    strike: row.querySelector('input[name="strike"]')?.value || '',
-                    quantity: row.querySelector('input[name="quantity"]')?.value || '',
-                    premium: row.querySelector('input[name="premium"]')?.value || ''
+                    option_type: row.querySelector('select[name="option_type"]').value,
+                    strike: row.querySelector('input[name="strike"]').value,
+                    quantity: row.querySelector('input[name="quantity"]').value,
+                    premium: row.querySelector('input[name="premium"]').value
                 }));
             },
 
             restoreOptionsTable(optionsData) {
-                const tbody = document.querySelector('#positions-table tbody');
-                const addRow = tbody.querySelector('.add-row');
+                const tbody = document.querySelector('#options-table tbody');
+                tbody.innerHTML = '';
                 
-                // Remove existing option rows
-                const existingRows = tbody.querySelectorAll('tr:not(.add-row)');
-                existingRows.forEach(row => row.remove());
-                
-                // Add restored options
                 optionsData.forEach(option => {
-                    if (option.option_type || option.strike || option.quantity || option.premium) {
-                        const row = this.createOptionRow();
-                        if (option.option_type) row.querySelector('select[name="option_type"]').value = option.option_type;
-                        if (option.strike) row.querySelector('input[name="strike"]').value = option.strike;
-                        if (option.quantity) row.querySelector('input[name="quantity"]').value = option.quantity;
-                        if (option.premium) row.querySelector('input[name="premium"]').value = option.premium;
-                        tbody.insertBefore(row, addRow);
-                    }
+                    const row = this.createOptionRow();
+                    row.querySelector('select[name="option_type"]').value = option.option_type;
+                    row.querySelector('input[name="strike"]').value = option.strike;
+                    row.querySelector('input[name="quantity"]').value = option.quantity;
+                    row.querySelector('input[name="premium"]').value = option.premium;
+                    tbody.appendChild(row);
                 });
             },
 
@@ -374,7 +389,6 @@
                 row.innerHTML = `
                     <td>
                         <select name="option_type" class="option-select">
-                            <option value="">Select Type</option>
                             <option value="SC">Short Call</option>
                             <option value="SP">Short Put</option>
                             <option value="LC">Long Call</option>
@@ -382,37 +396,29 @@
                         </select>
                     </td>
                     <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
-                    <td><input type="number" name="quantity" placeholder="1" value="1"></td>
+                    <td><input type="number" name="quantity" placeholder="Contracts"></td>
                     <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
+                    <td>
+                        <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
                 `;
-                
-                // Add delete functionality
-                row.addEventListener('click', function(e) {
-                    if (e.target.closest('td')) {
-                        // Add delete button on click
-                        if (!row.querySelector('.delete-btn')) {
-                            const deleteBtn = document.createElement('button');
-                            deleteBtn.className = 'btn-delete delete-btn';
-                            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-                            deleteBtn.onclick = function() {
-                                row.remove();
-                                FormManager.saveState();
-                            };
-                            row.appendChild(document.createElement('td')).appendChild(deleteBtn);
-                        }
-                    }
-                });
-                
                 return row;
             }
         };
 
         // Options table management
         function addOptionRow() {
-            const tbody = document.querySelector('#positions-table tbody');
-            const addRow = tbody.querySelector('.add-row');
+            const tbody = document.querySelector('#options-table tbody');
             const row = FormManager.createOptionRow();
-            tbody.insertBefore(row, addRow);
+            tbody.appendChild(row);
+            FormManager.saveState();
+        }
+
+        function deleteOptionRow(button) {
+            const row = button.closest('tr');
+            row.remove();
             FormManager.saveState();
         }
 
@@ -429,7 +435,7 @@
 
             clearTimeout(validationTimeout);
             validationTimeout = setTimeout(() => {
-                validationDiv.innerHTML = 'Validating...';
+                validationDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
                 
                 fetch('/api/validate_ticker', {
                     method: 'POST',
@@ -441,15 +447,15 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.valid) {
-                        validationDiv.innerHTML = '✓ Valid';
+                        validationDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> Valid';
                         validationDiv.className = 'ticker-validation valid';
                     } else {
-                        validationDiv.innerHTML = '✗ Invalid';
+                        validationDiv.innerHTML = '<i class="fas fa-exclamation-circle text-error"></i> Invalid';
                         validationDiv.className = 'ticker-validation invalid';
                     }
                 })
                 .catch(error => {
-                    validationDiv.innerHTML = '⚠ Error';
+                    validationDiv.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error';
                     validationDiv.className = 'ticker-validation warning';
                 });
             }, 500);
@@ -459,12 +465,6 @@
         document.getElementById('analysis-form').addEventListener('submit', function(e) {
             // Save form state
             FormManager.saveState();
-            
-            // Set end date to today if empty
-            const endDateInput = document.getElementById('end_date');
-            if (!endDateInput.value) {
-                endDateInput.value = getCurrentDate();
-            }
             
             // Prepare options data
             const optionsData = FormManager.getOptionsData().filter(option => 
@@ -476,7 +476,7 @@
             // Show loading state
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = 'Analyzing...';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             submitBtn.disabled = true;
             
             // Re-enable button after a delay (in case of errors)
@@ -486,14 +486,30 @@
             }, 30000);
         });
 
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            FormManager.loadState();
+            
+            // Add ticker validation
+            document.getElementById('ticker').addEventListener('input', validateTicker);
+            
+            // Auto-save form state on changes
+            document.querySelectorAll('input, select').forEach(element => {
+                element.addEventListener('change', FormManager.saveState.bind(FormManager));
+            });
+        });
+
+        // Smooth scrolling to results
+        function scrollToResults() {
+            const resultsSection = document.querySelector('.results-section');
+            if (resultsSection) {
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
         // Auto-scroll to results if they exist
         if (document.querySelector('.results-section')) {
-            setTimeout(() => {
-                const resultsSection = document.querySelector('.results-section');
-                if (resultsSection) {
-                    resultsSection.scrollIntoView({ behavior: 'smooth' });
-                }
-            }, 500);
+            setTimeout(scrollToResults, 500);
         }
     </script>
 </body>
