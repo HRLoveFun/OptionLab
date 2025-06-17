@@ -200,11 +200,11 @@ class PriceDynamic:
 
     def bull_bear_plot(self, price_series):
         """
-        Determine bull/bear periods for price coloring.
+        Determine bull/bear periods based on historical high (80% threshold).
         
         Args:
-            price_series: Price data series
-            
+            price_series: Price data series (pandas Series with datetime index)
+                
         Returns:
             Dictionary with bull/bear segments
         """
@@ -212,28 +212,26 @@ class PriceDynamic:
             return {'bull_segments': [], 'bear_segments': []}
         
         try:
-            # Calculate moving average for trend determination
-            ma_window = min(20, len(price_series) // 4)  # Adaptive window
-            if ma_window < 2:
-                ma_window = 2
-                
-            moving_avg = price_series.rolling(window=ma_window, center=True).mean()
+            # 创建DataFrame并计算累积最大值
+            df = pd.DataFrame(price_series, columns=['Close'])
+            df['CumMax'] = df['Close'].cummax()
             
-            # Determine trend: bull when price > MA, bear when price < MA
-            is_bull = price_series > moving_avg
+            # 关键逻辑：判断牛熊市 (Close >= 80% of historical high)
+            df['IsBull'] = df['Close'] >= 0.8 * df['CumMax']
             
-            # Find trend changes
-            trend_changes = is_bull != is_bull.shift(1)
-            trend_changes.iloc[0] = True  # First point is always a change
+            # 找到趋势变化点
+            trend_changes = df['IsBull'] != df['IsBull'].shift(1)
+            trend_changes.iloc[0] = True  # 第一个点总是变化点
             
             segments = {'bull_segments': [], 'bear_segments': []}
-            
             current_trend = None
             segment_start = None
             
-            for i, (date, is_trend_change) in enumerate(trend_changes.items()):
-                if is_trend_change or i == len(trend_changes) - 1:
-                    # End previous segment
+            for i, (date, row) in enumerate(df.iterrows()):
+                is_trend_change = trend_changes.loc[date]
+                
+                if is_trend_change or i == len(df) - 1:
+                    # 结束前一段
                     if segment_start is not None and current_trend is not None:
                         segment_data = price_series.loc[segment_start:date]
                         if len(segment_data) > 1:
@@ -242,17 +240,17 @@ class PriceDynamic:
                             else:
                                 segments['bear_segments'].append(segment_data)
                     
-                    # Start new segment
-                    if i < len(trend_changes) - 1:  # Not the last point
+                    # 开始新段（非最后一点）
+                    if i < len(df) - 1:
                         segment_start = date
-                        current_trend = is_bull.loc[date]
+                        current_trend = row['IsBull']
             
             return segments
             
         except Exception as e:
             logger.error(f"Error in bull_bear_plot: {e}")
             return {'bull_segments': [], 'bear_segments': []}
-
+        
     def osc(self, on_effect=False):
         """
         Calculate price oscillation.
@@ -481,13 +479,13 @@ class MarketAnalyzer:
             for segment in bull_bear_segments['bull_segments']:
                 if len(segment) > 1:
                     ax1.plot(segment.index, segment.values, color='green', 
-                            linewidth=2, alpha=0.8)
+                            linewidth=2, alpha=0.5)
             
             # Plot bear segments in red
             for segment in bull_bear_segments['bear_segments']:
                 if len(segment) > 1:
                     ax1.plot(segment.index, segment.values, color='red', 
-                            linewidth=2, alpha=0.8)
+                            linewidth=2, alpha=0.5)
             
             ax1.tick_params(axis='y', labelcolor='black')
             ax1.grid(True, alpha=0.3)
@@ -497,15 +495,31 @@ class MarketAnalyzer:
             ax2.set_ylabel('Volatility (%)', fontsize=12, color='blue')
             
             # Plot volatility line
-            ax2.plot(volatility.index, volatility.values, color='blue', 
-                    linewidth=2, alpha=0.9, label='Historical Volatility')
+            ax2.plot(
+                volatility.index, 
+                volatility.values, 
+                color='orange', 
+                linewidth=3, 
+                alpha=0.7, 
+                label='Historical Volatility',
+                linestyle='-'
+            )            
             ax2.tick_params(axis='y', labelcolor='blue')
             
-            # Add current volatility level
+            # Add current volatility spot
             current_vol = volatility.iloc[-1] if len(volatility) > 0 else volatility.mean()
-            ax2.axhline(y=current_vol, color='orange', linestyle='--', 
-                       linewidth=2, alpha=0.8)
-            
+            # Use scatter plot with x as the last date and y as current_vol
+            ax2.scatter(
+                x=volatility.index[-1],  # X-axis: latest date
+                y=current_vol,           # Y-axis: current volatility
+                color='purple',          # Purple color
+                s=100,                   # Size of the marker (adjustable)
+                marker='o',              # Marker shape (e.g., 'o' for circle)
+                # edgecolor='black',       # Edge color for better visibility
+                linewidth=1.5,           # Edge width
+                alpha=0.8,               # Transparency
+                zorder=5                 # Ensure it appears above other lines
+            )            
             # Formatting
             frequency_name = FREQUENCY_MAPPING.get(self.frequency, self.frequency)
             window = VOLATILITY_WINDOWS.get(self.frequency, 21)
@@ -516,28 +530,27 @@ class MarketAnalyzer:
             
             # Create custom legend
             from matplotlib.lines import Line2D
+
             legend_elements = [
                 Line2D([0], [0], color='green', linewidth=2, label='Bull Market'),
                 Line2D([0], [0], color='red', linewidth=2, label='Bear Market'),
                 Line2D([0], [0], color='blue', linewidth=2, label='Volatility'),
                 Line2D([0], [0], color='orange', linestyle='--', linewidth=2, 
-                       label=f'Current Vol: {current_vol:.1f}%')
+                       label=f'Current Vol: {current_vol:.1f}%'),
             ]
-            ax1.legend(handles=legend_elements, loc='upper left', fontsize=11)
             
+            # Plot legend
+            ax1.legend(
+                handles=legend_elements, 
+                loc='upper left', 
+                fontsize=10, 
+                framealpha=0.8,
+                bbox_to_anchor=(0.0, 1.0),  # Adjust positioning
+                borderaxespad=0.1
+            )
+
             # Format x-axis
-            ax1.tick_params(axis='x', rotation=45)
-            
-            # Add volatility statistics text box
-            vol_stats = f'Volatility Statistics:\n' \
-                       f'Mean: {volatility.mean():.1f}%\n' \
-                       f'Std: {volatility.std():.1f}%\n' \
-                       f'Max: {volatility.max():.1f}%\n' \
-                       f'Min: {volatility.min():.1f}%'
-            
-            ax1.text(0.02, 0.98, vol_stats, transform=ax1.transAxes, fontsize=10,
-                    verticalalignment='top', bbox=dict(boxstyle='round', 
-                    facecolor='wheat', alpha=0.8))
+            ax1.tick_params(axis='x', rotation=90)
             
             plt.tight_layout()
             return self._fig_to_base64(fig)
@@ -1242,87 +1255,3 @@ def option_matrix(ticker, option_position):
     except Exception as e:
         logger.error(f"Error in legacy option_matrix function: {e}")
         return None
-
-# New standalone functions for enhanced volatility analysis
-def calculate_volatility(daily_data, window=21):
-    """
-    Calculate historical volatility using daily OHLC data.
-    
-    Args:
-        daily_data: DataFrame with daily OHLC data
-        window: Rolling window size for volatility calculation
-        
-    Returns:
-        Series containing volatility data as percentage
-    """
-    try:
-        if daily_data is None or daily_data.empty:
-            return None
-        
-        # Calculate daily returns
-        daily_returns = daily_data['Close'].pct_change().dropna()
-        
-        # Calculate rolling volatility (annualized)
-        rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(252) * 100
-        
-        rolling_vol.name = 'Volatility'
-        return rolling_vol.dropna()
-        
-    except Exception as e:
-        logger.error(f"Error calculating volatility: {e}")
-        return None
-
-def bull_bear_plot(price_series):
-    """
-    Determine bull/bear periods for price coloring.
-    
-    Args:
-        price_series: Price data series
-        
-    Returns:
-        Dictionary with bull/bear segments
-    """
-    if price_series is None or price_series.empty:
-        return {'bull_segments': [], 'bear_segments': []}
-    
-    try:
-        # Calculate moving average for trend determination
-        ma_window = min(20, len(price_series) // 4)  # Adaptive window
-        if ma_window < 2:
-            ma_window = 2
-            
-        moving_avg = price_series.rolling(window=ma_window, center=True).mean()
-        
-        # Determine trend: bull when price > MA, bear when price < MA
-        is_bull = price_series > moving_avg
-        
-        # Find trend changes
-        trend_changes = is_bull != is_bull.shift(1)
-        trend_changes.iloc[0] = True  # First point is always a change
-        
-        segments = {'bull_segments': [], 'bear_segments': []}
-        
-        current_trend = None
-        segment_start = None
-        
-        for i, (date, is_trend_change) in enumerate(trend_changes.items()):
-            if is_trend_change or i == len(trend_changes) - 1:
-                # End previous segment
-                if segment_start is not None and current_trend is not None:
-                    segment_data = price_series.loc[segment_start:date]
-                    if len(segment_data) > 1:
-                        if current_trend:
-                            segments['bull_segments'].append(segment_data)
-                        else:
-                            segments['bear_segments'].append(segment_data)
-                
-                # Start new segment
-                if i < len(trend_changes) - 1:  # Not the last point
-                    segment_start = date
-                    current_trend = is_bull.loc[date]
-        
-        return segments
-        
-    except Exception as e:
-        logger.error(f"Error in bull_bear_plot: {e}")
-        return {'bull_segments': [], 'bear_segments': []}
