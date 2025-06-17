@@ -58,7 +58,7 @@ body {
     font-size: var(--font-size-base);
 }
 
-/* Header */
+/* Header - Simplified */
 header {
     background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
     color: white;
@@ -73,26 +73,21 @@ header h1 {
     margin-bottom: var(--spacing-sm);
 }
 
-header h1 i {
-    margin-right: var(--spacing-sm);
-    color: #60a5fa;
-}
-
 .subtitle {
     font-size: var(--font-size-lg);
     opacity: 0.9;
     font-weight: 300;
 }
 
-/* Fixed Parameter Bar */
+/* Fixed Parameter Bar - Plain and Simple */
 .parameter-bar {
     position: sticky;
     top: 0;
     z-index: 100;
     background: var(--surface-color);
-    border-bottom: 2px solid var(--border-color);
-    box-shadow: var(--shadow-md);
-    padding: var(--spacing-lg) var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    padding: var(--spacing-md);
 }
 
 .parameter-form {
@@ -103,7 +98,7 @@ header h1 i {
 .parameter-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 2fr 1fr 1fr 1fr;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-md);
     align-items: end;
 }
 
@@ -113,27 +108,19 @@ header h1 i {
 }
 
 .parameter-grid .form-group label {
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: var(--spacing-xs);
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
     font-size: var(--font-size-sm);
-}
-
-.parameter-grid .form-group label i {
-    margin-right: var(--spacing-xs);
-    color: var(--primary-color);
-    width: 14px;
 }
 
 .parameter-grid .form-group input,
 .parameter-grid .form-group select {
     padding: var(--spacing-sm) var(--spacing-md);
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
-    transition: all 0.2s ease;
+    transition: border-color 0.2s ease;
     background: var(--surface-color);
 }
 
@@ -141,7 +128,6 @@ header h1 i {
 .parameter-grid .form-group select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
 }
 
 /* Period Checkboxes in Parameter Bar */
@@ -155,16 +141,10 @@ header h1 i {
     display: flex;
     align-items: center;
     cursor: pointer;
-    font-weight: 500;
+    font-weight: 400;
     font-size: var(--font-size-sm);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    transition: background-color 0.2s ease;
+    padding: var(--spacing-xs);
     white-space: nowrap;
-}
-
-.period-checkboxes .checkbox-label:hover {
-    background-color: #f1f5f9;
 }
 
 .period-checkboxes .checkbox-label input[type="checkbox"] {
@@ -194,19 +174,20 @@ header h1 i {
     color: var(--warning-color);
 }
 
-/* Options Toggle Section */
+/* Options Toggle Section - Simplified */
 .options-toggle-section {
     max-width: 1400px;
     margin: var(--spacing-lg) auto;
     background: var(--surface-color);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
     overflow: hidden;
 }
 
 .toggle-header {
-    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-    padding: var(--spacing-lg);
+    background: #f8fafc;
+    padding: var(--spacing-md) var(--spacing-lg);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
@@ -216,19 +197,14 @@ header h1 i {
 }
 
 .toggle-header:hover {
-    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+    background: #f1f5f9;
 }
 
 .toggle-header h3 {
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-lg);
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
-}
-
-.toggle-header h3 i {
-    margin-right: var(--spacing-sm);
-    color: var(--primary-color);
 }
 
 .toggle-controls {
@@ -256,11 +232,12 @@ header h1 i {
     width: 100%;
     border-collapse: collapse;
     font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-md);
 }
 
 .options-table th,
 .options-table td {
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
     text-align: left;
     border-bottom: 1px solid var(--border-color);
 }
@@ -269,8 +246,6 @@ header h1 i {
     background: #f8fafc;
     font-weight: 600;
     color: var(--text-primary);
-    position: sticky;
-    top: 0;
 }
 
 .options-table input,
@@ -280,10 +255,45 @@ header h1 i {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
+    background: var(--surface-color);
+}
+
+.options-table input:focus,
+.options-table select:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }
 
 .option-select {
     background: var(--surface-color);
+}
+
+/* Add Row Container */
+.add-row-container {
+    text-align: center;
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-add-row {
+    background: var(--surface-color);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin: 0 auto;
+}
+
+.btn-add-row:hover {
+    background: var(--primary-color);
+    color: white;
 }
 
 /* Main Content */
@@ -299,12 +309,13 @@ header h1 i {
 }
 
 .results-header {
-    background: linear-gradient(135deg, var(--surface-color) 0%, #f8fafc 100%);
+    background: var(--surface-color);
     padding: var(--spacing-xl);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
     margin-bottom: var(--spacing-xl);
     text-align: center;
+    border: 1px solid var(--border-color);
 }
 
 .results-header h2 {
@@ -312,11 +323,6 @@ header h1 i {
     font-weight: 700;
     margin-bottom: var(--spacing-md);
     color: var(--text-primary);
-}
-
-.results-header h2 i {
-    margin-right: var(--spacing-sm);
-    color: var(--primary-color);
 }
 
 .results-meta {
@@ -327,15 +333,9 @@ header h1 i {
 }
 
 .meta-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
     color: var(--text-secondary);
     font-weight: 500;
-}
-
-.meta-item i {
-    color: var(--primary-color);
+    font-size: var(--font-size-sm);
 }
 
 /* Analysis and Assessment Sections */
@@ -349,15 +349,7 @@ header h1 i {
     font-size: var(--font-size-xl);
     font-weight: 600;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
     margin-bottom: var(--spacing-lg);
-}
-
-.analysis-section h3 i,
-.assessment-section h3 i {
-    color: var(--primary-color);
 }
 
 /* Charts and Stats Grid */
@@ -377,8 +369,9 @@ header h1 i {
 .chart-container,
 .stats-container {
     background: var(--surface-color);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
     overflow: hidden;
 }
 
@@ -388,8 +381,8 @@ header h1 i {
 
 .chart-container h4,
 .stats-container h4 {
-    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-    padding: var(--spacing-lg);
+    background: #f8fafc;
+    padding: var(--spacing-md) var(--spacing-lg);
     margin: 0;
     font-size: var(--font-size-lg);
     font-weight: 600;
@@ -405,8 +398,7 @@ header h1 i {
 .analysis-chart {
     max-width: 100%;
     height: auto;
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-sm);
 }
 
 .table-wrapper {
@@ -440,11 +432,11 @@ header h1 i {
 
 /* Button Styles */
 .btn-primary {
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    background: var(--primary-color);
     color: white;
     border: none;
     padding: var(--spacing-sm) var(--spacing-lg);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
@@ -453,66 +445,55 @@ header h1 i {
     align-items: center;
     justify-content: center;
     gap: var(--spacing-sm);
-    box-shadow: var(--shadow-sm);
     white-space: nowrap;
 }
 
 .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    background: var(--primary-hover);
 }
 
 .btn-primary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    transform: none;
 }
 
-.btn-secondary {
-    background: var(--surface-color);
-    color: var(--primary-color);
-    border: 2px solid var(--primary-color);
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--radius-md);
+.btn-create {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
 }
 
-.btn-secondary:hover {
-    background: var(--primary-color);
-    color: white;
+.btn-create:hover {
+    background: var(--primary-hover);
 }
 
-.btn-danger {
+.btn-delete {
     background: var(--error-color);
     color: white;
     border: none;
-    padding: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.2s ease;
+    font-size: 0.75rem;
 }
 
-.btn-danger:hover {
+.btn-delete:hover {
     background: #dc2626;
-}
-
-.btn-small {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
 }
 
 /* Error Message */
 .error-message {
-    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    background: #fef2f2;
     color: var(--error-color);
     padding: var(--spacing-md);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     margin-bottom: var(--spacing-lg);
     border-left: 4px solid var(--error-color);
     display: flex;
@@ -527,19 +508,6 @@ footer {
     text-align: center;
     padding: var(--spacing-xl);
     margin-top: var(--spacing-2xl);
-}
-
-/* Utility Classes */
-.text-success {
-    color: var(--success-color);
-}
-
-.text-error {
-    color: var(--error-color);
-}
-
-.text-warning {
-    color: var(--warning-color);
 }
 
 /* Responsive Design */

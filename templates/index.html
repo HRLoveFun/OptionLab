@@ -11,7 +11,7 @@
 
 <body>
     <header>
-        <h1><i class="fas fa-chart-line"></i> Market Observation Dashboard</h1>
+        <h1>Market Observation Dashboard</h1>
         <p class="subtitle">Advanced Market Analysis & Options Strategy Tool</p>
     </header>
 
@@ -27,27 +27,21 @@
 
             <div class="parameter-grid">
                 <div class="form-group">
-                    <label for="ticker">
-                        <i class="fas fa-tag"></i> Ticker
-                    </label>
+                    <label for="ticker">Ticker</label>
                     <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}" 
                            placeholder="AAPL, ^GSPC" required>
                     <div class="ticker-validation" id="ticker-validation"></div>
                 </div>
 
                 <div class="form-group">
-                    <label for="start_time">
-                        <i class="fas fa-calendar"></i> Start Date
-                    </label>
+                    <label for="start_time">Start Date</label>
                     <input type="text" id="start_time" name="start_time" 
                            value="{{ start_time_str or '' }}"
                            placeholder="202001" pattern="[0-9]{6}" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="frequency">
-                        <i class="fas fa-clock"></i> Frequency
-                    </label>
+                    <label for="frequency">Frequency</label>
                     <select id="frequency" name="frequency">
                         <option value="D" {% if frequency == 'D' %}selected{% endif %}>Daily</option>
                         <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
@@ -57,9 +51,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>
-                        <i class="fas fa-history"></i> Periods
-                    </label>
+                    <label>Periods</label>
                     <div class="period-checkboxes">
                         <label class="checkbox-label">
                             <input type="checkbox" name="period" value="12" checked>
@@ -81,17 +73,13 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="risk_threshold">
-                        <i class="fas fa-shield-alt"></i> Risk Threshold (%)
-                    </label>
+                    <label for="risk_threshold">Risk Threshold (%)</label>
                     <input type="number" id="risk_threshold" name="risk_threshold" 
                            min="0" max="100" step="1" value="{{ risk_threshold or 90 }}" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="side_bias">
-                        <i class="fas fa-balance-scale"></i> Side Bias
-                    </label>
+                    <label for="side_bias">Side Bias</label>
                     <select id="side_bias" name="side_bias">
                         <option value="Natural" {% if side_bias == 'Natural' %}selected{% endif %}>Natural</option>
                         <option value="Neutral" {% if side_bias == 'Neutral' %}selected{% endif %}>Neutral</option>
@@ -109,13 +97,13 @@
         </form>
     </div>
 
-    <!-- Options Toggle Section -->
+    <!-- Options Strategy Toggle Section -->
     <div class="options-toggle-section">
         <div class="toggle-header" onclick="toggleOptionsSection()">
-            <h3><i class="fas fa-coins"></i> Options Strategy</h3>
+            <h3>Positions</h3>
             <div class="toggle-controls">
-                <button type="button" class="btn-secondary" onclick="addOptionRow(); event.stopPropagation();">
-                    <i class="fas fa-plus"></i> Add Position
+                <button type="button" class="btn-create" onclick="createOptionsStrategy(); event.stopPropagation();">
+                    Create
                 </button>
                 <i class="fas fa-chevron-down toggle-icon" id="options-toggle-icon"></i>
             </div>
@@ -133,45 +121,15 @@
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
-                            <td>
-                                <select name="option_type" class="option-select">
-                                    <option value="SC" selected>Short Call</option>
-                                    <option value="SP">Short Put</option>
-                                    <option value="LC">Long Call</option>
-                                    <option value="LP">Long Put</option>
-                                </select>
-                            </td>
-                            <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
-                            <td><input type="number" name="quantity" placeholder="Contracts"></td>
-                            <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
-                            <td>
-                                <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                <select name="option_type" class="option-select">
-                                    <option value="SC">Short Call</option>
-                                    <option value="SP" selected>Short Put</option>
-                                    <option value="LC">Long Call</option>
-                                    <option value="LP">Long Put</option>
-                                </select>
-                            </td>
-                            <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
-                            <td><input type="number" name="quantity" placeholder="Contracts"></td>
-                            <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
-                            <td>
-                                <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
+                    <tbody id="options-tbody">
+                        <!-- Default 4 rows will be added by JavaScript -->
                     </tbody>
                 </table>
+                <div class="add-row-container">
+                    <button type="button" class="btn-add-row" onclick="addOptionRow()">
+                        <i class="fas fa-plus"></i> Add Position
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -182,22 +140,18 @@
         {% if ticker %}
         <section class="results-section">
             <div class="results-header">
-                <h2><i class="fas fa-chart-area"></i> Analysis Results for {{ ticker }}</h2>
+                <h2>Analysis Results for {{ ticker }}</h2>
                 <div class="results-meta">
                     <span class="meta-item">
-                        <i class="fas fa-calendar-alt"></i> 
                         Frequency: {{ frequency_display or frequency }}
                     </span>
                     <span class="meta-item">
-                        <i class="fas fa-chart-line"></i> 
                         Feature: Oscillation Analysis
                     </span>
                     <span class="meta-item">
-                        <i class="fas fa-shield-alt"></i> 
                         Risk Threshold: {{ risk_threshold or 90 }}%
                     </span>
                     <span class="meta-item">
-                        <i class="fas fa-balance-scale"></i> 
                         Bias: {{ side_bias or 'Natural' }}
                     </span>
                 </div>
@@ -205,7 +159,7 @@
 
             <!-- Statistical Analysis Section -->
             <div class="analysis-section">
-                <h3><i class="fas fa-microscope"></i> Statistical Analysis</h3>
+                <h3>Statistical Analysis</h3>
                 
                 <div class="charts-grid">
                     {% if feat_ret_scatter_hist_url %}
@@ -262,7 +216,7 @@
 
             <!-- Market Assessment Section -->
             <div class="assessment-section">
-                <h3><i class="fas fa-crystal-ball"></i> Market Assessment & Projections</h3>
+                <h3>Market Assessment & Projections</h3>
                 
                 <div class="charts-grid">
                     {% if feat_projection_url %}
@@ -295,6 +249,9 @@
     </footer>
 
     <script>
+        // Global variables
+        let currentPrice = null;
+
         // Options toggle functionality
         function toggleOptionsSection() {
             const content = document.getElementById('options-content');
@@ -311,11 +268,72 @@
             }
         }
 
-        // Initialize options section as collapsed
-        document.addEventListener('DOMContentLoaded', function() {
-            const content = document.getElementById('options-content');
-            content.style.display = 'none';
-        });
+        // Create options strategy (same as analyze for now)
+        function createOptionsStrategy() {
+            document.getElementById('analysis-form').submit();
+        }
+
+        // Initialize options table with 4 default rows
+        function initializeOptionsTable() {
+            const tbody = document.getElementById('options-tbody');
+            tbody.innerHTML = '';
+            
+            // Add 4 default rows
+            for (let i = 0; i < 4; i++) {
+                addOptionRow();
+            }
+        }
+
+        // Create option row
+        function createOptionRow() {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <select name="option_type" class="option-select">
+                        <option value="SC">Short Call</option>
+                        <option value="SP">Short Put</option>
+                        <option value="LC">Long Call</option>
+                        <option value="LP">Long Put</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="number" name="strike" step="1" placeholder="${currentPrice || 'Strike'}" 
+                           value="${currentPrice || ''}" class="strike-input">
+                </td>
+                <td>
+                    <input type="number" name="quantity" placeholder="1" value="1" class="quantity-input">
+                </td>
+                <td>
+                    <input type="number" name="premium" step="0.01" placeholder="Premium" class="premium-input">
+                </td>
+                <td>
+                    <button type="button" class="btn-delete" onclick="deleteOptionRow(this)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            return row;
+        }
+
+        // Add option row
+        function addOptionRow() {
+            const tbody = document.getElementById('options-tbody');
+            const row = createOptionRow();
+            tbody.appendChild(row);
+            FormManager.saveState();
+        }
+
+        // Delete option row
+        function deleteOptionRow(button) {
+            const tbody = document.getElementById('options-tbody');
+            const row = button.closest('tr');
+            
+            // Don't delete if it's the last row
+            if (tbody.children.length > 1) {
+                row.remove();
+                FormManager.saveState();
+            }
+        }
 
         // Form state management
         const FormManager = {
@@ -367,62 +385,31 @@
                     strike: row.querySelector('input[name="strike"]').value,
                     quantity: row.querySelector('input[name="quantity"]').value,
                     premium: row.querySelector('input[name="premium"]').value
-                }));
+                })).filter(option => option.strike && option.quantity && option.premium);
             },
 
             restoreOptionsTable(optionsData) {
-                const tbody = document.querySelector('#options-table tbody');
+                const tbody = document.getElementById('options-tbody');
                 tbody.innerHTML = '';
                 
-                optionsData.forEach(option => {
-                    const row = this.createOptionRow();
-                    row.querySelector('select[name="option_type"]').value = option.option_type;
-                    row.querySelector('input[name="strike"]').value = option.strike;
-                    row.querySelector('input[name="quantity"]').value = option.quantity;
-                    row.querySelector('input[name="premium"]').value = option.premium;
+                // Ensure at least 4 rows
+                const rowCount = Math.max(4, optionsData.length);
+                
+                for (let i = 0; i < rowCount; i++) {
+                    const row = createOptionRow();
+                    if (i < optionsData.length) {
+                        const option = optionsData[i];
+                        row.querySelector('select[name="option_type"]').value = option.option_type;
+                        row.querySelector('input[name="strike"]').value = option.strike;
+                        row.querySelector('input[name="quantity"]').value = option.quantity;
+                        row.querySelector('input[name="premium"]').value = option.premium;
+                    }
                     tbody.appendChild(row);
-                });
-            },
-
-            createOptionRow() {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>
-                        <select name="option_type" class="option-select">
-                            <option value="SC">Short Call</option>
-                            <option value="SP">Short Put</option>
-                            <option value="LC">Long Call</option>
-                            <option value="LP">Long Put</option>
-                        </select>
-                    </td>
-                    <td><input type="number" name="strike" step="0.01" placeholder="Strike Price"></td>
-                    <td><input type="number" name="quantity" placeholder="Contracts"></td>
-                    <td><input type="number" name="premium" step="0.01" placeholder="Premium"></td>
-                    <td>
-                        <button type="button" class="btn-danger btn-small" onclick="deleteOptionRow(this)">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                return row;
+                }
             }
         };
 
-        // Options table management
-        function addOptionRow() {
-            const tbody = document.querySelector('#options-table tbody');
-            const row = FormManager.createOptionRow();
-            tbody.appendChild(row);
-            FormManager.saveState();
-        }
-
-        function deleteOptionRow(button) {
-            const row = button.closest('tr');
-            row.remove();
-            FormManager.saveState();
-        }
-
-        // Ticker validation
+        // Ticker validation and price fetching
         let validationTimeout;
         function validateTicker() {
             const ticker = document.getElementById('ticker').value.trim().toUpperCase();
@@ -430,6 +417,8 @@
             
             if (!ticker) {
                 validationDiv.innerHTML = '';
+                currentPrice = null;
+                updateStrikePlaceholders();
                 return;
             }
 
@@ -447,18 +436,41 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.valid) {
-                        validationDiv.innerHTML = '<i class="fas fa-check-circle text-success"></i> Valid';
+                        validationDiv.innerHTML = '<i class="fas fa-check-circle"></i> Valid';
                         validationDiv.className = 'ticker-validation valid';
+                        // You could fetch current price here if API provides it
+                        // For now, we'll use a placeholder
+                        currentPrice = data.price || null;
+                        updateStrikePlaceholders();
                     } else {
-                        validationDiv.innerHTML = '<i class="fas fa-exclamation-circle text-error"></i> Invalid';
+                        validationDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Invalid';
                         validationDiv.className = 'ticker-validation invalid';
+                        currentPrice = null;
+                        updateStrikePlaceholders();
                     }
                 })
                 .catch(error => {
-                    validationDiv.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Error';
+                    validationDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
                     validationDiv.className = 'ticker-validation warning';
+                    currentPrice = null;
+                    updateStrikePlaceholders();
                 });
             }, 500);
+        }
+
+        // Update strike price placeholders
+        function updateStrikePlaceholders() {
+            const strikeInputs = document.querySelectorAll('.strike-input');
+            strikeInputs.forEach(input => {
+                if (currentPrice) {
+                    input.placeholder = currentPrice.toString();
+                    if (!input.value) {
+                        input.value = currentPrice;
+                    }
+                } else {
+                    input.placeholder = 'Strike';
+                }
+            });
         }
 
         // Form submission
@@ -467,10 +479,7 @@
             FormManager.saveState();
             
             // Prepare options data
-            const optionsData = FormManager.getOptionsData().filter(option => 
-                option.option_type && option.strike && option.quantity && option.premium
-            );
-            
+            const optionsData = FormManager.getOptionsData();
             document.getElementById('option_position').value = JSON.stringify(optionsData);
             
             // Show loading state
@@ -488,7 +497,15 @@
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize options table
+            initializeOptionsTable();
+            
+            // Load saved state
             FormManager.loadState();
+            
+            // Initialize options section as collapsed
+            const content = document.getElementById('options-content');
+            content.style.display = 'none';
             
             // Add ticker validation
             document.getElementById('ticker').addEventListener('input', validateTicker);
