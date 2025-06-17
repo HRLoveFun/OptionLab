@@ -1012,6 +1012,146 @@ class MarketAnalyzer:
             plt.close(fig)
             return None
 
+    def bull_bear_plot(self, time_window):
+        """
+        Generate bull and bear trend plots for specified time windows.
+        
+        Args:
+            time_window: List of time windows (strings like '5Y' or tuples like ('20200101', '20221231'))
+        """
+        if not self.is_data_valid():
+            return None
+
+        close_series = self.price_dynamic._data['Close']
+        
+        if not isinstance(time_window, (list, tuple)):
+            raise ValueError("time_window must be a list or a tuple.")
+        if not isinstance(close_series, pd.Series):
+            raise ValueError("Data must be a pandas Series.")
+
+        n = len(time_window)
+        fig = make_subplots(rows=n, cols=1, 
+                           subplot_titles=[f"Plot {i+1}" for i in range(n)])
+
+        df = pd.DataFrame(close_series)
+        df.columns = ["Close"]
+        df["CumMax"] = df["Close"].cummax()
+        df["IsBull"] = (df["Close"] - df["CumMax"] * 0.8).apply(np.sign)
+        df.index = pd.to_datetime(df.index)
+
+        for i, time_window_element in enumerate(time_window):
+            if isinstance(time_window_element, str):
+                time_unit = time_window_element[-1]
+                num = int(time_window_element[:-1])
+                if time_unit == 'W':
+                    offset = pd.DateOffset(weeks=num)
+                elif time_unit == 'M':
+                    offset = pd.DateOffset(months=num)
+                elif time_unit == 'Q':
+                    offset = pd.DateOffset(months=3*num)
+                elif time_unit == 'Y':
+                    offset = pd.DateOffset(years=num)
+                else:
+                    raise ValueError("Invalid time unit. Allowed: [W, M, Q, Y]")
+                end_date = df.index[-1]
+                start_date = end_date - offset
+                selected_df = df[(df.index >= start_date) & (df.index <= end_date)]
+                title_time_window = f"Recent {time_window_element}"
+            elif isinstance(time_window_element, tuple) and len(time_window_element) == 2:
+                start_date = pd.to_datetime(time_window_element[0], format="%Y%m%d")
+                end_date = pd.to_datetime(time_window_element[1], format="%Y%m%d")
+                selected_df = df[(df.index >= start_date) & (df.index <= end_date)]
+                title_time_window = f"{time_window_element[0]}-{time_window_element[1]}"
+            else:
+                raise ValueError("Invalid time_window format.")
+
+            for j in range(len(selected_df) - 1):
+                x_vals = [selected_df.index[j], selected_df.index[j+1]]
+                y_vals = [selected_df["Close"].iloc[j], selected_df["Close"].iloc[j+1]]
+                color = 'red' if selected_df['IsBull'].iloc[j] < 0 else 'green'
+
+                fig.add_trace(go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode='lines',
+                    line=dict(color=color, width=2),
+                    showlegend=False
+                ), row=i+1, col=1)
+
+            fig.update_xaxes(title_text="Date", row=i+1, col=1)
+            fig.update_yaxes(title_text="Price", type="log", row=i+1, col=1)
+            fig.layout.annotations[i].update(
+                text=f"Bull/Bear Trend: {title_time_window}"
+            )
+
+        fig.update_layout(height=400*n, width=1000, 
+                         title_text=f"{self.ticker} Bull/Bear Analysis")
+        
+        # Convert to base64 for consistency
+        img_bytes = fig.to_image(format="png")
+        return base64.b64encode(img_bytes).decode('utf-8')
+    
+    def calculate_volatility(self, frequency, method):
+        """
+        Calculate historical volatility using various estimators with rolling windows.
+        
+        Args:
+            frequency: the rolling window size (number of periods)
+            method: volatility estimator (close_to_close, parkinson, garman_klass, rogers_satchell, yang_zhang)
+        
+        Returns:
+            time series of volatility
+        """
+        if not self.is_data_valid():
+            return None
+        data = self.price_dynamic._data[['Open', 'High', 'Low', 'Close']].rename(columns=str.lower)
+        # Validate input columns
+        required_cols = ['open', 'high', 'low', 'close']
+        if not all(col in data.columns for col in required_cols):
+            raise ValueError("DataFrame must contain 'open', 'high', 'low', 'close' columns")
+        
+        # Precompute common components
+        log_returns = np.log(data['close'] / data['close'].shift(1))
+        hl_sq = (np.log(data['high'] / data['low'])) ** 2
+        term1 = 0.5 * hl_sq
+        term2 = (2 * np.log(2) - 1) * (np.log(data['close'] / data['open'])) ** 2
+        gk_component = term1 - term2
+        term_rs1 = np.log(data['high'] / data['close']) * np.log(data['high'] / data['open'])
+        term_rs2 = np.log(data['low'] / data['close']) * np.log(data['low'] / data['open'])
+        rs_component = term_rs1 + term_rs2
+        u = np.log(data['open'] / data['close'].shift(1))  # Overnight return
+        v = np.log(data['close'] / data['open'])  # Intraday return
+        
+        # Calculate volatility based on selected method
+        if method == 'close_to_close':
+            vol = log_returns.rolling(window=frequency, min_periods=frequency).std(ddof=1) * np.sqrt(252)
+        
+        elif method == 'parkinson':
+            sum_hl_sq = hl_sq.rolling(window=frequency, min_periods=frequency).sum()
+            vol = np.sqrt(sum_hl_sq / (4 * frequency * np.log(2))) * np.sqrt(252)
+        
+        elif method == 'garman_klass':
+            sum_gk = gk_component.rolling(window=frequency, min_periods=frequency).sum()
+            vol = np.sqrt(sum_gk / frequency) * np.sqrt(252)
+        
+        elif method == 'rogers_satchell':
+            sum_rs = rs_component.rolling(window=frequency, min_periods=frequency).sum()
+            vol = np.sqrt(sum_rs / frequency) * np.sqrt(252)
+        
+        elif method == 'yang_zhang':
+            var_u = u.rolling(window=frequency, min_periods=frequency).var(ddof=1)
+            var_v = v.rolling(window=frequency, min_periods=frequency).var(ddof=1)
+            mean_rs = rs_component.rolling(window=frequency, min_periods=frequency).mean()
+            k = 0.34 / (1.34 + (frequency + 1) / (frequency - 1))
+            yz_var = var_u + k * var_v + (1 - k) * mean_rs
+            vol = np.sqrt(yz_var) * np.sqrt(252)
+        
+        else:
+            raise ValueError(f"Unknown volatility method: {method}")
+        
+        return vol
+
+
 
 # Legacy functions for backward compatibility
 def period_segment(df, periods=PERIODS):
