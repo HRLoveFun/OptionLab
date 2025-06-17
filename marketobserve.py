@@ -30,6 +30,14 @@ FREQUENCY_MAPPING = {
     'QE': 'Quarterly'
 }
 
+# Volatility calculation windows based on frequency
+VOLATILITY_WINDOWS = {
+    'D': 5,   # Daily equivalent to weekly
+    'W': 5,   # Weekly
+    'ME': 21, # Monthly
+    'QE': 63  # Quarterly
+}
+
 class PriceDynamic:
     """
     A class to handle price data downloading, processing, and basic calculations.
@@ -53,6 +61,9 @@ class PriceDynamic:
         # Download and process data
         raw_data = self._download_data()
         self._data = self._refrequency(raw_data) if raw_data is not None else None
+        
+        # Store daily data for volatility calculations
+        self._daily_data = raw_data
 
     def _validate_inputs(self, ticker, start_date, frequency):
         """Validate input parameters"""
@@ -155,6 +166,92 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error resampling data: {e}")
             return None
+
+    def calculate_volatility(self, window=None):
+        """
+        Calculate historical volatility using daily OHLC data.
+        
+        Args:
+            window: Rolling window size. If None, uses frequency-based default
+            
+        Returns:
+            Series containing volatility data as percentage
+        """
+        if self._daily_data is None or self._daily_data.empty:
+            return None
+        
+        try:
+            # Use frequency-based window if not specified
+            if window is None:
+                window = VOLATILITY_WINDOWS.get(self.frequency, 21)
+            
+            # Calculate daily returns
+            daily_returns = self._daily_data['Close'].pct_change().dropna()
+            
+            # Calculate rolling volatility (annualized)
+            rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(252) * 100
+            
+            rolling_vol.name = 'Volatility'
+            return rolling_vol.dropna()
+            
+        except Exception as e:
+            logger.error(f"Error calculating volatility: {e}")
+            return None
+
+    def bull_bear_plot(self, price_series):
+        """
+        Determine bull/bear periods for price coloring.
+        
+        Args:
+            price_series: Price data series
+            
+        Returns:
+            Dictionary with bull/bear segments
+        """
+        if price_series is None or price_series.empty:
+            return {'bull_segments': [], 'bear_segments': []}
+        
+        try:
+            # Calculate moving average for trend determination
+            ma_window = min(20, len(price_series) // 4)  # Adaptive window
+            if ma_window < 2:
+                ma_window = 2
+                
+            moving_avg = price_series.rolling(window=ma_window, center=True).mean()
+            
+            # Determine trend: bull when price > MA, bear when price < MA
+            is_bull = price_series > moving_avg
+            
+            # Find trend changes
+            trend_changes = is_bull != is_bull.shift(1)
+            trend_changes.iloc[0] = True  # First point is always a change
+            
+            segments = {'bull_segments': [], 'bear_segments': []}
+            
+            current_trend = None
+            segment_start = None
+            
+            for i, (date, is_trend_change) in enumerate(trend_changes.items()):
+                if is_trend_change or i == len(trend_changes) - 1:
+                    # End previous segment
+                    if segment_start is not None and current_trend is not None:
+                        segment_data = price_series.loc[segment_start:date]
+                        if len(segment_data) > 1:
+                            if current_trend:
+                                segments['bull_segments'].append(segment_data)
+                            else:
+                                segments['bear_segments'].append(segment_data)
+                    
+                    # Start new segment
+                    if i < len(trend_changes) - 1:  # Not the last point
+                        segment_start = date
+                        current_trend = is_bull.loc[date]
+            
+            return segments
+            
+        except Exception as e:
+            logger.error(f"Error in bull_bear_plot: {e}")
+            return {'bull_segments': [], 'bear_segments': []}
 
     def osc(self, on_effect=False):
         """
@@ -352,49 +449,101 @@ class MarketAnalyzer:
         return fig
 
     def generate_volatility_dynamics(self):
-        """Generate volatility dynamics plot over time"""
+        """Generate enhanced volatility dynamics plot with price and bull/bear analysis"""
         if not self.is_data_valid():
             return None
         
         try:
-            # Calculate rolling volatility
-            oscillation_data = self.features_df['Oscillation']
+            # Get daily data for calculations
+            daily_data = self.price_dynamic._daily_data
+            if daily_data is None or daily_data.empty:
+                return None
             
-            # Calculate different rolling windows
-            windows = [20, 60, 120]  # Different periods for volatility calculation
+            # Calculate volatility
+            volatility = self.price_dynamic.calculate_volatility()
+            if volatility is None or volatility.empty:
+                return None
             
-            fig, ax = plt.subplots(figsize=(14, 8))
+            # Get daily close prices
+            daily_close = daily_data['Close']
             
-            colors = ['blue', 'red', 'green']
+            # Get bull/bear segments
+            bull_bear_segments = self.price_dynamic.bull_bear_plot(daily_close)
             
-            for i, window in enumerate(windows):
-                if len(oscillation_data) > window:
-                    rolling_vol = oscillation_data.rolling(window=window).std()
-                    ax.plot(rolling_vol.index, rolling_vol, 
-                           label=f'{window}-Period Rolling Volatility', 
-                           color=colors[i], linewidth=2, alpha=0.8)
+            # Create dual-axis plot
+            fig, ax1 = plt.subplots(figsize=(16, 10))
+            
+            # Plot price on primary axis with bull/bear coloring
+            ax1.set_xlabel('Date', fontsize=12)
+            ax1.set_ylabel('Price ($)', fontsize=12, color='black')
+            
+            # Plot bull segments in green
+            for segment in bull_bear_segments['bull_segments']:
+                if len(segment) > 1:
+                    ax1.plot(segment.index, segment.values, color='green', 
+                            linewidth=2, alpha=0.8)
+            
+            # Plot bear segments in red
+            for segment in bull_bear_segments['bear_segments']:
+                if len(segment) > 1:
+                    ax1.plot(segment.index, segment.values, color='red', 
+                            linewidth=2, alpha=0.8)
+            
+            ax1.tick_params(axis='y', labelcolor='black')
+            ax1.grid(True, alpha=0.3)
+            
+            # Create secondary axis for volatility
+            ax2 = ax1.twinx()
+            ax2.set_ylabel('Volatility (%)', fontsize=12, color='blue')
+            
+            # Plot volatility line
+            ax2.plot(volatility.index, volatility.values, color='blue', 
+                    linewidth=2, alpha=0.9, label='Historical Volatility')
+            ax2.tick_params(axis='y', labelcolor='blue')
             
             # Add current volatility level
-            current_vol = oscillation_data.std()
-            ax.axhline(y=current_vol, color='orange', linestyle='--', 
-                      label=f'Overall Volatility: {current_vol:.2f}%', linewidth=2)
+            current_vol = volatility.iloc[-1] if len(volatility) > 0 else volatility.mean()
+            ax2.axhline(y=current_vol, color='orange', linestyle='--', 
+                       linewidth=2, alpha=0.8)
             
             # Formatting
-            ax.set_xlabel('Date', fontsize=12)
-            ax.set_ylabel('Volatility (%)', fontsize=12)
-            ax.set_title(f'{self.ticker} - Volatility Dynamics Over Time', 
-                        fontsize=14, fontweight='bold')
-            ax.legend(fontsize=11)
-            ax.grid(True, alpha=0.3)
+            frequency_name = FREQUENCY_MAPPING.get(self.frequency, self.frequency)
+            window = VOLATILITY_WINDOWS.get(self.frequency, 21)
+            
+            ax1.set_title(f'{self.ticker} - Price & Volatility Dynamics\n'
+                         f'Volatility Window: {window} days ({frequency_name} frequency)', 
+                         fontsize=14, fontweight='bold', pad=20)
+            
+            # Create custom legend
+            from matplotlib.lines import Line2D
+            legend_elements = [
+                Line2D([0], [0], color='green', linewidth=2, label='Bull Market'),
+                Line2D([0], [0], color='red', linewidth=2, label='Bear Market'),
+                Line2D([0], [0], color='blue', linewidth=2, label='Volatility'),
+                Line2D([0], [0], color='orange', linestyle='--', linewidth=2, 
+                       label=f'Current Vol: {current_vol:.1f}%')
+            ]
+            ax1.legend(handles=legend_elements, loc='upper left', fontsize=11)
             
             # Format x-axis
-            ax.tick_params(axis='x', rotation=45)
+            ax1.tick_params(axis='x', rotation=45)
+            
+            # Add volatility statistics text box
+            vol_stats = f'Volatility Statistics:\n' \
+                       f'Mean: {volatility.mean():.1f}%\n' \
+                       f'Std: {volatility.std():.1f}%\n' \
+                       f'Max: {volatility.max():.1f}%\n' \
+                       f'Min: {volatility.min():.1f}%'
+            
+            ax1.text(0.02, 0.98, vol_stats, transform=ax1.transAxes, fontsize=10,
+                    verticalalignment='top', bbox=dict(boxstyle='round', 
+                    facecolor='wheat', alpha=0.8))
             
             plt.tight_layout()
             return self._fig_to_base64(fig)
             
         except Exception as e:
-            logger.error(f"Error generating volatility dynamics: {e}")
+            logger.error(f"Error generating enhanced volatility dynamics: {e}")
             return None
 
     def calculate_tail_statistics(self, feature_name):
@@ -1012,146 +1161,6 @@ class MarketAnalyzer:
             plt.close(fig)
             return None
 
-    def bull_bear_plot(self, time_window):
-        """
-        Generate bull and bear trend plots for specified time windows.
-        
-        Args:
-            time_window: List of time windows (strings like '5Y' or tuples like ('20200101', '20221231'))
-        """
-        if not self.is_data_valid():
-            return None
-
-        close_series = self.price_dynamic._data['Close']
-        
-        if not isinstance(time_window, (list, tuple)):
-            raise ValueError("time_window must be a list or a tuple.")
-        if not isinstance(close_series, pd.Series):
-            raise ValueError("Data must be a pandas Series.")
-
-        n = len(time_window)
-        fig = make_subplots(rows=n, cols=1, 
-                           subplot_titles=[f"Plot {i+1}" for i in range(n)])
-
-        df = pd.DataFrame(close_series)
-        df.columns = ["Close"]
-        df["CumMax"] = df["Close"].cummax()
-        df["IsBull"] = (df["Close"] - df["CumMax"] * 0.8).apply(np.sign)
-        df.index = pd.to_datetime(df.index)
-
-        for i, time_window_element in enumerate(time_window):
-            if isinstance(time_window_element, str):
-                time_unit = time_window_element[-1]
-                num = int(time_window_element[:-1])
-                if time_unit == 'W':
-                    offset = pd.DateOffset(weeks=num)
-                elif time_unit == 'M':
-                    offset = pd.DateOffset(months=num)
-                elif time_unit == 'Q':
-                    offset = pd.DateOffset(months=3*num)
-                elif time_unit == 'Y':
-                    offset = pd.DateOffset(years=num)
-                else:
-                    raise ValueError("Invalid time unit. Allowed: [W, M, Q, Y]")
-                end_date = df.index[-1]
-                start_date = end_date - offset
-                selected_df = df[(df.index >= start_date) & (df.index <= end_date)]
-                title_time_window = f"Recent {time_window_element}"
-            elif isinstance(time_window_element, tuple) and len(time_window_element) == 2:
-                start_date = pd.to_datetime(time_window_element[0], format="%Y%m%d")
-                end_date = pd.to_datetime(time_window_element[1], format="%Y%m%d")
-                selected_df = df[(df.index >= start_date) & (df.index <= end_date)]
-                title_time_window = f"{time_window_element[0]}-{time_window_element[1]}"
-            else:
-                raise ValueError("Invalid time_window format.")
-
-            for j in range(len(selected_df) - 1):
-                x_vals = [selected_df.index[j], selected_df.index[j+1]]
-                y_vals = [selected_df["Close"].iloc[j], selected_df["Close"].iloc[j+1]]
-                color = 'red' if selected_df['IsBull'].iloc[j] < 0 else 'green'
-
-                fig.add_trace(go.Scatter(
-                    x=x_vals,
-                    y=y_vals,
-                    mode='lines',
-                    line=dict(color=color, width=2),
-                    showlegend=False
-                ), row=i+1, col=1)
-
-            fig.update_xaxes(title_text="Date", row=i+1, col=1)
-            fig.update_yaxes(title_text="Price", type="log", row=i+1, col=1)
-            fig.layout.annotations[i].update(
-                text=f"Bull/Bear Trend: {title_time_window}"
-            )
-
-        fig.update_layout(height=400*n, width=1000, 
-                         title_text=f"{self.ticker} Bull/Bear Analysis")
-        
-        # Convert to base64 for consistency
-        img_bytes = fig.to_image(format="png")
-        return base64.b64encode(img_bytes).decode('utf-8')
-    
-    def calculate_volatility(self, frequency, method):
-        """
-        Calculate historical volatility using various estimators with rolling windows.
-        
-        Args:
-            frequency: the rolling window size (number of periods)
-            method: volatility estimator (close_to_close, parkinson, garman_klass, rogers_satchell, yang_zhang)
-        
-        Returns:
-            time series of volatility
-        """
-        if not self.is_data_valid():
-            return None
-        data = self.price_dynamic._data[['Open', 'High', 'Low', 'Close']].rename(columns=str.lower)
-        # Validate input columns
-        required_cols = ['open', 'high', 'low', 'close']
-        if not all(col in data.columns for col in required_cols):
-            raise ValueError("DataFrame must contain 'open', 'high', 'low', 'close' columns")
-        
-        # Precompute common components
-        log_returns = np.log(data['close'] / data['close'].shift(1))
-        hl_sq = (np.log(data['high'] / data['low'])) ** 2
-        term1 = 0.5 * hl_sq
-        term2 = (2 * np.log(2) - 1) * (np.log(data['close'] / data['open'])) ** 2
-        gk_component = term1 - term2
-        term_rs1 = np.log(data['high'] / data['close']) * np.log(data['high'] / data['open'])
-        term_rs2 = np.log(data['low'] / data['close']) * np.log(data['low'] / data['open'])
-        rs_component = term_rs1 + term_rs2
-        u = np.log(data['open'] / data['close'].shift(1))  # Overnight return
-        v = np.log(data['close'] / data['open'])  # Intraday return
-        
-        # Calculate volatility based on selected method
-        if method == 'close_to_close':
-            vol = log_returns.rolling(window=frequency, min_periods=frequency).std(ddof=1) * np.sqrt(252)
-        
-        elif method == 'parkinson':
-            sum_hl_sq = hl_sq.rolling(window=frequency, min_periods=frequency).sum()
-            vol = np.sqrt(sum_hl_sq / (4 * frequency * np.log(2))) * np.sqrt(252)
-        
-        elif method == 'garman_klass':
-            sum_gk = gk_component.rolling(window=frequency, min_periods=frequency).sum()
-            vol = np.sqrt(sum_gk / frequency) * np.sqrt(252)
-        
-        elif method == 'rogers_satchell':
-            sum_rs = rs_component.rolling(window=frequency, min_periods=frequency).sum()
-            vol = np.sqrt(sum_rs / frequency) * np.sqrt(252)
-        
-        elif method == 'yang_zhang':
-            var_u = u.rolling(window=frequency, min_periods=frequency).var(ddof=1)
-            var_v = v.rolling(window=frequency, min_periods=frequency).var(ddof=1)
-            mean_rs = rs_component.rolling(window=frequency, min_periods=frequency).mean()
-            k = 0.34 / (1.34 + (frequency + 1) / (frequency - 1))
-            yz_var = var_u + k * var_v + (1 - k) * mean_rs
-            vol = np.sqrt(yz_var) * np.sqrt(252)
-        
-        else:
-            raise ValueError(f"Unknown volatility method: {method}")
-        
-        return vol
-
-
 
 # Legacy functions for backward compatibility
 def period_segment(df, periods=PERIODS):
@@ -1233,3 +1242,87 @@ def option_matrix(ticker, option_position):
     except Exception as e:
         logger.error(f"Error in legacy option_matrix function: {e}")
         return None
+
+# New standalone functions for enhanced volatility analysis
+def calculate_volatility(daily_data, window=21):
+    """
+    Calculate historical volatility using daily OHLC data.
+    
+    Args:
+        daily_data: DataFrame with daily OHLC data
+        window: Rolling window size for volatility calculation
+        
+    Returns:
+        Series containing volatility data as percentage
+    """
+    try:
+        if daily_data is None or daily_data.empty:
+            return None
+        
+        # Calculate daily returns
+        daily_returns = daily_data['Close'].pct_change().dropna()
+        
+        # Calculate rolling volatility (annualized)
+        rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(252) * 100
+        
+        rolling_vol.name = 'Volatility'
+        return rolling_vol.dropna()
+        
+    except Exception as e:
+        logger.error(f"Error calculating volatility: {e}")
+        return None
+
+def bull_bear_plot(price_series):
+    """
+    Determine bull/bear periods for price coloring.
+    
+    Args:
+        price_series: Price data series
+        
+    Returns:
+        Dictionary with bull/bear segments
+    """
+    if price_series is None or price_series.empty:
+        return {'bull_segments': [], 'bear_segments': []}
+    
+    try:
+        # Calculate moving average for trend determination
+        ma_window = min(20, len(price_series) // 4)  # Adaptive window
+        if ma_window < 2:
+            ma_window = 2
+            
+        moving_avg = price_series.rolling(window=ma_window, center=True).mean()
+        
+        # Determine trend: bull when price > MA, bear when price < MA
+        is_bull = price_series > moving_avg
+        
+        # Find trend changes
+        trend_changes = is_bull != is_bull.shift(1)
+        trend_changes.iloc[0] = True  # First point is always a change
+        
+        segments = {'bull_segments': [], 'bear_segments': []}
+        
+        current_trend = None
+        segment_start = None
+        
+        for i, (date, is_trend_change) in enumerate(trend_changes.items()):
+            if is_trend_change or i == len(trend_changes) - 1:
+                # End previous segment
+                if segment_start is not None and current_trend is not None:
+                    segment_data = price_series.loc[segment_start:date]
+                    if len(segment_data) > 1:
+                        if current_trend:
+                            segments['bull_segments'].append(segment_data)
+                        else:
+                            segments['bear_segments'].append(segment_data)
+                
+                # Start new segment
+                if i < len(trend_changes) - 1:  # Not the last point
+                    segment_start = date
+                    current_trend = is_bull.loc[date]
+        
+        return segments
+        
+    except Exception as e:
+        logger.error(f"Error in bull_bear_plot: {e}")
+        return {'bull_segments': [], 'bear_segments': []}
