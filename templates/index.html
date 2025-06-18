@@ -157,6 +157,32 @@
                 </div>
             </div>
 
+            <!-- Market Review Section -->
+            <div class="market-review-section">
+                <h3>Market Review</h3>
+                
+                <div class="market-review-grid">
+                    {% if market_overview_table %}
+                    <div class="stats-container full-width">
+                        <h4>Market Overview</h4>
+                        <div class="table-wrapper">
+                            {{ market_overview_table|safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if correlation_matrix_url %}
+                    <div class="chart-container full-width">
+                        <h4>Market Correlation Matrix</h4>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ correlation_matrix_url }}" 
+                                 alt="Market Correlation Matrix" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- Statistical Analysis Section -->
             <div class="analysis-section">
                 <h3>Statistical Analysis</h3>

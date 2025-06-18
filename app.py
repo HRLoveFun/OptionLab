@@ -42,6 +42,9 @@ def index():
                 return render_template('index.html', 
                     error=f"Failed to download data for {form_data['ticker']}. Please check the ticker symbol.")
 
+            # Generate market review results
+            market_review_results = generate_market_review(form_data)
+            
             # Generate analysis results
             analysis_results = generate_analysis(analyzer, form_data)
             
@@ -51,6 +54,7 @@ def index():
             # Combine all results
             template_data = {
                 **form_data,
+                **market_review_results,
                 **analysis_results,
                 **assessment_results
             }
@@ -130,6 +134,245 @@ def validate_input_data(form_data):
         return f"Invalid side bias selected: {form_data['side_bias']}"
     
     return None
+
+def generate_market_review(form_data):
+    """Generate market review results including market overview table and correlation matrix"""
+    results = {}
+    
+    try:
+        # Define market review tickers
+        market_tickers = [
+            form_data['ticker'],  # User's ticker
+            'DX-Y.NYB',  # US Dollar Index
+            '^TNX',      # 10-Year Treasury
+            '^GSPC',     # S&P 500
+            'GC=F',      # Gold
+            '000300.SS', # CSI 300
+            '^STOXX',    # STOXX Europe 600
+            '^HSI',      # Hang Seng
+            '^N225'      # Nikkei 225
+        ]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_tickers = []
+        for ticker in market_tickers:
+            if ticker not in seen:
+                unique_tickers.append(ticker)
+                seen.add(ticker)
+        
+        # Calculate market review data
+        market_data = []
+        correlation_data = {}
+        
+        for ticker in unique_tickers:
+            try:
+                # Get recent extreme change data
+                extreme_data = calculate_recent_extreme_change(ticker)
+                if extreme_data is not None:
+                    market_data.append(extreme_data)
+                    
+                    # Store price data for correlation calculation
+                    analyzer = MarketAnalyzer(ticker, dt.date.today() - dt.timedelta(days=365), 'D')
+                    if analyzer.is_data_valid():
+                        correlation_data[ticker] = analyzer.price_dynamic.data['Close'].pct_change().dropna()
+                
+            except Exception as e:
+                logger.warning(f"Error processing ticker {ticker}: {e}")
+                continue
+        
+        # Create market overview table
+        if market_data:
+            market_df = pd.DataFrame(market_data)
+            
+            # Format the dataframe for display
+            formatted_df = market_df.copy()
+            
+            # Format percentage columns
+            percentage_cols = ['1M_Return', '1Q_Return', 'YTD_Return', 'ETD_Return', 
+                             '1M_Volatility', '1Q_Volatility', 'YTD_Volatility', 'ETD_Volatility']
+            
+            for col in percentage_cols:
+                if col in formatted_df.columns:
+                    formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:.2%}" if pd.notna(x) else "N/A")
+            
+            # Format last close price
+            if 'Last_Close' in formatted_df.columns:
+                formatted_df['Last_Close'] = formatted_df['Last_Close'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
+            
+            results['market_overview_table'] = formatted_df.to_html(
+                classes='table table-striped',
+                index=False,
+                escape=False
+            )
+        
+        # Generate correlation matrix chart
+        if len(correlation_data) >= 2:
+            correlation_chart = generate_correlation_matrix(correlation_data)
+            if correlation_chart:
+                results['correlation_matrix_url'] = correlation_chart
+        
+    except Exception as e:
+        logger.error(f"Error generating market review: {e}", exc_info=True)
+    
+    return results
+
+def calculate_recent_extreme_change(ticker):
+    """Calculate recent extreme changes for a ticker"""
+    try:
+        # Create analyzer for the ticker
+        analyzer = MarketAnalyzer(ticker, dt.date.today() - dt.timedelta(days=365), 'D')
+        
+        if not analyzer.is_data_valid():
+            return None
+        
+        data = analyzer.price_dynamic.data
+        current_price = data['Close'].iloc[-1]
+        
+        # Calculate returns for different periods
+        returns_data = {}
+        volatility_data = {}
+        
+        # Define periods
+        periods = {
+            '1M': 22,    # ~1 month
+            '1Q': 66,    # ~1 quarter
+            'YTD': None, # Year to date
+            'ETD': None  # Entire time period
+        }
+        
+        for period_name, days in periods.items():
+            try:
+                if period_name == 'YTD':
+                    # Year to date calculation
+                    year_start = dt.date(dt.date.today().year, 1, 1)
+                    ytd_data = data[data.index.date >= year_start]
+                    if len(ytd_data) > 1:
+                        period_return = (ytd_data['Close'].iloc[-1] / ytd_data['Close'].iloc[0]) - 1
+                        period_volatility = ytd_data['Close'].pct_change().std() * np.sqrt(252)
+                    else:
+                        period_return = np.nan
+                        period_volatility = np.nan
+                elif period_name == 'ETD':
+                    # Entire time period
+                    if len(data) > 1:
+                        period_return = (data['Close'].iloc[-1] / data['Close'].iloc[0]) - 1
+                        period_volatility = data['Close'].pct_change().std() * np.sqrt(252)
+                    else:
+                        period_return = np.nan
+                        period_volatility = np.nan
+                else:
+                    # Fixed period calculation
+                    if len(data) > days:
+                        period_data = data.iloc[-days:]
+                        period_return = (period_data['Close'].iloc[-1] / period_data['Close'].iloc[0]) - 1
+                        period_volatility = period_data['Close'].pct_change().std() * np.sqrt(252)
+                    else:
+                        period_return = np.nan
+                        period_volatility = np.nan
+                
+                returns_data[f'{period_name}_Return'] = period_return
+                volatility_data[f'{period_name}_Volatility'] = period_volatility
+                
+            except Exception as e:
+                logger.warning(f"Error calculating {period_name} for {ticker}: {e}")
+                returns_data[f'{period_name}_Return'] = np.nan
+                volatility_data[f'{period_name}_Volatility'] = np.nan
+        
+        # Combine all data
+        result = {
+            'Ticker': ticker,
+            'Last_Close': current_price,
+            **returns_data,
+            **volatility_data
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in calculate_recent_extreme_change for {ticker}: {e}")
+        return None
+
+def generate_correlation_matrix(correlation_data):
+    """Generate correlation matrix chart"""
+    try:
+        # Calculate correlations for different periods
+        periods = {
+            '1M': 22,
+            '1Q': 66,
+            'YTD': None,
+            'ETD': None
+        }
+        
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Market Correlation Matrix', fontsize=16, fontweight='bold')
+        
+        axes = axes.flatten()
+        
+        for idx, (period_name, days) in enumerate(periods.items()):
+            try:
+                # Prepare data for correlation calculation
+                period_data = {}
+                
+                for ticker, returns in correlation_data.items():
+                    if period_name == 'YTD':
+                        # Year to date
+                        year_start = dt.date(dt.date.today().year, 1, 1)
+                        period_returns = returns[returns.index.date >= year_start]
+                    elif period_name == 'ETD':
+                        # Entire time period
+                        period_returns = returns
+                    else:
+                        # Fixed period
+                        period_returns = returns.iloc[-days:] if len(returns) > days else returns
+                    
+                    if len(period_returns) > 10:  # Minimum data points
+                        period_data[ticker] = period_returns
+                
+                if len(period_data) >= 2:
+                    # Create correlation matrix
+                    corr_df = pd.DataFrame(period_data).corr()
+                    
+                    # Plot heatmap
+                    sns.heatmap(
+                        corr_df,
+                        annot=True,
+                        cmap='RdYlBu_r',
+                        center=0,
+                        fmt='.2f',
+                        square=True,
+                        ax=axes[idx],
+                        cbar_kws={'shrink': 0.8}
+                    )
+                    axes[idx].set_title(f'{period_name} Correlation', fontweight='bold')
+                    axes[idx].tick_params(axis='x', rotation=45)
+                    axes[idx].tick_params(axis='y', rotation=0)
+                else:
+                    axes[idx].text(0.5, 0.5, f'Insufficient data for {period_name}', 
+                                 ha='center', va='center', transform=axes[idx].transAxes)
+                    axes[idx].set_title(f'{period_name} Correlation', fontweight='bold')
+                
+            except Exception as e:
+                logger.warning(f"Error generating correlation for {period_name}: {e}")
+                axes[idx].text(0.5, 0.5, f'Error: {period_name}', 
+                             ha='center', va='center', transform=axes[idx].transAxes)
+                axes[idx].set_title(f'{period_name} Correlation', fontweight='bold')
+        
+        plt.tight_layout()
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+        buffer.seek(0)
+        plot_data = buffer.getvalue()
+        buffer.close()
+        plt.close()
+        
+        return base64.b64encode(plot_data).decode()
+        
+    except Exception as e:
+        logger.error(f"Error generating correlation matrix: {e}")
+        return None
 
 def generate_analysis(analyzer, form_data):
     """Generate analysis results including statistics and plots"""

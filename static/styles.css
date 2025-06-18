@@ -338,6 +338,24 @@ header h1 {
     font-size: var(--font-size-sm);
 }
 
+/* Market Review Section */
+.market-review-section {
+    margin-bottom: var(--spacing-2xl);
+}
+
+.market-review-section h3 {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.market-review-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg);
+}
+
 /* Analysis and Assessment Sections */
 .analysis-section,
 .assessment-section {
@@ -375,7 +393,8 @@ header h1 {
     overflow: hidden;
 }
 
-.chart-container.full-width {
+.chart-container.full-width,
+.stats-container.full-width {
     grid-column: 1 / -1;
 }
 
