@@ -136,81 +136,6 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-        <!-- Market Review Section -->
-        {% if market_review_data %}
-        <section class="market-review-section">
-            <div class="results-header">
-                <h2>Market Review for {{ ticker }}</h2>
-                <div class="results-meta">
-                    <span class="meta-item">
-                        Last Close: ${{ "%.2f"|format(market_review_data.last_close) }}
-                    </span>
-                    <span class="meta-item">
-                        As of: {{ market_review_data.current_date.strftime('%Y-%m-%d') }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="market-review-content">
-                <div class="review-table-container">
-                    <h4>Market Metrics Summary</h4>
-                    <table class="review-table">
-                        <thead>
-                            <tr>
-                                <th>Metric</th>
-                                <th>1 Month</th>
-                                <th>1 Quarter</th>
-                                <th>YTD</th>
-                                <th>ETD</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><strong>Volatility (%)</strong></td>
-                                <td>{{ "%.2f"|format(market_review_data.volatility.get('1M', 0)) }}</td>
-                                <td>{{ "%.2f"|format(market_review_data.volatility.get('1Q', 0)) }}</td>
-                                <td>{{ "%.2f"|format(market_review_data.volatility.get('YTD', 0)) }}</td>
-                                <td>{{ "%.2f"|format(market_review_data.volatility.get('ETD', 0)) }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Return (%)</strong></td>
-                                <td class="{{ 'positive' if market_review_data.returns.get('1M', 0) > 0 else 'negative' }}">
-                                    {{ "%.2f"|format(market_review_data.returns.get('1M', 0)) }}
-                                </td>
-                                <td class="{{ 'positive' if market_review_data.returns.get('1Q', 0) > 0 else 'negative' }}">
-                                    {{ "%.2f"|format(market_review_data.returns.get('1Q', 0)) }}
-                                </td>
-                                <td class="{{ 'positive' if market_review_data.returns.get('YTD', 0) > 0 else 'negative' }}">
-                                    {{ "%.2f"|format(market_review_data.returns.get('YTD', 0)) }}
-                                </td>
-                                <td class="{{ 'positive' if market_review_data.returns.get('ETD', 0) > 0 else 'negative' }}">
-                                    {{ "%.2f"|format(market_review_data.returns.get('ETD', 0)) }}
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Market Correlation</strong></td>
-                                <td>{{ "%.3f"|format(market_review_data.correlations.get('1M', 0)) if not market_review_data.correlations.get('1M', 0)|isnan else 'N/A' }}</td>
-                                <td>{{ "%.3f"|format(market_review_data.correlations.get('1Q', 0)) if not market_review_data.correlations.get('1Q', 0)|isnan else 'N/A' }}</td>
-                                <td>{{ "%.3f"|format(market_review_data.correlations.get('YTD', 0)) if not market_review_data.correlations.get('YTD', 0)|isnan else 'N/A' }}</td>
-                                <td>{{ "%.3f"|format(market_review_data.correlations.get('ETD', 0)) if not market_review_data.correlations.get('ETD', 0)|isnan else 'N/A' }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                {% if market_review_chart %}
-                <div class="review-chart-container">
-                    <h4>Market Correlation Analysis</h4>
-                    <div class="chart-wrapper">
-                        <img src="data:image/png;base64,{{ market_review_chart }}" 
-                             alt="Market Correlation Chart" class="analysis-chart">
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        </section>
-        {% endif %}
-
         <!-- Results Section -->
         {% if ticker %}
         <section class="results-section">
@@ -258,8 +183,8 @@
                     {% endif %}
 
                     {% if volatility_dynamic_url %}
-                    <div class="chart-container full-width">
-                        <h4>Volatility Dynamics & Price Movement</h4>
+                    <div class="chart-container">
+                        <h4>Volatility Dynamics</h4>
                         <div class="chart-wrapper">
                             <img src="data:image/png;base64,{{ volatility_dynamic_url }}" 
                                  alt="Volatility Dynamics" class="analysis-chart">
