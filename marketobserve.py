@@ -40,7 +40,7 @@ VOLATILITY_WINDOWS = {
 
 class PriceDynamic:
     """
-    A class to handle price data downloading, processing, and basic calculations.
+    Handles price data downloading, processing, and calculations.
     """
     
     def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='D'):
@@ -125,7 +125,7 @@ class PriceDynamic:
             return None
 
     def _refrequency(self, df):
-        """Resample data to specified frequency"""
+        """Resample data to specified frequency with clear structure."""
         if df is None or df.empty:
             return None
         
@@ -155,14 +155,11 @@ class PriceDynamic:
                     'Low': lambda x: x.index[x.argmin()] if len(x) > 0 else pd.NaT,
                     'Close': lambda x: x.index[-1] if len(x) > 0 else pd.NaT
                 })
-                
                 resampled['OpenDate'] = date_agg['Open']
                 resampled['HighDate'] = date_agg['High']
                 resampled['LowDate'] = date_agg['Low']
                 resampled['CloseDate'] = date_agg['Close']
-            
             return resampled
-            
         except Exception as e:
             logger.error(f"Error resampling data: {e}")
             return None
@@ -170,12 +167,7 @@ class PriceDynamic:
     def calculate_volatility(self, window=None):
         """
         Calculate historical volatility using daily OHLC data.
-        
-        Args:
-            window: Rolling window size. If None, uses frequency-based default
-            
-        Returns:
-            Series containing volatility data as percentage
+        Returns: Series with volatility as percentage.
         """
         if self._daily_data is None or self._daily_data.empty:
             return None
@@ -308,13 +300,13 @@ class PriceDynamic:
             return None
 
     def is_valid(self):
-        """Check if data is valid and available"""
+        """Check if data is valid and available."""
         return self._data is not None and not self._data.empty
 
 
 class MarketAnalyzer:
     """
-    High-level market analysis class that uses PriceDynamic for comprehensive analysis.
+    High-level market analysis using PriceDynamic for calculations and visualization.
     """
     
     def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='W'):
@@ -358,7 +350,7 @@ class MarketAnalyzer:
         return self._create_period_segments(feature_data, periods)
 
     def _create_period_segments(self, data, periods):
-        """Create data segments for different time periods"""
+        """Segment data for different periods efficiently."""
         if data is None or data.empty:
             return {}
 
@@ -369,15 +361,12 @@ class MarketAnalyzer:
             try:
                 if isinstance(period, int):
                     start_date = last_date - pd.DateOffset(months=period)
-                    start_date = pd.Timestamp(start_date)
                     col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
                     segments[col_name] = data.loc[data.index >= start_date]
                 elif period == "ALL":
                     start_date = data.index[0]
                     col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
                     segments[col_name] = data
-                else:
-                    logger.warning(f"Invalid period value: {period}")
             except Exception as e:
                 logger.error(f"Error creating segment for period {period}: {e}")
         
@@ -647,7 +636,7 @@ class MarketAnalyzer:
             return None
 
     def _calculate_period_gap_stats(self, df, frequency):
-        """Calculate detailed gap statistics"""
+        """Calculate gap statistics for each period."""
         try:
             periods = [12, 36, 60, "ALL"]
             data_sources = self._create_data_sources_for_gaps(df, periods, frequency)
@@ -1395,6 +1384,17 @@ def option_matrix(ticker, option_position):
     try:
         analyzer = MarketAnalyzer(ticker)
         option_data = []
+        for _, row in option_position.iterrows():
+            option_data.append({
+                'option_type': row['option_type'],
+                'strike': row['strike'],
+                'quantity': row['quantity'],
+                'premium': row['premium']
+            })
+        return analyzer.analyze_options(option_data)
+    except Exception as e:
+        logger.error(f"Error in legacy option_matrix function: {e}")
+        return None
         for _, row in option_position.iterrows():
             option_data.append({
                 'option_type': row['option_type'],
