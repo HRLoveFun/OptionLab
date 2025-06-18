@@ -34,7 +34,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="start_time">Start Date</label>
+                    <label for="start_time">Horizon</label>
                     <input type="text" id="start_time" name="start_time" 
                            value="{{ start_time_str or '' }}"
                            placeholder="202001" pattern="[0-9]{6}" required>
@@ -45,7 +45,7 @@
                     <select id="frequency" name="frequency">
                         <option value="D" {% if frequency == 'D' %}selected{% endif %}>Daily</option>
                         <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
-                        <option value="ME" {% if frequency == 'ME' %}selected{% endif %}>Monthly</option>
+                        <option value="ME" {% if frequency == 'ME' or not frequency %}selected{% endif %}>Monthly</option>
                         <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
                     </select>
                 </div>
