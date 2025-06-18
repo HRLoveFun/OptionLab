@@ -175,7 +175,7 @@ def generate_market_review(form_data):
                     # Store price data for correlation calculation
                     analyzer = MarketAnalyzer(ticker, dt.date.today() - dt.timedelta(days=365), 'D')
                     if analyzer.is_data_valid():
-                        correlation_data[ticker] = analyzer.price_dynamic.data['Close'].pct_change().dropna()
+                        correlation_data[ticker] = analyzer.price_dynamic._data['Close'].pct_change().dropna()
                 
             except Exception as e:
                 logger.warning(f"Error processing ticker {ticker}: {e}")
@@ -226,7 +226,7 @@ def calculate_recent_extreme_change(ticker):
         if not analyzer.is_data_valid():
             return None
         
-        data = analyzer.price_dynamic.data
+        data = analyzer.price_dynamic._data
         current_price = data['Close'].iloc[-1]
         
         # Calculate returns for different periods
