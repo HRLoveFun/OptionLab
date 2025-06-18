@@ -58,6 +58,8 @@ body {
     font-size: var(--font-size-base);
 }
 
+/* Layout: Header, Parameter Bar, Main Content, Footer */
+
 /* Header - Simplified */
 header {
     background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
@@ -79,7 +81,7 @@ header h1 {
     font-weight: 300;
 }
 
-/* Fixed Parameter Bar - Plain and Simple */
+/* Parameter Bar - Plain and Simple */
 .parameter-bar {
     position: sticky;
     top: 0;
@@ -90,6 +92,23 @@ header h1 {
     padding: var(--spacing-md);
 }
 
+/* Main Content */
+.main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--spacing-lg) var(--spacing-md);
+}
+
+/* Footer */
+footer {
+    background: var(--text-primary);
+    color: white;
+    text-align: center;
+    padding: var(--spacing-xl);
+    margin-top: var(--spacing-2xl);
+}
+
+/* Parameter Bar: Grid structure for clarity */
 .parameter-form {
     max-width: 1400px;
     margin: 0 auto;
@@ -223,7 +242,7 @@ header h1 {
     transition: all 0.3s ease;
 }
 
-/* Options Table */
+/* Options Table: Clear separation for table and controls */
 .options-table-container {
     overflow-x: auto;
 }
@@ -296,14 +315,7 @@ header h1 {
     color: white;
 }
 
-/* Main Content */
-.main-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: var(--spacing-lg) var(--spacing-md);
-}
-
-/* Results Section */
+/* Results Section: Structured for easy reading */
 .results-section {
     margin-bottom: var(--spacing-xl);
 }
@@ -520,16 +532,7 @@ header h1 {
     gap: var(--spacing-sm);
 }
 
-/* Footer */
-footer {
-    background: var(--text-primary);
-    color: white;
-    text-align: center;
-    padding: var(--spacing-xl);
-    margin-top: var(--spacing-2xl);
-}
-
-/* Responsive Design */
+/* Responsive Design: Efficient layout for all devices */
 @media (max-width: 1200px) {
     .parameter-grid {
         grid-template-columns: 1fr 1fr 1fr 1fr;
