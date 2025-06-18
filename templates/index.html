@@ -15,7 +15,7 @@
         <p class="subtitle">Advanced Market Analysis & Options Strategy Tool</p>
     </header>
 
-    <!-- Fixed Top Parameter Bar -->
+    <!-- Parameter Bar: Clear structure for input -->
     <div class="parameter-bar">
         <form method="post" id="analysis-form" class="parameter-form">
             {% if error %}
@@ -26,6 +26,7 @@
             {% endif %}
 
             <div class="parameter-grid">
+                <!-- Ticker, Horizon, Frequency, Periods, Risk, Bias, Submit -->
                 <div class="form-group">
                     <label for="ticker">Ticker</label>
                     <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}" 
@@ -92,12 +93,11 @@
                     </button>
                 </div>
             </div>
-
             <input type="hidden" id="option_position" name="option_position">
         </form>
     </div>
 
-    <!-- Options Strategy Toggle Section -->
+    <!-- Options Strategy Section: Collapsible for clarity -->
     <div class="options-toggle-section">
         <div class="toggle-header" onclick="toggleOptionsSection()">
             <h3>Positions</h3>
@@ -122,7 +122,7 @@
                         </tr>
                     </thead>
                     <tbody id="options-tbody">
-                        <!-- Default 4 rows will be added by JavaScript -->
+                        <!-- Rows added by JS -->
                     </tbody>
                 </table>
                 <div class="add-row-container">
@@ -134,9 +134,8 @@
         </div>
     </div>
 
-    <!-- Main Content Area -->
+    <!-- Main Content: Results and Analysis -->
     <main class="main-content">
-        <!-- Results Section -->
         {% if ticker %}
         <section class="results-section">
             <div class="results-header">
