@@ -1,215 +1,84 @@
 # Market Observation Dashboard
 
-A comprehensive market analysis tool for measuring statistics of index returns and oscillations across different frequencies, with integrated options strategy analysis.
+A comprehensive tool for market analysis and options strategy, providing statistics on index returns and oscillations across multiple frequencies.
 
 ## Features
 
-### Market Analysis
-- **Price Dynamics**: Download and process stock data from Yahoo Finance
-- **Multiple Frequencies**: Support for Daily (D), Weekly (W), Monthly (ME), and Quarterly (QE) analysis
-- **Oscillation Analysis**: Calculate price oscillations with optional overnight effect consideration
-- **Statistical Analysis**: Comprehensive tail statistics and distribution analysis
-- **Period Segmentation**: Analyze data across different time periods (1Y, 3Y, 5Y, All)
-- **Volatility Dynamics**: Track volatility changes over time with multiple rolling windows
-
-### Enhanced Parameters
-- **Risk Threshold**: Configurable percentile threshold (0-100%) for projection analysis
-- **Side Bias**: Choose between Natural (market-driven) or Neutral (balanced) bias for projections
-- **Advanced Projections**: Oscillation projections with bias optimization and enhanced accuracy
-
-### Visualization
-- **Scatter Plots**: Feature vs Returns correlation analysis with marginal histograms
-- **Cumulative Distribution**: Tail distribution analysis across different periods
-- **Volatility Dynamics**: Time-series visualization of volatility patterns
-- **Projection Charts**: Market oscillation projections with configurable bias and risk thresholds
-- **Interactive Dashboard**: Modern, responsive web interface with fixed parameter bar
-
-### Options Strategy
-- **Portfolio Analysis**: Support for multiple option positions (Long/Short Calls/Puts)
-- **P&L Visualization**: Comprehensive profit/loss analysis across price ranges
-- **Breakeven Analysis**: Automatic calculation of breakeven points
-- **Risk Assessment**: Maximum profit/loss calculations
-- **Toggle Interface**: Collapsible options section for clean UI
-
-### UI/UX Improvements
-- **Fixed Parameter Bar**: Sticky top navigation with all key parameters
-- **Top-Down Layout**: Vertical structure for better content flow
-- **Toggle Sections**: Collapsible options interface
-- **Responsive Design**: Optimized for all screen sizes
-- **Form State Persistence**: Automatic saving/loading of user inputs
+- **Market Analysis**: Download/process stock data from Yahoo Finance; analyze daily, weekly, monthly, and quarterly frequencies.
+- **Oscillation & Returns**: Calculate price oscillations (with/without overnight effect) and returns.
+- **Statistical Analysis**: Tail statistics, distribution, and volatility dynamics with rolling windows.
+- **Period Segmentation**: Analyze 1Y, 3Y, 5Y, or all data.
+- **Risk Threshold & Bias**: Configurable percentile for projections; choose Natural or Neutral bias.
+- **Visualization**: Scatter plots, cumulative distributions, volatility, and projection charts.
+- **Options Strategy**: Analyze portfolios with multiple positions; visualize P&L, breakeven, and risk.
+- **UI/UX**: Fixed parameter bar, responsive design, collapsible options, and form state persistence.
 
 ## Installation
 
-1. Clone the repository:
 ```bash
 git clone <repository-url>
 cd market-observation
-```
-
-2. Install dependencies:
-```bash
 pip install -r requirements.txt
-```
-
-3. Run the application:
-```bash
 python app.py
 ```
-
-4. Open your browser and navigate to `http://localhost:5000`
+Open `http://localhost:5000` in your browser.
 
 ## Usage
 
 ### Basic Analysis
-1. Enter a ticker symbol (e.g., AAPL, ^GSPC) in the fixed parameter bar
-2. Set the start date in YYYYMM format
-3. Choose analysis frequency (Daily, Weekly, Monthly, Quarterly)
-4. Select time periods for analysis (1Y, 3Y, 5Y, All)
-5. Configure risk threshold (0-100%, default 90%)
-6. Choose side bias (Natural or Neutral)
-7. Click "Analyze"
+1. Enter a ticker (e.g., AAPL, ^GSPC).
+2. Set start date (YYYYMM).
+3. Choose frequency.
+4. Select periods.
+5. Set risk threshold (0-100%).
+6. Choose bias.
+7. Click "Analyze".
 
-### Options Strategy Analysis
-1. Click on "Options Strategy" to expand the toggle section
-2. Add option positions using the "Add Position" button
-3. Specify option type (SC/SP/LC/LP), strike, quantity, and premium
-4. Submit the form to generate P&L analysis
+### Options Strategy
+1. Expand "Positions" section.
+2. Add/edit option positions (type, strike, quantity, premium).
+3. Submit to view P&L analysis.
 
-### Parameter Explanations
+## Parameters
 
-#### Risk Threshold
-- **Range**: 0-100%
-- **Default**: 90%
-- **Purpose**: Sets the percentile level for oscillation projection analysis
-- **Impact**: Higher values create wider projection bands, lower values create tighter bands
+- **Risk Threshold**: Percentile for oscillation projection (default 90%).
+- **Side Bias**: 
+  - *Natural*: Uses historical bias.
+  - *Neutral*: Forces balanced projection.
 
-#### Side Bias
-- **Natural**: Uses historical market behavior to determine projection bias (target_bias=None)
-- **Neutral**: Forces balanced projections with no directional bias (target_bias=0)
-- **Impact**: Natural bias reflects market tendencies, Neutral bias provides symmetric projections
+## Key Classes
 
-### Key Classes
+- **PriceDynamic**: Handles price data, oscillation, and returns.
+- **MarketAnalyzer**: High-level analysis, statistics, and visualization.
 
-#### PriceDynamic
-Core class for handling price data:
-```python
-pxdy = PriceDynamic(ticker="AAPL", start_date=dt.date(2020, 1, 1), frequency='W')
-oscillation = pxdy.osc(on_effect=True)  # Calculate oscillation
-returns = pxdy.ret()  # Calculate returns
-```
+## API
 
-#### MarketAnalyzer
-High-level analysis class:
-```python
-analyzer = MarketAnalyzer("AAPL", dt.date(2020, 1, 1), 'W')
-scatter_plot = analyzer.generate_scatter_plot('Oscillation')
-tail_stats = analyzer.calculate_tail_statistics('Oscillation')
-volatility_plot = analyzer.generate_volatility_dynamics()
-projection = analyzer.generate_oscillation_projection(percentile=0.9, target_bias=None)
-```
-
-## API Endpoints
-
-- `GET/POST /`: Main dashboard interface
-- `POST /api/validate_ticker`: Ticker symbol validation
-
-## Configuration
-
-### Supported Frequencies
-- `D`: Daily
-- `W`: Weekly  
-- `ME`: Monthly
-- `QE`: Quarterly
-
-### Option Types
-- `SC`: Short Call
-- `SP`: Short Put
-- `LC`: Long Call
-- `LP`: Long Put
-
-### Side Bias Options
-- `Natural`: Market-driven bias based on historical performance
-- `Neutral`: Balanced bias with no directional preference
+- `/` (GET/POST): Main dashboard.
+- `/api/validate_ticker` (POST): Validate ticker.
 
 ## Technical Details
 
-### Data Processing
-- Automatic data download from Yahoo Finance
-- Resampling for different frequencies
-- Calculation of derived features (oscillation, returns, differences)
-- Period segmentation for comparative analysis
-- Enhanced volatility tracking with multiple rolling windows
-
-### Statistical Analysis
-- Tail statistics (mean, std, skewness, kurtosis, percentiles)
-- Cumulative distribution analysis
-- Gap statistics with Kolmogorov-Smirnov testing
-- Projection modeling with advanced bias optimization
-- Volatility dynamics analysis
-
-### Visualization
-- Matplotlib-based chart generation
-- Base64 encoding for web display
-- Responsive design with modern CSS
-- Interactive form state management
-- Fixed parameter bar for improved UX
-
-### Enhanced Features
-- **Natural Bias Calculation**: Analyzes historical performance to determine optimal projection weights
-- **Volatility Dynamics**: Multi-timeframe volatility analysis with rolling windows
-- **Improved Projections**: Enhanced oscillation projections with bias-aware calculations
-- **Toggle Interface**: Collapsible sections for better space utilization
+- Data from Yahoo Finance, resampled as needed.
+- Rolling window volatility and tail statistics.
+- Matplotlib/seaborn for charts, base64 for web display.
+- Responsive, modern CSS and persistent form state.
 
 ## Error Handling
 
-The application includes comprehensive error handling:
-- Input validation for all form fields including new parameters
-- Data download error recovery
-- Calculation error logging
-- User-friendly error messages
-- Graceful degradation for missing features
-
-## Browser Compatibility
-
-- Modern browsers with JavaScript enabled
-- Responsive design for mobile and desktop
-- Local storage for form state persistence
-- Optimized for touch interfaces
-
-## Recent Improvements
-
-### UI/UX Enhancements
-- Fixed parameter bar for always-accessible controls
-- Top-down layout replacing left-right structure
-- Toggle-based options section
-- Improved responsive design
-- Enhanced form state management
-
-### Functional Enhancements
-- Risk threshold parameter for projection control
-- Side bias selection (Natural vs Neutral)
-- Volatility dynamics visualization
-- Enhanced bias calculation algorithms
-- Improved projection accuracy
-
-### Code Quality
-- Better error handling and logging
-- Enhanced parameter validation
-- Improved code organization
-- Comprehensive documentation
+- Input validation for all fields.
+- Graceful handling of data download/calculation errors.
+- User-friendly error messages.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+1. Fork and branch.
+2. Make changes and add tests.
+3. Submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License.
 
 ## Disclaimer
 
-This tool is for educational and research purposes only. It should not be used as the sole basis for investment decisions. Always consult with qualified financial professionals before making investment decisions.
+For educational/research use only. Not investment advice.
