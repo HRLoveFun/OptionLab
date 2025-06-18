@@ -42,6 +42,9 @@ def index():
                 return render_template('index.html', 
                     error=f"Failed to download data for {form_data['ticker']}. Please check the ticker symbol.")
 
+            # Generate market review results
+            market_review_results = generate_market_review(analyzer, form_data)
+            
             # Generate analysis results
             analysis_results = generate_analysis(analyzer, form_data)
             
@@ -51,6 +54,7 @@ def index():
             # Combine all results
             template_data = {
                 **form_data,
+                **market_review_results,
                 **analysis_results,
                 **assessment_results
             }
@@ -91,12 +95,13 @@ def extract_form_data(request):
         try:
             option_rows = json.loads(option_position_str)
             for row in option_rows:
-                option_data.append({
-                    'option_type': row['option_type'],
-                    'strike': float(row['strike']),
-                    'quantity': int(row['quantity']),
-                    'premium': float(row['premium'])
-                })
+                if row['strike'] and row['quantity'] and row['premium']:
+                    option_data.append({
+                        'option_type': row['option_type'],
+                        'strike': float(row['strike']),
+                        'quantity': int(row['quantity']),
+                        'premium': float(row['premium'])
+                    })
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             logger.warning(f"Error parsing option data: {e}")
     
@@ -130,6 +135,26 @@ def validate_input_data(form_data):
         return f"Invalid side bias selected: {form_data['side_bias']}"
     
     return None
+
+def generate_market_review(analyzer, form_data):
+    """Generate market review results"""
+    results = {}
+    
+    try:
+        # Get market review data
+        review_data = analyzer.price_dynamic.market_review()
+        if review_data:
+            results['market_review_data'] = review_data
+            
+            # Generate correlation chart
+            correlation_chart = analyzer.generate_market_review_chart()
+            if correlation_chart:
+                results['market_review_chart'] = correlation_chart
+        
+    except Exception as e:
+        logger.error(f"Error generating market review: {e}", exc_info=True)
+    
+    return results
 
 def generate_analysis(analyzer, form_data):
     """Generate analysis results including statistics and plots"""

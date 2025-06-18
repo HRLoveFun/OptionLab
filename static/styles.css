@@ -303,6 +303,69 @@ header h1 {
     padding: var(--spacing-lg) var(--spacing-md);
 }
 
+/* Market Review Section */
+.market-review-section {
+    margin-bottom: var(--spacing-2xl);
+}
+
+.market-review-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+}
+
+.review-table-container,
+.review-chart-container {
+    background: var(--surface-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.review-table-container h4,
+.review-chart-container h4 {
+    background: #f8fafc;
+    padding: var(--spacing-md) var(--spacing-lg);
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.review-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+    margin: var(--spacing-lg);
+    width: calc(100% - 2 * var(--spacing-lg));
+}
+
+.review-table th,
+.review-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.review-table th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.review-table .positive {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+.review-table .negative {
+    color: var(--error-color);
+    font-weight: 600;
+}
+
 /* Results Section */
 .results-section {
     margin-bottom: var(--spacing-xl);
@@ -519,6 +582,10 @@ footer {
     
     .charts-grid,
     .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .market-review-content {
         grid-template-columns: 1fr;
     }
 }
