@@ -1,7 +1,6 @@
 import logging
 from marketobserve import MarketAnalyzer
 from .market_service import MarketService
-from .chart_service import ChartService
 
 logger = logging.getLogger(__name__)
 
