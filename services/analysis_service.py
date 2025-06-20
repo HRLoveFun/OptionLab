@@ -1,5 +1,5 @@
 import logging
-from marketobserve import MarketAnalyzer
+from core.market_analyzer import MarketAnalyzer
 from .market_service import MarketService
 
 logger = logging.getLogger(__name__)
@@ -104,10 +104,36 @@ class AnalysisService:
                 results['feat_projection_url'] = projection_plot
             
             # Generate option analysis if option data provided
-            if form_data['option_data']:
-                option_analysis = analyzer.analyze_options(form_data['option_data'])
-                if option_analysis:
-                    results['plot_url'] = option_analysis
+            logger.info(f"Option data received: {form_data['option_data']}")
+            
+            if form_data['option_data'] and len(form_data['option_data']) > 0:
+                # Filter out empty option positions
+                valid_options = [
+                    option for option in form_data['option_data']
+                    if (option.get('strike') and 
+                        option.get('quantity') and 
+                        option.get('premium') and
+                        float(option['strike']) > 0 and
+                        int(option['quantity']) != 0 and
+                        float(option['premium']) > 0)
+                ]
+                
+                logger.info(f"Valid option positions: {valid_options}")
+                
+                if valid_options:
+                    try:
+                        option_analysis = analyzer.analyze_options(valid_options)
+                        if option_analysis:
+                            results['plot_url'] = option_analysis
+                            logger.info("Option P&L chart generated successfully")
+                        else:
+                            logger.warning("Option analysis returned None")
+                    except Exception as e:
+                        logger.error(f"Error in option analysis: {e}", exc_info=True)
+                else:
+                    logger.info("No valid option positions found")
+            else:
+                logger.info("No option data provided")
             
         except Exception as e:
             logger.error(f"Error generating assessment: {e}", exc_info=True)

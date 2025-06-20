@@ -49,17 +49,44 @@ class FormService:
         option_data = []
         option_position_str = request.form.get('option_position', '')
         
+        logger.info(f"Raw option position string: {option_position_str}")
+        
         if option_position_str:
             try:
                 option_rows = json.loads(option_position_str)
+                logger.info(f"Parsed option rows: {option_rows}")
+                
                 for row in option_rows:
-                    option_data.append({
-                        'option_type': row['option_type'],
-                        'strike': float(row['strike']),
-                        'quantity': int(row['quantity']),
-                        'premium': float(row['premium'])
-                    })
+                    # Validate required fields
+                    if (row.get('option_type') and 
+                        row.get('strike') and 
+                        row.get('quantity') and 
+                        row.get('premium')):
+                        
+                        try:
+                            option_entry = {
+                                'option_type': row['option_type'],
+                                'strike': float(row['strike']),
+                                'quantity': int(row['quantity']),
+                                'premium': float(row['premium'])
+                            }
+                            
+                            # Only add if all values are valid
+                            if (option_entry['strike'] > 0 and 
+                                option_entry['quantity'] != 0 and 
+                                option_entry['premium'] > 0):
+                                option_data.append(option_entry)
+                                logger.info(f"Added valid option: {option_entry}")
+                            else:
+                                logger.warning(f"Skipped invalid option values: {option_entry}")
+                                
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error converting option values: {row}, error: {e}")
+                    else:
+                        logger.warning(f"Skipped incomplete option row: {row}")
+                        
             except (json.JSONDecodeError, ValueError, KeyError) as e:
-                logger.warning(f"Error parsing option data: {e}")
+                logger.error(f"Error parsing option data: {e}")
         
+        logger.info(f"Final option data: {option_data}")
         return option_data

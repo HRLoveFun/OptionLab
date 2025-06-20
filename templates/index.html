@@ -312,7 +312,7 @@
                     </select>
                 </td>
                 <td>
-                    <input type="number" name="strike" step="1" placeholder="${currentPrice || 'Strike'}" 
+                    <input type="number" name="strike" step="0.01" placeholder="${currentPrice || 'Strike'}" 
                            value="${currentPrice || ''}" class="strike-input">
                 </td>
                 <td>
@@ -395,12 +395,27 @@
 
             getOptionsData() {
                 const rows = document.querySelectorAll('#options-table tbody tr');
-                return Array.from(rows).map(row => ({
-                    option_type: row.querySelector('select[name="option_type"]').value,
-                    strike: row.querySelector('input[name="strike"]').value,
-                    quantity: row.querySelector('input[name="quantity"]').value,
-                    premium: row.querySelector('input[name="premium"]').value
-                })).filter(option => option.strike && option.quantity && option.premium);
+                const optionsData = [];
+                
+                rows.forEach(row => {
+                    const option_type = row.querySelector('select[name="option_type"]').value;
+                    const strike = row.querySelector('input[name="strike"]').value;
+                    const quantity = row.querySelector('input[name="quantity"]').value;
+                    const premium = row.querySelector('input[name="premium"]').value;
+                    
+                    // Only include rows with all required fields filled
+                    if (strike && quantity && premium && parseFloat(strike) > 0 && parseInt(quantity) !== 0 && parseFloat(premium) > 0) {
+                        optionsData.push({
+                            option_type: option_type,
+                            strike: strike,
+                            quantity: quantity,
+                            premium: premium
+                        });
+                    }
+                });
+                
+                console.log('Options data collected:', optionsData);
+                return optionsData;
             },
 
             restoreOptionsTable(optionsData) {
@@ -496,6 +511,9 @@
             // Prepare options data
             const optionsData = FormManager.getOptionsData();
             document.getElementById('option_position').value = JSON.stringify(optionsData);
+            
+            console.log('Submitting options data:', optionsData);
+            console.log('Hidden field value:', document.getElementById('option_position').value);
             
             // Show loading state
             const submitBtn = this.querySelector('button[type="submit"]');
