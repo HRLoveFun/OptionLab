@@ -4,3 +4,4 @@ __pycache__/marketobserve.cpython-312.pyc
 .env
 /services/__pycache__
 /utils/__pycache__
+/core/__pycache__
