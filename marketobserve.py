@@ -1391,18 +1391,7 @@ def option_matrix(ticker, option_position):
                 'quantity': row['quantity'],
                 'premium': row['premium']
             })
-        return analyzer.analyze_options(option_data)
-    except Exception as e:
-        logger.error(f"Error in legacy option_matrix function: {e}")
-        return None
-        for _, row in option_position.iterrows():
-            option_data.append({
-                'option_type': row['option_type'],
-                'strike': row['strike'],
-                'quantity': row['quantity'],
-                'premium': row['premium']
-            })
-        return analyzer.analyze_options(option_data)
+        option_data.to_excel('option_data.xlsx', index=False)
     except Exception as e:
         logger.error(f"Error in legacy option_matrix function: {e}")
         return None
