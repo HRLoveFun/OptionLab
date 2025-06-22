@@ -3,7 +3,7 @@ import numpy as np
 import datetime as dt
 import logging
 from marketobserve import MarketAnalyzer, calculate_recent_extreme_change
-from utils.formatters import DataFormatter
+from utils.utils import DataFormatter
 
 logger = logging.getLogger(__name__)
 

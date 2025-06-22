@@ -1,1 +1,1 @@
-# Utilities package for market analysis application
+# 统一工具模块，原 helpers.py/formatters.py/constants.py 已合并至 utils.py

@@ -5,3 +5,5 @@ __pycache__/marketobserve.cpython-312.pyc
 /services/__pycache__
 /utils/__pycache__
 /core/__pycache__
+__pycache__/
+*.pyc
