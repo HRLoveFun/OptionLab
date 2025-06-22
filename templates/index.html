@@ -505,23 +505,26 @@
 
         // Form submission
         document.getElementById('analysis-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // 阻止默认提交
             // Save form state
             FormManager.saveState();
-            
             // Prepare options data
             const optionsData = FormManager.getOptionsData();
+            if (!optionsData || optionsData.length === 0) {
+                alert('请至少填写一条完整且有效的期权数据（类型、行权价>0、数量≠0、权利金>0）！');
+                return false;
+            }
             document.getElementById('option_position').value = JSON.stringify(optionsData);
-            
             console.log('Submitting options data:', optionsData);
             console.log('Hidden field value:', document.getElementById('option_position').value);
-            
             // Show loading state
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             submitBtn.disabled = true;
-            
-            // Re-enable button after a delay (in case of errors)
+            // 赋值后再手动提交表单
+            this.submit();
+            // Re-enable button after a延迟（理论上不会执行到这里）
             setTimeout(() => {
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
@@ -530,19 +533,23 @@
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize options table
-            initializeOptionsTable();
-            
-            // Load saved state
+            // 优先还原本地存储
             FormManager.loadState();
-            
+            // 如果表格没有有效数据才初始化默认行
+            const tbody = document.getElementById('options-tbody');
+            if (!tbody || tbody.children.length === 0 || Array.from(tbody.querySelectorAll('tr')).every(row => {
+                const strike = row.querySelector('input[name="strike"]').value;
+                const quantity = row.querySelector('input[name="quantity"]').value;
+                const premium = row.querySelector('input[name="premium"]').value;
+                return !(strike && quantity && premium);
+            })) {
+                initializeOptionsTable();
+            }
             // Initialize options section as collapsed
             const content = document.getElementById('options-content');
             content.style.display = 'none';
-            
             // Add ticker validation
             document.getElementById('ticker').addEventListener('input', validateTicker);
-            
             // Auto-save form state on changes
             document.querySelectorAll('input, select').forEach(element => {
                 element.addEventListener('change', FormManager.saveState.bind(FormManager));
