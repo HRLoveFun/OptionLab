@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import logging
-from marketobserve import MarketAnalyzer
+from marketobserve import MarketAnalyzer, calculate_recent_extreme_change
 from utils.formatters import DataFormatter
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,12 @@ class MarketService:
             analyzer = MarketAnalyzer(ticker, start_date, 'D')
             if analyzer.is_data_valid():
                 data = analyzer.price_dynamic._data
-                return data.index[0].date(), data.index[-1].date()
+                # 使用极值点作为起点
+                _, _, extreme_date = calculate_recent_extreme_change(data['Close'])
+                if pd.notna(extreme_date):
+                    return extreme_date.date(), data.index[-1].date()
+                else:
+                    return data.index[0].date(), data.index[-1].date()
             return None, None
         except Exception as e:
             logger.error(f"Error getting time range for {ticker}: {e}")
@@ -197,7 +202,9 @@ class MarketService:
             
             if len(period_data) > 1:
                 period_return = (period_data['Close'].iloc[-1] / period_data['Close'].iloc[0]) - 1
-                period_volatility = period_data['Close'].pct_change().std() * np.sqrt(252)
+                # period_volatility = period_data['Close'].pct_change().std() * np.sqrt(252)
+                period_volatility = np.log(period_data['Close']).diff().std() * np.sqrt(252)
+
                 return period_return, period_volatility
             else:
                 return np.nan, np.nan
