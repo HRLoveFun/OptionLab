@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    """Main dashboard route"""
+    """
+    Main dashboard route.
+    GET: Render dashboard form.
+    POST: Extracts form data, validates, runs analysis, returns results or error.
+    """
     try:
         if request.method == 'POST':
             # Extract and validate form data
@@ -45,7 +49,11 @@ def index():
 
 @app.route('/api/validate_ticker', methods=['POST'])
 def validate_ticker():
-    """API endpoint to validate ticker symbol"""
+    """
+    API endpoint to validate ticker symbol.
+    Request: JSON {"ticker": "AAPL"}
+    Response: {"valid": true/false, "message": "..."}
+    """
     try:
         data = request.get_json()
         ticker = data.get('ticker', '').upper()
@@ -66,4 +74,5 @@ def validate_ticker():
         return jsonify({'valid': False, 'message': f'Error validating ticker: {str(e)}'})
 
 if __name__ == "__main__":
+    # Main entry: run Flask app
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)

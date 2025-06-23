@@ -13,72 +13,77 @@ A comprehensive tool for market analysis and options strategy, providing statist
 - **Options Strategy**: Analyze portfolios with multiple positions; visualize P&L, breakeven, and risk.
 - **UI/UX**: Fixed parameter bar, responsive design, collapsible options, and form state persistence.
 
-## Installation
+## Project Structure
 
-```bash
-git clone <repository-url>
-cd market-observation
-pip install -r requirements.txt
-python app.py
 ```
-Open `http://localhost:5000` in your browser.
+OptionStrategy/
+├── app.py                # Main Flask entry, API routing
+├── requirements.txt      # Python dependencies
+├── README.md             # Project documentation
+├── core/                 # Core market analysis logic
+│   ├── market_analyzer.py    # MarketAnalyzer: high-level analysis, stats, plots
+│   ├── market_review.py      # market_review: multi-asset review table
+│   └── price_dynamic.py      # PriceDynamic: data download, oscillation, returns
+├── services/             # Service layer (business logic)
+│   ├── analysis_service.py   # AnalysisService: orchestrates all analysis
+│   ├── chart_service.py      # ChartService: matplotlib/seaborn to base64
+│   ├── form_service.py       # FormService: form extraction, option parsing
+│   ├── market_service.py     # MarketService: ticker validation, review
+│   └── validation_service.py # ValidationService: input validation
+├── utils/                # Utility functions
+│   ├── data_utils.py         # calculate_recent_extreme_change, etc.
+│   └── utils.py              # DataFormatter, helpers, constants
+├── templates/            # Jinja2 HTML templates
+│   └── index.html
+├── static/               # CSS, JS, images
+│   └── styles.css
+```
 
-## Usage
+## API Endpoints
 
-### Basic Analysis
-1. Enter a ticker (e.g., AAPL, ^GSPC).
-2. Set start date (YYYYMM).
-3. Choose frequency.
-4. Select periods.
-5. Set risk threshold (0-100%).
-6. Choose bias.
-7. Click "Analyze".
+- `/` (GET/POST): Main dashboard. Accepts form data, returns rendered HTML with analysis results.
+    - POST参数：
+        - `ticker` (str): 股票代码
+        - `horizon` (str): 起始时间，格式 YYYYMM
+        - `frequency` (str): 频率，D/W/ME/QE
+        - `periods` (list): 分析区间 [12, 36, 60, "ALL"]
+        - `risk_threshold` (int): 风险阈值百分位
+        - `side_bias` (str): "Natural" 或 "Neutral"
+        - `option_position` (JSON): 期权持仓列表
+    - 返回：渲染后的 index.html，包含分析表格、图表、错误信息等，所有 key 统一下划线风格
+- `/api/validate_ticker` (POST): Validate ticker symbol.
+    - 请求体：`{"ticker": "AAPL"}`
+    - 返回：`{"valid": true, "message": "valid_ticker"}`
 
-### Options Strategy
-1. Expand "Positions" section.
-2. Add/edit option positions (type, strike, quantity, premium).
-3. Submit to view P&L analysis.
+## Key Classes & Responsibilities
 
-## Parameters
+- **core/price_dynamic.py**
+  - `PriceDynamic`: Handles price data download, frequency conversion, oscillation/return calculation.
+- **core/market_analyzer.py**
+  - `MarketAnalyzer`: High-level analysis, feature engineering, visualization, projections.
+- **core/market_review.py**
+  - `market_review`: Multi-asset review table (returns, volatility, correlation).
+- **services/analysis_service.py**
+  - `AnalysisService`: Orchestrates all analysis, combines market review, stats, projections, options。
+    - `generate_complete_analysis(form_data: dict) -> dict`：主分析入口，参数与前端表单字段一致，返回所有分析结果，key 统一下划线风格。
+- **services/chart_service.py**
+  - `ChartService`: 图表生成与 base64 编码。
+    - `convert_plot_to_base64(fig)`：matplotlib 图转 base64。
+- **services/form_service.py**
+  - `FormService`: 表单数据提取与期权持仓解析。
+    - `extract_form_data(request)`：提取表单字段，key 与前端一致。
+    - `parse_option_data(request)`：解析 option_position 字段。
+- **services/market_service.py**
+  - `MarketService`: 市场数据校验与综述。
+    - `validate_ticker(ticker)`：校验 ticker 合法性，返回 (bool, message)。
+    - `generate_market_review(form_data)`：生成市场综述表。
+- **services/validation_service.py**
+  - `ValidationService`: 表单输入校验。
+    - `validate_input_data(form_data)`：校验所有字段，返回错误信息（下划线风格）或 None。
 
-- **Risk Threshold**: Percentile for oscillation projection (default 90%).
-- **Side Bias**: 
-  - *Natural*: Uses historical bias.
-  - *Neutral*: Forces balanced projection.
+## 命名与风格规范
 
-## Key Classes
-
-- **PriceDynamic**: Handles price data, oscillation, and returns.
-- **MarketAnalyzer**: High-level analysis, statistics, and visualization.
-
-## API
-
-- `/` (GET/POST): Main dashboard.
-- `/api/validate_ticker` (POST): Validate ticker.
-
-## Technical Details
-
-- Data from Yahoo Finance, resampled as needed.
-- Rolling window volatility and tail statistics.
-- Matplotlib/seaborn for charts, base64 for web display.
-- Responsive, modern CSS and persistent form state.
-
-## Error Handling
-
-- Input validation for all fields.
-- Graceful handling of data download/calculation errors.
-- User-friendly error messages.
-
-## Contributing
-
-1. Fork and branch.
-2. Make changes and add tests.
-3. Submit a pull request.
-
-## License
-
-MIT License.
-
-## Disclaimer
-
-For educational/research use only. Not investment advice.
+- 所有 API、服务方法参数与前端字段一致（如 ticker, start_time, frequency）。
+- 所有 dict 返回值 key 统一为下划线风格。
+- 所有服务类静态方法均加 @staticmethod。
+- 日志记录统一 logger = logging.getLogger(__name__)，异常处理风格一致。

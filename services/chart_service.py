@@ -13,7 +13,7 @@ class ChartService:
     """Service for generating charts and visualizations"""
     
     @staticmethod
-    def _convert_plot_to_base64(fig):
+    def convert_plot_to_base64(fig):
         """Convert matplotlib figure to base64 string"""
         try:
             buffer = io.BytesIO()
