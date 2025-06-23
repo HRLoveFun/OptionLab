@@ -49,12 +49,9 @@ class FormService:
         option_data = []
         option_position_str = request.form.get('option_position', '')
         
-        logger.info(f"Raw option position string: {option_position_str}")
-        
         if option_position_str:
             try:
                 option_rows = json.loads(option_position_str)
-                logger.info(f"Parsed option rows: {option_rows}")
                 
                 for row in option_rows:
                     # Validate required fields
@@ -76,7 +73,6 @@ class FormService:
                                 option_entry['quantity'] != 0 and 
                                 option_entry['premium'] > 0):
                                 option_data.append(option_entry)
-                                logger.info(f"Added valid option: {option_entry}")
                             else:
                                 logger.warning(f"Skipped invalid option values: {option_entry}")
                                 
@@ -88,5 +84,4 @@ class FormService:
             except (json.JSONDecodeError, ValueError, KeyError) as e:
                 logger.error(f"Error parsing option data: {e}")
         
-        logger.info(f"Final option data: {option_data}")
         return option_data

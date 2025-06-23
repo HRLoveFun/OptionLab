@@ -104,7 +104,6 @@ class AnalysisService:
                 results['feat_projection_url'] = projection_plot
             
             # Generate option analysis if option data provided
-            logger.info(f"Option data received: {form_data['option_data']}")
             
             if form_data['option_data'] and len(form_data['option_data']) > 0:
                 # Filter out empty option positions
@@ -118,14 +117,11 @@ class AnalysisService:
                         float(option['premium']) > 0)
                 ]
                 
-                logger.info(f"Valid option positions: {valid_options}")
-                
                 if valid_options:
                     try:
                         option_analysis = analyzer.analyze_options(valid_options)
                         if option_analysis:
                             results['plot_url'] = option_analysis
-                            logger.info("Option P&L chart generated successfully")
                         else:
                             logger.warning("Option analysis returned None")
                     except Exception as e:
