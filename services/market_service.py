@@ -51,9 +51,9 @@ class MarketService:
             # Calculate comprehensive market data
             market_data = MarketService._calculate_comprehensive_market_data(unique_tickers, user_time_range)
             
-            # Create market overview table
+            # Create market review table
             if market_data:
-                results['market_overview_table'] = MarketService._create_comprehensive_market_table(market_data)
+                results['market_review_table'] = MarketService._create_comprehensive_market_table(market_data)
             
         except Exception as e:
             logger.error(f"Error generating market review: {e}", exc_info=True)
@@ -249,7 +249,7 @@ class MarketService:
     
     @staticmethod
     def _create_comprehensive_market_table(market_data):
-        """Create formatted HTML table for comprehensive market overview"""
+        """Create formatted HTML table for comprehensive market review"""
         try:
             market_df = pd.DataFrame(market_data)
             

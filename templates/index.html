@@ -161,11 +161,11 @@
                 <h3>Market Review</h3>
                 
                 <div class="market-review-grid">
-                    {% if market_overview_table %}
+                    {% if market_review_table %}
                     <div class="stats-container full-width">
-                        <h4>Market Overview</h4>
+                        <h4>Return, Volatility, and Correlation</h4>
                         <div class="table-wrapper">
-                            {{ market_overview_table|safe }}
+                            {{ market_review_table|safe }}
                         </div>
                     </div>
                     {% endif %}
