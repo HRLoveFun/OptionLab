@@ -100,11 +100,8 @@
     <!-- Options Strategy Section: Collapsible for clarity -->
     <div class="options-toggle-section">
         <div class="toggle-header" onclick="toggleOptionsSection()">
-            <h3>Positions</h3>
+            <h3>Positions (Optional)</h3>
             <div class="toggle-controls">
-                <button type="button" class="btn-create" onclick="createOptionsStrategy(); event.stopPropagation();">
-                    Create
-                </button>
                 <i class="fas fa-chevron-down toggle-icon" id="options-toggle-icon"></i>
             </div>
         </div>
@@ -283,20 +280,13 @@
             }
         }
 
-        // Create options strategy (same as analyze for now)
-        function createOptionsStrategy() {
-            addOptionRow();
-        }
-
-        // Initialize options table with 4 default rows
+        // Initialize options table with 1 default row (optional)
         function initializeOptionsTable() {
             const tbody = document.getElementById('options-tbody');
             tbody.innerHTML = '';
             
-            // Add 4 default rows
-            for (let i = 0; i < 4; i++) {
-                addOptionRow();
-            }
+            // Add 1 default empty row
+            addOptionRow();
         }
 
         // Create option row
@@ -305,6 +295,7 @@
             row.innerHTML = `
                 <td>
                     <select name="option_type" class="option-select">
+                        <option value="">Select Type</option>
                         <option value="SC">Short Call</option>
                         <option value="SP">Short Put</option>
                         <option value="LC">Long Call</option>
@@ -313,13 +304,13 @@
                 </td>
                 <td>
                     <input type="number" name="strike" step="0.01" placeholder="${currentPrice || 'Strike'}" 
-                           value="${currentPrice || ''}" class="strike-input">
+                           value="" class="strike-input">
                 </td>
                 <td>
-                    <input type="number" name="quantity" placeholder="1" value="1" class="quantity-input">
+                    <input type="number" name="quantity" placeholder="Quantity" value="" class="quantity-input">
                 </td>
                 <td>
-                    <input type="number" name="premium" step="0.01" placeholder="Premium" class="premium-input">
+                    <input type="number" name="premium" step="0.01" placeholder="Premium" value="" class="premium-input">
                 </td>
                 <td>
                     <button type="button" class="btn-delete" onclick="deleteOptionRow(this)">
@@ -343,11 +334,14 @@
             const tbody = document.getElementById('options-tbody');
             const row = button.closest('tr');
             
-            // Don't delete if it's the last row
-            if (tbody.children.length > 1) {
-                row.remove();
-                FormManager.saveState();
+            // Always allow deletion, add new row if table becomes empty
+            row.remove();
+            
+            if (tbody.children.length === 0) {
+                addOptionRow();
             }
+            
+            FormManager.saveState();
         }
 
         // Form state management
@@ -404,7 +398,8 @@
                     const premium = row.querySelector('input[name="premium"]').value;
                     
                     // Only include rows with all required fields filled
-                    if (strike && quantity && premium && parseFloat(strike) > 0 && parseInt(quantity) !== 0 && parseFloat(premium) > 0) {
+                    if (option_type && strike && quantity && premium && 
+                        parseFloat(strike) > 0 && parseInt(quantity) !== 0 && parseFloat(premium) > 0) {
                         optionsData.push({
                             option_type: option_type,
                             strike: strike,
@@ -422,8 +417,8 @@
                 const tbody = document.getElementById('options-tbody');
                 tbody.innerHTML = '';
                 
-                // Ensure at least 4 rows
-                const rowCount = Math.max(4, optionsData.length);
+                // Restore saved options or add one empty row
+                const rowCount = Math.max(1, optionsData.length);
                 
                 for (let i = 0; i < rowCount; i++) {
                     const row = createOptionRow();
@@ -494,37 +489,36 @@
             strikeInputs.forEach(input => {
                 if (currentPrice) {
                     input.placeholder = currentPrice.toString();
-                    if (!input.value) {
-                        input.value = currentPrice;
-                    }
                 } else {
                     input.placeholder = 'Strike';
                 }
             });
         }
 
-        // Form submission
+        // Form submission - no longer requires option data
         document.getElementById('analysis-form').addEventListener('submit', function(e) {
-            e.preventDefault(); // 阻止默认提交
+            e.preventDefault(); // Prevent default submission
+            
             // Save form state
             FormManager.saveState();
-            // Prepare options data
+            
+            // Prepare options data (optional)
             const optionsData = FormManager.getOptionsData();
-            if (!optionsData || optionsData.length === 0) {
-                alert('请至少填写一条完整且有效的期权数据（类型、行权价>0、数量≠0、权利金>0）！');
-                return false;
-            }
             document.getElementById('option_position').value = JSON.stringify(optionsData);
+            
             console.log('Submitting options data:', optionsData);
             console.log('Hidden field value:', document.getElementById('option_position').value);
+            
             // Show loading state
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             submitBtn.disabled = true;
-            // 赋值后再手动提交表单
+            
+            // Submit form
             this.submit();
-            // Re-enable button after a延迟（理论上不会执行到这里）
+            
+            // Re-enable button after delay (theoretically won't execute)
             setTimeout(() => {
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
@@ -533,23 +527,22 @@
 
         // Event listeners
         document.addEventListener('DOMContentLoaded', function() {
-            // 优先还原本地存储
+            // Load saved state first
             FormManager.loadState();
-            // 如果表格没有有效数据才初始化默认行
+            
+            // Initialize table if empty
             const tbody = document.getElementById('options-tbody');
-            if (!tbody || tbody.children.length === 0 || Array.from(tbody.querySelectorAll('tr')).every(row => {
-                const strike = row.querySelector('input[name="strike"]').value;
-                const quantity = row.querySelector('input[name="quantity"]').value;
-                const premium = row.querySelector('input[name="premium"]').value;
-                return !(strike && quantity && premium);
-            })) {
+            if (!tbody || tbody.children.length === 0) {
                 initializeOptionsTable();
             }
+            
             // Initialize options section as collapsed
             const content = document.getElementById('options-content');
             content.style.display = 'none';
+            
             // Add ticker validation
             document.getElementById('ticker').addEventListener('input', validateTicker);
+            
             // Auto-save form state on changes
             document.querySelectorAll('input, select').forEach(element => {
                 element.addEventListener('change', FormManager.saveState.bind(FormManager));

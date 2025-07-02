@@ -84,6 +84,8 @@ class AnalysisService:
             )
             if projection_plot:
                 results['feat_projection_url'] = projection_plot
+            
+            # Option analysis is now optional - only run if valid option data exists
             if form_data.get('option_data') and len(form_data['option_data']) > 0:
                 valid_options = [
                     option for option in form_data['option_data']
@@ -100,13 +102,13 @@ class AnalysisService:
                         if option_analysis:
                             results['plot_url'] = option_analysis
                         else:
-                            logger.warning("Option analysis returned None")
+                            logger.info("Option analysis returned None - no chart generated")
                     except Exception as e:
                         logger.error(f"Error in option analysis: {e}", exc_info=True)
                 else:
-                    logger.info("No valid option positions found")
+                    logger.info("No valid option positions found - skipping option analysis")
             else:
-                logger.info("No option data provided")
+                logger.info("No option data provided - skipping option analysis")
         except Exception as e:
             logger.error(f"Error generating assessment: {e}", exc_info=True)
         return results
