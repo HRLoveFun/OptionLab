@@ -202,8 +202,8 @@ class MarketAnalyzer:
         fig, ax = plt.subplots(figsize=(16, 10))
         try:
             x_values = np.arange(len(proj_df.index))
-            self._plot_projection_points(ax, x_values, proj_df)
-            self._add_projection_annotations(ax, x_values, proj_df)
+            self._plot_projection_lines(ax, x_values, proj_df)
+            self._add_vertical_value_annotations(ax, x_values, proj_df)
             bias_text = "Natural" if target_bias is None else f"Neutral ({target_bias})"
             self._format_projection_plot(ax, proj_df, percentile, proj_volatility, bias_text)
             return fig
@@ -211,27 +211,52 @@ class MarketAnalyzer:
             logger.error(f"Error plotting oscillation projection: {e}")
             return fig
 
-    def _plot_projection_points(self, ax, x_values, proj_df):
+    def _plot_projection_lines(self, ax, x_values, proj_df):
+        # Plot actual data as lines with markers
         for col, color, label in [("Close", "black", "Close"), ("High", "purple", "High"), ("Low", "purple", "Low")]:
             mask = ~proj_df[col].isna()
             if mask.any():
-                ax.scatter(x_values[mask], proj_df[col][mask], label=label, color=color, s=80, zorder=3)
+                ax.plot(x_values[mask], proj_df[col][mask], label=label, color=color, 
+                       linewidth=3, marker='o', markersize=8, zorder=3)
+        
+        # Plot projection data as lines
         for col, color, label in [("iHigh", "red", "Proj High (Current)"), ("iLow", "red", "Proj Low (Current)"), ("iHigh1", "orange", "Proj High (Next)"), ("iLow1", "orange", "Proj Low (Next)")]:
             mask = ~proj_df[col].isna()
             if mask.any():
-                ax.scatter(x_values[mask], proj_df[col][mask], label=label, facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
+                ax.plot(x_values[mask], proj_df[col][mask], label=label, color=color, 
+                       linewidth=2, linestyle='--', marker='s', markersize=6, 
+                       markerfacecolor='none', markeredgecolor=color, markeredgewidth=2, zorder=3)
 
-    def _add_projection_annotations(self, ax, x_values, proj_df):
+    def _add_vertical_value_annotations(self, ax, x_values, proj_df):
+        # Add vertical value annotations for actual data points
         for col, color in [("Close", "black"), ("High", "purple"), ("Low", "purple")]:
-            for i, (idx, val) in enumerate(proj_df[col].dropna().items()):
+            data_points = proj_df[col].dropna()
+            for idx, val in data_points.items():
                 x_pos = list(proj_df.index).index(idx)
-                ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), textcoords="offset points", ha='center', va='top', fontsize=10, color=color, fontweight='bold')
+                # Vertical annotation above the point
+                ax.annotate(f"{val:.0f}", (x_pos, val), 
+                           xytext=(0, 15), textcoords="offset points", 
+                           ha='center', va='bottom', fontsize=11, 
+                           color=color, fontweight='bold',
+                           bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
+                                   edgecolor=color, alpha=0.8))
+        
+        # Add vertical value annotations for projection data
         for col, color in [("iHigh", "red"), ("iLow", "red"), ("iHigh1", "orange"), ("iLow1", "orange")]:
             data_points = proj_df[col].dropna()
-            if len(data_points) >= 3:
-                for idx, val in data_points.tail(3).items():
-                    x_pos = list(proj_df.index).index(idx)
-                    ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), textcoords="offset points", ha='center', va='top', fontsize=10, color=color, fontweight='bold')
+            # Show values for key projection points
+            key_points = data_points.iloc[::max(1, len(data_points)//5)]  # Show every 5th point or all if less than 5
+            for idx, val in key_points.items():
+                x_pos = list(proj_df.index).index(idx)
+                # Vertical annotation with different positioning for high/low
+                y_offset = 20 if 'High' in col else -25
+                va_align = 'bottom' if 'High' in col else 'top'
+                ax.annotate(f"{val:.0f}", (x_pos, val), 
+                           xytext=(0, y_offset), textcoords="offset points", 
+                           ha='center', va=va_align, fontsize=10, 
+                           color=color, fontweight='bold',
+                           bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
+                                   edgecolor=color, alpha=0.7, linestyle='--'))
 
     def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility, bias_text):
         ax.set_xticks(range(0, len(proj_df.index), max(1, len(proj_df.index)//20)))
@@ -239,7 +264,8 @@ class MarketAnalyzer:
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel('Price', fontsize=12)
         ax.set_title(f'Oscillation Projection (Threshold: {percentile:.0%}, Volatility: {proj_volatility:.1f}%, Bias: {bias_text})', fontsize=14, fontweight='bold')
-        ax.grid(True, alpha=0.3)
+        ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+        ax.set_facecolor('#fafafa')
         ax.legend(fontsize=10, loc='best')
         plt.tight_layout()
 
