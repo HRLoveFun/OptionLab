@@ -212,33 +212,56 @@ class MarketAnalyzer:
             return fig
 
     def _plot_projection_points(self, ax, x_values, proj_df):
-        for col, color, label in [("Close", "black", "Close"), ("High", "purple", "High"), ("Low", "purple", "Low")]:
-            mask = ~proj_df[col].isna()
-            if mask.any():
-                ax.scatter(x_values[mask], proj_df[col][mask], label=label, color=color, s=80, zorder=3)
+        # Plot Close values with black circle points
+        close_mask = ~proj_df["Close"].isna()
+        if close_mask.any():
+            ax.scatter(x_values[close_mask], proj_df["Close"][close_mask], 
+                      label="Close", color="black", s=80, marker='o', zorder=3)
+        
+        # Plot High values with purple upward triangle points
+        high_mask = ~proj_df["High"].isna()
+        if high_mask.any():
+            ax.scatter(x_values[high_mask], proj_df["High"][high_mask], 
+                      label="High", color="purple", s=80, marker='^', zorder=3)
+        
+        # Plot Low values with blue downward triangle points
+        low_mask = ~proj_df["Low"].isna()
+        if low_mask.any():
+            ax.scatter(x_values[low_mask], proj_df["Low"][low_mask], 
+                      label="Low", color="blue", s=80, marker='v', zorder=3)
+        
+        # Plot projection lines
         for col, color, label in [("iHigh", "red", "Proj High (Current)"), ("iLow", "red", "Proj Low (Current)"), ("iHigh1", "orange", "Proj High (Next)"), ("iLow1", "orange", "Proj Low (Next)")]:
             mask = ~proj_df[col].isna()
             if mask.any():
-                ax.scatter(x_values[mask], proj_df[col][mask], label=label, facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
+                ax.scatter(x_values[mask], proj_df[col][mask], label=label, 
+                          facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
 
     def _add_projection_annotations(self, ax, x_values, proj_df):
         for col, color in [("Close", "black"), ("High", "purple"), ("Low", "purple")]:
             for i, (idx, val) in enumerate(proj_df[col].dropna().items()):
                 x_pos = list(proj_df.index).index(idx)
-                ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), textcoords="offset points", ha='center', va='top', fontsize=10, color=color, fontweight='bold')
+                ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), 
+                           textcoords="offset points", ha='center', va='top', 
+                           fontsize=10, color=color, fontweight='bold')
         for col, color in [("iHigh", "red"), ("iLow", "red"), ("iHigh1", "orange"), ("iLow1", "orange")]:
             data_points = proj_df[col].dropna()
             if len(data_points) >= 3:
                 for idx, val in data_points.tail(3).items():
                     x_pos = list(proj_df.index).index(idx)
-                    ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), textcoords="offset points", ha='center', va='top', fontsize=10, color=color, fontweight='bold')
+                    ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), 
+                               textcoords="offset points", ha='center', va='top', 
+                               fontsize=10, color=color, fontweight='bold')
 
     def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility, bias_text):
-        ax.set_xticks(range(0, len(proj_df.index), max(1, len(proj_df.index)//20)))
-        ax.set_xticklabels([proj_df.index[i].strftime('%m/%d') for i in range(0, len(proj_df.index), max(1, len(proj_df.index)//20))], rotation=45)
+        # Display all x-axis labels with vertical rotation
+        ax.set_xticks(range(len(proj_df.index)))
+        ax.set_xticklabels([date.strftime('%m/%d') for date in proj_df.index], 
+                          rotation=90, fontsize=8)
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel('Price', fontsize=12)
-        ax.set_title(f'Oscillation Projection (Threshold: {percentile:.0%}, Volatility: {proj_volatility:.1f}%, Bias: {bias_text})', fontsize=14, fontweight='bold')
+        ax.set_title(f'Oscillation Projection (Threshold: {percentile:.0%}, Volatility: {proj_volatility:.1f}%, Bias: {bias_text})', 
+                    fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=10, loc='best')
         plt.tight_layout()
