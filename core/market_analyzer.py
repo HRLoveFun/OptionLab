@@ -156,25 +156,67 @@ class MarketAnalyzer:
 
     def _create_projection_dataframe(self, data, proj_high_cur, proj_low_cur, proj_high_next, proj_low_next):
         try:
+            # Get daily data for filling historical values
+            daily_data = self.price_dynamic._daily_data
+            if daily_data is None or daily_data.empty:
+                logger.warning("No daily data available for projection DataFrame")
+                return pd.DataFrame()
+            
             close_dates = data.get("CloseDate")
             if isinstance(close_dates, pd.Series) and len(close_dates) >= 2:
                 date_last_close = close_dates.iloc[-2]
                 date_last = close_dates.iloc[-1]
             else:
-                date_last_close = None
-                date_last = None
+                # Fallback to data index if CloseDate not available
+                date_last_close = data.index[-2] if len(data) >= 2 else data.index[-1]
+                date_last = data.index[-1]
+            
+            # Ensure dates are timezone-aware if daily_data is timezone-aware
+            if hasattr(daily_data.index, 'tz') and daily_data.index.tz is not None:
+                if not hasattr(date_last_close, 'tz') or date_last_close.tz is None:
+                    date_last_close = pd.Timestamp(date_last_close).tz_localize(daily_data.index.tz)
+                if not hasattr(date_last, 'tz') or date_last.tz is None:
+                    date_last = pd.Timestamp(date_last).tz_localize(daily_data.index.tz)
+            
             end_date = date_last + pd.DateOffset(months=2)
             all_weekdays = pd.date_range(start=date_last_close, end=end_date, freq='B')
+            
+            # Match timezone if needed
+            if hasattr(daily_data.index, 'tz') and daily_data.index.tz is not None:
+                all_weekdays = all_weekdays.tz_localize(daily_data.index.tz)
+            
             proj_df = pd.DataFrame(index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow", "iHigh1", "iLow1"])
-            proj_df.loc[date_last_close, "Close"] = data["LastClose"].iloc[-1]
-            proj_df.loc[date_last, "Close"] = data["Close"].iloc[-1]
-            if 'HighDate' in data.columns and 'LowDate' in data.columns:
-                proj_df.loc[data["HighDate"].iloc[-1], "High"] = data["High"].iloc[-1]
-                proj_df.loc[data["LowDate"].iloc[-1], "Low"] = data["Low"].iloc[-1]
+            
+            # Fill historical data from daily_data between date_last_close and date_last
+            historical_period = daily_data.loc[date_last_close:date_last]
+            
+            # Fill Close, High, Low values from daily data
+            for date in historical_period.index:
+                if date in proj_df.index:
+                    proj_df.loc[date, "Close"] = historical_period.loc[date, "Close"]
+                    proj_df.loc[date, "High"] = historical_period.loc[date, "High"]
+                    proj_df.loc[date, "Low"] = historical_period.loc[date, "Low"]
+            
+            # Ensure we have the key reference points
+            if date_last_close in proj_df.index and date_last_close in historical_period.index:
+                proj_df.loc[date_last_close, "Close"] = historical_period.loc[date_last_close, "Close"]
+            if date_last in proj_df.index and date_last in historical_period.index:
+                proj_df.loc[date_last, "Close"] = historical_period.loc[date_last, "Close"]
+                proj_df.loc[date_last, "High"] = historical_period.loc[date_last, "High"]
+                proj_df.loc[date_last, "Low"] = historical_period.loc[date_last, "Low"]
+            
             current_month_end = self._get_current_month_end(date_last)
             next_twenty_days = date_last + pd.Timedelta(days=4*7)
             self._fill_projection_data(proj_df, date_last_close, current_month_end, proj_high_cur, proj_low_cur, "iHigh", "iLow")
             self._fill_projection_data(proj_df, date_last, next_twenty_days, proj_high_next, proj_low_next, "iHigh1", "iLow1")
+            
+            # Log data for verification
+            historical_data_count = proj_df[["Close", "High", "Low"]].notna().sum().sum()
+            projection_data_count = proj_df[["iHigh", "iLow", "iHigh1", "iLow1"]].notna().sum().sum()
+            logger.info(f"Projection DataFrame created: {len(proj_df)} total dates, "
+                       f"{historical_data_count} historical data points, "
+                       f"{projection_data_count} projection data points")
+            
             return proj_df
         except Exception as e:
             logger.error(f"Error creating projection DataFrame: {e}")
