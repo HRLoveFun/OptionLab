@@ -241,6 +241,15 @@
                     </div>
                     {% endif %}
 
+                    {% if feat_projection_table %}
+                    <div class="stats-container full-width">
+                        <h4>Oscillation Projection Values</h4>
+                        <div class="table-wrapper">
+                            {{ feat_projection_table|safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+
                     {% if plot_url %}
                     <div class="chart-container full-width">
                         <h4>Options Portfolio P&L Analysis</h4>

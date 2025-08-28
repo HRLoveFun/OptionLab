@@ -78,12 +78,14 @@ class AnalysisService:
         try:
             percentile = form_data['risk_threshold'] / 100.0
             target_bias = form_data['target_bias']
-            projection_plot = analyzer.generate_oscillation_projection(
+            projection_plot, projection_table = analyzer.generate_oscillation_projection(
                 percentile=percentile, 
                 target_bias=target_bias
             )
             if projection_plot:
                 results['feat_projection_url'] = projection_plot
+            if projection_table:
+                results['feat_projection_table'] = projection_table
             
             # Option analysis is now optional - only run if valid option data exists
             if form_data.get('option_data') and len(form_data['option_data']) > 0:

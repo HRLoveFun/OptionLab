@@ -77,11 +77,11 @@ class MarketAnalyzer:
             required_cols = ['High', 'Low', 'LastClose', 'Close', 'Oscillation']
             if not all(col in data.columns for col in required_cols):
                 logger.error("Missing required columns for oscillation projection")
-                return None
+                return None, None
             return self._create_oscillation_projection_plot(data, percentile, target_bias)
         except Exception as e:
             logger.error(f"Error generating oscillation projection: {e}")
-            return None
+            return None, None
 
     def _create_oscillation_projection_plot(self, data, percentile, target_bias):
         try:
@@ -279,21 +279,56 @@ class MarketAnalyzer:
                 ax.scatter(x_values[mask], proj_df[col][mask], label=label, 
                           facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
 
-    def _add_projection_annotations(self, ax, x_values, proj_df):
-        for col, color in [("Close", "black"), ("High", "purple"), ("Low", "purple")]:
-            for i, (idx, val) in enumerate(proj_df[col].dropna().items()):
-                x_pos = list(proj_df.index).index(idx)
-                ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), 
-                           textcoords="offset points", ha='center', va='top', 
-                           fontsize=10, color=color, fontweight='bold')
-        for col, color in [("iHigh", "red"), ("iLow", "red"), ("iHigh1", "orange"), ("iLow1", "orange")]:
-            data_points = proj_df[col].dropna()
-            if len(data_points) >= 3:
-                for idx, val in data_points.tail(3).items():
-                    x_pos = list(proj_df.index).index(idx)
-                    ax.annotate(f"{val:.0f}", (x_pos, val), xytext=(0, -20), 
-                               textcoords="offset points", ha='center', va='top', 
-                               fontsize=10, color=color, fontweight='bold')
+    def _create_projection_table(self, proj_df):
+        """Create a table with projection values"""
+        try:
+            # Get the last few historical points and all projection points
+            table_data = []
+            
+            # Add historical data (last 5 points)
+            historical_data = proj_df[["Close", "High", "Low"]].dropna()
+            if len(historical_data) > 0:
+                last_historical = historical_data.tail(5)
+                for date, row in last_historical.iterrows():
+                    table_data.append({
+                        'Date': date.strftime('%m/%d'),
+                        'Type': 'Historical',
+                        'Close': f"{row['Close']:.2f}" if pd.notna(row['Close']) else "-",
+                        'High': f"{row['High']:.2f}" if pd.notna(row['High']) else "-",
+                        'Low': f"{row['Low']:.2f}" if pd.notna(row['Low']) else "-",
+                        'Proj_High_Cur': "-",
+                        'Proj_Low_Cur': "-",
+                        'Proj_High_Next': "-",
+                        'Proj_Low_Next': "-"
+                    })
+            
+            # Add projection data
+            projection_cols = ["iHigh", "iLow", "iHigh1", "iLow1"]
+            projection_data = proj_df[projection_cols].dropna(how='all')
+            
+            for date, row in projection_data.iterrows():
+                table_data.append({
+                    'Date': date.strftime('%m/%d'),
+                    'Type': 'Projection',
+                    'Close': "-",
+                    'High': "-",
+                    'Low': "-",
+                    'Proj_High_Cur': f"{row['iHigh']:.2f}" if pd.notna(row['iHigh']) else "-",
+                    'Proj_Low_Cur': f"{row['iLow']:.2f}" if pd.notna(row['iLow']) else "-",
+                    'Proj_High_Next': f"{row['iHigh1']:.2f}" if pd.notna(row['iHigh1']) else "-",
+                    'Proj_Low_Next': f"{row['iLow1']:.2f}" if pd.notna(row['iLow1']) else "-"
+                })
+            
+            # Create DataFrame and convert to HTML
+            if table_data:
+                table_df = pd.DataFrame(table_data)
+                return table_df.to_html(classes='table table-striped table-sm', 
+                                      index=False, escape=False)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error creating projection table: {e}")
+            return None
 
     def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility, bias_text):
         # Display all x-axis labels with vertical rotation
@@ -313,10 +348,13 @@ class MarketAnalyzer:
         segments = self.get_period_segments(feature_name)
         if not segments:
             return None
-        try:
             stats_index = ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th"]
             stats_df = pd.DataFrame(index=stats_index)
-            for period_name, data in segments.items():
+            
+            # Create projection table
+            projection_table = self._create_projection_table(proj_df)
+            
+            return fig, projection_table
                 if len(data) > 0:
                     stats_df[period_name] = [
                         data.mean(),
@@ -411,7 +449,7 @@ class MarketAnalyzer:
             ax1.tick_params(axis='y', labelcolor='black')
             ax1.grid(True, alpha=0.3)
             ax2 = ax1.twinx()
-            ax2.set_ylabel('Volatility (%)', fontsize=12, color='blue')
+            return fig, None
             ax2.plot(volatility.index, volatility.values, color='orange', linewidth=3, alpha=0.7, label='Historical Volatility', linestyle='-')
             ax2.tick_params(axis='y', labelcolor='blue')
             current_vol = volatility.iloc[-1] if len(volatility) > 0 else volatility.mean()
@@ -427,16 +465,17 @@ class MarketAnalyzer:
                 Line2D([0], [0], color='orange', linestyle='--', linewidth=2, label=f'Current Vol: {current_vol:.1f}%'),
             ]
             ax1.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.8, bbox_to_anchor=(0.0, 1.0), borderaxespad=0.1)
-            ax1.tick_params(axis='x', rotation=90)
-            plt.tight_layout()
+            fig, projection_table = self._plot_oscillation_projection(proj_df, percentile, proj_volatility, target_bias)
+            chart_base64 = self._fig_to_base64(fig)
+            return chart_base64, projection_table
             return self._fig_to_base64(fig)
         except Exception as e:
-            logger.error(f"Error generating enhanced volatility dynamics: {e}")
+            return None, None
             return None
 
     def calculate_gap_statistics(self, frequency):
         if not self.is_data_valid():
-            return None
+            return None, None
         try:
             data = self.price_dynamic._data.copy()
             if "PeriodGap" not in data.columns and "LastClose" in data.columns:
