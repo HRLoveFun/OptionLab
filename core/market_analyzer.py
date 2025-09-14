@@ -414,16 +414,13 @@ class MarketAnalyzer:
 
     def calculate_tail_statistics(self, feature_name):
         """Calculate tail statistics for different periods"""
-        segments = self.get_period_segments(feature_name)
-        if not segments:
-            return None
+        try:
+            segments = self.get_period_segments(feature_name)
+            if not segments:
+                return None
             stats_index = ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th"]
             stats_df = pd.DataFrame(index=stats_index)
-            
-            # Create projection table
-            projection_table = self._create_projection_table(proj_df)
-            
-            return fig, projection_table
+            for period_name, data in segments.items():
                 if len(data) > 0:
                     stats_df[period_name] = [
                         data.mean(),
@@ -439,7 +436,7 @@ class MarketAnalyzer:
         except Exception as e:
             logger.error(f"Error calculating tail statistics: {e}")
             return None
-
+        
     def get_period_segments(self, feature_name, periods=None):
         if periods is None:
             periods = [12, 36, 60, "ALL"]
