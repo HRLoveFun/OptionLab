@@ -218,7 +218,7 @@ class MarketAnalyzer:
             logger.info(f"Projection DataFrame created: {len(proj_df)} total dates, "
                        f"{historical_data_count} historical data points, "
                        f"{projection_data_count} projection data points")
-            
+            proj_df = proj_df.sort_index()
             return proj_df
         except Exception as e:
             logger.error(f"Error creating projection DataFrame: {e}")
