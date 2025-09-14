@@ -106,7 +106,6 @@ class MarketAnalyzer:
                 .round(2)
                 .to_html(classes='table table-striped table-sm', index=True, escape=False)
             )
-            #self._create_projection_table(proj_df)
             return chart_base64, projection_table
         except Exception as e:
             logger.error(f"Error creating oscillation projection plot: {e}")
