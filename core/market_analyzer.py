@@ -245,7 +245,7 @@ class MarketAnalyzer:
         try:
             x_values = np.arange(len(proj_df.index))
             self._plot_projection_points(ax, x_values, proj_df)
-            self._add_projection_annotations(ax, x_values, proj_df)
+            self._add_embedded_values_table(ax, proj_df)
             bias_text = "Natural" if target_bias is None else f"Neutral ({target_bias})"
             self._format_projection_plot(ax, proj_df, percentile, proj_volatility, bias_text)
             return fig
@@ -278,6 +278,75 @@ class MarketAnalyzer:
             if mask.any():
                 ax.scatter(x_values[mask], proj_df[col][mask], label=label, 
                           facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
+
+    def _add_embedded_values_table(self, ax, proj_df):
+        """Add a table in the bottom-right corner of the chart with key values"""
+        try:
+            # Get key values for the table
+            table_data = []
+            
+            # Get last few historical points
+            historical_data = proj_df[["Close", "High", "Low"]].dropna()
+            if len(historical_data) >= 2:
+                last_close = historical_data["Close"].iloc[-1]
+                last_high = historical_data["High"].iloc[-1]
+                last_low = historical_data["Low"].iloc[-1]
+                prev_close = historical_data["Close"].iloc[-2]
+                
+                table_data.extend([
+                    ["Prev Close", f"{prev_close:.2f}"],
+                    ["Last Close", f"{last_close:.2f}"],
+                    ["Last High", f"{last_high:.2f}"],
+                    ["Last Low", f"{last_low:.2f}"]
+                ])
+            
+            # Get projection values
+            projection_data = proj_df[["iHigh", "iLow", "iHigh1", "iLow1"]].dropna(how='all')
+            if not projection_data.empty:
+                # Get final projection values
+                final_proj = projection_data.iloc[-1]
+                if pd.notna(final_proj.get("iHigh")):
+                    table_data.append(["Proj High (Cur)", f"{final_proj['iHigh']:.2f}"])
+                if pd.notna(final_proj.get("iLow")):
+                    table_data.append(["Proj Low (Cur)", f"{final_proj['iLow']:.2f}"])
+                if pd.notna(final_proj.get("iHigh1")):
+                    table_data.append(["Proj High (Next)", f"{final_proj['iHigh1']:.2f}"])
+                if pd.notna(final_proj.get("iLow1")):
+                    table_data.append(["Proj Low (Next)", f"{final_proj['iLow1']:.2f}"])
+            
+            if table_data:
+                # Create table in bottom-right corner
+                table = ax.table(
+                    cellText=table_data,
+                    colLabels=["Metric", "Value"],
+                    cellLoc='left',
+                    loc='lower right',
+                    bbox=[0.75, 0.02, 0.23, 0.35]  # [x, y, width, height] in axes coordinates
+                )
+                
+                # Style the table
+                table.auto_set_font_size(False)
+                table.set_fontsize(9)
+                table.scale(1, 1.2)
+                
+                # Style header
+                for i in range(2):
+                    table[(0, i)].set_facecolor('#E6E6FA')
+                    table[(0, i)].set_text_props(weight='bold')
+                
+                # Style data cells
+                for i in range(1, len(table_data) + 1):
+                    table[(i, 0)].set_facecolor('#F8F8FF')
+                    table[(i, 1)].set_facecolor('#FFFFFF')
+                    table[(i, 1)].set_text_props(weight='bold', color='#333333')
+                
+                # Add border
+                for key, cell in table.get_celld().items():
+                    cell.set_linewidth(1)
+                    cell.set_edgecolor('#CCCCCC')
+                    
+        except Exception as e:
+            logger.error(f"Error adding embedded values table: {e}")
 
     def _create_projection_table(self, proj_df):
         """Create a table with projection values"""
