@@ -99,7 +99,7 @@ class MarketAnalyzer:
             proj_df = self._create_projection_dataframe(data, proj_high_cur, proj_low_cur, proj_high_next, proj_low_next)
             fig = self._plot_oscillation_projection(proj_df, percentile, proj_volatility, target_bias)
             chart_base64 = self._fig_to_base64(fig)
-            projection_table = self._create_projection_table(proj_df)
+            projection_table = proj_df #self._create_projection_table(proj_df)
             return chart_base64, projection_table
         except Exception as e:
             logger.error(f"Error creating oscillation projection plot: {e}")
