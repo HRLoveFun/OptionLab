@@ -388,7 +388,6 @@ class MarketAnalyzer:
                     'Proj_High_Next': f"{row['iHigh1']:.2f}" if pd.notna(row['iHigh1']) else "-",
                     'Proj_Low_Next': f"{row['iLow1']:.2f}" if pd.notna(row['iLow1']) else "-"
                 })
-            table_data = table_data.sort_index()
 
             # Create DataFrame and convert to HTML
             if table_data:
