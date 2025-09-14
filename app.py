@@ -74,5 +74,6 @@ def validate_ticker():
         return jsonify({'valid': False, 'message': f'Error validating ticker: {str(e)}'})
 
 if __name__ == "__main__":
-    # Main entry: run Flask app
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False) 
+
+application = app
