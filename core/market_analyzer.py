@@ -70,7 +70,7 @@ class MarketAnalyzer:
     def generate_oscillation_projection(self, percentile=0.90, target_bias=None):
         """Generate oscillation projection plot with enhanced bias handling"""
         if not self.is_data_valid():
-            return None
+            return None, None
         try:
             data = self.price_dynamic._data.copy()
             data['Oscillation'] = self.oscillation
@@ -98,10 +98,12 @@ class MarketAnalyzer:
             proj_low_next = px_last - px_last * proj_volatility / 100 * (1 - proj_high_weight)
             proj_df = self._create_projection_dataframe(data, proj_high_cur, proj_low_cur, proj_high_next, proj_low_next)
             fig = self._plot_oscillation_projection(proj_df, percentile, proj_volatility, target_bias)
-            return self._fig_to_base64(fig)
+            chart_base64 = self._fig_to_base64(fig)
+            projection_table = self._create_projection_table(proj_df)
+            return chart_base64, projection_table
         except Exception as e:
             logger.error(f"Error creating oscillation projection plot: {e}")
-            return None
+            return None, None
 
     def _calculate_natural_bias_weight(self, data, proj_volatility):
         try:
