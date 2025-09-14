@@ -7,7 +7,7 @@ from werkzeug.datastructures import MultiDict
 
 class DummyRequest:
     def __init__(self, form_dict):
-        self.form = MultiDict(form_data)
+        self.form = MultiDict(form_dict)
     def getlist(self, key):
         return self.form.get(key, [])
 
