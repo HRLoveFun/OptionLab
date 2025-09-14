@@ -84,7 +84,7 @@ class AnalysisService:
             )
             if projection_plot:
                 results['feat_projection_url'] = projection_plot
-            if projection_table:
+            if not projection_table.empty:
                 results['feat_projection_table'] = projection_table
             
             # Option analysis is now optional - only run if valid option data exists
