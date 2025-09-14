@@ -1,10 +1,13 @@
 import pytest
 from services.form_service import FormService
 from flask import Flask, request
+from werkzeug.datastructures import MultiDict
+
+
 
 class DummyRequest:
     def __init__(self, form_dict):
-        self.form = form_dict
+        self.form = MultiDict(form_data)
     def getlist(self, key):
         return self.form.get(key, [])
 
