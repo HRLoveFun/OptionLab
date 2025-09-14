@@ -218,7 +218,6 @@ class MarketAnalyzer:
             logger.info(f"Projection DataFrame created: {len(proj_df)} total dates, "
                        f"{historical_data_count} historical data points, "
                        f"{projection_data_count} projection data points")
-            proj_df = proj_df.sort_index()
             return proj_df
         except Exception as e:
             logger.error(f"Error creating projection DataFrame: {e}")
@@ -389,7 +388,8 @@ class MarketAnalyzer:
                     'Proj_High_Next': f"{row['iHigh1']:.2f}" if pd.notna(row['iHigh1']) else "-",
                     'Proj_Low_Next': f"{row['iLow1']:.2f}" if pd.notna(row['iLow1']) else "-"
                 })
-            
+            table_data = table_data.sort_index()
+
             # Create DataFrame and convert to HTML
             if table_data:
                 table_df = pd.DataFrame(table_data)
