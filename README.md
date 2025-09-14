@@ -44,13 +44,13 @@ OptionStrategy/
 - `/` (GET/POST): Main dashboard. Accepts form data, returns rendered HTML with analysis results.
     - POST参数：
         - `ticker` (str): 股票代码
-        - `horizon` (str): 起始时间，格式 YYYYMM
+  - `horizon` / `start_time` (str): 起始时间，格式 YYYYMM
         - `frequency` (str): 频率，D/W/ME/QE
         - `periods` (list): 分析区间 [12, 36, 60, "ALL"]
         - `risk_threshold` (int): 风险阈值百分位
         - `side_bias` (str): "Natural" 或 "Neutral"
         - `option_position` (JSON): 期权持仓列表
-    - 返回：渲染后的 index.html，包含分析表格、图表、错误信息等，所有 key 统一下划线风格
+  - 返回：渲染后的 index.html，包含分析表格、图表、错误信息等，所有 key 统一下划线风格；解析后的日期在后端以 `parsed_start_time` 使用。
 - `/api/validate_ticker` (POST): Validate ticker symbol.
     - 请求体：`{"ticker": "AAPL"}`
     - 返回：`{"valid": true, "message": "valid_ticker"}`
@@ -71,7 +71,9 @@ OptionStrategy/
     - `convert_plot_to_base64(fig)`：matplotlib 图转 base64。
 - **services/form_service.py**
   - `FormService`: 表单数据提取与期权持仓解析。
-    - `extract_form_data(request)`：提取表单字段，key 与前端一致。
+    - `extract_form_data(request)`：提取表单字段，包含：
+        - `start_time`: 原始 YYYYMM 字符串
+        - `parsed_start_time`: 解析后的 `date` 对象（格式无效则为 None）
     - `parse_option_data(request)`：解析 option_position 字段。
 - **services/market_service.py**
   - `MarketService`: 市场数据校验与综述。
@@ -83,7 +85,56 @@ OptionStrategy/
 
 ## 命名与风格规范
 
-- 所有 API、服务方法参数与前端字段一致（如 ticker, start_time, frequency）。
+- 所有 API、服务方法参数与前端字段一致（如 ticker, start_time, frequency）。后端内部使用 `parsed_start_time` 存储解析后的日期。
 - 所有 dict 返回值 key 统一为下划线风格。
 - 所有服务类静态方法均加 @staticmethod。
 - 日志记录统一 logger = logging.getLogger(__name__)，异常处理风格一致。
+
+## Frontend Assets
+
+前端 JavaScript 逻辑已抽离到 `static/main.js`，模板中通过：
+```html
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+```
+进行加载。该脚本负责：
+1. 表单状态持久化 (localStorage)
+2. 期权持仓行增删与校验
+3. Ticker 异步校验
+4. 提交按钮加载状态与滚动定位
+
+## Testing
+
+安装开发依赖并运行：
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+示例测试：
+- `tests/test_form_service.py`
+- `tests/test_validation_service.py`
+
+可选覆盖率：
+```bash
+pytest --cov=.
+```
+
+## Continuous Integration (CI)
+
+GitHub Actions 工作流：`.github/workflows/ci.yml`
+触发 push / PR 到 `main` 后自动：
+1. 安装依赖（含 dev）
+2. 运行 pytest
+
+## Environment Variables
+
+参考 `.env.example`：
+- `SECRET_KEY` / `FLASK_ENV` / `FLASK_DEBUG`
+- `LOG_LEVEL`
+- 功能开关：`ENABLE_OPTION_ANALYSIS`
+
+## Roadmap Ideas
+
+- 缓存市场综述结果（Flask-Caching）
+- 扩展期权计算（Greeks / 波动率微笑）
+- REST/JSON API 输出模式
+- 引入前端构建工具 (Vite/Webpack) 进行资源拆分与按需加载

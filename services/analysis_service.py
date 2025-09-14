@@ -14,7 +14,7 @@ class AnalysisService:
             # 参数命名与前端表单字段保持一致
             analyzer = MarketAnalyzer(
                 ticker=form_data['ticker'],
-                start_date=form_data['start_date'],
+                start_date=form_data['parsed_start_time'],
                 frequency=form_data['frequency']
             )
             

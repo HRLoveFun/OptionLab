@@ -19,7 +19,7 @@ class ValidationService:
         if not form_data['ticker']:
             return "please_enter_a_ticker_symbol."
         
-        if not form_data['start_date']:
+        if not form_data['parsed_start_time']:
             return f"invalid_start_time_format: {form_data['start_time']}. please_use_yyyymm."
         
         if form_data['frequency'] not in ['D', 'W', 'ME', 'QE']:

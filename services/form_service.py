@@ -24,9 +24,9 @@ class FormService:
         periods = request.form.getlist('period') or [12, 36, 60, "ALL"]
         start_time = request.form.get('start_time', '')
         try:
-            start_date = dt.datetime.strptime(start_time, '%Y%m').date()
+            parsed_start_time = dt.datetime.strptime(start_time, '%Y%m').date()
         except ValueError:
-            start_date = None
+            parsed_start_time = None
         risk_threshold = int(request.form.get('risk_threshold', 90))
         side_bias = request.form.get('side_bias', 'Natural')
         target_bias = None if side_bias == 'Natural' else 0
@@ -35,8 +35,8 @@ class FormService:
             'ticker': ticker,
             'frequency': frequency,
             'periods': periods,
-            'start_date': start_date,
             'start_time': start_time,
+            'parsed_start_time': parsed_start_time,
             'risk_threshold': risk_threshold,
             'side_bias': side_bias,
             'target_bias': target_bias,
