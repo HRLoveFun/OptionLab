@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
 import numpy as np
 import datetime as dt
@@ -17,7 +16,7 @@ class ChartService:
         """Convert matplotlib figure to base64 string"""
         try:
             buffer = io.BytesIO()
-            plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
             buffer.seek(0)
             plot_data = buffer.getvalue()
             buffer.close()

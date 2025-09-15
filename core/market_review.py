@@ -1,11 +1,7 @@
 import numpy as np
 import pandas as pd
 import datetime as dt
-import matplotlib.pyplot as plt
-import seaborn as sns
 import yfinance as yf
-from core.market_analyzer import MarketAnalyzer
-from core.price_dynamic import PriceDynamic
 from utils.data_utils import calculate_recent_extreme_change
 
 def market_review(instrument):

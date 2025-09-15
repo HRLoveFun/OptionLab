@@ -4,7 +4,6 @@ import datetime as dt
 import logging
 from core.market_analyzer import MarketAnalyzer
 from core.market_review import market_review
-from utils.utils import DataFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -14,18 +13,6 @@ class MarketService:
     - validate_ticker: Check if ticker is valid (data available)
     - generate_market_review: Produce multi-asset review table for dashboard
     """
-    # Market tickers for review (updated list)
-    MARKET_TICKERS = [
-        'DX-Y.NYB',  # US Dollar Index
-        '^TNX',      # 10-Year Treasury
-        'GC=F',      # Gold
-        '^GSPC',     # S&P 500
-        '000300.SS', # CSI 300
-        '^STOXX',    # STOXX Europe 600
-        '^HSI',      # Hang Seng
-        '^N225',     # Nikkei 225
-        'BTC-USD'    # Bitcoin
-    ]
     
     @staticmethod
     def validate_ticker(ticker):

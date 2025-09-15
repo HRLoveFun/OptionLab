@@ -1,18 +1,7 @@
 """
 Market Analyzer - Core business logic for market analysis
 """
-import sys
-import os
-
-# Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Import the existing PriceDynamic from core.price_dynamic
 from core.price_dynamic import PriceDynamic
-
-# Re-export for clean imports
-__all__ = ['MarketAnalyzer']
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -527,8 +516,10 @@ class MarketAnalyzer:
             ax2.tick_params(axis='y', labelcolor='blue')
             current_vol = volatility.iloc[-1] if len(volatility) > 0 else volatility.mean()
             ax2.scatter(x=volatility.index[-1], y=current_vol, color='purple', s=100, marker='o', linewidth=1.5, alpha=0.8, zorder=5)
-            frequency_name = getattr(self, 'FREQUENCY_MAPPING', {'D':'Daily','W':'Weekly','ME':'Monthly','QE':'Quarterly'}).get(self.frequency, self.frequency)
-            window = getattr(self, 'VOLATILITY_WINDOWS', {'D':5,'W':5,'ME':21,'QE':63}).get(self.frequency, 21)
+            frequency_mapping = {'D':'Daily','W':'Weekly','ME':'Monthly','QE':'Quarterly'}
+            volatility_windows = {'D':5,'W':5,'ME':21,'QE':63}
+            frequency_name = frequency_mapping.get(self.frequency, self.frequency)
+            window = volatility_windows.get(self.frequency, 21)
             ax1.set_title(f'{self.ticker} - Price & Volatility Dynamics\nVolatility Window: {window} days ({frequency_name} frequency)', fontsize=14, fontweight='bold', pad=20)
             from matplotlib.lines import Line2D
             legend_elements = [
@@ -538,12 +529,8 @@ class MarketAnalyzer:
                 Line2D([0], [0], color='orange', linestyle='--', linewidth=2, label=f'Current Vol: {current_vol:.1f}%'),
             ]
             ax1.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.8, bbox_to_anchor=(0.0, 1.0), borderaxespad=0.1)
-            fig, projection_table = self._plot_oscillation_projection(proj_df, percentile, proj_volatility, target_bias)
-            chart_base64 = self._fig_to_base64(fig)
-            return chart_base64, projection_table
             return self._fig_to_base64(fig)
         except Exception as e:
-            return None, None
             return None
 
     def calculate_gap_statistics(self, frequency):

@@ -1,140 +1,258 @@
 # Market Observation Dashboard
 
-A comprehensive tool for market analysis and options strategy, providing statistics on index returns and oscillations across multiple frequencies.
+A comprehensive Flask-based web application for market analysis and options strategy evaluation, providing statistical analysis on index returns and oscillations across multiple time frequencies.
 
 ## Features
 
-- **Market Analysis**: Download/process stock data from Yahoo Finance; analyze daily, weekly, monthly, and quarterly frequencies.
-- **Oscillation & Returns**: Calculate price oscillations (with/without overnight effect) and returns.
-- **Statistical Analysis**: Tail statistics, distribution, and volatility dynamics with rolling windows.
-- **Period Segmentation**: Analyze 1Y, 3Y, 5Y, or all data.
-- **Risk Threshold & Bias**: Configurable percentile for projections; choose Natural or Neutral bias.
-- **Visualization**: Scatter plots, cumulative distributions, volatility, and projection charts.
-- **Options Strategy**: Analyze portfolios with multiple positions; visualize P&L, breakeven, and risk.
-- **UI/UX**: Fixed parameter bar, responsive design, collapsible options, and form state persistence.
+### Core Analysis
+- **Market Data Processing**: Download and process stock data from Yahoo Finance
+- **Multi-Frequency Analysis**: Analyze daily, weekly, monthly, and quarterly data
+- **Oscillation Analysis**: Calculate price oscillations with/without overnight effects
+- **Statistical Analysis**: Comprehensive tail statistics, distribution analysis, and volatility dynamics
+- **Period Segmentation**: Analyze data across 1Y, 3Y, 5Y, or entire available history
+
+### Advanced Features
+- **Risk Assessment**: Configurable percentile thresholds for risk projections
+- **Bias Analysis**: Natural vs Neutral bias selection for market projections
+- **Options Strategy**: Multi-position portfolio analysis with P&L visualization
+- **Market Review**: Multi-asset comparative analysis with correlation matrices
+
+### User Experience
+- **Responsive Design**: Mobile-first responsive interface
+- **Real-time Validation**: Asynchronous ticker symbol validation
+- **Form Persistence**: Automatic saving/loading of form state
+- **Interactive Charts**: High-quality matplotlib visualizations
+- **Collapsible Sections**: Clean, organized interface with expandable options
+
+## Technology Stack
+
+- **Backend**: Flask 3.1.1, Python 3.8+
+- **Data Processing**: pandas, numpy, scipy
+- **Visualization**: matplotlib, seaborn
+- **Market Data**: yfinance
+- **Frontend**: Vanilla JavaScript, CSS Grid/Flexbox
+- **Deployment**: Gunicorn WSGI server
 
 ## Project Structure
 
 ```
 OptionStrategy/
-├── app.py                # Main Flask entry, API routing
-├── requirements.txt      # Python dependencies
-├── README.md             # Project documentation
-├── core/                 # Core market analysis logic
-│   ├── market_analyzer.py    # MarketAnalyzer: high-level analysis, stats, plots
-│   ├── market_review.py      # market_review: multi-asset review table
-│   └── price_dynamic.py      # PriceDynamic: data download, oscillation, returns
-├── services/             # Service layer (business logic)
-│   ├── analysis_service.py   # AnalysisService: orchestrates all analysis
-│   ├── chart_service.py      # ChartService: matplotlib/seaborn to base64
-│   ├── form_service.py       # FormService: form extraction, option parsing
-│   ├── market_service.py     # MarketService: ticker validation, review
-│   └── validation_service.py # ValidationService: input validation
-├── utils/                # Utility functions
-│   ├── data_utils.py         # calculate_recent_extreme_change, etc.
-│   └── utils.py              # DataFormatter, helpers, constants
-├── templates/            # Jinja2 HTML templates
+├── app.py                    # Flask application entry point
+├── requirements.txt          # Python dependencies
+├── README.md                # Project documentation
+├── .env.example             # Environment variables template
+├── core/                    # Core business logic
+│   ├── __init__.py
+│   ├── market_analyzer.py   # Main analysis engine
+│   ├── market_review.py     # Multi-asset review functionality
+│   └── price_dynamic.py     # Data processing and calculations
+├── services/                # Service layer
+│   ├── __init__.py
+│   ├── analysis_service.py  # Analysis orchestration
+│   ├── chart_service.py     # Chart generation utilities
+│   ├── form_service.py      # Form data processing
+│   ├── market_service.py    # Market data operations
+│   └── validation_service.py # Input validation
+├── utils/                   # Utility functions
+│   ├── __init__.py
+│   ├── data_utils.py        # Data processing utilities
+│   └── utils.py             # Common helpers and formatters
+├── templates/               # Jinja2 templates
 │   └── index.html
-├── static/               # CSS, JS, images
-│   └── styles.css
+└── static/                  # Static assets
+    ├── styles.css
+    └── main.js
 ```
+
+## Installation & Setup
+
+### Prerequisites
+- Python 3.8 or higher
+- pip package manager
+
+### Installation Steps
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd OptionStrategy
+   ```
+
+2. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up environment variables** (optional)
+   ```bash
+   cp .env.example .env
+   # Edit .env with your preferred settings
+   ```
+
+5. **Run the application**
+   ```bash
+   python app.py
+   ```
+
+6. **Access the application**
+   Open your browser to `http://localhost:5000`
 
 ## API Endpoints
 
-- `/` (GET/POST): Main dashboard. Accepts form data, returns rendered HTML with analysis results.
-    - POST参数：
-        - `ticker` (str): 股票代码
-  - `horizon` / `start_time` (str): 起始时间，格式 YYYYMM
-        - `frequency` (str): 频率，D/W/ME/QE
-        - `periods` (list): 分析区间 [12, 36, 60, "ALL"]
-        - `risk_threshold` (int): 风险阈值百分位
-        - `side_bias` (str): "Natural" 或 "Neutral"
-        - `option_position` (JSON): 期权持仓列表
-  - 返回：渲染后的 index.html，包含分析表格、图表、错误信息等，所有 key 统一下划线风格；解析后的日期在后端以 `parsed_start_time` 使用。
-- `/api/validate_ticker` (POST): Validate ticker symbol.
-    - 请求体：`{"ticker": "AAPL"}`
-    - 返回：`{"valid": true, "message": "valid_ticker"}`
+### Main Dashboard
+- **GET/POST** `/`
+  - GET: Renders the main dashboard interface
+  - POST: Processes analysis request and returns results
+  - **Parameters**:
+    - `ticker` (str): Stock symbol (e.g., "AAPL", "^GSPC")
+    - `start_time` (str): Analysis start date in YYYYMM format
+    - `frequency` (str): Data frequency - D/W/ME/QE
+    - `periods` (list): Analysis periods [12, 36, 60, "ALL"]
+    - `risk_threshold` (int): Risk percentile threshold (0-100)
+    - `side_bias` (str): "Natural" or "Neutral" bias
+    - `option_position` (JSON): Optional options positions
 
-## Key Classes & Responsibilities
+### Ticker Validation
+- **POST** `/api/validate_ticker`
+  - **Request**: `{"ticker": "AAPL"}`
+  - **Response**: `{"valid": true/false, "message": "..."}`
 
-- **core/price_dynamic.py**
-  - `PriceDynamic`: Handles price data download, frequency conversion, oscillation/return calculation.
-- **core/market_analyzer.py**
-  - `MarketAnalyzer`: High-level analysis, feature engineering, visualization, projections.
-- **core/market_review.py**
-  - `market_review`: Multi-asset review table (returns, volatility, correlation).
-- **services/analysis_service.py**
-  - `AnalysisService`: Orchestrates all analysis, combines market review, stats, projections, options。
-    - `generate_complete_analysis(form_data: dict) -> dict`：主分析入口，参数与前端表单字段一致，返回所有分析结果，key 统一下划线风格。
-- **services/chart_service.py**
-  - `ChartService`: 图表生成与 base64 编码。
-    - `convert_plot_to_base64(fig)`：matplotlib 图转 base64。
-- **services/form_service.py**
-  - `FormService`: 表单数据提取与期权持仓解析。
-    - `extract_form_data(request)`：提取表单字段，包含：
-        - `start_time`: 原始 YYYYMM 字符串
-        - `parsed_start_time`: 解析后的 `date` 对象（格式无效则为 None）
-    - `parse_option_data(request)`：解析 option_position 字段。
-- **services/market_service.py**
-  - `MarketService`: 市场数据校验与综述。
-    - `validate_ticker(ticker)`：校验 ticker 合法性，返回 (bool, message)。
-    - `generate_market_review(form_data)`：生成市场综述表。
-- **services/validation_service.py**
-  - `ValidationService`: 表单输入校验。
-    - `validate_input_data(form_data)`：校验所有字段，返回错误信息（下划线风格）或 None。
+## Key Components
 
-## 命名与风格规范
+### Core Classes
 
-- 所有 API、服务方法参数与前端字段一致（如 ticker, start_time, frequency）。后端内部使用 `parsed_start_time` 存储解析后的日期。
-- 所有 dict 返回值 key 统一为下划线风格。
-- 所有服务类静态方法均加 @staticmethod。
-- 日志记录统一 logger = logging.getLogger(__name__)，异常处理风格一致。
+#### PriceDynamic
+- Handles data download from Yahoo Finance
+- Frequency conversion and resampling
+- Oscillation and return calculations
+- Volatility analysis
 
-## Frontend Assets
+#### MarketAnalyzer
+- High-level analysis orchestration
+- Statistical calculations and projections
+- Chart generation and visualization
+- Options portfolio analysis
 
-前端 JavaScript 逻辑已抽离到 `static/main.js`，模板中通过：
-```html
-<script src="{{ url_for('static', filename='main.js') }}"></script>
-```
-进行加载。该脚本负责：
-1. 表单状态持久化 (localStorage)
-2. 期权持仓行增删与校验
-3. Ticker 异步校验
-4. 提交按钮加载状态与滚动定位
+#### Service Layer
+- **AnalysisService**: Coordinates complete analysis workflow
+- **MarketService**: Market data validation and review generation
+- **FormService**: Form data extraction and processing
+- **ValidationService**: Input validation and error handling
 
-## Testing
+### Frontend Features
 
-安装开发依赖并运行：
+#### Form Management
+- Automatic state persistence using localStorage
+- Real-time ticker validation with visual feedback
+- Dynamic options position management
+- Responsive parameter controls
+
+#### Visualization
+- Interactive scatter plots with marginal histograms
+- Cumulative distribution analysis
+- Volatility dynamics with bull/bear market identification
+- Options P&L analysis with breakeven calculations
+
+## Configuration
+
+### Environment Variables
 ```bash
-pip install -r requirements-dev.txt
-pytest -q
-```
-示例测试：
-- `tests/test_form_service.py`
-- `tests/test_validation_service.py`
+# Flask settings
+FLASK_ENV=development
+FLASK_DEBUG=1
+SECRET_KEY=your_secret_key
+PORT=5000
 
-可选覆盖率：
+# Logging
+LOG_LEVEL=INFO
+
+# Analysis defaults
+DEFAULT_FREQUENCY=W
+DEFAULT_RISK_THRESHOLD=90
+```
+
+### Analysis Parameters
+- **Frequencies**: Daily (D), Weekly (W), Monthly (ME), Quarterly (QE)
+- **Periods**: 1Y (12 months), 3Y (36 months), 5Y (60 months), All available data
+- **Risk Thresholds**: 0-100% percentile for volatility projections
+- **Bias Types**: Natural (data-driven) vs Neutral (symmetric)
+
+## Usage Examples
+
+### Basic Market Analysis
+1. Enter ticker symbol (e.g., "AAPL")
+2. Set analysis horizon (e.g., "202001" for Jan 2020)
+3. Select frequency (Weekly recommended)
+4. Choose analysis periods
+5. Set risk threshold (90% default)
+6. Click "Analyze"
+
+### Options Strategy Analysis
+1. Complete basic analysis setup
+2. Expand "Positions (Optional)" section
+3. Add option positions:
+   - Type: Short Call, Short Put, Long Call, Long Put
+   - Strike price, quantity, premium
+4. Submit analysis for combined market + options view
+
+### Market Review
+The system automatically generates comparative analysis including:
+- US Dollar Index, 10-Year Treasury, Gold, S&P 500
+- CSI 300, STOXX Europe 600, Hang Seng, Nikkei 225
+- Returns, volatility, and correlation analysis
+
+## Performance Optimizations
+
+- **Efficient Data Processing**: Vectorized pandas operations
+- **Caching**: Form state persistence and data caching
+- **Lazy Loading**: On-demand chart generation
+- **Optimized Dependencies**: Minimal required packages
+- **Memory Management**: Proper matplotlib figure cleanup
+
+## Deployment
+
+### Production Deployment
 ```bash
-pytest --cov=.
+# Using Gunicorn
+gunicorn --bind 0.0.0.0:8000 --workers 4 app:application
+
+# Using Docker (create Dockerfile)
+FROM python:3.9-slim
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:application"]
 ```
 
-## Continuous Integration (CI)
+### Environment Setup
+- Set `FLASK_ENV=production`
+- Configure proper logging levels
+- Set secure `SECRET_KEY`
+- Configure reverse proxy (nginx recommended)
 
-GitHub Actions 工作流：`.github/workflows/ci.yml`
-触发 push / PR 到 `main` 后自动：
-1. 安装依赖（含 dev）
-2. 运行 pytest
+## Contributing
 
-## Environment Variables
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-参考 `.env.example`：
-- `SECRET_KEY` / `FLASK_ENV` / `FLASK_DEBUG`
-- `LOG_LEVEL`
-- 功能开关：`ENABLE_OPTION_ANALYSIS`
+## License
 
-## Roadmap Ideas
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- 缓存市场综述结果（Flask-Caching）
-- 扩展期权计算（Greeks / 波动率微笑）
-- REST/JSON API 输出模式
-- 引入前端构建工具 (Vite/Webpack) 进行资源拆分与按需加载
+## Support
+
+For support, please open an issue in the GitHub repository or contact the development team.
+
+---
+
+**Market Observation Dashboard** - Advanced analytics for informed trading decisions.

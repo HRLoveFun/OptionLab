@@ -1,10 +1,8 @@
 import pandas as pd
 import yfinance as yf
 import numpy as np
-import seaborn as sns
 import datetime as dt
 import logging
-from matplotlib.ticker import PercentFormatter, MultipleLocator
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +25,7 @@ class PriceDynamic:
     """
     Handles price data downloading, processing, and calculations.
     """
-    # ...existing code...
     def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='D'):
-        # ...existing code...
         self._validate_inputs(ticker, start_date, frequency)
         self.ticker = ticker
         self.start_date = start_date
@@ -37,29 +33,26 @@ class PriceDynamic:
         raw_data = self._download_data()
         self._data = self._refrequency(raw_data) if raw_data is not None else None
         self._daily_data = raw_data
-    # ...existing code...
+
     def _validate_inputs(self, ticker, start_date, frequency):
-        # ...existing code...
         if not isinstance(ticker, str) or not ticker.strip():
             raise ValueError("Ticker must be a non-empty string")
         if not isinstance(start_date, dt.date):
             raise ValueError("start_date must be a datetime.date object")
         if frequency not in ['D', 'W', 'ME', 'QE']:
             raise ValueError("frequency must be one of ['D', 'W', 'ME', 'QE']")
-    # ...existing code...
+
     def __getattr__(self, attr):
-        # ...existing code...
         if self._data is not None and hasattr(self._data, attr):
             return getattr(self._data, attr)
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{attr}'")
+
     def __getitem__(self, item):
-        # ...existing code...
         if self._data is not None:
             return self._data[item]
         raise KeyError(f"No data available for key: {item}")
-    # ...existing code...
+
     def _download_data(self):
-        # ...existing code...
         try:
             df = yf.download(
                 self.ticker,
@@ -83,9 +76,8 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error downloading data for {self.ticker}: {e}")
             return None
-    # ...existing code...
+
     def _refrequency(self, df):
-        # ...existing code...
         if df is None or df.empty:
             return None
         try:
@@ -116,9 +108,8 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error resampling data: {e}")
             return None
-    # ...existing code...
+
     def calculate_volatility(self, window=None):
-        # ...existing code...
         if self._daily_data is None or self._daily_data.empty:
             return None
         try:
@@ -131,9 +122,8 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error calculating volatility: {e}")
             return None
-    # ...existing code...
+
     def bull_bear_plot(self, price_series):
-        # ...existing code...
         if price_series is None or price_series.empty:
             return {'bull_segments': [], 'bear_segments': []}
         try:
@@ -162,9 +152,8 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error in bull_bear_plot: {e}")
             return {'bull_segments': [], 'bear_segments': []}
-    # ...existing code...
+
     def osc(self, on_effect=False):
-        # ...existing code...
         if self._data is None or self._data.empty:
             return None
         try:
@@ -179,9 +168,8 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error calculating oscillation: {e}")
             return None
-    # ...existing code...
+
     def ret(self):
-        # ...existing code...
         if self._data is None or self._data.empty:
             return None
         try:
@@ -191,9 +179,8 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error calculating returns: {e}")
             return None
-    # ...existing code...
+
     def dif(self):
-        # ...existing code...
         if self._data is None or self._data.empty:
             return None
         try:
@@ -203,6 +190,6 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error calculating difference: {e}")
             return None
-    # ...existing code...
+
     def is_valid(self):
         return self._data is not None and not self._data.empty
