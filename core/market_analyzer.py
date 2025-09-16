@@ -502,35 +502,49 @@ class MarketAnalyzer:
             fig, ax1 = plt.subplots(figsize=(16, 10))
             ax1.set_xlabel('Date', fontsize=12)
             ax1.set_ylabel('Price ($)', fontsize=12, color='black')
+            
+            # Plot price data with bull/bear segments
             for segment in bull_bear_segments['bull_segments']:
                 if len(segment) > 1:
                     ax1.plot(segment.index, segment.values, color='green', linewidth=2, alpha=0.5)
             for segment in bull_bear_segments['bear_segments']:
                 if len(segment) > 1:
                     ax1.plot(segment.index, segment.values, color='red', linewidth=2, alpha=0.5)
+            
             ax1.tick_params(axis='y', labelcolor='black')
             ax1.grid(True, alpha=0.3)
+            
+            # Create second y-axis for volatility
             ax2 = ax1.twinx()
-            return fig, None
+            ax2.set_ylabel('Volatility (%)', fontsize=12, color='blue')
             ax2.plot(volatility.index, volatility.values, color='orange', linewidth=3, alpha=0.7, label='Historical Volatility', linestyle='-')
             ax2.tick_params(axis='y', labelcolor='blue')
+            
+            # Add current volatility point
             current_vol = volatility.iloc[-1] if len(volatility) > 0 else volatility.mean()
             ax2.scatter(x=volatility.index[-1], y=current_vol, color='purple', s=100, marker='o', linewidth=1.5, alpha=0.8, zorder=5)
+            
+            # Set title and legend
             frequency_mapping = {'D':'Daily','W':'Weekly','ME':'Monthly','QE':'Quarterly'}
             volatility_windows = {'D':5,'W':5,'ME':21,'QE':63}
             frequency_name = frequency_mapping.get(self.frequency, self.frequency)
             window = volatility_windows.get(self.frequency, 21)
             ax1.set_title(f'{self.ticker} - Price & Volatility Dynamics\nVolatility Window: {window} days ({frequency_name} frequency)', fontsize=14, fontweight='bold', pad=20)
+            
+            # Create legend
             from matplotlib.lines import Line2D
             legend_elements = [
                 Line2D([0], [0], color='green', linewidth=2, label='Bull Market'),
                 Line2D([0], [0], color='red', linewidth=2, label='Bear Market'),
-                Line2D([0], [0], color='blue', linewidth=2, label='Volatility'),
+                Line2D([0], [0], color='orange', linewidth=2, label='Volatility'),
                 Line2D([0], [0], color='orange', linestyle='--', linewidth=2, label=f'Current Vol: {current_vol:.1f}%'),
             ]
             ax1.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.8, bbox_to_anchor=(0.0, 1.0), borderaxespad=0.1)
+            
+            plt.tight_layout()
             return self._fig_to_base64(fig)
         except Exception as e:
+            logger.error(f"Error generating volatility dynamics: {e}")
             return None
 
     def calculate_gap_statistics(self, frequency):

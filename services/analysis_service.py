@@ -58,6 +58,8 @@ class AnalysisService:
             volatility_plot = analyzer.generate_volatility_dynamics()
             if volatility_plot:
                 results['volatility_dynamic_url'] = volatility_plot
+            else:
+                logger.warning("Volatility dynamics plot generation failed")
             gap_stats = analyzer.calculate_gap_statistics(form_data['frequency'])
             if gap_stats is not None:
                 formatted_gap_stats = gap_stats.apply(

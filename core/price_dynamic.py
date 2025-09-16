@@ -130,11 +130,21 @@ class PriceDynamic:
             df = pd.DataFrame(price_series, columns=['Close'])
             df['CumMax'] = df['Close'].cummax()
             df['IsBull'] = df['Close'] >= 0.8 * df['CumMax']
+            
+            # Handle case where all values are the same
+            if df['IsBull'].nunique() == 1:
+                # If all bull or all bear, create one segment
+                if df['IsBull'].iloc[0]:
+                    return {'bull_segments': [price_series], 'bear_segments': []}
+                else:
+                    return {'bull_segments': [], 'bear_segments': [price_series]}
+            
             trend_changes = df['IsBull'] != df['IsBull'].shift(1)
             trend_changes.iloc[0] = True
             segments = {'bull_segments': [], 'bear_segments': []}
             current_trend = None
             segment_start = None
+            
             for i, (date, row) in enumerate(df.iterrows()):
                 is_trend_change = trend_changes.loc[date]
                 if is_trend_change or i == len(df) - 1:
@@ -148,6 +158,17 @@ class PriceDynamic:
                     if i < len(df) - 1:
                         segment_start = date
                         current_trend = row['IsBull']
+            
+            # Ensure we have at least some segments for visualization
+            if not segments['bull_segments'] and not segments['bear_segments']:
+                # Fallback: treat entire series as one segment based on overall trend
+                if len(price_series) > 1:
+                    overall_trend = price_series.iloc[-1] > price_series.iloc[0]
+                    if overall_trend:
+                        segments['bull_segments'] = [price_series]
+                    else:
+                        segments['bear_segments'] = [price_series]
+            
             return segments
         except Exception as e:
             logger.error(f"Error in bull_bear_plot: {e}")
