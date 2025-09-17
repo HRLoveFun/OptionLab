@@ -472,40 +472,6 @@ class MarketAnalyzer:
                     sorted_data = np.sort(data)
                     y_vals = np.arange(1, len(sorted_data) + 1) / len(sorted_data)
                     ax.plot(sorted_data, y_vals, label=period_name, linewidth=2, color=color)
-                    
-                    # Label the five points with largest values for each period
-                    if len(data) >= 5:
-                        largest_indices = data.nlargest(5).index
-                        largest_values = data.nlargest(5).values
-                        largest_y_vals = []
-                        for val in largest_values:
-                            y_val = np.searchsorted(sorted_data, val) / len(sorted_data)
-                            largest_y_vals.append(y_val)
-                        
-                        for i, (idx, val, y_val) in enumerate(zip(largest_indices, largest_values, largest_y_vals)):
-                            if i < 3:  # Only label top 3 to avoid overcrowding
-                                ax.annotate(f'{idx.strftime("%y%m%d")}', 
-                                           xy=(val, y_val), 
-                                           xytext=(5, 5), textcoords='offset points',
-                                           fontsize=7, color=color, fontweight='bold',
-                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor=color))
-                    
-                    # Label the five most recent points for each period
-                    if len(data) >= 5:
-                        recent_indices = data.index[-5:]
-                        recent_values = data.iloc[-5:].values
-                        recent_y_vals = []
-                        for val in recent_values:
-                            y_val = np.searchsorted(sorted_data, val) / len(sorted_data)
-                            recent_y_vals.append(y_val)
-                        
-                        for i, (idx, val, y_val) in enumerate(zip(recent_indices, recent_values, recent_y_vals)):
-                            if i >= 2:  # Only label last 3 to avoid overcrowding
-                                ax.annotate(f'{idx.strftime("%y%m%d")}', 
-                                           xy=(val, y_val), 
-                                           xytext=(-5, -10), textcoords='offset points',
-                                           fontsize=7, color=color, fontweight='bold',
-                                           bbox=dict(boxstyle='round,pad=0.2', facecolor='lightgray', alpha=0.8, edgecolor=color))
             
             for percentile in [0.9, 0.95, 0.99]:
                 ax.axhline(y=percentile, color='gray', linestyle='--', alpha=0.7)
@@ -779,7 +745,7 @@ class MarketAnalyzer:
         if len(x) >= 5:
             largest_osc_indices = x.nlargest(5).index
             for idx in largest_osc_indices:
-                ax.annotate(f'{idx.strftime("%y%m%d")}', 
+                ax.annotate(f'{idx.strftime("%y%b")}', 
                            xy=(x.loc[idx], y.loc[idx]), 
                            xytext=(5, 5), textcoords='offset points',
                            fontsize=8, color='red', fontweight='bold',
@@ -789,7 +755,7 @@ class MarketAnalyzer:
         if len(x) >= 5:
             recent_indices = x.index[-5:]
             for idx in recent_indices:
-                ax.annotate(f'{idx.strftime("%y%m%d")}', 
+                ax.annotate(f'{idx.strftime("%y%b")}', 
                            xy=(x.loc[idx], y.loc[idx]), 
                            xytext=(-5, -15), textcoords='offset points',
                            fontsize=8, color='blue', fontweight='bold',
