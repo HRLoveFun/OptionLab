@@ -390,6 +390,13 @@ footer {
     margin-bottom: var(--spacing-lg);
 }
 
+.charts-vertical {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -524,6 +531,7 @@ footer {
     }
     
     .charts-grid,
+    .charts-vertical,
     .stats-grid {
         grid-template-columns: 1fr;
     }
