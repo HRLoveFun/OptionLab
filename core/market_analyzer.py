@@ -324,13 +324,13 @@ class MarketAnalyzer:
                 ["Median of Returns", f"{median_returns:.2f}%"]
             ]
             
-            # Create table in bottom-right corner
+            # Create table in upper left corner
             table = ax.table(
                 cellText=table_data,
                 colLabels=["Metric", "Value"],
                 cellLoc='left',
-                loc='lower right',
-                bbox=[0.70, 0.02, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
+                loc='upper left',
+                bbox=[0.02, 0.75, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
             )
             
             # Style the table
@@ -355,8 +355,8 @@ class MarketAnalyzer:
                 cell.set_edgecolor('#CCCCCC')
             
             # Add a subtitle to clarify what the table shows
-            ax.text(0.84, 0.30, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
-                   transform=ax.transAxes, fontsize=8, ha='center', va='bottom',
+            ax.text(0.16, 0.72, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
+                   transform=ax.transAxes, fontsize=8, ha='center', va='top',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
                     
         except Exception as e:
@@ -834,13 +834,13 @@ class MarketAnalyzer:
                 ["Median of Returns", f"{median_returns:.2f}%"]
             ]
             
-            # Create table in bottom-right corner
+            # Create table in upper left corner
             table = ax.table(
                 cellText=table_data,
                 colLabels=["Metric", "Value"],
                 cellLoc='left',
-                loc='lower right',
-                bbox=[0.70, 0.02, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
+                loc='upper left',
+                bbox=[0.02, 0.75, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
             )
             
             # Style the table
@@ -865,8 +865,8 @@ class MarketAnalyzer:
                 cell.set_edgecolor('#CCCCCC')
             
             # Add a subtitle to clarify what the table shows
-            ax.text(0.84, 0.30, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
-                   transform=ax.transAxes, fontsize=8, ha='center', va='bottom',
+            ax.text(0.16, 0.72, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
+                   transform=ax.transAxes, fontsize=8, ha='center', va='top',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
                     
         except Exception as e:
