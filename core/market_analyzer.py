@@ -786,8 +786,91 @@ class MarketAnalyzer:
         ax.set_ylabel(f'{y.name} (%)', fontsize=12)
         ax_histx.hist(x, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
         ax_histy.hist(y, bins=30, alpha=0.7, color='lightcoral', orientation='horizontal', edgecolor='black')
+        
+        # Add supplementary data table for oscillation analysis
+        self._add_oscillation_analysis_table(ax, x, y)
+        
         fig.suptitle(f'{x.name} vs {y.name} Analysis', fontsize=14, fontweight='bold')
         return fig
+    
+    def _add_oscillation_analysis_table(self, ax, oscillation_data, returns_data):
+        """Add a table showing analysis for data points where oscillation >= latest oscillation"""
+        try:
+            # Ensure we have valid data
+            if oscillation_data is None or oscillation_data.empty or returns_data is None or returns_data.empty:
+                logger.warning("No oscillation or returns data available for table generation")
+                return
+            
+            # Get the latest oscillation value (most recent data point)
+            latest_oscillation = oscillation_data.iloc[-1]
+            
+            # Align oscillation and returns data by index to ensure consistency
+            aligned_data = pd.DataFrame({
+                'oscillation': oscillation_data,
+                'returns': returns_data
+            }).dropna()
+            
+            if aligned_data.empty:
+                logger.warning("No aligned oscillation and returns data available")
+                return
+            
+            # Filter for qualifying data points (oscillation >= latest oscillation)
+            qualifying_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
+            
+            if qualifying_data.empty:
+                logger.warning("No qualifying data points found")
+                return
+            
+            # Calculate metrics
+            counts = len(qualifying_data)
+            total_points = len(aligned_data)
+            frequency = (counts / total_points) * 100 if total_points > 0 else 0
+            median_returns = qualifying_data['returns'].median()
+            
+            # Create table data
+            table_data = [
+                ["Counts", f"{counts}"],
+                ["Frequency", f"{frequency:.1f}%"],
+                ["Median of Returns", f"{median_returns:.2f}%"]
+            ]
+            
+            # Create table in bottom-right corner
+            table = ax.table(
+                cellText=table_data,
+                colLabels=["Metric", "Value"],
+                cellLoc='left',
+                loc='lower right',
+                bbox=[0.70, 0.02, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
+            )
+            
+            # Style the table
+            table.auto_set_font_size(False)
+            table.set_fontsize(9)
+            table.scale(1, 1.2)
+            
+            # Style header
+            for i in range(2):
+                table[(0, i)].set_facecolor('#E6E6FA')
+                table[(0, i)].set_text_props(weight='bold')
+            
+            # Style data cells
+            for i in range(1, len(table_data) + 1):
+                table[(i, 0)].set_facecolor('#F8F8FF')
+                table[(i, 1)].set_facecolor('#FFFFFF')
+                table[(i, 1)].set_text_props(weight='bold', color='#333333')
+            
+            # Add border
+            for key, cell in table.get_celld().items():
+                cell.set_linewidth(1)
+                cell.set_edgecolor('#CCCCCC')
+            
+            # Add a subtitle to clarify what the table shows
+            ax.text(0.84, 0.30, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
+                   transform=ax.transAxes, fontsize=8, ha='center', va='bottom',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
+                    
+        except Exception as e:
+            logger.error(f"Error adding oscillation analysis table: {e}")
 
     def _fig_to_base64(self, fig):
         """Convert matplotlib figure to base64 string"""
