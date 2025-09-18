@@ -276,73 +276,91 @@ class MarketAnalyzer:
                           facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
 
     def _add_embedded_values_table(self, ax, proj_df):
-        """Add a table in the bottom-right corner of the chart with key values"""
+        """Add a table in the bottom-right corner showing historical oscillation analysis"""
         try:
-            # Get key values for the table
-            table_data = []
+            # Get the latest oscillation value for comparison
+            if not hasattr(self, 'oscillation') or self.oscillation is None or self.oscillation.empty:
+                logger.warning("No oscillation data available for table generation")
+                return
             
-            # Get last few historical points
-            historical_data = proj_df[["Close", "High", "Low"]].dropna()
-            if len(historical_data) >= 2:
-                last_close = historical_data["Close"].iloc[-1]
-                last_high = historical_data["High"].iloc[-1]
-                last_low = historical_data["Low"].iloc[-1]
-                prev_close = historical_data["Close"].iloc[-2]
-                
-                table_data.extend([
-                    ["Prev Close", f"{prev_close:.2f}"],
-                    ["Last Close", f"{last_close:.2f}"],
-                    ["Last High", f"{last_high:.2f}"],
-                    ["Last Low", f"{last_low:.2f}"]
-                ])
+            latest_oscillation = self.oscillation.iloc[-1]
             
-            # Get projection values
-            projection_data = proj_df[["iHigh", "iLow", "iHigh1", "iLow1"]].dropna(how='all')
-            if not projection_data.empty:
-                # Get final projection values
-                final_proj = projection_data.iloc[-1]
-                if pd.notna(final_proj.get("iHigh")):
-                    table_data.append(["Proj High (Cur)", f"{final_proj['iHigh']:.2f}"])
-                if pd.notna(final_proj.get("iLow")):
-                    table_data.append(["Proj Low (Cur)", f"{final_proj['iLow']:.2f}"])
-                if pd.notna(final_proj.get("iHigh1")):
-                    table_data.append(["Proj High (Next)", f"{final_proj['iHigh1']:.2f}"])
-                if pd.notna(final_proj.get("iLow1")):
-                    table_data.append(["Proj Low (Next)", f"{final_proj['iLow1']:.2f}"])
+            # Filter historical data where oscillation >= latest oscillation
+            qualifying_mask = self.oscillation >= latest_oscillation
+            qualifying_oscillations = self.oscillation[qualifying_mask]
             
-            if table_data:
-                # Create table in bottom-right corner
-                table = ax.table(
-                    cellText=table_data,
-                    colLabels=["Metric", "Value"],
-                    cellLoc='left',
-                    loc='lower right',
-                    bbox=[0.75, 0.02, 0.23, 0.35]  # [x, y, width, height] in axes coordinates
-                )
+            # Get corresponding returns for qualifying data points
+            if not hasattr(self, 'returns') or self.returns is None or self.returns.empty:
+                logger.warning("No returns data available for table generation")
+                return
                 
-                # Style the table
-                table.auto_set_font_size(False)
-                table.set_fontsize(9)
-                table.scale(1, 1.2)
-                
-                # Style header
-                for i in range(2):
-                    table[(0, i)].set_facecolor('#E6E6FA')
-                    table[(0, i)].set_text_props(weight='bold')
-                
-                # Style data cells
-                for i in range(1, len(table_data) + 1):
-                    table[(i, 0)].set_facecolor('#F8F8FF')
-                    table[(i, 1)].set_facecolor('#FFFFFF')
-                    table[(i, 1)].set_text_props(weight='bold', color='#333333')
-                
-                # Add border
-                for key, cell in table.get_celld().items():
-                    cell.set_linewidth(1)
-                    cell.set_edgecolor('#CCCCCC')
+            # Align oscillation and returns data by index
+            aligned_data = pd.DataFrame({
+                'oscillation': self.oscillation,
+                'returns': self.returns
+            }).dropna()
+            
+            if aligned_data.empty:
+                logger.warning("No aligned oscillation and returns data available")
+                return
+            
+            # Filter for qualifying data points
+            qualifying_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
+            
+            if qualifying_data.empty:
+                logger.warning("No qualifying data points found")
+                return
+            
+            # Calculate metrics
+            counts = len(qualifying_data)
+            total_points = len(aligned_data)
+            frequency = (counts / total_points) * 100 if total_points > 0 else 0
+            median_returns = qualifying_data['returns'].median()
+            
+            # Create table data
+            table_data = [
+                ["Counts", f"{counts}"],
+                ["Frequency", f"{frequency:.1f}%"],
+                ["Median of Returns", f"{median_returns:.2f}%"]
+            ]
+            
+            # Create table in bottom-right corner
+            table = ax.table(
+                cellText=table_data,
+                colLabels=["Metric", "Value"],
+                cellLoc='left',
+                loc='lower right',
+                bbox=[0.70, 0.02, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
+            )
+            
+            # Style the table
+            table.auto_set_font_size(False)
+            table.set_fontsize(9)
+            table.scale(1, 1.2)
+            
+            # Style header
+            for i in range(2):
+                table[(0, i)].set_facecolor('#E6E6FA')
+                table[(0, i)].set_text_props(weight='bold')
+            
+            # Style data cells
+            for i in range(1, len(table_data) + 1):
+                table[(i, 0)].set_facecolor('#F8F8FF')
+                table[(i, 1)].set_facecolor('#FFFFFF')
+                table[(i, 1)].set_text_props(weight='bold', color='#333333')
+            
+            # Add border
+            for key, cell in table.get_celld().items():
+                cell.set_linewidth(1)
+                cell.set_edgecolor('#CCCCCC')
+            
+            # Add a subtitle to clarify what the table shows
+            ax.text(0.84, 0.30, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
+                   transform=ax.transAxes, fontsize=8, ha='center', va='bottom',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
                     
         except Exception as e:
-            logger.error(f"Error adding embedded values table: {e}")
+            logger.error(f"Error adding oscillation analysis table: {e}")
 
     def _create_projection_table(self, proj_df):
         """Create a table with projection values"""
