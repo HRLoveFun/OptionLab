@@ -794,15 +794,16 @@ class MarketAnalyzer:
         return fig
     
     def _add_oscillation_analysis_table(self, ax, oscillation_data, returns_data):
-        """Add a table showing analysis for data points where oscillation >= latest oscillation"""
+        """Add a comprehensive table showing Overall and Risk analysis for current oscillation context"""
         try:
             # Ensure we have valid data
             if oscillation_data is None or oscillation_data.empty or returns_data is None or returns_data.empty:
                 logger.warning("No oscillation or returns data available for table generation")
                 return
             
-            # Get the latest oscillation value (most recent data point)
+            # Get the latest oscillation and return values (most recent data points)
             latest_oscillation = oscillation_data.iloc[-1]
+            latest_return = returns_data.iloc[-1]
             
             # Align oscillation and returns data by index to ensure consistency
             aligned_data = pd.DataFrame({
@@ -814,59 +815,74 @@ class MarketAnalyzer:
                 logger.warning("No aligned oscillation and returns data available")
                 return
             
-            # Filter for qualifying data points (oscillation >= latest oscillation)
-            qualifying_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
+            # Filter 1: Historical oscillation value >= latest oscillation value
+            filter1_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
             
-            if qualifying_data.empty:
-                logger.warning("No qualifying data points found")
+            if filter1_data.empty:
+                logger.warning("No data points found meeting Filter 1 criteria")
                 return
             
-            # Calculate metrics
-            counts = len(qualifying_data)
+            # Filter 2: sign(current_return) × historical return >= sign(current_return) × current_return
+            # This isolates periods where historical returns moved opposite to current return direction
+            current_return_sign = 1 if latest_return >= 0 else -1
+            filter2_condition = (current_return_sign * filter1_data['returns']) >= (current_return_sign * latest_return)
+            filter2_data = filter1_data[~filter2_condition]  # Opposite direction (risk scenarios)
+            
+            # Calculate Overall metrics (Filter 1 only)
             total_points = len(aligned_data)
-            frequency = (counts / total_points) * 100 if total_points > 0 else 0
-            median_returns = qualifying_data['returns'].median()
+            overall_counts = len(filter1_data)
+            overall_frequency = (overall_counts / total_points) * 100 if total_points > 0 else 0
+            overall_median_returns = filter1_data['returns'].median()
+            
+            # Calculate Risk metrics (Filter 1 + Filter 2)
+            risk_counts = len(filter2_data)
+            risk_frequency = (risk_counts / total_points) * 100 if total_points > 0 else 0
+            risk_median_returns = filter2_data['returns'].median() if not filter2_data.empty else 0
             
             # Create table data
             table_data = [
-                ["Counts", f"{counts}"],
-                ["Frequency", f"{frequency:.1f}%"],
-                ["Median of Returns", f"{median_returns:.2f}%"]
+                ["Counts", f"{overall_counts}", f"{risk_counts}"],
+                ["Frequency", f"{overall_frequency:.1f}%", f"{risk_frequency:.1f}%"],
+                ["Median of Returns", f"{overall_median_returns:.2f}%", f"{risk_median_returns:.2f}%"]
             ]
             
-            # Create table in upper left corner
+            # Create table in upper left corner with Overall and Risk columns
             table = ax.table(
                 cellText=table_data,
-                colLabels=["Metric", "Value"],
+                colLabels=["Metric", "Overall", "Risk"],
                 cellLoc='left',
                 loc='upper left',
-                bbox=[0.02, 0.75, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
+                bbox=[0.02, 0.70, 0.35, 0.30]  # [x, y, width, height] - wider for 3 columns
             )
             
             # Style the table
             table.auto_set_font_size(False)
-            table.set_fontsize(9)
+            table.set_fontsize(8)  # Smaller font for 3-column layout
             table.scale(1, 1.2)
             
             # Style header
-            for i in range(2):
+            for i in range(3):  # Now 3 columns
                 table[(0, i)].set_facecolor('#E6E6FA')
                 table[(0, i)].set_text_props(weight='bold')
             
             # Style data cells
             for i in range(1, len(table_data) + 1):
                 table[(i, 0)].set_facecolor('#F8F8FF')
-                table[(i, 1)].set_facecolor('#FFFFFF')
-                table[(i, 1)].set_text_props(weight='bold', color='#333333')
+                for j in range(1, 3):  # Overall and Risk columns
+                    table[(i, j)].set_facecolor('#FFFFFF')
+                    table[(i, j)].set_text_props(weight='bold', color='#333333')
             
             # Add border
             for key, cell in table.get_celld().items():
                 cell.set_linewidth(1)
                 cell.set_edgecolor('#CCCCCC')
             
-            # Add a subtitle to clarify what the table shows
-            ax.text(0.16, 0.72, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
-                   transform=ax.transAxes, fontsize=8, ha='center', va='top',
+            # Add a subtitle to clarify what the table shows with enhanced context
+            subtitle_text = (f'Historical Context Analysis\n'
+                           f'Current: Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%\n'
+                           f'Overall: Osc≥{latest_oscillation:.1f}% | Risk: Opposite Direction')
+            ax.text(0.195, 0.67, subtitle_text, 
+                   transform=ax.transAxes, fontsize=7, ha='center', va='top',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
                     
         except Exception as e:
