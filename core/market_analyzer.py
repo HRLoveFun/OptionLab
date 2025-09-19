@@ -815,18 +815,18 @@ class MarketAnalyzer:
                 logger.warning("No aligned oscillation and returns data available")
                 return
             
-            # Filter 1: Historical oscillation value >= latest oscillation value
-            filter1_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
+            # Filter stronger_oscillation: Historical oscillation value >= latest oscillation value
+            filter_stronger_oscillation_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
             
             if filter1_data.empty:
-                logger.warning("No data points found meeting Filter 1 criteria")
+                logger.warning("No data points found meeting stronger_oscillation criteria")
                 return
             
-            # Filter 2: sign(current_return) × historical return >= sign(current_return) × current_return
-            # This isolates periods where historical returns moved opposite to current return direction
-            current_return_sign = 1 if latest_return >= 0 else -1
-            filter2_condition = (current_return_sign * filter1_data['returns']) >= (current_return_sign * latest_return)
-            filter2_data = filter1_data[~filter2_condition]  # Opposite direction (risk scenarios)
+            # Filter stronger_returns_momentum: sign(current_return) × historical return >= sign(current_return) × current_return
+            # This isolates periods where historical returns moved stronger to current return direction
+            latest_return_sign = 1 if latest_return >= 0 else -1
+            filter_stronger_returns_momentum_condition = (latest_return_sign * filter_stronger_oscillation_data['returns']) >= (latest_return_sign * latest_return)
+            filter_stronger_returns_momentum_data = filter_stronger_oscillation_data[filter_stronger_returns_momentum_condition]  # stronger momentum (risk scenarios)
             
             # Calculate Overall metrics (Filter 1 only)
             total_points = len(aligned_data)
@@ -841,9 +841,9 @@ class MarketAnalyzer:
             
             # Create table data
             table_data = [
-                ["Counts", f"{overall_counts}", f"{risk_counts}"],
-                ["Frequency", f"{overall_frequency:.1f}%", f"{risk_frequency:.1f}%"],
-                ["Median of Returns", f"{overall_median_returns:.2f}%", f"{risk_median_returns:.2f}%"]
+                ["#No", f"{overall_counts}", f"{risk_counts}"],
+                ["Freq", f"{overall_frequency:.1f}%", f"{risk_frequency:.1f}%"],
+                ["Ret Median", f"{overall_median_returns:.2f}%", f"{risk_median_returns:.2f}%"]
             ]
             
             # Create table in upper left corner with Overall and Risk columns
@@ -878,9 +878,9 @@ class MarketAnalyzer:
                 cell.set_edgecolor('#CCCCCC')
             
             # Add a subtitle to clarify what the table shows with enhanced context
-            subtitle_text = (f'Historical Context Analysis\n'
+            subtitle_text = (f'Historical Analysis\n'
                            f'Current: Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%\n'
-                           f'Overall: Osc≥{latest_oscillation:.1f}% | Risk: Opposite Direction')
+                             )
             ax.text(0.195, 0.67, subtitle_text, 
                    transform=ax.transAxes, fontsize=7, ha='center', va='top',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
