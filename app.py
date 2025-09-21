@@ -77,12 +77,7 @@ def validate_ticker():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-<<<<<<< HEAD
 
-    app.run(host="0.0.0.0", port=port, debug=True)
-    # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False) 
-=======
->>>>>>> e09284a (Fix horizon end=None to include current period; repair analyzer plotting; cleanup unused helpers; standardize figure sizes; docstrings/comments; minor UI tweaks)
 
     app.run(host="0.0.0.0", port=port, debug=True)
     # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False) 
