@@ -4,7 +4,7 @@ import datetime as dt
 import yfinance as yf
 from utils.data_utils import calculate_recent_extreme_change
 
-def market_review(instrument):
+def market_review(instrument, start_date: dt.date | None = None, end_date: dt.date | None = None):
     """
     Generate market review for a given financial instrument.
     Parameters:
@@ -24,7 +24,11 @@ def market_review(instrument):
     }
     all_tickers = [instrument] + list(benchmarks.values())
     display_names = [instrument] + list(benchmarks.keys())
-    data = yf.download(all_tickers, period="300d")["Close"]
+    # Download data within explicit horizon if provided; else fallback to recent period
+    if start_date is not None or end_date is not None:
+        data = yf.download(all_tickers, start=start_date, end=end_date, auto_adjust=False, progress=False)["Close"]
+    else:
+        data = yf.download(all_tickers, period="300d", auto_adjust=False, progress=False)["Close"]
     data = data.ffill().dropna()
     if data.empty:
         raise ValueError("No data downloaded - check ticker symbols")

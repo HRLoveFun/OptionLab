@@ -1,6 +1,9 @@
 from flask import Flask, request, render_template, jsonify
 import logging
 import os
+from dotenv import load_dotenv
+load_dotenv()  # 加载.env文件
+
 
 from services.form_service import FormService
 from services.analysis_service import AnalysisService
@@ -74,8 +77,14 @@ def validate_ticker():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+<<<<<<< HEAD
+
+    app.run(host="0.0.0.0", port=port, debug=True)
+    # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False) 
+=======
+>>>>>>> e09284a (Fix horizon end=None to include current period; repair analyzer plotting; cleanup unused helpers; standardize figure sizes; docstrings/comments; minor UI tweaks)
 
     app.run(host="0.0.0.0", port=port, debug=True)
     # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False) 
 
-application = app
+# application = app

@@ -25,22 +25,34 @@ class PriceDynamic:
     """
     Handles price data downloading, processing, and calculations.
     """
-    def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='D'):
-        self._validate_inputs(ticker, start_date, frequency)
+    def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='D', end_date: dt.date | None = None):
+        self._validate_inputs(ticker, start_date, frequency, end_date)
         self.ticker = ticker
+        # Store user-requested horizon
         self.start_date = start_date
+        self.user_start_date = start_date
         self.frequency = frequency
+        # If end_date is blank (None), set internal end_date to today, but remember it was not user-provided
+        self._user_provided_end = end_date is not None
+        self.end_date = end_date or dt.date.today()  # internal exclusive end (may be adjusted for horizon filtering)
+        self.user_end_date = self.end_date
+        # Use an earlier download start to ensure the first in-horizon period has a valid LastClose
+        self._download_start = self._compute_download_start(self.start_date, self.frequency)
         raw_data = self._download_data()
         self._data = self._refrequency(raw_data) if raw_data is not None else None
         self._daily_data = raw_data
 
-    def _validate_inputs(self, ticker, start_date, frequency):
+    def _validate_inputs(self, ticker, start_date, frequency, end_date=None):
         if not isinstance(ticker, str) or not ticker.strip():
             raise ValueError("Ticker must be a non-empty string")
         if not isinstance(start_date, dt.date):
             raise ValueError("start_date must be a datetime.date object")
         if frequency not in ['D', 'W', 'ME', 'QE']:
             raise ValueError("frequency must be one of ['D', 'W', 'ME', 'QE']")
+        if end_date is not None and not isinstance(end_date, dt.date):
+            raise ValueError("end_date must be a datetime.date object or None")
+        if end_date is not None and end_date < start_date:
+            raise ValueError("end_date must be on or after start_date")
 
     def __getattr__(self, attr):
         if self._data is not None and hasattr(self._data, attr):
@@ -56,7 +68,8 @@ class PriceDynamic:
         try:
             df = yf.download(
                 self.ticker,
-                start=self.start_date,
+                start=self._download_start,
+                end=self.end_date,
                 interval='1d',
                 progress=False,
                 auto_adjust=False,
@@ -76,6 +89,70 @@ class PriceDynamic:
         except Exception as e:
             logger.error(f"Error downloading data for {self.ticker}: {e}")
             return None
+
+    def _compute_download_start(self, start_date: dt.date, frequency: str) -> dt.date:
+        # Provide a buffer before the requested start to compute LastClose, ret, etc.
+        if frequency == 'D':
+            delta = dt.timedelta(days=7)
+        elif frequency == 'W':
+            delta = dt.timedelta(days=35)
+        elif frequency == 'ME':
+            delta = dt.timedelta(days=90)
+        elif frequency == 'QE':
+            delta = dt.timedelta(days=200)
+        else:
+            delta = dt.timedelta(days=30)
+        return start_date - delta
+
+    def _apply_horizon(self, series: pd.Series | None) -> pd.Series | None:
+        if series is None or series.empty:
+            return series
+        try:
+            start_ts = pd.Timestamp(self.user_start_date)
+            # Determine effective end timestamp: if user left horizon end blank, include current period by extending end
+            if getattr(self, '_user_provided_end', True):
+                end_ts = pd.Timestamp(self.user_end_date)
+            else:
+                end_ts = self._compute_effective_end_ts()
+            idx = series.index
+            # Match timezone if necessary
+            if hasattr(idx, 'tz') and idx.tz is not None:
+                if start_ts.tz is None:
+                    start_ts = start_ts.tz_localize(idx.tz)
+                if end_ts.tz is None:
+                    end_ts = end_ts.tz_localize(idx.tz)
+            return series[(idx >= start_ts) & (idx < end_ts)]
+        except Exception:
+            return series
+
+    def _compute_effective_end_ts(self) -> pd.Timestamp:
+        """Compute an effective exclusive end timestamp so the current period is included
+        when the Horizon end date was left blank by the user.
+
+        Rules:
+        - D: today + 1 day
+        - W: end of current week (Sunday by pandas default) + 1 day
+        - ME: end of current month + 1 day
+        - QE: end of current quarter + 1 day
+        """
+        today = pd.Timestamp(dt.date.today())
+        if self.frequency == 'D':
+            eff = today + pd.Timedelta(days=1)
+        elif self.frequency == 'W':
+            # pandas weekly default is anchored to Sunday ('W-SUN'), so compute upcoming Sunday
+            weekday = today.weekday()  # Monday=0, Sunday=6
+            days_to_sunday = (6 - weekday) % 7
+            end_of_week = today + pd.Timedelta(days=days_to_sunday)
+            eff = end_of_week + pd.Timedelta(days=1)
+        elif self.frequency == 'ME':
+            end_of_month = today + pd.offsets.MonthEnd(0)
+            eff = end_of_month + pd.Timedelta(days=1)
+        elif self.frequency == 'QE':
+            end_of_quarter = today + pd.offsets.QuarterEnd(0)
+            eff = end_of_quarter + pd.Timedelta(days=1)
+        else:
+            eff = today + pd.Timedelta(days=1)
+        return pd.Timestamp(eff)
 
     def _refrequency(self, df):
         if df is None or df.empty:
@@ -118,7 +195,7 @@ class PriceDynamic:
             daily_returns = self._daily_data['Close'].pct_change().dropna()
             rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(252) * 100
             rolling_vol.name = 'Volatility'
-            return rolling_vol.dropna()
+            return self._apply_horizon(rolling_vol.dropna())
         except Exception as e:
             logger.error(f"Error calculating volatility: {e}")
             return None
@@ -185,7 +262,7 @@ class PriceDynamic:
             else:
                 osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
             osc_data.name = 'Oscillation'
-            return osc_data.dropna()
+            return self._apply_horizon(osc_data.dropna())
         except Exception as e:
             logger.error(f"Error calculating oscillation: {e}")
             return None
@@ -196,7 +273,7 @@ class PriceDynamic:
         try:
             ret_data = ((self._data["Close"] - self._data['LastClose']) / self._data['LastClose']) * 100
             ret_data.name = 'Returns'
-            return ret_data.dropna()
+            return self._apply_horizon(ret_data.dropna())
         except Exception as e:
             logger.error(f"Error calculating returns: {e}")
             return None
@@ -207,7 +284,7 @@ class PriceDynamic:
         try:
             dif_data = self._data["Close"] - self._data['LastClose']
             dif_data.name = 'Difference'
-            return dif_data.dropna()
+            return self._apply_horizon(dif_data.dropna())
         except Exception as e:
             logger.error(f"Error calculating difference: {e}")
             return None

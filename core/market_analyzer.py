@@ -1,40 +1,84 @@
 """
-Market Analyzer - Core business logic for market analysis
+Market Analyzer - Core business logic for market analysis.
+
+This module builds on top of `PriceDynamic` to compute derived features
+and generate charts used by the application. It focuses on:
+    - Feature preparation (Oscillation, Returns, Difference)
+    - Visualization (scatter with marginals, line dynamics, spread bars,
+        volatility dynamics, and projection)
+    - Lightweight options P&L visualization
+
+Refactoring highlights:
+    - Centralized Matplotlib backend setup (Agg)
+    - Module-level plotting constants (colors, sizes)
+    - Small helpers for repeated logic (date tick labels, group masks)
+    - Removed deprecated and unused tail/gap statistic utilities
+    - Improved docstrings and inline comments
 """
+
 from core.price_dynamic import PriceDynamic
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-GUI backend once at module import
 import matplotlib.pyplot as plt
 import io
 import base64
 import logging
 import datetime as dt
-from scipy.stats import ks_2samp
+
+# ---------------------------------------------------------------------------
+# Module-level constants
+# ---------------------------------------------------------------------------
+
+PLOT_SIZE_SCATTER_TOP = (12.5, 18)
+PLOT_SIZE_DYNAMICS = (14.5, 7.0)
+PLOT_SIZE_SPREAD = (14.5, 5.2)
+PLOT_SIZE_VOLATILITY = (16, 10)
+PLOT_SIZE_OPTIONS = (12, 8)
+PLOT_SIZE_PROJECTION = (16, 10)
+
+COLOR_OSC = 'tab:blue'
+COLOR_RET = 'tab:orange'
+COLOR_BULL = 'green'
+COLOR_BEAR = 'red'
+COLOR_VOL = 'orange'
+
+FREQUENCY_LABELS = {'D': 'Daily', 'W': 'Weekly', 'ME': 'Monthly', 'QE': 'Quarterly'}
+VOLATILITY_WINDOWS = {'D': 5, 'W': 5, 'ME': 21, 'QE': 63}
 
 logger = logging.getLogger(__name__)
 
 class MarketAnalyzer:
-    """
-    High-level market analysis using PriceDynamic for calculations and visualization.
-    """
+    """High-level market analysis using PriceDynamic for calculations and plots."""
 
-    def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='W'):
-        self.price_dynamic = PriceDynamic(ticker, start_date, frequency)
+    def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='W', end_date: dt.date | None = None):
+        self.price_dynamic = PriceDynamic(ticker, start_date, frequency, end_date=end_date)
         self.ticker = ticker
         self.frequency = frequency
+        self.end_date = end_date
         if self.price_dynamic.is_valid():
             self._calculate_features()
 
     def _calculate_features(self):
+        """Compute feature series and assemble a clean DataFrame.
+
+        Notes:
+            - Oscillation uses on_effect=True per domain requirement.
+            - All series are aligned and rows with any NaN are dropped.
+        """
         try:
             self.oscillation = self.price_dynamic.osc(on_effect=True)
             self.returns = self.price_dynamic.ret()
             self.difference = self.price_dynamic.dif()
-            self.features_df = pd.DataFrame({
-                'Oscillation': self.oscillation,
-                'Returns': self.returns,
-                'Difference': self.difference
-            }).dropna()
+            self.features_df = (
+                pd.DataFrame({
+                    'Oscillation': self.oscillation,
+                    'Returns': self.returns,
+                    'Difference': self.difference,
+                })
+                .dropna()
+            )
         except Exception as e:
             logger.error(f"Error calculating features: {e}")
             self.features_df = pd.DataFrame()
@@ -43,21 +87,54 @@ class MarketAnalyzer:
         """Check if analyzer has valid data"""
         return self.price_dynamic.is_valid()
 
-    def generate_scatter_plot(self, feature_name):
-        """Generate scatter plot with histograms"""
+    # Deprecated single-chart scatter kept only for historical reference.
+    # Not used by the current application flow.
+
+    def generate_scatter_plots(self, feature_name):
+        """Generate separate top (scatter+marginal histograms) and bottom dynamics charts.
+
+        Returns:
+            tuple[str|None, str|None]: (top_chart_base64, bottom_chart_base64)
+        """
         if not self.is_data_valid() or feature_name not in self.features_df.columns:
+            return None, None
+        try:
+            x = self.features_df[feature_name]
+            y = self.features_df['Returns']
+            fig_top = self._create_scatter_hist_top_plot(x, y)
+            fig_bottom = self._create_return_osc_dynamic_plot(x, y)
+            return self._fig_to_base64(fig_top), self._fig_to_base64(fig_bottom)
+        except Exception as e:
+            logger.error(f"Error generating split scatter plots: {e}")
+            return None, None
+
+    def generate_osc_ret_spread_plot(self):
+        """Generate 'Oscillation-Returns Spread Dynamics' bar chart.
+
+        Notes:
+            Spread is computed as Oscillation - Returns and visualized
+            with color coding by sign.
+        """
+        if not self.is_data_valid() or self.features_df.empty:
             return None
         try:
-            feature_data = self.features_df[feature_name]
-            returns_data = self.features_df['Returns']
-            fig = self._create_scatter_hist_plot(feature_data, returns_data)
+            x = self.features_df['Oscillation']
+            y = self.features_df['Returns']
+            spread = (x - y).rename('Spread')
+            fig = self._create_spread_dynamics_bar_plot(spread)
             return self._fig_to_base64(fig)
         except Exception as e:
-            logger.error(f"Error generating scatter plot: {e}")
+            logger.error(f"Error generating spread dynamics plot: {e}")
             return None
 
     def generate_oscillation_projection(self, percentile=0.90, target_bias=None):
-        """Generate oscillation projection plot with enhanced bias handling"""
+        """Generate oscillation projection figure and summary table.
+
+        Args:
+            percentile (float): Percentile threshold for oscillation width.
+            target_bias (float|None): If provided, aim for this directional bias
+                when optimizing the projection weight; otherwise use natural bias.
+        """
         if not self.is_data_valid():
             return None, None
         try:
@@ -219,6 +296,7 @@ class MarketAnalyzer:
             return pd.DataFrame()
 
     def _get_current_month_end(self, date_last):
+        """Return the last calendar day of the current month for the given date."""
         if date_last.month < 12:
             return dt.datetime(date_last.year, date_last.month + 1, 1) - pd.Timedelta(days=1)
         else:
@@ -237,11 +315,10 @@ class MarketAnalyzer:
             logger.error(f"Error filling projection data: {e}")
 
     def _plot_oscillation_projection(self, proj_df, percentile, proj_volatility, target_bias):
-        fig, ax = plt.subplots(figsize=(16, 10))
+        fig, ax = plt.subplots(figsize=PLOT_SIZE_PROJECTION)
         try:
             x_values = np.arange(len(proj_df.index))
             self._plot_projection_points(ax, x_values, proj_df)
-            self._add_embedded_values_table(ax, proj_df)
             bias_text = "Natural" if target_bias is None else f"Neutral ({target_bias})"
             self._format_projection_plot(ax, proj_df, percentile, proj_volatility, bias_text)
             return fig
@@ -254,19 +331,25 @@ class MarketAnalyzer:
         close_mask = ~proj_df["Close"].isna()
         if close_mask.any():
             ax.scatter(x_values[close_mask], proj_df["Close"][close_mask], 
-                      label="Close", color="black", s=80, marker='o', zorder=3)
+                      label="Close", color="green", s=50, marker='o', zorder=3)
         
         # Plot High values with purple upward triangle points
         high_mask = ~proj_df["High"].isna()
         if high_mask.any():
             ax.scatter(x_values[high_mask], proj_df["High"][high_mask], 
-                      label="High", color="purple", s=80, marker='^', zorder=3)
+                      label="High", color="purple", s=50, marker='^', zorder=3)
+            # Connect consecutive High points with a purple line
+            ax.plot(x_values[high_mask], proj_df["High"][high_mask], 
+                    color="purple", linewidth=1.5, alpha=0.8, solid_capstyle='round', label='_nolegend_')
         
         # Plot Low values with blue downward triangle points
         low_mask = ~proj_df["Low"].isna()
         if low_mask.any():
             ax.scatter(x_values[low_mask], proj_df["Low"][low_mask], 
-                      label="Low", color="blue", s=80, marker='v', zorder=3)
+                      label="Low", color="blue", s=50, marker='v', zorder=3)
+            # Connect consecutive Low points with a blue line
+            ax.plot(x_values[low_mask], proj_df["Low"][low_mask], 
+                    color="blue", linewidth=1.5, alpha=0.8, solid_capstyle='round', label='_nolegend_')
         
         # Plot projection lines
         for col, color, label in [("iHigh", "red", "Proj High (Current)"), ("iLow", "red", "Proj Low (Current)"), ("iHigh1", "orange", "Proj High (Next)"), ("iLow1", "orange", "Proj Low (Next)")]:
@@ -275,145 +358,8 @@ class MarketAnalyzer:
                 ax.scatter(x_values[mask], proj_df[col][mask], label=label, 
                           facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
 
-    def _add_embedded_values_table(self, ax, proj_df):
-        """Add a table in the bottom-right corner showing historical oscillation analysis"""
-        try:
-            # Get the latest oscillation value for comparison
-            if not hasattr(self, 'oscillation') or self.oscillation is None or self.oscillation.empty:
-                logger.warning("No oscillation data available for table generation")
-                return
-            
-            latest_oscillation = self.oscillation.iloc[-1]
-            
-            # Filter historical data where oscillation >= latest oscillation
-            qualifying_mask = self.oscillation >= latest_oscillation
-            qualifying_oscillations = self.oscillation[qualifying_mask]
-            
-            # Get corresponding returns for qualifying data points
-            if not hasattr(self, 'returns') or self.returns is None or self.returns.empty:
-                logger.warning("No returns data available for table generation")
-                return
-                
-            # Align oscillation and returns data by index
-            aligned_data = pd.DataFrame({
-                'oscillation': self.oscillation,
-                'returns': self.returns
-            }).dropna()
-            
-            if aligned_data.empty:
-                logger.warning("No aligned oscillation and returns data available")
-                return
-            
-            # Filter for qualifying data points
-            qualifying_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
-            
-            if qualifying_data.empty:
-                logger.warning("No qualifying data points found")
-                return
-            
-            # Calculate metrics
-            counts = len(qualifying_data)
-            total_points = len(aligned_data)
-            frequency = (counts / total_points) * 100 if total_points > 0 else 0
-            median_returns = qualifying_data['returns'].median()
-            
-            # Create table data
-            table_data = [
-                ["Counts", f"{counts}"],
-                ["Frequency", f"{frequency:.1f}%"],
-                ["Median of Returns", f"{median_returns:.2f}%"]
-            ]
-            
-            # Create table in upper left corner
-            table = ax.table(
-                cellText=table_data,
-                colLabels=["Metric", "Value"],
-                cellLoc='left',
-                loc='upper left',
-                bbox=[0.02, 0.75, 0.28, 0.25]  # [x, y, width, height] in axes coordinates
-            )
-            
-            # Style the table
-            table.auto_set_font_size(False)
-            table.set_fontsize(9)
-            table.scale(1, 1.2)
-            
-            # Style header
-            for i in range(2):
-                table[(0, i)].set_facecolor('#E6E6FA')
-                table[(0, i)].set_text_props(weight='bold')
-            
-            # Style data cells
-            for i in range(1, len(table_data) + 1):
-                table[(i, 0)].set_facecolor('#F8F8FF')
-                table[(i, 1)].set_facecolor('#FFFFFF')
-                table[(i, 1)].set_text_props(weight='bold', color='#333333')
-            
-            # Add border
-            for key, cell in table.get_celld().items():
-                cell.set_linewidth(1)
-                cell.set_edgecolor('#CCCCCC')
-            
-            # Add a subtitle to clarify what the table shows
-            ax.text(0.16, 0.72, f'Historical Analysis\n(Oscillation ≥ {latest_oscillation:.1f}%)', 
-                   transform=ax.transAxes, fontsize=8, ha='center', va='top',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
-                    
-        except Exception as e:
-            logger.error(f"Error adding oscillation analysis table: {e}")
-
-    def _create_projection_table(self, proj_df):
-        """Create a table with projection values"""
-        try:
-            # Get the last few historical points and all projection points
-            table_data = []
-            
-            # Add historical data (last 5 points)
-            historical_data = proj_df[["Close", "High", "Low"]].dropna()
-            if len(historical_data) > 0:
-                last_historical = historical_data.tail(5)
-                for date, row in last_historical.iterrows():
-                    table_data.append({
-                        'Date': date.strftime('%m/%d'),
-                        'Type': 'Historical',
-                        'Close': f"{row['Close']:.2f}" if pd.notna(row['Close']) else "-",
-                        'High': f"{row['High']:.2f}" if pd.notna(row['High']) else "-",
-                        'Low': f"{row['Low']:.2f}" if pd.notna(row['Low']) else "-",
-                        'Proj_High_Cur': "-",
-                        'Proj_Low_Cur': "-",
-                        'Proj_High_Next': "-",
-                        'Proj_Low_Next': "-"
-                    })
-            
-            # Add projection data
-            projection_cols = ["iHigh", "iLow", "iHigh1", "iLow1"]
-            projection_data = proj_df[projection_cols].dropna(how='all')
-            
-            for date, row in projection_data.iterrows():
-                table_data.append({
-                    'Date': date.strftime('%m/%d'),
-                    'Type': 'Projection',
-                    'Close': "-",
-                    'High': "-",
-                    'Low': "-",
-                    'Proj_High_Cur': f"{row['iHigh']:.2f}" if pd.notna(row['iHigh']) else "-",
-                    'Proj_Low_Cur': f"{row['iLow']:.2f}" if pd.notna(row['iLow']) else "-",
-                    'Proj_High_Next': f"{row['iHigh1']:.2f}" if pd.notna(row['iHigh1']) else "-",
-                    'Proj_Low_Next': f"{row['iLow1']:.2f}" if pd.notna(row['iLow1']) else "-"
-                })
-
-            # Create DataFrame and convert to HTML
-            if table_data:
-                table_df = pd.DataFrame(table_data)
-                return table_df.to_html(classes='table table-striped table-sm', 
-                                      index=False, escape=False)
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error creating projection table: {e}")
-            return None
-
     def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility, bias_text):
+        """Apply consistent labels, ticks, and legend to the projection chart."""
         # Display all x-axis labels with vertical rotation
         ax.set_xticks(range(len(proj_df.index)))
         ax.set_xticklabels([date.strftime('%m/%d') for date in proj_df.index], 
@@ -426,85 +372,8 @@ class MarketAnalyzer:
         ax.legend(fontsize=10, loc='best')
         plt.tight_layout()
 
-    def calculate_tail_statistics(self, feature_name):
-        """Calculate tail statistics for different periods"""
-        try:
-            segments = self.get_period_segments(feature_name)
-            if not segments:
-                return None
-            stats_index = ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th"]
-            stats_df = pd.DataFrame(index=stats_index)
-            for period_name, data in segments.items():
-                if len(data) > 0:
-                    stats_df[period_name] = [
-                        data.mean(),
-                        data.std(),
-                        data.skew(),
-                        data.kurtosis(),
-                        data.max(),
-                        data.quantile(0.99),
-                        data.quantile(0.95),
-                        data.quantile(0.90)
-                    ]
-            return stats_df.round(2)
-        except Exception as e:
-            logger.error(f"Error calculating tail statistics: {e}")
-            return None
-        
-    def get_period_segments(self, feature_name, periods=None):
-        if periods is None:
-            periods = [12, 36, 60, "ALL"]
-        if not self.is_data_valid() or feature_name not in self.features_df.columns:
-            return {}
-        feature_data = self.features_df[feature_name]
-        return self._create_period_segments(feature_data, periods)
-
-    def _create_period_segments(self, data, periods):
-        if data is None or data.empty:
-            return {}
-        last_date = data.index[-1]
-        segments = {}
-        for period in periods:
-            try:
-                if isinstance(period, int):
-                    start_date = last_date - pd.DateOffset(months=period)
-                    col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                    segments[col_name] = data.loc[data.index >= start_date]
-                elif period == "ALL":
-                    start_date = data.index[0]
-                    col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                    segments[col_name] = data
-            except Exception as e:
-                logger.error(f"Error creating segment for period {period}: {e}")
-        return segments
-
-    def generate_tail_plot(self, feature_name):
-        segments = self.get_period_segments(feature_name)
-        if not segments:
-            return None
-        try:
-            fig, ax = plt.subplots(figsize=(12, 8))
-            colors = plt.cm.Set1(np.linspace(0, 1, len(segments)))
-            for (period_name, data), color in zip(segments.items(), colors):
-                if len(data) > 0:
-                    sorted_data = np.sort(data)
-                    y_vals = np.arange(1, len(sorted_data) + 1) / len(sorted_data)
-                    ax.plot(sorted_data, y_vals, label=period_name, linewidth=2, color=color)
-            
-            for percentile in [0.9, 0.95, 0.99]:
-                ax.axhline(y=percentile, color='gray', linestyle='--', alpha=0.7)
-                ax.text(ax.get_xlim()[1], percentile, f'{percentile*100:.0f}th', 
-                        ha='left', va='center', color='gray', fontweight='bold')
-            ax.set_xlabel(f'{feature_name} (%)', fontsize=12)
-            ax.set_ylabel('Cumulative Probability', fontsize=12)
-            ax.set_title(f'{feature_name} Cumulative Distribution', fontsize=14, fontweight='bold')
-            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            ax.grid(True, alpha=0.3)
-            plt.tight_layout()
-            return self._fig_to_base64(fig)
-        except Exception as e:
-            logger.error(f"Error generating tail plot: {e}")
-            return None
+    # Removed legacy tail statistics and cumulative distribution utilities.
+    # The current application flow no longer surfaces these views.
 
     def generate_volatility_dynamics(self):
         if not self.is_data_valid():
@@ -518,17 +387,17 @@ class MarketAnalyzer:
                 return None
             daily_close = daily_data['Close']
             bull_bear_segments = self.price_dynamic.bull_bear_plot(daily_close)
-            fig, ax1 = plt.subplots(figsize=(16, 10))
+            fig, ax1 = plt.subplots(figsize=PLOT_SIZE_VOLATILITY)
             ax1.set_xlabel('Date', fontsize=12)
             ax1.set_ylabel('Price ($)', fontsize=12, color='black')
             
             # Plot price data with bull/bear segments
             for segment in bull_bear_segments['bull_segments']:
                 if len(segment) > 1:
-                    ax1.plot(segment.index, segment.values, color='green', linewidth=2, alpha=0.5)
+                    ax1.plot(segment.index, segment.values, color=COLOR_BULL, linewidth=2, alpha=0.5)
             for segment in bull_bear_segments['bear_segments']:
                 if len(segment) > 1:
-                    ax1.plot(segment.index, segment.values, color='red', linewidth=2, alpha=0.5)
+                    ax1.plot(segment.index, segment.values, color=COLOR_BEAR, linewidth=2, alpha=0.5)
             
             ax1.tick_params(axis='y', labelcolor='black')
             ax1.grid(True, alpha=0.3)
@@ -536,7 +405,7 @@ class MarketAnalyzer:
             # Create second y-axis for volatility
             ax2 = ax1.twinx()
             ax2.set_ylabel('Volatility (%)', fontsize=12, color='blue')
-            ax2.plot(volatility.index, volatility.values, color='orange', linewidth=3, alpha=0.7, label='Historical Volatility', linestyle='-')
+            ax2.plot(volatility.index, volatility.values, color=COLOR_VOL, linewidth=3, alpha=0.7, label='Historical Volatility', linestyle='-')
             ax2.tick_params(axis='y', labelcolor='blue')
             
             # Add current volatility point
@@ -544,19 +413,17 @@ class MarketAnalyzer:
             ax2.scatter(x=volatility.index[-1], y=current_vol, color='purple', s=100, marker='o', linewidth=1.5, alpha=0.8, zorder=5)
             
             # Set title and legend
-            frequency_mapping = {'D':'Daily','W':'Weekly','ME':'Monthly','QE':'Quarterly'}
-            volatility_windows = {'D':5,'W':5,'ME':21,'QE':63}
-            frequency_name = frequency_mapping.get(self.frequency, self.frequency)
-            window = volatility_windows.get(self.frequency, 21)
+            frequency_name = FREQUENCY_LABELS.get(self.frequency, self.frequency)
+            window = VOLATILITY_WINDOWS.get(self.frequency, 21)
             ax1.set_title(f'{self.ticker} - Price & Volatility Dynamics\nVolatility Window: {window} days ({frequency_name} frequency)', fontsize=14, fontweight='bold', pad=20)
             
             # Create legend
             from matplotlib.lines import Line2D
             legend_elements = [
-                Line2D([0], [0], color='green', linewidth=2, label='Bull Market'),
-                Line2D([0], [0], color='red', linewidth=2, label='Bear Market'),
-                Line2D([0], [0], color='orange', linewidth=2, label='Volatility'),
-                Line2D([0], [0], color='orange', linestyle='--', linewidth=2, label=f'Current Vol: {current_vol:.1f}%'),
+                Line2D([0], [0], color=COLOR_BULL, linewidth=2, label='Bull Market'),
+                Line2D([0], [0], color=COLOR_BEAR, linewidth=2, label='Bear Market'),
+                Line2D([0], [0], color=COLOR_VOL, linewidth=2, label='Volatility'),
+                Line2D([0], [0], color=COLOR_VOL, linestyle='--', linewidth=2, label=f'Current Vol: {current_vol:.1f}%'),
             ]
             ax1.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.8, bbox_to_anchor=(0.0, 1.0), borderaxespad=0.1)
             
@@ -565,83 +432,6 @@ class MarketAnalyzer:
         except Exception as e:
             logger.error(f"Error generating volatility dynamics: {e}")
             return None
-
-    def calculate_gap_statistics(self, frequency):
-        if not self.is_data_valid():
-            return None, None
-        try:
-            data = self.price_dynamic._data.copy()
-            if "PeriodGap" not in data.columns and "LastClose" in data.columns:
-                data["PeriodGap"] = data["Open"] / data["LastClose"] - 1
-            if "PeriodGap" not in data.columns:
-                return None
-            return self._calculate_period_gap_stats(data, frequency)
-        except Exception as e:
-            logger.error(f"Error calculating gap statistics: {e}")
-            return None
-
-    def _calculate_period_gap_stats(self, df, frequency):
-        try:
-            periods = [12, 36, 60, "ALL"]
-            data_sources = self._create_data_sources_for_gaps(df, periods, frequency)
-            stats_index = ["mean", "std", "skew", "kurt", "max", "99th", "95th", "90th", "10th", "05th", "01st", "min", "p-value"]
-            gap_stats_df = pd.DataFrame(index=stats_index)
-            for period_name, data in data_sources.items():
-                if len(data) > 0:
-                    gap_return = data["PeriodGap"]
-                    period_return = (data["Close"] / data["LastClose"] - 1)
-                    try:
-                        _, p_value = ks_2samp(gap_return, period_return)
-                    except:
-                        p_value = np.nan
-                    gap_stats_df[period_name] = [
-                        gap_return.mean(),
-                        gap_return.std(),
-                        gap_return.skew(),
-                        gap_return.kurtosis(),
-                        gap_return.max(),
-                        gap_return.quantile(0.99),
-                        gap_return.quantile(0.95),
-                        gap_return.quantile(0.90),
-                        gap_return.quantile(0.10),
-                        gap_return.quantile(0.05),
-                        gap_return.quantile(0.01),
-                        gap_return.min(),
-                        p_value
-                    ]
-            return gap_stats_df
-        except Exception as e:
-            logger.error(f"Error in gap statistics calculation: {e}")
-            return None
-
-    def _create_data_sources_for_gaps(self, df, periods, frequency):
-        current_date = pd.Timestamp.now()
-        if frequency == 'ME':
-            end_date = current_date.replace(day=1)
-        elif frequency == 'W':
-            end_date = current_date - pd.DateOffset(days=current_date.weekday())
-        elif frequency == 'QE':
-            end_date = current_date - pd.tseries.offsets.QuarterBegin()
-        else:
-            end_date = current_date
-        df_filtered = df[df.index < end_date]
-        if df_filtered.empty:
-            return {}
-        last_date = df_filtered.index[-1]
-        data_sources = {}
-        for period in periods:
-            try:
-                if isinstance(period, int):
-                    start_date = last_date - pd.DateOffset(months=period)
-                    col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                    data_sources[col_name] = df_filtered.loc[df_filtered.index >= start_date]
-                elif period == "ALL":
-                    start_date = df_filtered.index[0]
-                    col_name = f"{start_date.strftime('%y%b')}-{last_date.strftime('%y%b')}"
-                    data_sources[col_name] = df_filtered
-            except Exception as e:
-                logger.error(f"Error creating data source for period {period}: {e}")
-        return data_sources
 
     def analyze_options(self, option_data):
         if not option_data:
@@ -698,7 +488,7 @@ class MarketAnalyzer:
 
     def _create_option_pnl_chart(self, matrix_df, current_price):
         try:
-            fig, ax = plt.subplots(figsize=(12, 8))
+            fig, ax = plt.subplots(figsize=PLOT_SIZE_OPTIONS)
             ax.plot(matrix_df.index, matrix_df['PnL'], linewidth=3, color='blue')
             ax.axhline(y=0, color='black', linestyle='-', alpha=0.8, linewidth=1)
             ax.axvline(x=current_price, color='red', linestyle='--', alpha=0.8, linewidth=2, label=f'Current Price: ${current_price:.2f}')
@@ -740,57 +530,204 @@ class MarketAnalyzer:
             return []
 
     def _create_scatter_hist_plot(self, x, y):
-        """Create scatter plot with marginal histograms"""
-        import matplotlib
-        matplotlib.use('Agg')  # 强制使用非GUI后端，防止多线程/服务器环境崩溃
-        import matplotlib.pyplot as plt
-        fig = plt.figure(figsize=(10, 8))
-        gs = fig.add_gridspec(2, 2, width_ratios=(4, 1), height_ratios=(1, 4),
-                              left=0.1, right=0.9, bottom=0.1, top=0.9,
-                              wspace=0.05, hspace=0.05)
-        ax = fig.add_subplot(gs[1, 0])
-        ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
-        ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
-        ax_histx.tick_params(axis="x", labelbottom=False)
-        ax_histy.tick_params(axis="y", labelleft=False)
-        ax.scatter(x, y, alpha=0.6, s=30)
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        ax.plot(xlim, [0, 0], 'k--', alpha=0.5, linewidth=1)
-        ax.plot([0, 0], ylim, 'k--', alpha=0.5, linewidth=1)
-        
+        """Backward-compat shim to the top scatter plot."""
+        fig = self._create_scatter_hist_top_plot(x, y)
+        return fig
+
+    def _create_scatter_hist_top_plot(self, x, y):
+        """Create the top main scatter with marginal histograms as a standalone figure."""
+        fig = plt.figure(figsize=PLOT_SIZE_SCATTER_TOP)
+        gs = fig.add_gridspec(2, 2, width_ratios=(4, 1), height_ratios=(1, 4), left=0.06, right=0.98, bottom=0.12, top=0.90, wspace=0.05, hspace=0.05)
+        ax_left = fig.add_subplot(gs[1, 0])
+        ax_histx_left = fig.add_subplot(gs[0, 0], sharex=ax_left)
+        ax_histy_left = fig.add_subplot(gs[1, 1], sharey=ax_left)
+        ax_histx_left.tick_params(axis="x", labelbottom=False)
+        ax_histy_left.tick_params(axis="y", labelleft=False)
+
+        # Main scatter (left)
+        ax_left.scatter(x, y, alpha=0.6, s=30, c=COLOR_OSC)
+        xlim = ax_left.get_xlim()
+        ax_left.plot(xlim, [0, 0], 'k--', alpha=0.5, linewidth=1)
+        ax_left.set_aspect('equal', adjustable='box')
+
         # Label the five points with largest oscillation
         if len(x) >= 5:
             largest_osc_indices = x.nlargest(5).index
             for idx in largest_osc_indices:
-                ax.annotate(f'{idx.strftime("%y%b")}', 
-                           xy=(x.loc[idx], y.loc[idx]), 
-                           xytext=(5, 5), textcoords='offset points',
-                           fontsize=8, color='red', fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
-        
+                ax_left.annotate(
+                    f'{idx.strftime("%y%b")}',
+                    xy=(x.loc[idx], y.loc[idx]),
+                    xytext=(5, 5), textcoords='offset points',
+                    fontsize=8, color='red', fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                )
+
         # Label the five most recent points
         if len(x) >= 5:
             recent_indices = x.index[-5:]
             for idx in recent_indices:
-                ax.annotate(f'{idx.strftime("%y%b")}', 
-                           xy=(x.loc[idx], y.loc[idx]), 
-                           xytext=(-5, -15), textcoords='offset points',
-                           fontsize=8, color='blue', fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7))
-        
+                ax_left.annotate(
+                    f'{idx.strftime("%y%b")}',
+                    xy=(x.loc[idx], y.loc[idx]),
+                    xytext=(-5, -15), textcoords='offset points',
+                    fontsize=8, color='blue', fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7),
+                )
+
         if len(x) > 0 and len(y) > 0:
-            ax.scatter(x.iloc[-1], y.iloc[-1], color='red', s=100, zorder=5, edgecolors='darkred', linewidth=2)
-        ax.grid(True, alpha=0.3)
-        ax.set_xlabel(f'{x.name} (%)', fontsize=12)
-        ax.set_ylabel(f'{y.name} (%)', fontsize=12)
-        ax_histx.hist(x, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
-        ax_histy.hist(y, bins=30, alpha=0.7, color='lightcoral', orientation='horizontal', edgecolor='black')
-        
-        # Add supplementary data table for oscillation analysis
-        self._add_oscillation_analysis_table(ax, x, y)
-        
+            ax_left.scatter(x.iloc[-1], y.iloc[-1], color='red', s=100, zorder=5, edgecolors='darkred', linewidth=2)
+        ax_left.grid(True, alpha=0.3)
+        ax_left.set_xlabel(f'{x.name} (%)', fontsize=12)
+        ax_left.set_ylabel(f'{y.name} (%)', fontsize=12)
+        ax_histx_left.hist(x, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+        ax_histy_left.hist(y, bins=30, alpha=0.7, color='lightcoral', orientation='horizontal', edgecolor='black')
+
+        # Add percentile labels for the latest data point on upper and right charts
+        try:
+            if len(x) > 0:
+                latest_x = x.iloc[-1]
+                x_percentile = float(((x <= latest_x).sum() / len(x)) * 100.0)
+                ax_histx_left.text(
+                    0.98,
+                    0.90,
+                    f"Osc Percentile: {x_percentile:.1f}%",
+                    transform=ax_histx_left.transAxes,
+                    ha='right', va='top', fontsize=9,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
+                )
+            if len(y) > 0:
+                latest_y = y.iloc[-1]
+                y_percentile = float(((y <= latest_y).sum() / len(y)) * 100.0)
+                ax_histy_left.text(
+                    0.05,
+                    0.98,
+                    f"Ret Percentile: {y_percentile:.1f}%",
+                    transform=ax_histy_left.transAxes,
+                    ha='left', va='top', fontsize=9,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
+                )
+        except Exception as e:
+            logger.warning(f"Failed to add percentile labels: {e}")
+
+        # Add supplementary data table on the main chart (Overall vs Risk)
+        self._add_oscillation_analysis_table(ax_left, x, y)
+
         fig.suptitle(f'{x.name} vs {y.name} Analysis', fontsize=14, fontweight='bold')
+        return fig
+
+    def _create_return_osc_dynamic_plot(self, x, y):
+        """Create a 2D line chart: X=Index, Y includes Oscillation (blue) and Returns (orange).
+
+        Grouped points from the original 3D chart are annotated with different marker styles:
+        - Stronger oscillation: solid dots
+        - Next step of Stronger oscillation: hollow squares
+        """
+        from matplotlib.lines import Line2D
+        # Increased figure size for better readability per request
+        fig, ax = plt.subplots(figsize=PLOT_SIZE_DYNAMICS)
+
+        # Prepare valid data
+        valid_mask = x.notna() & y.notna()
+        x_valid = x[valid_mask]  # Oscillation (%)
+        y_valid = y[valid_mask]  # Returns (%)
+        n = len(x_valid)
+        if n == 0:
+            ax.text(0.5, 0.5, 'No data', transform=ax.transAxes, ha='center', va='center')
+            ax.axis('off')
+            return fig
+        t_idx = np.arange(n)
+
+        # Plot lines
+        ax.plot(t_idx, x_valid.values, color=COLOR_OSC, linewidth=0.5, label=f'{x.name}')
+        ax.plot(t_idx, y_valid.values, color=COLOR_RET, linewidth=0.5, label=f'{y.name}')
+
+        # Group definitions based on oscillation
+        group1_mask = pd.Series(False, index=x_valid.index)
+        group2_mask = pd.Series(False, index=x_valid.index)
+        if n >= 2:
+            latest_x = x_valid.iloc[-1]
+            group1_mask = x_valid > latest_x
+            group2_mask = group1_mask.shift(1, fill_value=False)
+
+        # Annotate group points on both series with distinct marker styles
+        if group1_mask.any():
+            pos = np.where(group1_mask.values)[0]
+            # Solid dots for Group 1
+            ax.scatter(pos, x_valid[group1_mask].values, c=COLOR_OSC, s=16, marker='o', zorder=5)
+            ax.scatter(pos, y_valid[group1_mask].values, c=COLOR_RET, s=16, marker='o', zorder=5)
+        if group2_mask.any():
+            pos2 = np.where(group2_mask.values)[0]
+            # Hollow squares for Group 2
+            ax.scatter(pos2, x_valid[group2_mask].values, facecolors='none', edgecolors=COLOR_OSC, s=48, marker='s', linewidth=1.5, zorder=5)
+            ax.scatter(pos2, y_valid[group2_mask].values, facecolors='none', edgecolors=COLOR_RET, s=48, marker='s', linewidth=1.5, zorder=5)
+
+        # Labels, ticks, and grid
+        ax.set_xlabel('Time', fontsize=11)
+        ax.set_ylabel('Percentage (%)', fontsize=11)
+
+        # Map index ticks to date labels for readability
+        try:
+            tick_pos, tick_labels = self._build_date_ticks(x_valid.index, n, approx_ticks=n // 3 if n >= 9 else n)
+            ax.set_xticks(tick_pos)
+            ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
+        except Exception:
+            pass
+
+        ax.grid(True, alpha=0.3)
+
+        if n > 0:
+            last_idx = t_idx[-1]
+            last_x_val = x_valid.iloc[-1]
+            last_y_val = y_valid.iloc[-1]
+
+            ax.axhline(
+                y=last_x_val, xmin=0, xmax=last_idx / len(t_idx),
+                linestyle='--', color=COLOR_OSC, alpha=0.6,
+            )
+            ax.axhline(
+                y=last_y_val, xmin=0, xmax=last_idx / len(t_idx),
+                linestyle='--', color=COLOR_RET, alpha=0.6,
+            )
+
+        line_handles = [
+            Line2D([0], [0], color=COLOR_OSC, lw=2, label=f'{x.name}'),
+            Line2D([0], [0], color=COLOR_RET, lw=2, label=f'{y.name}'),
+        ]
+        group_handles = [
+            Line2D([0], [0], marker='o', color='black', linestyle='None', markersize=7, label='Stronger Osc'),
+            Line2D([0], [0], marker='s', markerfacecolor='none', markeredgecolor='black', linestyle='None', markersize=8, label='Next Step'),
+        ]
+        ax.legend(handles=line_handles + group_handles, loc='upper left', fontsize=9, framealpha=0.85)
+
+        ax.set_title('Oscillation-Returns Dynamics', fontsize=13, fontweight='bold')
+        plt.tight_layout()
+        return fig
+
+    def _create_spread_dynamics_bar_plot(self, spread_series: pd.Series):
+        """Create the spread dynamics bar chart: spread = Oscillation - Returns, aligned by index."""
+        fig, ax = plt.subplots(figsize=PLOT_SIZE_SPREAD)
+        spread = spread_series.dropna()
+        n = len(spread)
+        if n == 0:
+            ax.text(0.5, 0.5, 'No data', transform=ax.transAxes, ha='center', va='center')
+            ax.axis('off')
+            return fig
+        t_idx = np.arange(n)
+        colors = np.where(spread.values >= 0, COLOR_OSC, COLOR_RET)  # blue for >=0, orange for <0
+        ax.bar(t_idx, spread.values, color=colors, width=0.8, alpha=0.9, edgecolor='black', linewidth=0.3)
+        ax.axhline(0, color='black', linewidth=1)
+        ax.set_xlabel('Index', fontsize=11)
+        ax.set_ylabel('Spread (%)', fontsize=11)
+        # Ticks -> map to dates at regular intervals for readability
+        try:
+            tick_pos, tick_labels = self._build_date_ticks(spread.index, n, approx_ticks=20)
+            ax.set_xticks(tick_pos)
+            ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
+        except Exception:
+            pass
+        ax.grid(True, axis='y', alpha=0.3)
+        ax.set_title('Oscillation-Returns Spread Dynamics', fontsize=13, fontweight='bold')
+        plt.tight_layout()
         return fig
     
     def _add_oscillation_analysis_table(self, ax, oscillation_data, returns_data):
@@ -855,15 +792,16 @@ class MarketAnalyzer:
             # Create table in upper left corner with Overall and Risk columns
             table = ax.table(
                 cellText=table_data,
-                colLabels=["Metric", "Overall", "Risk"],
+                colLabels=["Stronger\nOsc", "Overall", "Risk"],
                 cellLoc='left',
                 loc='upper left',
-                bbox=[0.02, 0.70, 0.35, 0.30]  # [x, y, width, height] - wider for 3 columns
+                bbox=[0.02, 0.8, 0.20, 0.20]  # [x, y, width, height]
             )
             
             # Style the table
             table.auto_set_font_size(False)
-            table.set_fontsize(8)  # Smaller font for 3-column layout
+            # Reduce font size for all text within the in-chart table
+            table.set_fontsize(6)
             table.scale(1, 1.2)
             
             # Style header
@@ -884,11 +822,12 @@ class MarketAnalyzer:
                 cell.set_edgecolor('#CCCCCC')
             
             # Add a subtitle to clarify what the table shows with enhanced context
-            subtitle_text = (f'Historical Analysis\n'
-                           f'Current: Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%\n'
-                             )
-            ax.text(0.195, 0.67, subtitle_text, 
-                   transform=ax.transAxes, fontsize=7, ha='center', va='top',
+            subtitle_text = (
+                f'Historical Analysis\n'
+                f'Current: Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%'
+                )
+            ax.text(0.02, 0.75, subtitle_text, 
+                   transform=ax.transAxes, fontsize=7, ha='left', va='top',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
                     
         except Exception as e:
@@ -902,3 +841,24 @@ class MarketAnalyzer:
         plot_url = base64.b64encode(img_buffer.getvalue()).decode()
         plt.close(fig)
         return plot_url
+
+    # -----------------------------------------------------------------------
+    # Small internal helpers
+    # -----------------------------------------------------------------------
+
+    def _build_date_ticks(self, index, n_points: int, approx_ticks: int = 20):
+        """Return (positions, labels) for date-like x-axis ticks.
+
+        Args:
+            index (pd.Index): Time index to label from.
+            n_points (int): Total number of points in the plot.
+            approx_ticks (int): Desired rough number of ticks.
+
+        Returns:
+            tuple[list[int], list[str]]: positions and string labels like '25Jan'.
+        """
+        step = max(1, n_points // max(1, approx_ticks))
+        positions = list(np.arange(0, n_points, step))
+        date_index = index
+        labels = [pd.Timestamp(date_index[int(p)]).strftime('%y%b') for p in positions]
+        return positions, labels

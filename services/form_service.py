@@ -17,16 +17,25 @@ class FormService:
         Args:
             request (flask.Request): Incoming request
         Returns:
-            dict: Parsed form data (ticker, frequency, periods, start_time, etc.)
+            dict: Parsed form data (ticker, frequency, start_time/end_time, etc.)
         """
         ticker = request.form.get('ticker', '').upper()
         frequency = request.form.get('frequency', 'W')
-        periods = request.form.getlist('period') or [12, 36, 60, "ALL"]
         start_time = request.form.get('start_time', '')
-        try:
-            parsed_start_time = dt.datetime.strptime(start_time, '%Y%m').date()
-        except ValueError:
-            parsed_start_time = None
+        end_time = request.form.get('end_time', '')
+
+        def _parse_month(s: str):
+            if not s:
+                return None
+            for fmt in ('%Y%m', '%Y-%m'):
+                try:
+                    return dt.datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
+            return None
+
+        parsed_start_time = _parse_month(start_time)
+        parsed_end_time = _parse_month(end_time) if end_time else None
         risk_threshold = int(request.form.get('risk_threshold', 90))
         side_bias = request.form.get('side_bias', 'Natural')
         target_bias = None if side_bias == 'Natural' else 0
@@ -34,9 +43,10 @@ class FormService:
         return {
             'ticker': ticker,
             'frequency': frequency,
-            'periods': periods,
             'start_time': start_time,
+            'end_time': end_time,
             'parsed_start_time': parsed_start_time,
+            'parsed_end_time': parsed_end_time,
             'risk_threshold': risk_threshold,
             'side_bias': side_bias,
             'target_bias': target_bias,

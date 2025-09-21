@@ -27,7 +27,7 @@
             {% endif %}
 
             <div class="parameter-grid">
-                <!-- Ticker, Horizon, Frequency, Periods, Risk, Bias, Submit -->
+                <!-- Ticker, Horizon, Frequency, Risk, Bias, Submit -->
                 <div class="form-group">
                     <label for="ticker">Ticker</label>
                     <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}" 
@@ -37,9 +37,17 @@
 
                 <div class="form-group">
                     <label for="start_time">Horizon</label>
-                    <input type="text" id="start_time" name="start_time" 
-                           value="{{ start_time_str or '' }}"
-                           placeholder="202001" pattern="[0-9]{6}" required>
+                    <div class="horizon-fields">
+                        <input type="month" id="start_time" name="start_time"
+                               value="{{ (start_time[:4] + '-' + start_time[4:6]) if start_time and start_time|length == 6 else start_time or '' }}"
+                               placeholder="Start YYYY-MM" required>
+                        <span class="to-separator">to</span>
+                        <input type="month" id="end_time" name="end_time"
+                               value="{{ (end_time[:4] + '-' + end_time[4:6]) if end_time and end_time|length == 6 else end_time or '' }}"
+                               placeholder="End YYYY-MM (optional)">
+                    </div>
+                    <div class="hint" id="horizon-hint">Enter months as YYYY-MM. End month is optional; defaults to latest if left blank.</div>
+                    <div class="validation-warning" id="horizon-warning" style="display:none;"></div>
                 </div>
 
                 <div class="form-group">
@@ -52,27 +60,7 @@
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label>Periods</label>
-                    <div class="period-checkboxes">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="period" value="12" checked>
-                            1Y
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="period" value="36" checked>
-                            3Y
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="period" value="60" checked>
-                            5Y
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="period" value="ALL" checked>
-                            All
-                        </label>
-                    </div>
-                </div>
+                
 
                 <div class="form-group">
                     <label for="risk_threshold">Risk Threshold (%)</label>
@@ -146,6 +134,9 @@
                         Feature: Oscillation Analysis
                     </span>
                     <span class="meta-item">
+                        Horizon: {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}
+                    </span>
+                    <span class="meta-item">
                         Risk Threshold: {{ risk_threshold or 90 }}%
                     </span>
                     <span class="meta-item">
@@ -175,22 +166,32 @@
                 <h3>Statistical Analysis</h3>
                 
                 <div class="charts-vertical">
-                    {% if feat_ret_scatter_hist_url %}
+                    {% if feat_ret_scatter_top_url or feat_ret_scatter_hist_url %}
                     <div class="chart-container">
                         <h4>Oscillation vs Returns Correlation</h4>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_ret_scatter_hist_url }}" 
-                                 alt="Oscillation vs Returns Analysis" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ feat_ret_scatter_top_url or feat_ret_scatter_hist_url }}" 
+                                 alt="Oscillation vs Returns Analysis (Top)" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
-                    {% if tail_plot_url %}
+                    {% if feat_ret_scatter_bottom_url %}
                     <div class="chart-container">
-                        <h4>Cumulative Distribution Analysis</h4>
+                        <h4>Oscillation-Returns Dynamics</h4>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ tail_plot_url }}" 
-                                 alt="Tail Distribution Plot" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ feat_ret_scatter_bottom_url }}" 
+                                 alt="Oscillation-Returns Dynamics Line Chart" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if feat_ret_spread_url %}
+                    <div class="chart-container">
+                        <h4>Oscillation-Returns Spread Dynamics</h4>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ feat_ret_spread_url }}" 
+                                 alt="Oscillation-Returns Spread Bar Chart" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
@@ -206,25 +207,7 @@
                     {% endif %}
                 </div>
 
-                <div class="stats-grid">
-                    {% if tail_stats_result %}
-                    <div class="stats-container">
-                        <h4>Tail Statistics Summary</h4>
-                        <div class="table-wrapper">
-                            {{ tail_stats_result|safe }}
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if gap_stats_result %}
-                    <div class="stats-container">
-                        <h4>Gap Statistics Analysis</h4>
-                        <div class="table-wrapper">
-                            {{ gap_stats_result|safe }}
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
+                
             </div>
 
             <!-- Market Assessment Section -->

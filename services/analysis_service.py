@@ -1,4 +1,5 @@
 import logging
+import datetime as dt
 from core.market_analyzer import MarketAnalyzer
 from .market_service import MarketService
 
@@ -12,10 +13,19 @@ class AnalysisService:
         """Generate complete analysis including market review, statistical analysis, and assessment"""
         try:
             # 参数命名与前端表单字段保持一致
+            # Convert user end month (YYYY-MM) to an exclusive end date (first day of next month)
+            end_exclusive = None
+            if form_data.get('parsed_end_time'):
+                end_m = form_data['parsed_end_time']
+                year = end_m.year + (1 if end_m.month == 12 else 0)
+                month = 1 if end_m.month == 12 else end_m.month + 1
+                end_exclusive = dt.date(year, month, 1)
+
             analyzer = MarketAnalyzer(
                 ticker=form_data['ticker'],
                 start_date=form_data['parsed_start_time'],
-                frequency=form_data['frequency']
+                frequency=form_data['frequency'],
+                end_date=end_exclusive
             )
             
             if not analyzer.is_data_valid():
@@ -46,29 +56,22 @@ class AnalysisService:
         """Generate statistical analysis results"""
         results = {}
         try:
-            scatter_plot = analyzer.generate_scatter_plot('Oscillation')
-            if scatter_plot:
-                results['feat_ret_scatter_hist_url'] = scatter_plot
-            tail_stats = analyzer.calculate_tail_statistics('Oscillation')
-            if tail_stats is not None:
-                results['tail_stats_result'] = tail_stats.to_html(classes='table table-striped')
-            tail_plot = analyzer.generate_tail_plot('Oscillation')
-            if tail_plot:
-                results['tail_plot_url'] = tail_plot
+            # Generate split charts: top scatter+hist and bottom line dynamics
+            top_plot, bottom_plot = analyzer.generate_scatter_plots('Oscillation')
+            if top_plot:
+                results['feat_ret_scatter_top_url'] = top_plot
+            if bottom_plot:
+                results['feat_ret_scatter_bottom_url'] = bottom_plot
+
+            # Generate spread dynamics bar chart (Oscillation - Returns)
+            spread_plot = analyzer.generate_osc_ret_spread_plot()
+            if spread_plot:
+                results['feat_ret_spread_url'] = spread_plot
             volatility_plot = analyzer.generate_volatility_dynamics()
             if volatility_plot:
                 results['volatility_dynamic_url'] = volatility_plot
             else:
                 logger.warning("Volatility dynamics plot generation failed")
-            gap_stats = analyzer.calculate_gap_statistics(form_data['frequency'])
-            if gap_stats is not None:
-                formatted_gap_stats = gap_stats.apply(
-                    lambda row: row.apply(
-                        lambda x: '{:.2%}'.format(x) if isinstance(x, (int, float)) and row.name not in [
-                            "skew", "kurt", "p-value"] else '{:.2f}'.format(x) if isinstance(x, (int, float)) else x
-                    ), axis=1
-                )
-                results['gap_stats_result'] = formatted_gap_stats.to_html(classes='table table-striped')
         except Exception as e:
             logger.error(f"Error generating statistical analysis: {e}", exc_info=True)
         return results

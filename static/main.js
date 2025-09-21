@@ -73,11 +73,11 @@ const FormManager = {
     saveState() {
         const formData = {
             ticker: document.getElementById('ticker').value,
-            start_time: document.getElementById('start_time').value,
+            start_time: this.normalizeMonth(document.getElementById('start_time').value),
+            end_time: document.getElementById('end_time') ? this.normalizeMonth(document.getElementById('end_time').value) : '',
             frequency: document.getElementById('frequency').value,
             risk_threshold: document.getElementById('risk_threshold').value,
             side_bias: document.getElementById('side_bias').value,
-            periods: Array.from(document.querySelectorAll('input[name="period"]:checked')).map(cb => cb.value),
             options: this.getOptionsData()
         };
         localStorage.setItem('marketAnalysisForm', JSON.stringify(formData));
@@ -88,19 +88,42 @@ const FormManager = {
         try {
             const formData = JSON.parse(saved);
             if (formData.ticker) document.getElementById('ticker').value = formData.ticker;
-            if (formData.start_time) document.getElementById('start_time').value = formData.start_time;
+            if (formData.start_time) document.getElementById('start_time').value = this.toMonthInput(formData.start_time);
+            if (formData.end_time && document.getElementById('end_time')) document.getElementById('end_time').value = this.toMonthInput(formData.end_time);
             if (formData.frequency) document.getElementById('frequency').value = formData.frequency;
             if (formData.risk_threshold) document.getElementById('risk_threshold').value = formData.risk_threshold;
             if (formData.side_bias) document.getElementById('side_bias').value = formData.side_bias;
-            document.querySelectorAll('input[name="period"]').forEach(cb => {
-                cb.checked = formData.periods && formData.periods.includes(cb.value);
-            });
+            // No periods checkboxes anymore
             if (formData.options && formData.options.length > 0) {
                 this.restoreOptionsTable(formData.options);
             }
         } catch (e) {
             console.error('Error loading saved form state:', e);
         }
+    },
+    normalizeMonth(val) {
+        // Accept 'YYYY-MM' (from month input) or 'YYYYMM'; return 'YYYYMM'
+        if (!val) return '';
+        const m = val.match(/^(\d{4})[-]?(\d{2})$/);
+        return m ? `${m[1]}${m[2]}` : val;
+    },
+    toMonthInput(val) {
+        // Convert 'YYYYMM' to 'YYYY-MM' for month input
+        const m = val.match(/^(\d{4})(\d{2})$/);
+        return m ? `${m[1]}-${m[2]}` : val;
+    },
+    validateHorizon() {
+        const startVal = this.normalizeMonth(document.getElementById('start_time').value);
+        const endVal = this.normalizeMonth(document.getElementById('end_time').value);
+        const warning = document.getElementById('horizon-warning');
+        warning.style.display = 'none';
+        warning.textContent = '';
+        if (startVal && endVal && endVal < startVal) {
+            warning.textContent = 'End month must be the same or after Start month.';
+            warning.style.display = 'block';
+            return false;
+        }
+        return true;
     },
     getOptionsData() {
         const rows = document.querySelectorAll('#options-table tbody tr');
@@ -182,6 +205,9 @@ function updateStrikePlaceholders() {
 
 document.getElementById('analysis-form')?.addEventListener('submit', function(e) {
     e.preventDefault();
+    if (!FormManager.validateHorizon()) {
+        return; // Block submit on invalid horizon
+    }
     FormManager.saveState();
     const optionsData = FormManager.getOptionsData();
     document.getElementById('option_position').value = JSON.stringify(optionsData);
@@ -198,6 +224,17 @@ document.getElementById('analysis-form')?.addEventListener('submit', function(e)
 
 document.addEventListener('DOMContentLoaded', function() {
     FormManager.loadState();
+    // Validate horizon on load and on change
+    FormManager.validateHorizon();
+    ['start_time','end_time'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', () => {
+                FormManager.validateHorizon();
+                FormManager.saveState();
+            });
+        }
+    });
     const tbody = document.getElementById('options-tbody');
     if (tbody && tbody.children.length === 0) {
         initializeOptionsTable();

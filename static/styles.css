@@ -1,3 +1,31 @@
+/* Horizon paired inputs */
+.horizon-fields {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.horizon-fields input[type="text"] {
+    width: 140px;
+}
+.to-separator {
+    color: #666;
+    font-size: 0.95em;
+}
+
+.hint {
+    color: #666;
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
+.validation-warning {
+    color: #b45309; /* amber-700 */
+    background: #fef3c7; /* amber-100 */
+    border: 1px solid #f59e0b; /* amber-500 */
+    padding: 6px 8px;
+    margin-top: 6px;
+    border-radius: 4px;
+}
 /* Modern CSS Reset and Base Styles */
 * {
     margin: 0;

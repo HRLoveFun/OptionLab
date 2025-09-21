@@ -21,6 +21,12 @@ class ValidationService:
         
         if not form_data['parsed_start_time']:
             return f"invalid_start_time_format: {form_data['start_time']}. please_use_yyyymm."
+        # end time is optional; if provided, must be valid and >= start
+        if form_data.get('end_time'):
+            if not form_data.get('parsed_end_time'):
+                return f"invalid_end_time_format: {form_data['end_time']}. please_use_yyyymm."
+            if form_data['parsed_end_time'] < form_data['parsed_start_time']:
+                return "end_time_must_be_on_or_after_start_time."
         
         if form_data['frequency'] not in ['D', 'W', 'ME', 'QE']:
             return f"invalid_frequency_selected: {form_data['frequency']}"

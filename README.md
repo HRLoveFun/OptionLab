@@ -113,7 +113,7 @@ OptionStrategy/
     - `ticker` (str): Stock symbol (e.g., "AAPL", "^GSPC")
     - `start_time` (str): Analysis start date in YYYYMM format
     - `frequency` (str): Data frequency - D/W/ME/QE
-    - `periods` (list): Analysis periods [12, 36, 60, "ALL"]
+   - (removed) `periods`: The app now uses the Horizon months to drive the analysis window.
     - `risk_threshold` (int): Risk percentile threshold (0-100)
     - `side_bias` (str): "Natural" or "Neutral" bias
     - `option_position` (JSON): Optional options positions
@@ -179,7 +179,7 @@ DEFAULT_RISK_THRESHOLD=90
 
 ### Analysis Parameters
 - **Frequencies**: Daily (D), Weekly (W), Monthly (ME), Quarterly (QE)
-- **Periods**: 1Y (12 months), 3Y (36 months), 5Y (60 months), All available data
+   (The Periods controls have been removed; analysis follows the Horizon window.)
 - **Risk Thresholds**: 0-100% percentile for volatility projections
 - **Bias Types**: Natural (data-driven) vs Neutral (symmetric)
 
@@ -189,7 +189,7 @@ DEFAULT_RISK_THRESHOLD=90
 1. Enter ticker symbol (e.g., "AAPL")
 2. Set analysis horizon (e.g., "202001" for Jan 2020)
 3. Select frequency (Weekly recommended)
-4. Choose analysis periods
+4. Set Horizon start/end months (optional end)
 5. Set risk threshold (90% default)
 6. Click "Analyze"
 
