@@ -169,13 +169,51 @@ class MarketAnalyzer:
                 proj_df
                 .dropna(how='all')
                 .fillna("")
-                .round(2)
+                .apply(lambda col: col.apply(self._format_projection_value) if col.dtype in ['float64', 'int64'] else col)
                 .to_html(classes='table table-striped table-sm', index=True, escape=False)
             )
             return chart_base64, projection_table
         except Exception as e:
             logger.error(f"Error creating oscillation projection plot: {e}")
             return None, None
+
+    def _format_projection_value(self, value):
+        """Format projection values with dynamic precision based on magnitude"""
+        if pd.isna(value) or value == "":
+            return ""
+        
+        try:
+            # Convert to float if it's not already
+            num_value = float(value)
+            
+            # Handle zero case
+            if num_value == 0:
+                return "0.00"
+            
+            # Get absolute value for calculations
+            abs_value = abs(num_value)
+            
+            # If value is >= 0.01, use standard 2 decimal places
+            if abs_value >= 0.01:
+                return f"{num_value:.2f}"
+            
+            # For values < 0.01, find first non-zero decimal place
+            # and keep 2 decimal places from there
+            decimal_places = 2
+            temp_value = abs_value
+            
+            # Count leading zeros after decimal point
+            while temp_value < 0.1 and decimal_places < 10:  # Cap at 10 to prevent infinite loop
+                temp_value *= 10
+                decimal_places += 1
+            
+            # Add one more decimal place to get 2 significant digits
+            decimal_places += 1
+            
+            return f"{num_value:.{decimal_places}f}"
+            
+        except (ValueError, TypeError):
+            return str(value)
 
     def _calculate_natural_bias_weight(self, data, proj_volatility):
         try:
