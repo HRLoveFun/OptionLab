@@ -575,7 +575,7 @@ class MarketAnalyzer:
     def _create_scatter_hist_top_plot(self, x, y):
         """Create the top main scatter with marginal histograms as a standalone figure."""
         fig = plt.figure(figsize=PLOT_SIZE_SCATTER_TOP)
-        gs = fig.add_gridspec(2, 2, width_ratios=(4, 1), height_ratios=(1, 4), left=0.06, right=0.98, bottom=0.12, top=0.90, wspace=0.05, hspace=0.05)
+        gs = fig.add_gridspec(2, 2, width_ratios=(3, 1), height_ratios=(1, 3), left=0.08, right=0.96, bottom=0.10, top=0.92, wspace=0.08, hspace=0.08)
         ax_left = fig.add_subplot(gs[1, 0])
         ax_histx_left = fig.add_subplot(gs[0, 0], sharex=ax_left)
         ax_histy_left = fig.add_subplot(gs[1, 1], sharey=ax_left)
