@@ -169,7 +169,7 @@ class MarketAnalyzer:
                 proj_df
                 .dropna(how='all')
                 .fillna("")
-                .apply(lambda col: col.apply(self._format_projection_value) if col.dtype in ['float64', 'int64'] else col)
+                .apply(lambda col: col.apply(self._format_projection_value) if col.name in ['Close', 'High', 'Low', 'iHigh', 'iLow', 'iHigh1', 'iLow1'] else col)
                 .to_html(classes='table table-striped table-sm', index=True, escape=False)
             )
             return chart_base64, projection_table
