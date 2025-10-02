@@ -256,3 +256,49 @@ For support, please open an issue in the GitHub repository or contact the develo
 ---
 
 **Market Observation Dashboard** - Advanced analytics for informed trading decisions.
+
+## Data pipeline (download → clean → process → serve)
+
+This project includes a local SQLite-backed data pipeline that separates concerns:
+
+- data_pipeline/downloader.py: Download OHLCV from yfinance and upsert into DB (raw_prices). If a day's new data is entirely blank, the old data is retained and a warning is logged.
+- data_pipeline/cleaning.py: Exchange-calendar alignment (NYSE by default), fill missing sessions with NA (no interpolation for full missing days), field-level handling (forward-fill volume only), anomaly flags (5σ price jumps, 5σ volume changes, OHLC consistency).
+- data_pipeline/processing.py: Build daily/weekly/monthly series from cleaned daily and compute features (log returns, amplitude, log high-low spread, Parkinson/GK variance, volume log change, volume z-score, moving averages, momentum). Stored in processed_prices.
+- data_pipeline/data_service.py: Facade used by the app to initialize DB, perform manual updates on access, and return cleaned/processed DataFrames.
+- data_pipeline/scheduler.py: Optional daily auto-update at 16:15 (local scheduler timezone).
+
+Environment variables:
+
+- MARKET_DB_PATH: Path to the SQLite DB file (default: ./market_data.sqlite).
+- AUTO_UPDATE_TICKERS: Comma-separated tickers to auto-update daily at 16:15 (e.g., "AAPL,MSFT,SPY").
+- SCHED_TZ: Scheduler timezone (default: UTC). For Eastern Time, set "America/New_York".
+
+Manual update on access:
+
+- Calls to DataService.get_cleaned_daily(...) and DataService.get_processed(...) trigger a quick past-week refresh (download → clean → process) before returning data.
+
+Optional: pre-seed the DB
+
+You can pre-populate the DB for common tickers to speed up first requests. Example:
+
+```python
+import datetime as dt
+from data_pipeline.data_service import DataService
+from data_pipeline.downloader import upsert_raw_prices
+from data_pipeline.cleaning import clean_range
+from data_pipeline.processing import process_frequencies
+
+DataService.initialize()
+start = dt.date.today() - dt.timedelta(days=730)
+end = dt.date.today()
+for t in ["AAPL", "MSFT", "SPY"]:
+   upsert_raw_prices(t, start, end)
+   clean_range(t, start, end)
+   process_frequencies(t, start, end)
+```
+
+Notes:
+
+- Cleaning uses the NYSE calendar (XNYS). You can switch exchanges by editing cleaning._get_business_days.
+- Monthly resampling uses month-end alignment.
+- Some logs may show warnings for log(0) in volume; these are benign and flagged by anomaly checks.

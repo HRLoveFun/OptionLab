@@ -7,3 +7,4 @@ pandas==2.2.3
 seaborn==0.13.2
 yfinance==0.2.61
 python-dotenv == 1.1.1
+APScheduler==3.10.4

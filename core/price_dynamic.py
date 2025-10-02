@@ -3,6 +3,7 @@ import yfinance as yf
 import numpy as np
 import datetime as dt
 import logging
+from data_pipeline.data_service import DataService
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,15 @@ class PriceDynamic:
         self.user_end_date = self.end_date
         # Use an earlier download start to ensure the first in-horizon period has a valid LastClose
         self._download_start = self._compute_download_start(self.start_date, self.frequency)
-        raw_data = self._download_data()
+        # Ensure DB is initialized
+        try:
+            DataService.initialize()
+        except Exception:
+            pass
+        # Prefer DB-backed cleaned daily data; fallback to direct download if empty
+        raw_data = self._fetch_daily_from_db()
+        if raw_data is None or raw_data.empty:
+            raw_data = self._download_data()
         self._data = self._refrequency(raw_data) if raw_data is not None else None
         self._daily_data = raw_data
 
@@ -66,10 +75,12 @@ class PriceDynamic:
 
     def _download_data(self):
         try:
+            # yfinance end argument is exclusive -> pass end + 1 day to include requested end date
+            yf_end = pd.Timestamp(self.end_date) + pd.Timedelta(days=1)
             df = yf.download(
                 self.ticker,
                 start=self._download_start,
-                end=self.end_date,
+                end=yf_end,
                 interval='1d',
                 progress=False,
                 auto_adjust=False,
@@ -88,6 +99,32 @@ class PriceDynamic:
             return df[required_columns]
         except Exception as e:
             logger.error(f"Error downloading data for {self.ticker}: {e}")
+            return None
+
+    def _fetch_daily_from_db(self):
+        try:
+            df = DataService.get_cleaned_daily(self.ticker, self._download_start, self.end_date)
+            if df is None or df.empty:
+                return None
+            df = df.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'adj_close': 'Adj Close',
+                'volume': 'Volume',
+            })
+            # Require sufficient coverage; else fallback to live download
+            try:
+                idx_min = pd.to_datetime(df.index.min()).tz_localize(None)
+                need_start = pd.Timestamp(self._download_start)
+                if idx_min > need_start + pd.Timedelta(days=3) or len(df) < 30:
+                    return None
+            except Exception:
+                pass
+            return df
+        except Exception as e:
+            logger.warning(f"DB fetch failed for {self.ticker}: {e}")
             return None
 
     def _compute_download_start(self, start_date: dt.date, frequency: str) -> dt.date:
@@ -121,7 +158,8 @@ class PriceDynamic:
                     start_ts = start_ts.tz_localize(idx.tz)
                 if end_ts.tz is None:
                     end_ts = end_ts.tz_localize(idx.tz)
-            return series[(idx >= start_ts) & (idx < end_ts)]
+            # Include the end timestamp in results (inclusive end date)
+            return series[(idx >= start_ts) & (idx <= end_ts)]
         except Exception:
             return series
 
@@ -137,21 +175,18 @@ class PriceDynamic:
         """
         today = pd.Timestamp(dt.date.today())
         if self.frequency == 'D':
-            eff = today + pd.Timedelta(days=1)
+            eff = today
         elif self.frequency == 'W':
             # pandas weekly default is anchored to Sunday ('W-SUN'), so compute upcoming Sunday
             weekday = today.weekday()  # Monday=0, Sunday=6
             days_to_sunday = (6 - weekday) % 7
-            end_of_week = today + pd.Timedelta(days=days_to_sunday)
-            eff = end_of_week + pd.Timedelta(days=1)
+            eff = today + pd.Timedelta(days=days_to_sunday)
         elif self.frequency == 'ME':
-            end_of_month = today + pd.offsets.MonthEnd(0)
-            eff = end_of_month + pd.Timedelta(days=1)
+            eff = today + pd.offsets.MonthEnd(0)
         elif self.frequency == 'QE':
-            end_of_quarter = today + pd.offsets.QuarterEnd(0)
-            eff = end_of_quarter + pd.Timedelta(days=1)
+            eff = today + pd.offsets.QuarterEnd(0)
         else:
-            eff = today + pd.Timedelta(days=1)
+            eff = today
         return pd.Timestamp(eff)
 
     def _refrequency(self, df):

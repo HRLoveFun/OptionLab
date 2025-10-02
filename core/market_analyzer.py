@@ -18,6 +18,7 @@ Refactoring highlights:
 
 from core.price_dynamic import PriceDynamic
 import pandas as pd
+from pandas.tseries.offsets import BDay
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-GUI backend once at module import
@@ -31,7 +32,7 @@ import datetime as dt
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-PLOT_SIZE_SCATTER_TOP = (12.5, 18)
+PLOT_SIZE_SCATTER = (10, 8)
 PLOT_SIZE_DYNAMICS = (14.5, 7.0)
 PLOT_SIZE_SPREAD = (14.5, 5.2)
 PLOT_SIZE_VOLATILITY = (16, 10)
@@ -101,7 +102,7 @@ class MarketAnalyzer:
         try:
             x = self.features_df[feature_name]
             y = self.features_df['Returns']
-            fig_top = self._create_scatter_hist_top_plot(x, y)
+            fig_top = self._create_scatter_hist_plot(x, y)
             fig_bottom = self._create_return_osc_dynamic_plot(x, y)
             return self._fig_to_base64(fig_top), self._fig_to_base64(fig_bottom)
         except Exception as e:
@@ -317,11 +318,12 @@ class MarketAnalyzer:
                 proj_df.loc[date_last, "High"] = historical_period.loc[date_last, "High"]
                 proj_df.loc[date_last, "Low"] = historical_period.loc[date_last, "Low"]
             
-            current_month_end = self._get_current_month_end(date_last)
-            next_twenty_days = date_last + pd.Timedelta(days=4*7)
-            self._fill_projection_data(proj_df, date_last_close, current_month_end, proj_high_cur, proj_low_cur, "iHigh", "iLow")
-            self._fill_projection_data(proj_df, date_last, next_twenty_days, proj_high_next, proj_low_next, "iHigh1", "iLow1")
-            
+            # current_month_end = self._get_current_month_end(date_last)
+            current_end = date_last_close + 22 * BDay()
+            next_end = date_last + 22 * BDay()
+            self._fill_projection_data(proj_df, date_last_close, current_end, proj_high_cur, proj_low_cur, "iHigh", "iLow")
+            self._fill_projection_data(proj_df, date_last, next_end, proj_high_next, proj_low_next, "iHigh1", "iLow1")
+
             # Log data for verification
             historical_data_count = proj_df[["Close", "High", "Low"]].notna().sum().sum()
             projection_data_count = proj_df[["iHigh", "iLow", "iHigh1", "iLow1"]].notna().sum().sum()
@@ -567,80 +569,130 @@ class MarketAnalyzer:
             logger.error(f"Error finding breakeven points: {e}")
             return []
 
+    # def _create_scatter_hist_plot(self, x, y):
+    #     """Backward-compat shim to the top scatter plot."""
+    #     fig = self._create_scatter_hist_top_plot(x, y)
+    #     return fig
+
     def _create_scatter_hist_plot(self, x, y):
-        """Backward-compat shim to the top scatter plot."""
-        fig = self._create_scatter_hist_top_plot(x, y)
-        return fig
-
-    def _create_scatter_hist_top_plot(self, x, y):
         """Create the top main scatter with marginal histograms as a standalone figure."""
-        fig = plt.figure(figsize=PLOT_SIZE_SCATTER_TOP)
-        gs = fig.add_gridspec(2, 2, width_ratios=(3, 1), height_ratios=(1, 3), left=0.08, right=0.96, bottom=0.10, top=0.92, wspace=0.08, hspace=0.08)
-        ax_left = fig.add_subplot(gs[1, 0])
-        ax_histx_left = fig.add_subplot(gs[0, 0], sharex=ax_left)
-        ax_histy_left = fig.add_subplot(gs[1, 1], sharey=ax_left)
-        ax_histx_left.tick_params(axis="x", labelbottom=False)
-        ax_histy_left.tick_params(axis="y", labelleft=False)
+        fig = plt.figure(figsize=PLOT_SIZE_SCATTER)
+        gs = fig.add_gridspec(
+            2, 2, 
+            width_ratios=(3, 1), 
+            height_ratios=(1, 3), 
+            left=0.05, right=0.95, 
+            bottom=0.05, top=0.95, 
+            wspace=0.05,  
+            hspace=0.05
+        )
+        ax = fig.add_subplot(gs[1, 0])
+        ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
+        ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
+        ax_histx.tick_params(axis="x", labelbottom=False)
+        ax_histy.tick_params(axis="y", labelleft=False)
 
-        # Main scatter (left)
-        ax_left.scatter(x, y, alpha=0.6, s=30, c=COLOR_OSC)
-        xlim = ax_left.get_xlim()
-        ax_left.plot(xlim, [0, 0], 'k--', alpha=0.5, linewidth=1)
-        ax_left.set_aspect('equal', adjustable='box')
+        # Main scatter plot
+        ax.scatter(x, y, alpha=0.5, s=20, c="orange")
+        ax.scatter(x.iloc[-1], y.iloc[-1], color='purple', s=40, zorder=5)
+
+        ax.axhline(y=0, color='gray', linestyle='-', linewidth=5, alpha=0.05)
+        ax.axvline(x=0, color='gray', linestyle='-', linewidth=5, alpha=0.05)
+
+        ax.set_aspect('auto', adjustable='box')
+
+        # Add vertical dashed lines for oscillation percentiles
+        osc_percentiles = np.percentile(x, [20, 40, 60, 80])
+        for p in osc_percentiles:
+            ax.axvline(p, color='blue', linestyle='dashed', linewidth=1, alpha=0.2)
+
+        # Add horizontal dashed lines for return percentiles
+        ret_percentiles = np.percentile(y, [20, 40, 60, 80])
+        for p in ret_percentiles:
+            ax.axhline(p, color='blue', linestyle='dashed', linewidth=1, alpha=0.2)
 
         # Label the five points with largest oscillation
         if len(x) >= 5:
             largest_osc_indices = x.nlargest(5).index
             for idx in largest_osc_indices:
-                ax_left.annotate(
+                ax.annotate(
                     f'{idx.strftime("%y%b")}',
                     xy=(x.loc[idx], y.loc[idx]),
-                    xytext=(5, 5), textcoords='offset points',
-                    fontsize=8, color='red', fontweight='bold',
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                    xytext=(5, 0), textcoords='offset points',
+                    fontsize=6, color='red', 
+                    # bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.5),
                 )
 
         # Label the five most recent points
         if len(x) >= 5:
             recent_indices = x.index[-5:]
             for idx in recent_indices:
-                ax_left.annotate(
-                    f'{idx.strftime("%y%b")}',
+                ax.annotate(
+                    f'{idx.strftime("%b")}',
                     xy=(x.loc[idx], y.loc[idx]),
-                    xytext=(-5, -15), textcoords='offset points',
-                    fontsize=8, color='blue', fontweight='bold',
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7),
+                    xytext=(5, 0), textcoords='offset points',
+                    fontsize=6, color='blue',
+                    # bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.5),
                 )
 
-        if len(x) > 0 and len(y) > 0:
-            ax_left.scatter(x.iloc[-1], y.iloc[-1], color='red', s=100, zorder=5, edgecolors='darkred', linewidth=2)
-        ax_left.grid(True, alpha=0.3)
-        ax_left.set_xlabel(f'{x.name} (%)', fontsize=12)
-        ax_left.set_ylabel(f'{y.name} (%)', fontsize=12)
-        ax_histx_left.hist(x, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
-        ax_histy_left.hist(y, bins=30, alpha=0.7, color='lightcoral', orientation='horizontal', edgecolor='black')
+        ax.grid(True, alpha=0.3)
+        ax.set_xlabel(f'{x.name} (%)', fontsize=12)
+        ax.set_ylabel(f'{y.name} (%)', fontsize=12)
+
+        # Generate bins for x-axis data with fixed length of 1 and boundaries ending with 0.5
+        # bins_x, bins_y = None, None
+        if len(x) > 0:
+            min_x = x.min()
+            max_x = x.max()
+            # Calculate left boundary (maximum x.5 value <= min_x)
+            left_x = np.floor(min_x + 0.5) - 0.5  # Core formula: ensure boundary ends with 0.5
+            # Calculate right boundary (minimum x.5 value >= max_x)
+            right_x = np.ceil(max_x - 0.5) + 0.5   # Core formula: ensure boundary ends with 0.5
+            # Generate bin sequence (step=1, covering all data)
+            bins_x = np.arange(left_x, right_x + 1, 1)  # +1 to ensure right boundary is included
+        else:
+            # Default bins when data is empty (to avoid errors)
+            bins_x = np.arange(-0.5, 5.5, 1)
+
+        # Generate bins for y-axis data with fixed length of 1 and boundaries ending with 0.5 (same logic as above)
+        if len(y) > 0:
+            min_y = y.min()
+            max_y = y.max()
+            left_y = np.floor(min_y + 0.5) - 0.5
+            right_y = np.ceil(max_y - 0.5) + 0.5
+            bins_y = np.arange(left_y, right_y + 1, 1)
+        else:
+            bins_y = np.arange(-0.5, 5.5, 1)
+
+        # Plot top histogram (using custom bins)
+        ax_histx.hist(x, bins=bins_x, alpha=0.7, color='skyblue', edgecolor='black')
+        # Plot right histogram (using custom bins)
+        ax_histy.hist(y, bins=bins_y, alpha=0.7, color='lightcoral', orientation='horizontal', edgecolor='black')
+
+        # ax_histx.hist(x, bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+        # ax_histy.hist(y, bins=30, alpha=0.7, color='lightcoral', orientation='horizontal', edgecolor='black')
 
         # Add percentile labels for the latest data point on upper and right charts
         try:
             if len(x) > 0:
                 latest_x = x.iloc[-1]
                 x_percentile = float(((x <= latest_x).sum() / len(x)) * 100.0)
-                ax_histx_left.text(
+                ax_histx.text(
                     0.98,
                     0.90,
                     f"Osc Percentile: {x_percentile:.1f}%",
-                    transform=ax_histx_left.transAxes,
+                    transform=ax_histx.transAxes,
                     ha='right', va='top', fontsize=9,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
                 )
             if len(y) > 0:
                 latest_y = y.iloc[-1]
                 y_percentile = float(((y <= latest_y).sum() / len(y)) * 100.0)
-                ax_histy_left.text(
+                ax_histy.text(
                     0.05,
                     0.98,
                     f"Ret Percentile: {y_percentile:.1f}%",
-                    transform=ax_histy_left.transAxes,
+                    transform=ax_histy.transAxes,
                     ha='left', va='top', fontsize=9,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
                 )
@@ -648,7 +700,33 @@ class MarketAnalyzer:
             logger.warning(f"Failed to add percentile labels: {e}")
 
         # Add supplementary data table on the main chart (Overall vs Risk)
-        self._add_oscillation_analysis_table(ax_left, x, y)
+        self._add_oscillation_analysis_table(ax, x, y)
+
+        # try:
+        #     # Draw the canvas to obtain final layout metrics before adjustment
+        #     fig.canvas.draw()
+
+        #     scatter_pos = ax.get_position()
+        #     top_pos = ax_histx.get_position()
+        #     right_pos = ax_histy.get_position()
+
+        #     # Align the upper histogram's width with the scatter chart's width
+        #     ax_histx.set_position((
+        #         scatter_pos.x0,
+        #         top_pos.y0,
+        #         scatter_pos.width,
+        #         top_pos.height,
+        #     ))
+
+        #     # Align the right histogram's height with the scatter chart's height
+        #     ax_histy.set_position((
+        #         right_pos.x0,
+        #         scatter_pos.y0,
+        #         right_pos.width,
+        #         scatter_pos.height,
+        #     ))
+        # except Exception as e:
+        #     logger.warning(f"Failed to reshape marginal histograms to match scatter dimensions: {e}")
 
         fig.suptitle(f'{x.name} vs {y.name} Analysis', fontsize=14, fontweight='bold')
         return fig
@@ -689,12 +767,12 @@ class MarketAnalyzer:
 
         # Annotate group points on both series with distinct marker styles
         if group1_mask.any():
-            pos = np.where(group1_mask.values)[0]
+            pos = np.where(group1_mask.to_numpy())[0]
             # Solid dots for Group 1
             ax.scatter(pos, x_valid[group1_mask].values, c=COLOR_OSC, s=16, marker='o', zorder=5)
             ax.scatter(pos, y_valid[group1_mask].values, c=COLOR_RET, s=16, marker='o', zorder=5)
         if group2_mask.any():
-            pos2 = np.where(group2_mask.values)[0]
+            pos2 = np.where(group2_mask.to_numpy())[0]
             # Hollow squares for Group 2
             ax.scatter(pos2, x_valid[group2_mask].values, facecolors='none', edgecolors=COLOR_OSC, s=48, marker='s', linewidth=1.5, zorder=5)
             ax.scatter(pos2, y_valid[group2_mask].values, facecolors='none', edgecolors=COLOR_RET, s=48, marker='s', linewidth=1.5, zorder=5)
@@ -751,8 +829,9 @@ class MarketAnalyzer:
             ax.axis('off')
             return fig
         t_idx = np.arange(n)
-        colors = np.where(spread.values >= 0, COLOR_OSC, COLOR_RET)  # blue for >=0, orange for <0
-        ax.bar(t_idx, spread.values, color=colors, width=0.8, alpha=0.9, edgecolor='black', linewidth=0.3)
+        spread_np = spread.to_numpy()
+        colors = np.where(spread_np >= 0, COLOR_OSC, COLOR_RET)  # blue for >=0, orange for <0
+        ax.bar(t_idx, spread_np, color=colors, width=0.8, alpha=0.9, edgecolor='black', linewidth=0.3)
         ax.axhline(0, color='black', linewidth=1)
         ax.set_xlabel('Index', fontsize=11)
         ax.set_ylabel('Spread (%)', fontsize=11)

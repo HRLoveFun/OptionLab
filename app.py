@@ -9,12 +9,28 @@ from services.form_service import FormService
 from services.analysis_service import AnalysisService
 from services.market_service import MarketService
 from services.validation_service import ValidationService
+from data_pipeline.data_service import DataService
+from data_pipeline.scheduler import UpdateScheduler
 
 app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize DB
+DataService.initialize()
+_scheduler = None
+try:
+    auto_update = os.environ.get("AUTO_UPDATE_TICKERS", "").strip()
+    if auto_update:
+        tickers = [t.strip().upper() for t in auto_update.split(",") if t.strip()]
+        if tickers:
+            _scheduler = UpdateScheduler()
+            _scheduler.start_daily_update(tickers)
+            logger.info(f"Auto-update scheduler started for: {tickers}")
+except Exception as e:
+    logger.warning(f"Scheduler init failed: {e}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
