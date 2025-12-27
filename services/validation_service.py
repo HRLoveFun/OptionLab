@@ -34,6 +34,9 @@ class ValidationService:
         if not (0 <= form_data['risk_threshold'] <= 100):
             return "risk_threshold_must_be_between_0_and_100."
         
+        if form_data.get('rolling_window') is not None and form_data['rolling_window'] < 1:
+            return "rolling_window_must_be_a_positive_integer."
+        
         if form_data['side_bias'] not in ['Natural', 'Neutral']:
             return f"invalid_side_bias_selected: {form_data['side_bias']}"
         

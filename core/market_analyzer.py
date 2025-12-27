@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 class MarketAnalyzer:
     """High-level market analysis using PriceDynamic for calculations and plots."""
 
-    def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='W', end_date: dt.date | None = None):
+    def __init__(self, ticker: str, start_date: dt.date, frequency: str, end_date: dt.date | None = None):
         self.price_dynamic = PriceDynamic(ticker, start_date, frequency, end_date=end_date)
         self.ticker = ticker
         self.frequency = frequency
@@ -70,11 +70,15 @@ class MarketAnalyzer:
         """
         try:
             self.oscillation = self.price_dynamic.osc(on_effect=True)
+            self.osc_high = self.price_dynamic.osc_high()
+            self.osc_low = self.price_dynamic.osc_low()
             self.returns = self.price_dynamic.ret()
             self.difference = self.price_dynamic.dif()
             self.features_df = (
                 pd.DataFrame({
                     'Oscillation': self.oscillation,
+                    'Osc_high': self.osc_high,
+                    'Osc_low': self.osc_low,
                     'Returns': self.returns,
                     'Difference': self.difference,
                 })
@@ -91,41 +95,107 @@ class MarketAnalyzer:
     # Deprecated single-chart scatter kept only for historical reference.
     # Not used by the current application flow.
 
-    def generate_scatter_plots(self, feature_name):
-        """Generate separate top (scatter+marginal histograms) and bottom dynamics charts.
+    def generate_scatter_plots(self, feature_name, rolling_window=20, risk_threshold=90):
+        """Generate scatter plot with marginal histograms.
+
+        Args:
+            feature_name: Name of the feature to plot
+            rolling_window: Number of historical periods for rolling projections (kept for compatibility but not used)
+            risk_threshold: Percentile threshold (0-100) for projections (kept for compatibility but not used)
 
         Returns:
-            tuple[str|None, str|None]: (top_chart_base64, bottom_chart_base64)
+            str|None: top_chart_base64
         """
         if not self.is_data_valid() or feature_name not in self.features_df.columns:
-            return None, None
+            return None
         try:
             x = self.features_df[feature_name]
             y = self.features_df['Returns']
             fig_top = self._create_scatter_hist_plot(x, y)
-            fig_bottom = self._create_return_osc_dynamic_plot(x, y)
-            return self._fig_to_base64(fig_top), self._fig_to_base64(fig_bottom)
+            return self._fig_to_base64(fig_top)
         except Exception as e:
-            logger.error(f"Error generating split scatter plots: {e}")
-            return None, None
+            logger.error(f"Error generating scatter plot: {e}")
+            return None
 
-    def generate_osc_ret_spread_plot(self):
-        """Generate 'Oscillation-Returns Spread Dynamics' bar chart.
+    def generate_high_low_scatter(self):
+        """Generate Osc_Low vs Osc_High scatter plot with marginal histograms.
 
-        Notes:
-            Spread is computed as Oscillation - Returns and visualized
-            with color coding by sign.
+        Returns:
+            str|None: base64-encoded chart or None on error
+        """
+        if not self.is_data_valid():
+            return None
+        try:
+            # Use Osc_low and Osc_high from features_df
+            if 'Osc_low' not in self.features_df.columns or 'Osc_high' not in self.features_df.columns:
+                logger.error("Osc_low or Osc_high columns not found in features_df")
+                return None
+            
+            osc_low = self.features_df['Osc_low'].dropna()
+            osc_high = self.features_df['Osc_high'].dropna()
+
+            # Align indices to ensure pairs match
+            common_index = osc_low.index.intersection(osc_high.index)
+            osc_low = osc_low.loc[common_index]
+            osc_high = osc_high.loc[common_index]
+            
+            if osc_low.empty or osc_high.empty:
+                logger.error("No valid Osc_low-Osc_high data")
+                return None
+            
+            # Set proper names for axis labels
+            osc_low.name = 'Osc_low'
+            osc_high.name = 'Osc_high'
+            
+            # Compute spread and select top-5 indices by (Osc_high - Osc_low)
+            try:
+                spread = (osc_high - osc_low).dropna()
+                top5_indices = spread.nlargest(5).index if len(spread) >= 5 else spread.sort_values(ascending=False).index
+            except Exception as e:
+                logger.warning(f"Failed to compute spread for labeling: {e}")
+                top5_indices = []
+
+            fig = self._create_scatter_hist_plot(osc_low, osc_high, label_indices=top5_indices)
+            return self._fig_to_base64(fig)
+        except Exception as e:
+            logger.error(f"Error generating Osc_low-Osc_high scatter plot: {e}")
+            return None
+
+    def generate_return_osc_high_low_chart(self, rolling_window=20, risk_threshold=90):
+        """Generate Return-Oscillation line chart with rolling projections.
+        
+        Args:
+            rolling_window: Number of historical periods for rolling projections
+            risk_threshold: Percentile threshold (0-100) for projections
+        
+        Returns:
+            str|None: Base64-encoded chart or None on error
         """
         if not self.is_data_valid() or self.features_df.empty:
             return None
         try:
-            x = self.features_df['Oscillation']
-            y = self.features_df['Returns']
-            spread = (x - y).rename('Spread')
-            fig = self._create_spread_dynamics_bar_plot(spread)
+            # Get filtered data for display
+            returns = self.features_df['Returns']
+            osc_high = self.features_df['Osc_high']
+            osc_low = self.features_df['Osc_low']
+            
+            # Get full unfiltered data for rolling projections calculation
+            # Use apply_horizon=False to get complete historical data
+            osc_high_full = self.price_dynamic.osc_high(apply_horizon=False)
+            osc_low_full = self.price_dynamic.osc_low(apply_horizon=False)
+            
+            if osc_high_full is None or osc_low_full is None:
+                logger.warning("No full osc data available for rolling projections")
+                return None
+            
+            fig = self._create_return_osc_high_low_plot(
+                returns, osc_high, osc_low, 
+                osc_high_full, osc_low_full,
+                rolling_window, risk_threshold
+            )
             return self._fig_to_base64(fig)
         except Exception as e:
-            logger.error(f"Error generating spread dynamics plot: {e}")
+            logger.error(f"Error generating Return-Oscillation chart: {e}")
             return None
 
     def generate_oscillation_projection(self, percentile=0.90, target_bias=None):
@@ -139,8 +209,12 @@ class MarketAnalyzer:
         if not self.is_data_valid():
             return None, None
         try:
+            # Use full unfiltered data for all calculations
+            # This ensures we have complete historical context for projections
             data = self.price_dynamic._data.copy()
-            data['Oscillation'] = self.oscillation
+            # Calculate oscillation on full unfiltered data
+            osc_full = self.price_dynamic.osc(on_effect=True, apply_horizon=False)
+            data['Oscillation'] = osc_full
             required_cols = ['High', 'Low', 'LastClose', 'Close', 'Oscillation']
             if not all(col in data.columns for col in required_cols):
                 logger.error("Missing required columns for oscillation projection")
@@ -318,9 +392,16 @@ class MarketAnalyzer:
                 proj_df.loc[date_last, "High"] = historical_period.loc[date_last, "High"]
                 proj_df.loc[date_last, "Low"] = historical_period.loc[date_last, "Low"]
             
-            # current_month_end = self._get_current_month_end(date_last)
-            current_end = date_last_close + 22 * BDay()
-            next_end = date_last + 22 * BDay()
+            # Determine business-day period length based on selected frequency
+            # Mapping: W -> 5, ME -> 22, QE -> 65, default -> 21
+            try:
+                freq = getattr(self, 'frequency', 'W')
+                period_days = 5 if freq == 'W' else 22 if freq == 'ME' else 65 if freq == 'QE' else 21
+            except Exception:
+                period_days = 21
+
+            current_end = date_last_close + period_days * BDay()
+            next_end = date_last + period_days * BDay()
             self._fill_projection_data(proj_df, date_last_close, current_end, proj_high_cur, proj_low_cur, "iHigh", "iLow")
             self._fill_projection_data(proj_df, date_last, next_end, proj_high_next, proj_low_next, "iHigh1", "iLow1")
 
@@ -425,7 +506,10 @@ class MarketAnalyzer:
             volatility = self.price_dynamic.calculate_volatility()
             if volatility is None or volatility.empty:
                 return None
-            daily_close = daily_data['Close']
+            # Align close price series with the Horizon so segments match volatility timeframe
+            daily_close = self.price_dynamic._apply_horizon(daily_data['Close'])
+            if daily_close is None or daily_close.empty:
+                return None
             bull_bear_segments = self.price_dynamic.bull_bear_plot(daily_close)
             fig, ax1 = plt.subplots(figsize=PLOT_SIZE_VOLATILITY)
             ax1.set_xlabel('Date', fontsize=12)
@@ -460,10 +544,9 @@ class MarketAnalyzer:
             # Create legend
             from matplotlib.lines import Line2D
             legend_elements = [
-                Line2D([0], [0], color=COLOR_BULL, linewidth=2, label='Bull Market'),
-                Line2D([0], [0], color=COLOR_BEAR, linewidth=2, label='Bear Market'),
-                Line2D([0], [0], color=COLOR_VOL, linewidth=2, label='Volatility'),
-                Line2D([0], [0], color=COLOR_VOL, linestyle='--', linewidth=2, label=f'Current Vol: {current_vol:.1f}%'),
+                Line2D([0], [0], color=COLOR_BULL, linewidth=2, label='Bull'),
+                Line2D([0], [0], color=COLOR_BEAR, linewidth=2, label='Bear'),
+                Line2D([0], [0], color=COLOR_VOL, linewidth=2, label=f'Volatility, *{current_vol:.1f}%'),
             ]
             ax1.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.8, bbox_to_anchor=(0.0, 1.0), borderaxespad=0.1)
             
@@ -574,8 +657,16 @@ class MarketAnalyzer:
     #     fig = self._create_scatter_hist_top_plot(x, y)
     #     return fig
 
-    def _create_scatter_hist_plot(self, x, y):
-        """Create the top main scatter with marginal histograms as a standalone figure."""
+    def _create_scatter_hist_plot(self, x, y, label_indices=None):
+        """Create the top main scatter with marginal histograms as a standalone figure.
+
+        Args:
+            x (pd.Series): X-axis series
+            y (pd.Series): Y-axis series
+            label_indices (Iterable|None): Optional iterable of index labels to annotate.
+                When provided, only these points are labeled; otherwise falls back to
+                labeling the five largest x-values (legacy behavior).
+        """
         fig = plt.figure(figsize=PLOT_SIZE_SCATTER)
         gs = fig.add_gridspec(
             2, 2, 
@@ -611,17 +702,25 @@ class MarketAnalyzer:
         for p in ret_percentiles:
             ax.axhline(p, color='blue', linestyle='dashed', linewidth=1, alpha=0.2)
 
-        # Label the five points with largest oscillation
-        if len(x) >= 5:
-            largest_osc_indices = x.nlargest(5).index
-            for idx in largest_osc_indices:
-                ax.annotate(
-                    f'{idx.strftime("%y%b")}',
-                    xy=(x.loc[idx], y.loc[idx]),
-                    xytext=(5, 0), textcoords='offset points',
-                    fontsize=6, color='red', 
-                    # bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.5),
-                )
+        # Label points
+        try:
+            indices_to_label = None
+            if label_indices is not None:
+                # Filter to indices present in both series
+                indices_to_label = [idx for idx in label_indices if idx in x.index and idx in y.index]
+            elif len(x) >= 5:
+                indices_to_label = x.nlargest(5).index
+
+            if indices_to_label is not None and len(indices_to_label) > 0:
+                for idx in indices_to_label:
+                    ax.annotate(
+                        f'{idx.strftime("%y%b")}',
+                        xy=(x.loc[idx], y.loc[idx]),
+                        xytext=(5, 0), textcoords='offset points',
+                        fontsize=6, color='red',
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to add labels: {e}")
 
         # Label the five most recent points
         if len(x) >= 5:
@@ -702,151 +801,146 @@ class MarketAnalyzer:
         # Add supplementary data table on the main chart (Overall vs Risk)
         self._add_oscillation_analysis_table(ax, x, y)
 
-        # try:
-        #     # Draw the canvas to obtain final layout metrics before adjustment
-        #     fig.canvas.draw()
-
-        #     scatter_pos = ax.get_position()
-        #     top_pos = ax_histx.get_position()
-        #     right_pos = ax_histy.get_position()
-
-        #     # Align the upper histogram's width with the scatter chart's width
-        #     ax_histx.set_position((
-        #         scatter_pos.x0,
-        #         top_pos.y0,
-        #         scatter_pos.width,
-        #         top_pos.height,
-        #     ))
-
-        #     # Align the right histogram's height with the scatter chart's height
-        #     ax_histy.set_position((
-        #         right_pos.x0,
-        #         scatter_pos.y0,
-        #         right_pos.width,
-        #         scatter_pos.height,
-        #     ))
-        # except Exception as e:
-        #     logger.warning(f"Failed to reshape marginal histograms to match scatter dimensions: {e}")
-
         fig.suptitle(f'{x.name} vs {y.name} Analysis', fontsize=14, fontweight='bold')
         return fig
 
-    def _create_return_osc_dynamic_plot(self, x, y):
-        """Create a 2D line chart: X=Index, Y includes Oscillation (blue) and Returns (orange).
+    def _calculate_rolling_projections(self, series, rolling_window, risk_threshold):
+        """Calculate rolling projections using historical percentiles.
+        
+        For each data point, calculates the percentile of the previous rolling_window points.
+        
+        Args:
+            series: Time series data (e.g., osc_high or osc_low)
+            rolling_window: Number of historical periods to use
+            risk_threshold: Percentile threshold (0-100)
+            
+        Returns:
+            pd.Series: Rolling projection values
+        """
+        percentile = risk_threshold / 100.0
+        projections = []
+        
+        for i in range(len(series)):
+            if i < rolling_window:
+                # Not enough historical data
+                projections.append(np.nan)
+            else:
+                # Get previous rolling_window points (excluding current point)
+                historical_window = series.iloc[i - rolling_window:i]
+                proj_value = historical_window.quantile(percentile)
+                projections.append(proj_value)
+        
+        return pd.Series(projections, index=series.index)
 
-        Grouped points from the original 3D chart are annotated with different marker styles:
-        - Stronger oscillation: solid dots
-        - Next step of Stronger oscillation: hollow squares
+    def _create_return_osc_high_low_plot(self, returns, osc_high, osc_low, 
+                                          osc_high_full, osc_low_full,
+                                          rolling_window=20, risk_threshold=90):
+        """Create a line chart showing Returns, Osc_high, Osc_low, and their rolling projections over time.
+        
+        Args:
+            returns: Returns series (filtered to display horizon)
+            osc_high: Osc_high series (filtered to display horizon)
+            osc_low: Osc_low series (filtered to display horizon)
+            osc_high_full: Osc_high series (complete historical dataset, before horizon filtering)
+            osc_low_full: Osc_low series (complete historical dataset, before horizon filtering)
+            rolling_window: Number of historical periods for rolling projections
+            risk_threshold: Percentile threshold (0-100) for projections
+            
+        Returns:
+            matplotlib.figure.Figure: The generated figure
         """
         from matplotlib.lines import Line2D
-        # Increased figure size for better readability per request
         fig, ax = plt.subplots(figsize=PLOT_SIZE_DYNAMICS)
-
-        # Prepare valid data
-        valid_mask = x.notna() & y.notna()
-        x_valid = x[valid_mask]  # Oscillation (%)
-        y_valid = y[valid_mask]  # Returns (%)
-        n = len(x_valid)
+        
+        # Prepare valid data for display
+        valid_mask = returns.notna() & osc_high.notna() & osc_low.notna()
+        returns_valid = returns[valid_mask]
+        osc_high_valid = osc_high[valid_mask]
+        osc_low_valid = osc_low[valid_mask]
+        n = len(returns_valid)
+        
         if n == 0:
             ax.text(0.5, 0.5, 'No data', transform=ax.transAxes, ha='center', va='center')
             ax.axis('off')
             return fig
+            
         t_idx = np.arange(n)
+        
+        # Calculate rolling projections using FULL historical dataset
+        # This ensures accurate projections based on complete history
+        high_proj_full = self._calculate_rolling_projections(osc_high_full, rolling_window, risk_threshold)
+        low_proj_full = self._calculate_rolling_projections(osc_low_full, rolling_window, 100-risk_threshold)
+        
+        # Filter projections to match display horizon
+        high_proj = high_proj_full.reindex(osc_high_valid.index)
+        low_proj = low_proj_full.reindex(osc_low_valid.index)
+        
+        # Plot main series as spots
+        ax.scatter(t_idx, returns_valid.values, color=COLOR_RET, s=25, marker='o', label='Returns', alpha=0.8, zorder=3)
+        
+        ax.scatter(
+            t_idx,
+            osc_high_valid.values,
+            s=40,
+            marker='s',
+            facecolors='none',
+            edgecolors='purple',
+            linewidths=1.4,
+            label='Osc_high',
+            alpha=0.9,
+            zorder=4,
+        )
+        ax.scatter(
+            t_idx,
+            osc_low_valid.values,
+            s=40,
+            marker='s',
+            facecolors='none',
+            edgecolors='blue',
+            linewidths=1.4,
+            label='Osc_low',
+            alpha=0.9,
+            zorder=4,
+        )
+        
 
-        # Plot lines
-        ax.plot(t_idx, x_valid.values, color=COLOR_OSC, linewidth=0.5, label=f'{x.name}')
-        ax.plot(t_idx, y_valid.values, color=COLOR_RET, linewidth=0.5, label=f'{y.name}')
-
-        # Group definitions based on oscillation
-        group1_mask = pd.Series(False, index=x_valid.index)
-        group2_mask = pd.Series(False, index=x_valid.index)
-        if n >= 2:
-            latest_x = x_valid.iloc[-1]
-            group1_mask = x_valid > latest_x
-            group2_mask = group1_mask.shift(1, fill_value=False)
-
-        # Annotate group points on both series with distinct marker styles
-        if group1_mask.any():
-            pos = np.where(group1_mask.to_numpy())[0]
-            # Solid dots for Group 1
-            ax.scatter(pos, x_valid[group1_mask].values, c=COLOR_OSC, s=16, marker='o', zorder=5)
-            ax.scatter(pos, y_valid[group1_mask].values, c=COLOR_RET, s=16, marker='o', zorder=5)
-        if group2_mask.any():
-            pos2 = np.where(group2_mask.to_numpy())[0]
-            # Hollow squares for Group 2
-            ax.scatter(pos2, x_valid[group2_mask].values, facecolors='none', edgecolors=COLOR_OSC, s=48, marker='s', linewidth=1.5, zorder=5)
-            ax.scatter(pos2, y_valid[group2_mask].values, facecolors='none', edgecolors=COLOR_RET, s=48, marker='s', linewidth=1.5, zorder=5)
-
-        # Labels, ticks, and grid
-        ax.set_xlabel('Time', fontsize=11)
-        ax.set_ylabel('Percentage (%)', fontsize=11)
-
-        # Map index ticks to date labels for readability
-        try:
-            tick_pos, tick_labels = self._build_date_ticks(x_valid.index, n, approx_ticks=n // 3 if n >= 9 else n)
-            ax.set_xticks(tick_pos)
-            ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
-        except Exception:
-            pass
-
-        ax.grid(True, alpha=0.3)
-
-        if n > 0:
-            last_idx = t_idx[-1]
-            last_x_val = x_valid.iloc[-1]
-            last_y_val = y_valid.iloc[-1]
-
-            ax.axhline(
-                y=last_x_val, xmin=0, xmax=last_idx / len(t_idx),
-                linestyle='--', color=COLOR_OSC, alpha=0.6,
-            )
-            ax.axhline(
-                y=last_y_val, xmin=0, xmax=last_idx / len(t_idx),
-                linestyle='--', color=COLOR_RET, alpha=0.6,
-            )
-
-        line_handles = [
-            Line2D([0], [0], color=COLOR_OSC, lw=2, label=f'{x.name}'),
-            Line2D([0], [0], color=COLOR_RET, lw=2, label=f'{y.name}'),
-        ]
-        group_handles = [
-            Line2D([0], [0], marker='o', color='black', linestyle='None', markersize=7, label='Stronger Osc'),
-            Line2D([0], [0], marker='s', markerfacecolor='none', markeredgecolor='black', linestyle='None', markersize=8, label='Next Step'),
-        ]
-        ax.legend(handles=line_handles + group_handles, loc='upper left', fontsize=9, framealpha=0.85)
-
-        ax.set_title('Oscillation-Returns Dynamics', fontsize=13, fontweight='bold')
-        plt.tight_layout()
-        return fig
-
-    def _create_spread_dynamics_bar_plot(self, spread_series: pd.Series):
-        """Create the spread dynamics bar chart: spread = Oscillation - Returns, aligned by index."""
-        fig, ax = plt.subplots(figsize=PLOT_SIZE_SPREAD)
-        spread = spread_series.dropna()
-        n = len(spread)
-        if n == 0:
-            ax.text(0.5, 0.5, 'No data', transform=ax.transAxes, ha='center', va='center')
-            ax.axis('off')
-            return fig
-        t_idx = np.arange(n)
-        spread_np = spread.to_numpy()
-        colors = np.where(spread_np >= 0, COLOR_OSC, COLOR_RET)  # blue for >=0, orange for <0
-        ax.bar(t_idx, spread_np, color=colors, width=0.8, alpha=0.9, edgecolor='black', linewidth=0.3)
-        ax.axhline(0, color='black', linewidth=1)
+        # Plot rolling projections with last value in legend
+        last_high_proj = high_proj.iloc[-1] if high_proj is not None and not high_proj.empty else None
+        last_low_proj = low_proj.iloc[-1] if low_proj is not None and not low_proj.empty else None
+        if high_proj is not None and not high_proj.empty:
+            label_high = f'High Proj ({risk_threshold}%)'
+            if last_high_proj is not None:
+                label_high += f' *{last_high_proj:.2f}'
+            ax.plot(t_idx, high_proj.to_numpy(), color='darkgreen', linewidth=1.2, linestyle='--', 
+                label=label_high, alpha=0.6)
+        if low_proj is not None and not low_proj.empty:
+            label_low = f'Low Proj ({risk_threshold}%)'
+            if last_low_proj is not None:
+                label_low += f' *{last_low_proj:.2f}'
+            ax.plot(t_idx, low_proj.to_numpy(), color='darkred', linewidth=1.2, linestyle='--', 
+                label=label_low, alpha=0.6)
+            
+        # Add reference line at y=0
+        ax.axhline(y=0, color='gray', linestyle='-', linewidth=1, alpha=0.3)
+        
+        # Set labels and grid
         ax.set_xlabel('Index', fontsize=11)
-        ax.set_ylabel('Spread (%)', fontsize=11)
-        # Ticks -> map to dates at regular intervals for readability
+        ax.set_ylabel('Percentage (%)', fontsize=11)
+        ax.grid(True, alpha=0.3)
+        
+        # Add date ticks
         try:
-            tick_pos, tick_labels = self._build_date_ticks(spread.index, n, approx_ticks=20)
+            tick_pos, tick_labels = self._build_date_ticks(returns_valid.index, n, approx_ticks=20)
             ax.set_xticks(tick_pos)
             ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
         except Exception:
             pass
-        ax.grid(True, axis='y', alpha=0.3)
-        ax.set_title('Oscillation-Returns Spread Dynamics', fontsize=13, fontweight='bold')
+            
+        ax.legend(loc='upper left', fontsize=8, framealpha=0.85)
+        ax.set_title('Return-Oscillation Dynamics', fontsize=13, fontweight='bold')
         plt.tight_layout()
         return fig
-    
+
     def _add_oscillation_analysis_table(self, ax, oscillation_data, returns_data):
         """Add a comprehensive table showing Overall and Risk analysis for current oscillation context"""
         try:
@@ -941,7 +1035,7 @@ class MarketAnalyzer:
             # Add a subtitle to clarify what the table shows with enhanced context
             subtitle_text = (
                 f'Historical Analysis\n'
-                f'Current: Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%'
+                f'* Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%'
                 )
             ax.text(0.02, 0.75, subtitle_text, 
                    transform=ax.transAxes, fontsize=7, ha='left', va='top',

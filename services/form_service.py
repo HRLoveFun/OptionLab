@@ -1,6 +1,10 @@
 import json
-import datetime as dt
 import logging
+from utils.utils import (
+    DEFAULT_RISK_THRESHOLD,
+    DEFAULT_ROLLING_WINDOW,
+    parse_month_str,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,19 +28,22 @@ class FormService:
         start_time = request.form.get('start_time', '')
         end_time = request.form.get('end_time', '')
 
-        def _parse_month(s: str):
-            if not s:
-                return None
-            for fmt in ('%Y%m', '%Y-%m'):
-                try:
-                    return dt.datetime.strptime(s, fmt).date()
-                except ValueError:
-                    continue
-            return None
+        parsed_start_time = parse_month_str(start_time)
+        parsed_end_time = parse_month_str(end_time) if end_time else None
 
-        parsed_start_time = _parse_month(start_time)
-        parsed_end_time = _parse_month(end_time) if end_time else None
-        risk_threshold = int(request.form.get('risk_threshold', 90))
+        # Apply defaults when fields are blank
+        rt_raw = request.form.get('risk_threshold', '')
+        rw_raw = request.form.get('rolling_window', '')
+
+        try:
+            risk_threshold = int(rt_raw) if str(rt_raw).strip() != '' else DEFAULT_RISK_THRESHOLD
+        except (ValueError, TypeError):
+            risk_threshold = DEFAULT_RISK_THRESHOLD
+
+        try:
+            rolling_window = int(rw_raw) if str(rw_raw).strip() != '' else DEFAULT_ROLLING_WINDOW
+        except (ValueError, TypeError):
+            rolling_window = DEFAULT_ROLLING_WINDOW
         side_bias = request.form.get('side_bias', 'Natural')
         target_bias = None if side_bias == 'Natural' else 0
         option_data = FormService.parse_option_data(request)
@@ -48,6 +55,7 @@ class FormService:
             'parsed_start_time': parsed_start_time,
             'parsed_end_time': parsed_end_time,
             'risk_threshold': risk_threshold,
+            'rolling_window': rolling_window,
             'side_bias': side_bias,
             'target_bias': target_bias,
             'option_data': option_data

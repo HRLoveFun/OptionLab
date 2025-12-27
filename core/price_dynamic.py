@@ -29,25 +29,43 @@ class PriceDynamic:
     def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='D', end_date: dt.date | None = None):
         self._validate_inputs(ticker, start_date, frequency, end_date)
         self.ticker = ticker
-        # Store user-requested horizon
-        self.start_date = start_date
+        # Store user-requested horizon for output filtering only
         self.user_start_date = start_date
         self.frequency = frequency
         # If end_date is blank (None), set internal end_date to today, but remember it was not user-provided
         self._user_provided_end = end_date is not None
-        self.end_date = end_date or dt.date.today()  # internal exclusive end (may be adjusted for horizon filtering)
-        self.user_end_date = self.end_date
-        # Use an earlier download start to ensure the first in-horizon period has a valid LastClose
-        self._download_start = self._compute_download_start(self.start_date, self.frequency)
+        self.user_end_date = end_date or dt.date.today()
+        
+        # Fetch complete historical data - no start_date clamping
+        # Use a far-back date to get maximum historical data so any user start_date is honored
+        # yfinance will return earliest available history when start is very early
+        self._download_start = dt.date(1900, 1, 1)
+        
         # Ensure DB is initialized
         try:
             DataService.initialize()
         except Exception:
             pass
-        # Prefer DB-backed cleaned daily data; fallback to direct download if empty
+        # Prefer DB-backed cleaned daily data; fallback to direct download if insufficient coverage
         raw_data = self._fetch_daily_from_db()
+        
+        # Check if database data has sufficient coverage for the requested horizon
+        # If database doesn't cover the user's start_date, fall back to yfinance
+        needs_fallback = False
         if raw_data is None or raw_data.empty:
+            needs_fallback = True
+        elif len(raw_data) > 0:
+            # Check if earliest available data is after user's start_date
+            earliest_db_date = raw_data.index[0]
+            if isinstance(earliest_db_date, pd.Timestamp):
+                earliest_db_date = earliest_db_date.date()
+            if earliest_db_date > start_date:
+                logger.info(f"Database has data from {earliest_db_date}, but user requested from {start_date}. Falling back to yfinance.")
+                needs_fallback = True
+        
+        if needs_fallback:
             raw_data = self._download_data()
+        
         self._data = self._refrequency(raw_data) if raw_data is not None else None
         self._daily_data = raw_data
 
@@ -75,8 +93,9 @@ class PriceDynamic:
 
     def _download_data(self):
         try:
-            # yfinance end argument is exclusive -> pass end + 1 day to include requested end date
-            yf_end = pd.Timestamp(self.end_date) + pd.Timedelta(days=1)
+            # Fetch all available historical data without date restrictions
+            # yfinance will return all available data when start is far back
+            yf_end = dt.date.today() + dt.timedelta(days=1)
             df = yf.download(
                 self.ticker,
                 start=self._download_start,
@@ -103,7 +122,8 @@ class PriceDynamic:
 
     def _fetch_daily_from_db(self):
         try:
-            df = DataService.get_cleaned_daily(self.ticker, self._download_start, self.end_date)
+            # Fetch all available data from database without date restrictions
+            df = DataService.get_cleaned_daily(self.ticker, self._download_start, dt.date.today())
             if df is None or df.empty:
                 return None
             df = df.rename(columns={
@@ -114,14 +134,7 @@ class PriceDynamic:
                 'adj_close': 'Adj Close',
                 'volume': 'Volume',
             })
-            # Require sufficient coverage; else fallback to live download
-            try:
-                idx_min = pd.to_datetime(df.index.min()).tz_localize(None)
-                need_start = pd.Timestamp(self._download_start)
-                if idx_min > need_start + pd.Timedelta(days=3) or len(df) < 30:
-                    return None
-            except Exception:
-                pass
+            # No coverage check - we want all available data
             return df
         except Exception as e:
             logger.warning(f"DB fetch failed for {self.ticker}: {e}")
@@ -286,7 +299,14 @@ class PriceDynamic:
             logger.error(f"Error in bull_bear_plot: {e}")
             return {'bull_segments': [], 'bear_segments': []}
 
-    def osc(self, on_effect=False):
+    def osc(self, on_effect=False, apply_horizon=True):
+        """Calculate oscillation.
+        
+        Args:
+            on_effect: If True, adjust high/low by LastClose
+            apply_horizon: If True, filter results to user-specified horizon. 
+                          If False, return full historical data.
+        """
         if self._data is None or self._data.empty:
             return None
         try:
@@ -297,18 +317,70 @@ class PriceDynamic:
             else:
                 osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
             osc_data.name = 'Oscillation'
-            return self._apply_horizon(osc_data.dropna())
+            if apply_horizon:
+                return self._apply_horizon(osc_data.dropna())
+            else:
+                return osc_data.dropna()
         except Exception as e:
             logger.error(f"Error calculating oscillation: {e}")
             return None
 
-    def ret(self):
+    def osc_high(self, apply_horizon=True):
+        """Calculate high oscillation.
+        
+        Args:
+            apply_horizon: If True, filter results to user-specified horizon.
+                          If False, return full historical data.
+        """
+        if self._data is None or self._data.empty:
+            return None
+        try:
+            osc_high_data = (self._data["High"] / self._data['LastClose'] - 1) * 100
+            osc_high_data.name = 'Osc_high'
+            if apply_horizon:
+                return self._apply_horizon(osc_high_data.dropna())
+            else:
+                return osc_high_data.dropna()
+        except Exception as e:
+            logger.error(f"Error calculating osc_high: {e}")
+            return None
+
+    def osc_low(self, apply_horizon=True):
+        """Calculate low oscillation.
+        
+        Args:
+            apply_horizon: If True, filter results to user-specified horizon.
+                          If False, return full historical data.
+        """
+        if self._data is None or self._data.empty:
+            return None
+        try:
+            osc_low_data = (self._data["Low"] / self._data['LastClose'] - 1) * 100
+            osc_low_data.name = 'Osc_low'
+            if apply_horizon:
+                return self._apply_horizon(osc_low_data.dropna())
+            else:
+                return osc_low_data.dropna()
+        except Exception as e:
+            logger.error(f"Error calculating osc_low: {e}")
+            return None
+
+    def ret(self, apply_horizon=True):
+        """Calculate returns.
+        
+        Args:
+            apply_horizon: If True, filter results to user-specified horizon.
+                          If False, return full historical data.
+        """
         if self._data is None or self._data.empty:
             return None
         try:
             ret_data = ((self._data["Close"] - self._data['LastClose']) / self._data['LastClose']) * 100
             ret_data.name = 'Returns'
-            return self._apply_horizon(ret_data.dropna())
+            if apply_horizon:
+                return self._apply_horizon(ret_data.dropna())
+            else:
+                return ret_data.dropna()
         except Exception as e:
             logger.error(f"Error calculating returns: {e}")
             return None

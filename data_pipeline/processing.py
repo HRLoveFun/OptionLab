@@ -41,6 +41,10 @@ def _features(df: pd.DataFrame) -> pd.DataFrame:
         out[f"ma_{k}"] = out["close"].rolling(k, min_periods=max(2, int(k/2))).mean()
     for k in [10, 20, 60]:
         out[f"mom_{k}"] = out["close"] / out["close"].shift(k) - 1.0
+    # 5. Oscillation metrics
+    out["osc_high"] = (out["high"] / out["last_close"] - 1) * 100
+    out["osc_low"] = (out["low"] / out["last_close"] - 1) * 100
+    out["osc"] = out["osc_high"] - out["osc_low"]
     return out
 
 
@@ -102,6 +106,9 @@ def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optio
                     None if pd.isna(r.get("mom_10")) else float(r["mom_10"]),
                     None if pd.isna(r.get("mom_20")) else float(r["mom_20"]),
                     None if pd.isna(r.get("mom_60")) else float(r["mom_60"]),
+                    None if pd.isna(r.get("osc_high")) else float(r["osc_high"]),
+                    None if pd.isna(r.get("osc_low")) else float(r["osc_low"]),
+                    None if pd.isna(r.get("osc")) else float(r["osc"]),
                 )
             )
         if rows:
@@ -134,6 +141,9 @@ def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optio
                     "mom_10",
                     "mom_20",
                     "mom_60",
+                    "osc_high",
+                    "osc_low",
+                    "osc",
                 ],
                 rows,
             )

@@ -1,9 +1,8 @@
-import pandas as pd
-import numpy as np
 import datetime as dt
 import logging
 from core.market_analyzer import MarketAnalyzer
 from core.market_review import market_review
+from utils.utils import exclusive_month_end
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +37,7 @@ class MarketService:
         results = {}
         try:
             start_d = form_data.get('parsed_start_time')
-            end_m = form_data.get('parsed_end_time')
-            end_exclusive = None
-            if end_m:
-                year = end_m.year + (1 if end_m.month == 12 else 0)
-                month = 1 if end_m.month == 12 else end_m.month + 1
-                end_exclusive = dt.date(year, month, 1)
+            end_exclusive = exclusive_month_end(form_data.get('parsed_end_time'))
             review_table = market_review(form_data['ticker'], start_d, end_exclusive)
             results['market_review_table'] = review_table.to_html(classes='table table-striped', index=True, escape=False)
         except Exception as e:

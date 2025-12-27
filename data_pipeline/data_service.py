@@ -90,3 +90,17 @@ class DataService:
             (ticker, frequency, start.isoformat(), end.isoformat()),
         )
         return df
+
+    @staticmethod
+    def get_processed_data(ticker: str, start: dt.date, end: dt.date, frequency: str = "W") -> pd.DataFrame:
+        """Get processed data including osc_high, osc_low, and other features."""
+        try:
+            DataService.manual_update(ticker, days=7)
+            df = fetch_df(
+                "SELECT * FROM processed_prices WHERE ticker=? AND frequency=? AND date>=? AND date<=?",
+                (ticker, frequency, start.isoformat(), end.isoformat()),
+            )
+            return df
+        except Exception as e:
+            logger.error(f"Error fetching processed data: {e}")
+            return pd.DataFrame()

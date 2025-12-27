@@ -1,6 +1,7 @@
 import logging
-import datetime as dt
+from utils.utils import DEFAULT_ROLLING_WINDOW, DEFAULT_RISK_THRESHOLD, exclusive_month_end
 from core.market_analyzer import MarketAnalyzer
+from core.correlation_validator import CorrelationValidator
 from .market_service import MarketService
 
 logger = logging.getLogger(__name__)
@@ -14,12 +15,7 @@ class AnalysisService:
         try:
             # 参数命名与前端表单字段保持一致
             # Convert user end month (YYYY-MM) to an exclusive end date (first day of next month)
-            end_exclusive = None
-            if form_data.get('parsed_end_time'):
-                end_m = form_data['parsed_end_time']
-                year = end_m.year + (1 if end_m.month == 12 else 0)
-                month = 1 if end_m.month == 12 else end_m.month + 1
-                end_exclusive = dt.date(year, month, 1)
+            end_exclusive = exclusive_month_end(form_data.get('parsed_end_time'))
 
             analyzer = MarketAnalyzer(
                 ticker=form_data['ticker'],
@@ -56,22 +52,48 @@ class AnalysisService:
         """Generate statistical analysis results"""
         results = {}
         try:
-            # Generate split charts: top scatter+hist and bottom line dynamics
-            top_plot, bottom_plot = analyzer.generate_scatter_plots('Oscillation')
+            # Extract rolling_window and risk_threshold from form_data (apply defaults if blank/missing)
+            rolling_window = form_data.get('rolling_window', DEFAULT_ROLLING_WINDOW)
+            risk_threshold = form_data.get('risk_threshold', DEFAULT_RISK_THRESHOLD)
+            
+            # Generate scatter plot with marginal histograms
+            top_plot = analyzer.generate_scatter_plots('Oscillation', rolling_window, risk_threshold)
             if top_plot:
                 results['feat_ret_scatter_top_url'] = top_plot
-            if bottom_plot:
-                results['feat_ret_scatter_bottom_url'] = bottom_plot
 
-            # Generate spread dynamics bar chart (Oscillation - Returns)
-            spread_plot = analyzer.generate_osc_ret_spread_plot()
-            if spread_plot:
-                results['feat_ret_spread_url'] = spread_plot
+            # Generate High-Low scatter plot
+            high_low_scatter = analyzer.generate_high_low_scatter()
+            if high_low_scatter:
+                results['high_low_scatter_url'] = high_low_scatter
+
+            # Generate Return-Osc_high/low line chart with rolling projections
+            return_osc_plot = analyzer.generate_return_osc_high_low_chart(rolling_window, risk_threshold)
+            if return_osc_plot:
+                results['return_osc_high_low_url'] = return_osc_plot
+            
             volatility_plot = analyzer.generate_volatility_dynamics()
             if volatility_plot:
                 results['volatility_dynamic_url'] = volatility_plot
             else:
                 logger.warning("Volatility dynamics plot generation failed")
+            
+            # Generate correlation validation charts
+            try:
+                correlation_validator = CorrelationValidator(
+                    ticker=form_data['ticker'],
+                    start_date=form_data['parsed_start_time'],
+                    frequency=form_data['frequency'],
+                    end_date=form_data.get('parsed_end_time')
+                )
+                
+                if correlation_validator.is_data_valid():
+                    corr_charts = correlation_validator.generate_all_correlation_charts()
+                    results.update(corr_charts)
+                else:
+                    logger.warning("Correlation validator has no valid data")
+            except Exception as e:
+                logger.error(f"Error generating correlation charts: {e}", exc_info=True)
+                
         except Exception as e:
             logger.error(f"Error generating statistical analysis: {e}", exc_info=True)
         return results

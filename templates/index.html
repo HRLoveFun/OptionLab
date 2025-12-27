@@ -64,8 +64,15 @@
 
                 <div class="form-group">
                     <label for="risk_threshold">Risk Threshold (%)</label>
-                    <input type="number" id="risk_threshold" name="risk_threshold" 
-                           min="0" max="100" step="1" value="{{ risk_threshold or 90 }}" required>
+              <input type="number" id="risk_threshold" name="risk_threshold" 
+                  min="0" max="100" step="1" value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="rolling_window">Rolling Window</label>
+              <input type="number" id="rolling_window" name="rolling_window" 
+                  min="1" step="1" value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}" required>
+                    <div class="hint">Number of historical periods for rolling projections</div>
                 </div>
 
                 <div class="form-group">
@@ -137,7 +144,7 @@
                         Horizon: {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}
                     </span>
                     <span class="meta-item">
-                        Risk Threshold: {{ risk_threshold or 90 }}%
+                        Risk Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%
                     </span>
                     <span class="meta-item">
                         Bias: {{ side_bias or 'Natural' }}
@@ -176,22 +183,22 @@
                     </div>
                     {% endif %}
 
-                    {% if feat_ret_scatter_bottom_url %}
+                    {% if high_low_scatter_url %}
                     <div class="chart-container">
-                        <h4>Oscillation-Returns Dynamics</h4>
+                        <h4>High-Low Correlation</h4>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_ret_scatter_bottom_url }}" 
-                                 alt="Oscillation-Returns Dynamics Line Chart" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ high_low_scatter_url }}" 
+                                 alt="High-Low Correlation" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
-                    {% if feat_ret_spread_url %}
+                    {% if return_osc_high_low_url %}
                     <div class="chart-container">
-                        <h4>Oscillation-Returns Spread Dynamics</h4>
+                        <h4>Return-Oscillation Dynamics</h4>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_ret_spread_url }}" 
-                                 alt="Oscillation-Returns Spread Bar Chart" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ return_osc_high_low_url }}" 
+                                 alt="Return-Oscillation Dynamics" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
@@ -202,6 +209,16 @@
                         <div class="chart-wrapper">
                             <img src="data:image/png;base64,{{ volatility_dynamic_url }}" 
                                  alt="Volatility Dynamics" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if correlation_dynamics_chart or return_autocorr_chart %}
+                    <div class="chart-container">
+                        <h4>Correlation Dynamics</h4>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ correlation_dynamics_chart or return_autocorr_chart }}" 
+                                 alt="Correlation Dynamics" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
@@ -217,7 +234,7 @@
                 <div class="charts-grid">
                     {% if feat_projection_url %}
                     <div class="chart-container full-width">
-                        <h4>Oscillation Projection ({{ side_bias or 'Natural' }} Bias, {{ risk_threshold or 90 }}% Threshold)</h4>
+                        <h4>Oscillation Projection ({{ side_bias or 'Natural' }} Bias, {{ risk_threshold if risk_threshold is not none else 90 }}% Threshold)</h4>
                         <div class="chart-wrapper">
                             <img src="data:image/png;base64,{{ feat_projection_url }}" 
                                  alt="Market Projection" class="analysis-chart">

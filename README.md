@@ -1,286 +1,34 @@
 # Market Observation Dashboard
 
-A comprehensive Flask-based web application for market analysis and options strategy evaluation, providing statistical analysis on index returns and oscillations across multiple time frequencies.
+Flask-based dashboard for market analysis, oscillation statistics, options P&L sketches, and quick multi-asset reviews. Data comes from Yahoo Finance, is optionally cached in SQLite, and is visualized with matplotlib on the backend and vanilla JS on the frontend.
 
-## Features
+## Highlights
+- Multi-frequency returns/oscillation analysis with horizon-aware filtering (D/W/ME/QE).
+- Oscillation projection with bias tuning and options portfolio P&L charting.
+- Market review table across major benchmarks (USD, rates, gold, US/EU/Asia equity indices) with returns, volatility, and correlations.
+- Client-side form persistence, async ticker validation, and collapsible options editor.
 
-### Core Analysis
-- **Market Data Processing**: Download and process stock data from Yahoo Finance
-- **Multi-Frequency Analysis**: Analyze daily, weekly, monthly, and quarterly data
-- **Oscillation Analysis**: Calculate price oscillations with/without overnight effects
-- **Statistical Analysis**: Comprehensive tail statistics, distribution analysis, and volatility dynamics
-- **Period Segmentation**: Analyze data across 1Y, 3Y, 5Y, or entire available history
+## Architecture
+- app.py: Flask entrypoint, routes, and scheduler bootstrap.
+- core/: Price shaping and analytics (price_dynamic, market_analyzer, market_review, correlation_validator).
+- services/: Request orchestration, validation, and market review wiring.
+- data_pipeline/: SQLite-backed ingest → clean → feature pipeline plus optional schedulers.
+- static/ and templates/: Vanilla JS UI, styling, and dashboard template.
+- tests/: Regression tests for chart horizon coverage.
 
-### Advanced Features
-- **Risk Assessment**: Configurable percentile thresholds for risk projections
-- **Bias Analysis**: Natural vs Neutral bias selection for market projections
-- **Options Strategy**: Multi-position portfolio analysis with P&L visualization
-- **Market Review**: Multi-asset comparative analysis with correlation matrices
+## Data Pipeline (download → clean → process → serve)
+- data_pipeline/downloader.py: Download OHLCV via yfinance and upsert into raw_prices (skip fully blank days).
+- data_pipeline/cleaning.py: Align to business days, flag anomalies (5σ moves, volume spikes, OHLC inconsistencies), forward-fill volume only.
+- data_pipeline/processing.py: Build daily/weekly/month-end aggregates and derived features (returns, amplitude, HL spread, Parkinson/GK variance, volume deltas/z-scores, MAs, momentum, osc ranges) into processed_prices.
+- data_pipeline/data_service.py: Facade that initializes DB and performs a 7-day refresh on every fetch (manual_update) before returning cleaned/processed frames.
+- data_pipeline/scheduler.py: Optional APScheduler jobs for daily refresh (16:15) and monthly correlation refresh; controlled by env.
 
-### User Experience
-- **Responsive Design**: Mobile-first responsive interface
-- **Real-time Validation**: Asynchronous ticker symbol validation
-- **Form Persistence**: Automatic saving/loading of form state
-- **Interactive Charts**: High-quality matplotlib visualizations
-- **Collapsible Sections**: Clean, organized interface with expandable options
+Environment
+- MARKET_DB_PATH: SQLite path (default ./market_data.sqlite).
+- AUTO_UPDATE_TICKERS: Comma-separated tickers for scheduled refresh (e.g., "AAPL,MSFT,SPY").
+- SCHED_TZ: Scheduler timezone (default UTC).
 
-## Technology Stack
-
-- **Backend**: Flask 3.1.1, Python 3.8+
-- **Data Processing**: pandas, numpy, scipy
-- **Visualization**: matplotlib, seaborn
-- **Market Data**: yfinance
-- **Frontend**: Vanilla JavaScript, CSS Grid/Flexbox
-- **Deployment**: Gunicorn WSGI server
-
-## Project Structure
-
-```
-OptionStrategy/
-├── app.py                    # Flask application entry point
-├── requirements.txt          # Python dependencies
-├── README.md                # Project documentation
-├── .env.example             # Environment variables template
-├── core/                    # Core business logic
-│   ├── __init__.py
-│   ├── market_analyzer.py   # Main analysis engine
-│   ├── market_review.py     # Multi-asset review functionality
-│   └── price_dynamic.py     # Data processing and calculations
-├── services/                # Service layer
-│   ├── __init__.py
-│   ├── analysis_service.py  # Analysis orchestration
-│   ├── chart_service.py     # Chart generation utilities
-│   ├── form_service.py      # Form data processing
-│   ├── market_service.py    # Market data operations
-│   └── validation_service.py # Input validation
-├── utils/                   # Utility functions
-│   ├── __init__.py
-│   ├── data_utils.py        # Data processing utilities
-│   └── utils.py             # Common helpers and formatters
-├── templates/               # Jinja2 templates
-│   └── index.html
-└── static/                  # Static assets
-    ├── styles.css
-    └── main.js
-```
-
-## Installation & Setup
-
-### Prerequisites
-- Python 3.8 or higher
-- pip package manager
-
-### Installation Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd OptionStrategy
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Set up environment variables** (optional)
-   ```bash
-   cp .env.example .env
-   # Edit .env with your preferred settings
-   ```
-
-5. **Run the application**
-   ```bash
-   python app.py
-   ```
-
-6. **Access the application**
-   Open your browser to `http://localhost:5000`
-
-## API Endpoints
-
-### Main Dashboard
-- **GET/POST** `/`
-  - GET: Renders the main dashboard interface
-  - POST: Processes analysis request and returns results
-  - **Parameters**:
-    - `ticker` (str): Stock symbol (e.g., "AAPL", "^GSPC")
-    - `start_time` (str): Analysis start date in YYYYMM format
-    - `frequency` (str): Data frequency - D/W/ME/QE
-   - (removed) `periods`: The app now uses the Horizon months to drive the analysis window.
-    - `risk_threshold` (int): Risk percentile threshold (0-100)
-    - `side_bias` (str): "Natural" or "Neutral" bias
-    - `option_position` (JSON): Optional options positions
-
-### Ticker Validation
-- **POST** `/api/validate_ticker`
-  - **Request**: `{"ticker": "AAPL"}`
-  - **Response**: `{"valid": true/false, "message": "..."}`
-
-## Key Components
-
-### Core Classes
-
-#### PriceDynamic
-- Handles data download from Yahoo Finance
-- Frequency conversion and resampling
-- Oscillation and return calculations
-- Volatility analysis
-
-#### MarketAnalyzer
-- High-level analysis orchestration
-- Statistical calculations and projections
-- Chart generation and visualization
-- Options portfolio analysis
-
-#### Service Layer
-- **AnalysisService**: Coordinates complete analysis workflow
-- **MarketService**: Market data validation and review generation
-- **FormService**: Form data extraction and processing
-- **ValidationService**: Input validation and error handling
-
-### Frontend Features
-
-#### Form Management
-- Automatic state persistence using localStorage
-- Real-time ticker validation with visual feedback
-- Dynamic options position management
-- Responsive parameter controls
-
-#### Visualization
-- Interactive scatter plots with marginal histograms
-- Cumulative distribution analysis
-- Volatility dynamics with bull/bear market identification
-- Options P&L analysis with breakeven calculations
-
-## Configuration
-
-### Environment Variables
-```bash
-# Flask settings
-FLASK_ENV=development
-FLASK_DEBUG=1
-SECRET_KEY=your_secret_key
-PORT=5000
-
-# Logging
-LOG_LEVEL=INFO
-
-# Analysis defaults
-DEFAULT_FREQUENCY=W
-DEFAULT_RISK_THRESHOLD=90
-```
-
-### Analysis Parameters
-- **Frequencies**: Daily (D), Weekly (W), Monthly (ME), Quarterly (QE)
-   (The Periods controls have been removed; analysis follows the Horizon window.)
-- **Risk Thresholds**: 0-100% percentile for volatility projections
-- **Bias Types**: Natural (data-driven) vs Neutral (symmetric)
-
-## Usage Examples
-
-### Basic Market Analysis
-1. Enter ticker symbol (e.g., "AAPL")
-2. Set analysis horizon (e.g., "202001" for Jan 2020)
-3. Select frequency (Weekly recommended)
-4. Set Horizon start/end months (optional end)
-5. Set risk threshold (90% default)
-6. Click "Analyze"
-
-### Options Strategy Analysis
-1. Complete basic analysis setup
-2. Expand "Positions (Optional)" section
-3. Add option positions:
-   - Type: Short Call, Short Put, Long Call, Long Put
-   - Strike price, quantity, premium
-4. Submit analysis for combined market + options view
-
-### Market Review
-The system automatically generates comparative analysis including:
-- US Dollar Index, 10-Year Treasury, Gold, S&P 500
-- CSI 300, STOXX Europe 600, Hang Seng, Nikkei 225
-- Returns, volatility, and correlation analysis
-
-## Performance Optimizations
-
-- **Efficient Data Processing**: Vectorized pandas operations
-- **Caching**: Form state persistence and data caching
-- **Lazy Loading**: On-demand chart generation
-- **Optimized Dependencies**: Minimal required packages
-- **Memory Management**: Proper matplotlib figure cleanup
-
-## Deployment
-
-### Production Deployment
-```bash
-# Using Gunicorn
-gunicorn --bind 0.0.0.0:8000 --workers 4 app:application
-
-# Using Docker (create Dockerfile)
-FROM python:3.9-slim
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-EXPOSE 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:application"]
-```
-
-### Environment Setup
-- Set `FLASK_ENV=production`
-- Configure proper logging levels
-- Set secure `SECRET_KEY`
-- Configure reverse proxy (nginx recommended)
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support, please open an issue in the GitHub repository or contact the development team.
-
----
-
-**Market Observation Dashboard** - Advanced analytics for informed trading decisions.
-
-## Data pipeline (download → clean → process → serve)
-
-This project includes a local SQLite-backed data pipeline that separates concerns:
-
-- data_pipeline/downloader.py: Download OHLCV from yfinance and upsert into DB (raw_prices). If a day's new data is entirely blank, the old data is retained and a warning is logged.
-- data_pipeline/cleaning.py: Exchange-calendar alignment (NYSE by default), fill missing sessions with NA (no interpolation for full missing days), field-level handling (forward-fill volume only), anomaly flags (5σ price jumps, 5σ volume changes, OHLC consistency).
-- data_pipeline/processing.py: Build daily/weekly/monthly series from cleaned daily and compute features (log returns, amplitude, log high-low spread, Parkinson/GK variance, volume log change, volume z-score, moving averages, momentum). Stored in processed_prices.
-- data_pipeline/data_service.py: Facade used by the app to initialize DB, perform manual updates on access, and return cleaned/processed DataFrames.
-- data_pipeline/scheduler.py: Optional daily auto-update at 16:15 (local scheduler timezone).
-
-Environment variables:
-
-- MARKET_DB_PATH: Path to the SQLite DB file (default: ./market_data.sqlite).
-- AUTO_UPDATE_TICKERS: Comma-separated tickers to auto-update daily at 16:15 (e.g., "AAPL,MSFT,SPY").
-- SCHED_TZ: Scheduler timezone (default: UTC). For Eastern Time, set "America/New_York".
-
-Manual update on access:
-
-- Calls to DataService.get_cleaned_daily(...) and DataService.get_processed(...) trigger a quick past-week refresh (download → clean → process) before returning data.
-
-Optional: pre-seed the DB
-
-You can pre-populate the DB for common tickers to speed up first requests. Example:
-
+Optional seeding
 ```python
 import datetime as dt
 from data_pipeline.data_service import DataService
@@ -292,13 +40,43 @@ DataService.initialize()
 start = dt.date.today() - dt.timedelta(days=730)
 end = dt.date.today()
 for t in ["AAPL", "MSFT", "SPY"]:
-   upsert_raw_prices(t, start, end)
-   clean_range(t, start, end)
-   process_frequencies(t, start, end)
+    upsert_raw_prices(t, start, end)
+    clean_range(t, start, end)
+    process_frequencies(t, start, end)
 ```
 
-Notes:
+## Running Locally
+1) Python 3.8+ and pip are required.
+2) Install deps:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+3) (Optional) cp .env.example .env and set PORT, FLASK_ENV, SECRET_KEY, LOG_LEVEL.
+4) Launch: `python app.py` then open http://localhost:5000.
 
-- Cleaning uses the NYSE calendar (XNYS). You can switch exchanges by editing cleaning._get_business_days.
-- Monthly resampling uses month-end alignment.
-- Some logs may show warnings for log(0) in volume; these are benign and flagged by anomaly checks.
+## API Surface
+- GET/POST / : Renders dashboard; POST accepts ticker, start_time (YYYYMM or YYYY-MM), optional end_time, frequency (D/W/ME/QE), risk_threshold (0-100), side_bias (Natural/Neutral), and option_position JSON.
+- POST /api/validate_ticker : `{ "ticker": "AAPL" }` → `{ valid: bool, message: str }`.
+
+## Usage
+- Provide start/end horizon months, frequency, and risk threshold; choose side bias.
+- Add option rows (type, strike, quantity, premium) if you want P&L overlay.
+- Run analysis to receive oscillation/return charts, volatility dynamics, correlation chart, projection table, and market review table.
+
+## Testing
+- Regression for the chart horizon fix: `python tests/test_chart_time_range.py`.
+
+## Deployment Notes
+- Netlify build config pins Python 3.11 and installs via `pip install -r requirements.txt`.
+- Gunicorn example: `gunicorn --bind 0.0.0.0:8000 app:application`.
+
+## Chart Time Range Fix (documented)
+- Problem: Charts showed only the last few points when the DB lacked full coverage for the requested horizon.
+- Root cause: price_dynamic accepted any DB slice without checking start-date coverage, so yfinance fallback never ran.
+- Fix: coverage check plus optional `apply_horizon=False` paths so calculations can use full history while displays stay horizon-filtered. Implemented in core/price_dynamic.py and core/market_analyzer.py.
+- Verify: run the test above or instantiate MarketAnalyzer with multi-year horizons and confirm counts/plots.
+
+## License & Support
+MIT License. For support or issues, open a GitHub issue.

@@ -28,7 +28,9 @@ try:
         if tickers:
             _scheduler = UpdateScheduler()
             _scheduler.start_daily_update(tickers)
+            _scheduler.start_monthly_correlation_update(tickers)
             logger.info(f"Auto-update scheduler started for: {tickers}")
+            logger.info(f"Monthly correlation update scheduler started for: {tickers}")
 except Exception as e:
     logger.warning(f"Scheduler init failed: {e}")
 
