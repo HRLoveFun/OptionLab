@@ -3,6 +3,8 @@ import logging
 from utils.utils import (
     DEFAULT_RISK_THRESHOLD,
     DEFAULT_ROLLING_WINDOW,
+    DEFAULT_FREQUENCY,
+    DEFAULT_SIDE_BIAS,
     parse_month_str,
 )
 
@@ -24,7 +26,7 @@ class FormService:
             dict: Parsed form data (ticker, frequency, start_time/end_time, etc.)
         """
         ticker = request.form.get('ticker', '').upper()
-        frequency = request.form.get('frequency', 'W')
+        frequency = request.form.get('frequency', DEFAULT_FREQUENCY)
         start_time = request.form.get('start_time', '')
         end_time = request.form.get('end_time', '')
 
@@ -44,7 +46,7 @@ class FormService:
             rolling_window = int(rw_raw) if str(rw_raw).strip() != '' else DEFAULT_ROLLING_WINDOW
         except (ValueError, TypeError):
             rolling_window = DEFAULT_ROLLING_WINDOW
-        side_bias = request.form.get('side_bias', 'Natural')
+        side_bias = request.form.get('side_bias', DEFAULT_SIDE_BIAS)
         target_bias = None if side_bias == 'Natural' else 0
         option_data = FormService.parse_option_data(request)
         return {

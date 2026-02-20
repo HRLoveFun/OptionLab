@@ -487,10 +487,16 @@ class MarketAnalyzer:
                           rotation=90, fontsize=8)
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel('Price', fontsize=12)
-        ax.set_title(f'Oscillation Projection (Threshold: {percentile:.0%}, Volatility: {proj_volatility:.1f}%, Bias: {bias_text})', 
-                    fontsize=14, fontweight='bold')
+        ax.set_title('Oscillation Projection', fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=10, loc='best')
+        
+        # Create parameter info text box in upper left
+        param_text = f'Threshold: {percentile:.0%}\nVolatility: {proj_volatility:.1f}%\nBias: {bias_text}'
+        ax.text(0.02, 0.98, param_text, transform=ax.transAxes,
+                fontsize=12, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        ax.legend(fontsize=12, loc='upper right')
         plt.tight_layout()
 
     # Removed legacy tail statistics and cumulative distribution utilities.
@@ -683,9 +689,8 @@ class MarketAnalyzer:
         ax_histx.tick_params(axis="x", labelbottom=False)
         ax_histy.tick_params(axis="y", labelleft=False)
 
-        # Main scatter plot
+        # Main scatter plot - plot base points first
         ax.scatter(x, y, alpha=0.5, s=20, c="orange")
-        ax.scatter(x.iloc[-1], y.iloc[-1], color='purple', s=40, zorder=5)
 
         ax.axhline(y=0, color='gray', linestyle='-', linewidth=5, alpha=0.05)
         ax.axvline(x=0, color='gray', linestyle='-', linewidth=5, alpha=0.05)
@@ -702,7 +707,7 @@ class MarketAnalyzer:
         for p in ret_percentiles:
             ax.axhline(p, color='blue', linestyle='dashed', linewidth=1, alpha=0.2)
 
-        # Label points
+        # Determine indices to highlight with colors
         try:
             indices_to_label = None
             if label_indices is not None:
@@ -710,29 +715,64 @@ class MarketAnalyzer:
                 indices_to_label = [idx for idx in label_indices if idx in x.index and idx in y.index]
             elif len(x) >= 5:
                 indices_to_label = x.nlargest(5).index
-
+            
+            # Get recent indices
+            recent_indices = x.index[-5:] if len(x) >= 5 else []
+            
+            # Separate into three groups: top only, recent only, and both
+            top_only = []
+            recent_only = []
+            both = []
+            
+            if indices_to_label is not None:
+                for idx in indices_to_label:
+                    if idx in recent_indices:
+                        both.append(idx)
+                    else:
+                        top_only.append(idx)
+            
+            for idx in recent_indices:
+                if indices_to_label is None or idx not in indices_to_label:
+                    recent_only.append(idx)
+            
+            # Plot colored spots for top maximums (red) - exclude ones that are also recent
+            if len(top_only) > 0:
+                ax.scatter([x.loc[idx] for idx in top_only], 
+                          [y.loc[idx] for idx in top_only],
+                          color='red', s=20, zorder=4, alpha=0.7,  )
+            
+            # Plot colored spots for recent periods (blue) - exclude ones that are also top
+            if len(recent_only) > 0:
+                ax.scatter([x.loc[idx] for idx in recent_only], 
+                          [y.loc[idx] for idx in recent_only],
+                          color='blue', s=20, zorder=4, alpha=0.7, )
+            
+            # Plot colored spots for both (purple) - points that are both recent and top maximum
+            if len(both) > 0:
+                ax.scatter([x.loc[idx] for idx in both], 
+                          [y.loc[idx] for idx in both],
+                          color='purple', s=20, zorder=5, alpha=0.7, )
+            
+            # Add labels for top maximums
             if indices_to_label is not None and len(indices_to_label) > 0:
                 for idx in indices_to_label:
                     ax.annotate(
                         f'{idx.strftime("%y%b")}',
                         xy=(x.loc[idx], y.loc[idx]),
-                        xytext=(5, 0), textcoords='offset points',
+                        xytext=(5, -5), textcoords='offset points',
                         fontsize=6, color='red',
                     )
-        except Exception as e:
-            logger.warning(f"Failed to add labels: {e}")
-
-        # Label the five most recent points
-        if len(x) >= 5:
-            recent_indices = x.index[-5:]
+            
+            # Add labels for recent periods
             for idx in recent_indices:
                 ax.annotate(
                     f'{idx.strftime("%b")}',
                     xy=(x.loc[idx], y.loc[idx]),
-                    xytext=(5, 0), textcoords='offset points',
+                    xytext=(5, 5), textcoords='offset points',
                     fontsize=6, color='blue',
-                    # bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.5),
                 )
+        except Exception as e:
+            logger.warning(f"Failed to add labels and colored spots: {e}")
 
         ax.grid(True, alpha=0.3)
         ax.set_xlabel(f'{x.name} (%)', fontsize=12)

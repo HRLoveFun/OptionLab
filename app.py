@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template, jsonify
 import logging
 import os
+import datetime as dt
 from dotenv import load_dotenv
 load_dotenv()  # 加载.env文件
 
@@ -11,6 +12,10 @@ from services.market_service import MarketService
 from services.validation_service import ValidationService
 from data_pipeline.data_service import DataService
 from data_pipeline.scheduler import UpdateScheduler
+from utils.utils import (
+    DEFAULT_TICKER, DEFAULT_FREQUENCY, DEFAULT_RISK_THRESHOLD,
+    DEFAULT_ROLLING_WINDOW, DEFAULT_SIDE_BIAS
+)
 
 app = Flask(__name__)
 
@@ -60,7 +65,17 @@ def index():
             template_data = {**form_data, **analysis_results}
             return render_template('index.html', **template_data)
 
-        return render_template('index.html')
+        return render_template('index.html',
+            ticker=DEFAULT_TICKER,
+            start_time=(
+                lambda today: f"{today.year - 5}-{today.month:02d}"
+            )(dt.date.today()),
+            end_time='',
+            frequency=DEFAULT_FREQUENCY,
+            risk_threshold=DEFAULT_RISK_THRESHOLD,
+            rolling_window=DEFAULT_ROLLING_WINDOW,
+            side_bias=DEFAULT_SIDE_BIAS,
+        )
 
     except Exception as e:
         logger.error(f"Unexpected error in main route: {e}", exc_info=True)
@@ -95,9 +110,4 @@ def validate_ticker():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-
-
     app.run(host="0.0.0.0", port=port, debug=True)
-    # app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False) 
-
-# application = app

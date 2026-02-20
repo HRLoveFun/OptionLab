@@ -1,276 +1,333 @@
-
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Observation Dashboard</title>
+    <title>Market Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
-    <header>
-        <h1>Market Observation Dashboard</h1>
-        <p class="subtitle">Advanced Market Analysis & Options Strategy Tool</p>
-    </header>
 
-    <!-- Parameter Bar: Clear structure for input -->
-    <div class="parameter-bar">
-        <form method="post" id="analysis-form" class="parameter-form">
-            {% if error %}
-            <div class="error-message">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>{{ error }}</span>
+    <header class="site-header">
+        <div class="header-inner">
+            <div class="header-brand">
+                <span class="brand-icon"><i class="fas fa-wave-square"></i></span>
+                <div>
+                    <h1>Market Dashboard</h1>
+                    <p class="subtitle">Options Strategy &amp; Market Analysis</p>
+                </div>
+            </div>
+            {% if ticker %}
+            <div class="header-badge">
+                <span class="badge-ticker">{{ ticker }}</span>
+                <span class="badge-meta">{{ frequency_display or frequency }} &middot; {{ side_bias or 'Natural' }}</span>
             </div>
             {% endif %}
-
-            <div class="parameter-grid">
-                <!-- Ticker, Horizon, Frequency, Risk, Bias, Submit -->
-                <div class="form-group">
-                    <label for="ticker">Ticker</label>
-                    <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}" 
-                           placeholder="AAPL, ^GSPC" required>
-                    <div class="ticker-validation" id="ticker-validation"></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="start_time">Horizon</label>
-                    <div class="horizon-fields">
-                        <input type="month" id="start_time" name="start_time"
-                               value="{{ (start_time[:4] + '-' + start_time[4:6]) if start_time and start_time|length == 6 else start_time or '' }}"
-                               placeholder="Start YYYY-MM" required>
-                        <span class="to-separator">to</span>
-                        <input type="month" id="end_time" name="end_time"
-                               value="{{ (end_time[:4] + '-' + end_time[4:6]) if end_time and end_time|length == 6 else end_time or '' }}"
-                               placeholder="End YYYY-MM (optional)">
-                    </div>
-                    <div class="hint" id="horizon-hint">Enter months as YYYY-MM. End month is optional; defaults to latest if left blank.</div>
-                    <div class="validation-warning" id="horizon-warning" style="display:none;"></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="frequency">Frequency</label>
-                    <select id="frequency" name="frequency">
-                        <option value="D" {% if frequency == 'D' %}selected{% endif %}>Daily</option>
-                        <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
-                        <option value="ME" {% if frequency == 'ME' or not frequency %}selected{% endif %}>Monthly</option>
-                        <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
-                    </select>
-                </div>
-
-                
-
-                <div class="form-group">
-                    <label for="risk_threshold">Risk Threshold (%)</label>
-              <input type="number" id="risk_threshold" name="risk_threshold" 
-                  min="0" max="100" step="1" value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="rolling_window">Rolling Window</label>
-              <input type="number" id="rolling_window" name="rolling_window" 
-                  min="1" step="1" value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}" required>
-                    <div class="hint">Number of historical periods for rolling projections</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="side_bias">Side Bias</label>
-                    <select id="side_bias" name="side_bias">
-                        <option value="Natural" {% if side_bias == 'Natural' %}selected{% endif %}>Natural</option>
-                        <option value="Neutral" {% if side_bias == 'Neutral' %}selected{% endif %}>Neutral</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <button type="submit" class="btn-primary">
-                        <i class="fas fa-play"></i> Analyze
-                    </button>
-                </div>
-            </div>
-            <input type="hidden" id="option_position" name="option_position">
-        </form>
-    </div>
-
-    <!-- Options Strategy Section: Collapsible for clarity -->
-    <div class="options-toggle-section">
-        <div class="toggle-header" onclick="toggleOptionsSection()">
-            <h3>Positions (Optional)</h3>
-            <div class="toggle-controls">
-                <i class="fas fa-chevron-down toggle-icon" id="options-toggle-icon"></i>
-            </div>
         </div>
+    </header>
 
-        <div class="options-content" id="options-content">
-            <div class="options-table-container">
-                <table id="options-table" class="options-table">
-                    <thead>
-                        <tr>
-                            <th>Type</th>
-                            <th>Strike</th>
-                            <th>Quantity</th>
-                            <th>Premium</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="options-tbody">
-                        <!-- Rows added by JS -->
-                    </tbody>
-                </table>
-                <div class="add-row-container">
-                    <button type="button" class="btn-add-row" onclick="addOptionRow()">
-                        <i class="fas fa-plus"></i> Add Position
-                    </button>
+    <div class="app-body">
+        <!-- Sidebar Tab Nav -->
+        <aside class="sidebar">
+            <nav class="tab-nav">
+                <button class="tab-btn {% if not ticker %}active{% endif %}" data-tab="tab-parameter">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>Parameter</span>
+                </button>
+                <button class="tab-btn {% if market_review_table is defined and market_review_table %}active{% endif %}" data-tab="tab-market-review">
+                    <i class="fas fa-table"></i>
+                    <span>Market Review</span>
+                </button>
+                <button class="tab-btn" data-tab="tab-statistical-analysis">
+                    <i class="fas fa-chart-scatter"></i>
+                    <span>Statistical Analysis</span>
+                </button>
+                <button class="tab-btn" data-tab="tab-market-assessment">
+                    <i class="fas fa-binoculars"></i>
+                    <span>Assessment &amp; Projections</span>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Main Panel -->
+        <main class="main-panel">
+
+            <!-- Tab 1: Parameter -->
+            <div class="tab-content {% if not ticker %}active{% endif %}" id="tab-parameter">
+                <div class="panel-header">
+                    <h2><i class="fas fa-sliders-h"></i> Parameters</h2>
+                    <p class="panel-desc">Configure analysis inputs and optional option positions.</p>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Main Content: Results and Analysis -->
-    <main class="main-content">
-        {% if ticker %}
-        <section class="results-section">
-            <div class="results-header">
-                <h2>Analysis Results for {{ ticker }}</h2>
-                <div class="results-meta">
-                    <span class="meta-item">
-                        Frequency: {{ frequency_display or frequency }}
-                    </span>
-                    <span class="meta-item">
-                        Feature: Oscillation Analysis
-                    </span>
-                    <span class="meta-item">
-                        Horizon: {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}
-                    </span>
-                    <span class="meta-item">
-                        Risk Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%
-                    </span>
-                    <span class="meta-item">
-                        Bias: {{ side_bias or 'Natural' }}
-                    </span>
-                </div>
-            </div>
-
-            <!-- Market Review Section -->
-            <div class="market-review-section">
-                <h3>Market Review</h3>
-                
-                <div class="market-review-grid">
-                    {% if market_review_table %}
-                    <div class="stats-container full-width">
-                        <h4>Return, Volatility, and Correlation</h4>
-                        <div class="table-wrapper">
-                            {{ market_review_table|safe }}
-                        </div>
+                <form method="post" id="analysis-form">
+                    {% if error %}
+                    <div class="alert alert-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>{{ error }}</span>
                     </div>
                     {% endif %}
-                </div>
+
+                    <div class="form-card">
+                        <div class="form-card-title">Analysis Settings</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="ticker">Ticker Symbol</label>
+                                <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}"
+                                       placeholder="e.g. AAPL, ^SPX" required>
+                                <div class="ticker-validation" id="ticker-validation"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="frequency">Frequency</label>
+                                <select id="frequency" name="frequency">
+                                    <option value="D" {% if frequency == 'D' %}selected{% endif %}>Daily</option>
+                                    <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
+                                    <option value="ME" {% if frequency == 'ME' or not frequency %}selected{% endif %}>Monthly</option>
+                                    <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="side_bias">Side Bias</label>
+                                <select id="side_bias" name="side_bias">
+                                    <option value="Natural" {% if side_bias == 'Natural' %}selected{% endif %}>Natural</option>
+                                    <option value="Neutral" {% if side_bias == 'Neutral' %}selected{% endif %}>Neutral</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group horizon-group">
+                                <label>Time Horizon</label>
+                                <div class="horizon-fields">
+                                    <input type="month" id="start_time" name="start_time"
+                                           value="{{ (start_time[:4] + '-' + start_time[4:6]) if start_time and start_time|length == 6 else start_time or '' }}"
+                                           required>
+                                    <span class="to-separator"><i class="fas fa-arrow-right"></i></span>
+                                    <input type="month" id="end_time" name="end_time"
+                                           value="{{ (end_time[:4] + '-' + end_time[4:6]) if end_time and end_time|length == 6 else end_time or '' }}"
+                                           placeholder="optional">
+                                </div>
+                                <div class="field-hint">End month is optional — defaults to latest available.</div>
+                                <div class="validation-warning" id="horizon-warning" style="display:none;"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="risk_threshold">Risk Threshold <span class="label-unit">%</span></label>
+                                <input type="number" id="risk_threshold" name="risk_threshold"
+                                       min="0" max="100" step="1"
+                                       value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="rolling_window">Rolling Window <span class="label-unit">periods</span></label>
+                                <input type="number" id="rolling_window" name="rolling_window"
+                                       min="1" step="1"
+                                       value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}" required>
+                                <div class="field-hint">Historical periods used for rolling projections.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="option_position" name="option_position">
+
+                    <!-- Positions accordion -->
+                    <div class="form-card collapsible" id="positions-card">
+                        <div class="form-card-title collapsible-trigger" onclick="toggleOptionsSection()">
+                            <span><i class="fas fa-layer-group"></i> Positions <span class="optional-tag">Optional</span></span>
+                            <i class="fas fa-chevron-down chevron-icon" id="options-toggle-icon"></i>
+                        </div>
+                        <div class="collapsible-body" id="options-content">
+                            <div class="options-table-container">
+                                <table id="options-table" class="options-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Strike</th>
+                                            <th>Quantity</th>
+                                            <th>Premium</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="options-tbody"></tbody>
+                                </table>
+                                <div class="add-row-container">
+                                    <button type="button" class="btn-ghost" onclick="addOptionRow()">
+                                        <i class="fas fa-plus"></i> Add Position
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary btn-lg">
+                            <i class="fas fa-play"></i> Run Analysis
+                        </button>
+                    </div>
+                </form>
             </div>
 
-            <!-- Statistical Analysis Section -->
-            <div class="analysis-section">
-                <h3>Statistical Analysis</h3>
-                
-                <div class="charts-vertical">
+            <!-- Tab 2: Market Review -->
+            <div class="tab-content {% if ticker %}active{% endif %}" id="tab-market-review">
+                <div class="panel-header">
+                    <h2><i class="fas fa-table"></i> Market Review</h2>
+                    {% if ticker %}
+                    <p class="panel-desc">Return, volatility, and correlation summary for <strong>{{ ticker }}</strong>.</p>
+                    {% endif %}
+                </div>
+
+                {% if ticker %}
+                <div class="meta-bar">
+                    <span class="meta-chip"><i class="fas fa-tag"></i> {{ ticker }}</span>
+                    <span class="meta-chip"><i class="fas fa-clock"></i> {{ frequency_display or frequency }}</span>
+                    <span class="meta-chip"><i class="fas fa-calendar"></i> {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}</span>
+                    <span class="meta-chip"><i class="fas fa-shield-alt"></i> Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%</span>
+                    <span class="meta-chip"><i class="fas fa-compass"></i> {{ side_bias or 'Natural' }}</span>
+                </div>
+
+                {% if market_review_table %}
+                <div class="content-card">
+                    <div class="content-card-title">Return, Volatility &amp; Correlation</div>
+                    <div class="table-wrapper">{{ market_review_table|safe }}</div>
+                </div>
+                {% else %}
+                <div class="no-results-notice">
+                    <i class="fas fa-info-circle"></i>
+                    No results yet — fill in the parameters and click <strong>Run Analysis</strong>.
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-table empty-icon"></i>
+                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Tab 3: Statistical Analysis -->
+            <div class="tab-content" id="tab-statistical-analysis">
+                <div class="panel-header">
+                    <h2><i class="fas fa-chart-bar"></i> Statistical Analysis</h2>
+                    {% if ticker %}
+                    <p class="panel-desc">Scatter plots and dynamic correlations for <strong>{{ ticker }}</strong>.</p>
+                    {% endif %}
+                </div>
+
+                {% if feat_ret_scatter_top_url is defined and (feat_ret_scatter_top_url or feat_ret_scatter_hist_url or high_low_scatter_url or return_osc_high_low_url or volatility_dynamic_url or correlation_dynamics_chart or return_autocorr_chart) %}
+                <div class="charts-stack">
                     {% if feat_ret_scatter_top_url or feat_ret_scatter_hist_url %}
-                    <div class="chart-container">
-                        <h4>Oscillation vs Returns Correlation</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">Oscillation vs Returns Correlation</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_ret_scatter_top_url or feat_ret_scatter_hist_url }}" 
-                                 alt="Oscillation vs Returns Analysis (Top)" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ feat_ret_scatter_top_url or feat_ret_scatter_hist_url }}" alt="Oscillation vs Returns" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
                     {% if high_low_scatter_url %}
-                    <div class="chart-container">
-                        <h4>High-Low Correlation</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">High-Low Correlation</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ high_low_scatter_url }}" 
-                                 alt="High-Low Correlation" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ high_low_scatter_url }}" alt="High-Low Correlation" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
                     {% if return_osc_high_low_url %}
-                    <div class="chart-container">
-                        <h4>Return-Oscillation Dynamics</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">Return-Oscillation Dynamics</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ return_osc_high_low_url }}" 
-                                 alt="Return-Oscillation Dynamics" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ return_osc_high_low_url }}" alt="Return-Oscillation Dynamics" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
                     {% if volatility_dynamic_url %}
-                    <div class="chart-container">
-                        <h4>Volatility Dynamics</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">Volatility Dynamics</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ volatility_dynamic_url }}" 
-                                 alt="Volatility Dynamics" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ volatility_dynamic_url }}" alt="Volatility Dynamics" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
                     {% if correlation_dynamics_chart or return_autocorr_chart %}
-                    <div class="chart-container">
-                        <h4>Correlation Dynamics</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">Correlation Dynamics</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ correlation_dynamics_chart or return_autocorr_chart }}" 
-                                 alt="Correlation Dynamics" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ correlation_dynamics_chart or return_autocorr_chart }}" alt="Correlation Dynamics" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
                 </div>
-
-                
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-chart-bar empty-icon"></i>
+                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+                </div>
+                {% endif %}
             </div>
 
-            <!-- Market Assessment Section -->
-            <div class="assessment-section">
-                <h3>Market Assessment & Projections</h3>
-                
-                <div class="charts-grid">
+            <!-- Tab 4: Market Assessment & Projections -->
+            <div class="tab-content" id="tab-market-assessment">
+                <div class="panel-header">
+                    <h2><i class="fas fa-binoculars"></i> Assessment &amp; Projections</h2>
+                    {% if ticker %}
+                    <p class="panel-desc">Forward-looking projections and P&amp;L for <strong>{{ ticker }}</strong>.</p>
+                    {% endif %}
+                </div>
+
+                {% if feat_projection_url is defined or plot_url is defined %}
+                <div class="charts-stack">
                     {% if feat_projection_url %}
-                    <div class="chart-container full-width">
-                        <h4>Oscillation Projection ({{ side_bias or 'Natural' }} Bias, {{ risk_threshold if risk_threshold is not none else 90 }}% Threshold)</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">Oscillation Projection</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_projection_url }}" 
-                                 alt="Market Projection" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ feat_projection_url }}" alt="Market Projection" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
 
-                    {% if not feat_projection_table.empty %}
-                    <div class="stats-container full-width">
-                        <h4>Oscillation Projection Values</h4>
-                        <div class="table-wrapper">
-                            {{ feat_projection_table|safe }}
-                        </div>
+                    {% if feat_projection_table is defined and feat_projection_table and not feat_projection_table.empty %}
+                    <div class="content-card">
+                        <div class="content-card-title">Projection Values</div>
+                        <div class="table-wrapper">{{ feat_projection_table|safe }}</div>
                     </div>
                     {% endif %}
 
                     {% if plot_url %}
-                    <div class="chart-container full-width">
-                        <h4>Options Portfolio P&L Analysis</h4>
+                    <div class="content-card">
+                        <div class="content-card-title">Options Portfolio P&amp;L Analysis</div>
                         <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ plot_url }}" 
-                                 alt="Options P&L Chart" class="analysis-chart">
+                            <img src="data:image/png;base64,{{ plot_url }}" alt="Options P&L Chart" class="analysis-chart">
                         </div>
                     </div>
                     {% endif %}
                 </div>
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-binoculars empty-icon"></i>
+                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+                </div>
+                {% endif %}
             </div>
-        </section>
-        {% endif %}
-    </main>
 
-    <footer>
-        <p>&copy; 2024 Market Observation Dashboard. Advanced analytics for informed trading decisions.</p>
-    </footer>
+        </main>
+    </div>
 
     <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script>
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var target = this.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+                document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+                this.classList.add('active');
+                document.getElementById(target).classList.add('active');
+            });
+        });
+    </script>
 </body>
-
 </html>

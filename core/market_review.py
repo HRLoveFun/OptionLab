@@ -16,7 +16,7 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
         'USD': 'DX-Y.NYB',
         'US10Y': '^TNX',
         'Gold': 'GC=F',
-        'SPX': '^GSPC',
+        'SPX': '^SPX',
         'CSI300': '000300.SS',
         'HSI': '^HSI',
         'NKY': '^N225',
