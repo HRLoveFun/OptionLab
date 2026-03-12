@@ -894,6 +894,10 @@ body {
 .oc-t-row:last-child { border-bottom: none; }
 .oc-t-row:hover > div { background: var(--slate-50) !important; }
 
+/* Liquidity score row styling */
+.oc-t-row.oc-liq-avoid > div { opacity: 0.45; text-decoration: line-through; }
+.oc-t-row.oc-liq-fair  > div { background: #fffbe6; }
+
 /* Calls & Puts cell grids */
 .oc-t-calls,
 .oc-t-puts {

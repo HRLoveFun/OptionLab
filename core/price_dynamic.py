@@ -398,3 +398,95 @@ class PriceDynamic:
 
     def is_valid(self):
         return self._data is not None and not self._data.empty
+
+    def calculate_hv_context(self) -> dict | None:
+        """Multi-window historical volatility and percentile rank.
+
+        Reuses ``_daily_data``, computes log returns once and derives all
+        rolling windows from the same series.  Result is cached for the
+        lifetime of this object (one request).
+        """
+        if hasattr(self, '_hv_context_cache'):
+            return self._hv_context_cache
+
+        daily = self._daily_data
+        if daily is None or len(daily) < 30:
+            return None
+
+        try:
+            log_ret = np.log(daily['Close'] / daily['Close'].shift(1)).dropna()
+
+            WINDOWS = [10, 20, 60, 252]
+            ANN_FACTOR = np.sqrt(252) * 100
+
+            hv_dict = {
+                f'hv_{w}d': float(log_ret.rolling(w, min_periods=max(5, w // 2))
+                                   .std().iloc[-1] * ANN_FACTOR)
+                for w in WINDOWS
+            }
+
+            hv_20_series = (log_ret.rolling(20, min_periods=10)
+                                    .std().dropna() * ANN_FACTOR)
+            if len(hv_20_series) >= 60:
+                recent_252 = hv_20_series.iloc[-252:]
+                current_hv20 = hv_dict['hv_20d']
+                hv_dict['hv_rank'] = float(
+                    (recent_252 <= current_hv20).sum() / len(recent_252)
+                )
+                hv_dict['hv_252d_min'] = float(recent_252.min())
+                hv_dict['hv_252d_max'] = float(recent_252.max())
+            else:
+                hv_dict['hv_rank'] = None
+
+            hv_dict['hv_term_slope'] = round(
+                hv_dict['hv_10d'] - hv_dict['hv_60d'], 2
+            )
+
+            self._hv_context_cache = hv_dict
+            return hv_dict
+
+        except Exception as e:
+            logger.warning(f"HV context calculation failed: {e}")
+            return None
+
+    def build_vol_premium_context(self, atm_iv: float | None) -> dict | None:
+        """Compare current IV snapshot with historical HV to produce an
+        actionable qualitative signal.
+        """
+        hv_ctx = self.calculate_hv_context()
+        if hv_ctx is None or atm_iv is None:
+            return None
+
+        hv_20 = hv_ctx.get('hv_20d')
+        hv_rank = hv_ctx.get('hv_rank')
+
+        vol_premium = None
+        if hv_20 and hv_20 > 1.0:
+            vol_premium = round(atm_iv / hv_20, 3)
+
+        signal = "数据不足，无法判断"
+        if vol_premium is not None and hv_rank is not None:
+            high_vp  = vol_premium > 1.2
+            high_hvr = hv_rank > 0.5
+            low_vp   = vol_premium < 0.85
+            low_hvr  = hv_rank < 0.4
+
+            if high_vp and high_hvr:
+                signal = "Seller environment (IV premium over HV, HV rank mid-high)"
+            elif low_vp and low_hvr:
+                signal = "Buyer environment (IV discount to HV, HV rank mid-low)"
+            elif high_vp and not high_hvr:
+                signal = "IV premium but HV low — watch for mean reversion"
+            else:
+                signal = "Neutral (no clear directional edge)"
+
+        return {
+            'atm_iv':        round(atm_iv, 2),
+            'hv_10d':        round(hv_ctx.get('hv_10d', 0), 2),
+            'hv_20d':        round(hv_20, 2) if hv_20 else None,
+            'hv_60d':        round(hv_ctx.get('hv_60d', 0), 2),
+            'vol_premium':   vol_premium,
+            'hv_rank_252d':  round(hv_rank * 100, 1) if hv_rank else "N/A (insufficient sample)",
+            'hv_term_slope': hv_ctx.get('hv_term_slope'),
+            'signal':        signal,
+        }

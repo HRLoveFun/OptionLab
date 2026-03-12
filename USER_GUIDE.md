@@ -10,8 +10,13 @@ This guide explains every tab in the Market Dashboard, covering the concepts, fo
 2. [Market Review](#2-market-review)
 3. [Statistical Analysis](#3-statistical-analysis)
 4. [Assessment & Projections](#4-assessment--projections)
+   - [Oscillation Projection](#41-oscillation-projection)
+   - [Position Sizing](#42-position-sizing)
+   - [Options Portfolio P&L](#43-options-portfolio-pl)
 5. [Option Chain](#5-option-chain)
 6. [Volatility Analysis](#6-volatility-analysis)
+   - [Key Metrics](#61-key-metrics-snapshot)
+   - [Volatility Premium Context](#62-volatility-premium-context)
 7. [Odds](#7-odds)
 
 ---
@@ -30,6 +35,17 @@ The **Parameter** tab is the control panel for all analyses. Configure your inpu
 | **Time Horizon** | Start month (required) and end month (optional). Determines the analysis window. If end month is omitted, data extends to the latest available date. | Past 5 years to present |
 | **Risk Threshold (%)** | Percentile used for oscillation-based projections and rolling envelopes (0–100). Higher values widen the projected range. | 90 |
 | **Rolling Window (periods)** | Number of historical periods used to compute rolling percentile projections in the Return-Oscillation chart. | 120 |
+
+### Position Sizing (Optional)
+
+Expand the **Position Sizing** accordion to configure capital-aware risk management:
+
+| Field | Description | Default |
+|---|---|---|
+| **Account Size ($)** | Total account equity in USD. Must be a positive number (max $1 billion). | *(empty — sizing disabled)* |
+| **Max Risk per Trade (%)** | Maximum percentage of account equity to risk on a single trade (0.1 – 20%). | 2.0 |
+
+When both fields are provided, the system calculates the maximum number of contracts you can trade while staying within your risk budget. Results appear in the **Assessment** tab.
 
 ### Option Positions (Optional)
 
@@ -219,9 +235,11 @@ where $p$ is the Risk Threshold (e.g., 90th percentile) and the oscillation seri
 
 Depending on Side Bias:
 
-- **Natural bias**: Grid-search over weights $w \in [0.3, 0.7]$ to maximize the historical hit rate (percentage of periods where the actual close fell within the projected range):
+- **Natural bias**: A **walk-forward** procedure splits the historical data into a training set (first 70%) and an out-of-sample (OOS) validation set (last 30%). The algorithm grid-searches over weights $w \in [0.3, 0.7]$ using the training set to maximize the hit rate, then evaluates the chosen weight on the held-out validation set:
 
-$$w^* = \arg\max_w \;\frac{1}{N}\sum_{t=1}^{N} \mathbf{1}\bigl[C_t \in [\text{ProjLow}_t,\, \text{ProjHigh}_t]\bigr]$$
+$$w^* = \arg\max_w \;\frac{1}{N_{\text{train}}}\sum_{t=1}^{N_{\text{train}}} \mathbf{1}\bigl[C_t \in [\text{ProjLow}_t,\, \text{ProjHigh}_t]\bigr]$$
+
+  The OOS hit rate is displayed in the projection chart's info box (e.g., "OOS Hit 78.5% (Train 840 / Valid 360)"), providing transparency on the model's true forward-looking accuracy and guarding against overfitting.
 
 - **Neutral bias**: Grid-search over $w \in [0.4, 0.6]$ to minimize the net directional bias:
 
@@ -250,13 +268,44 @@ The chart displays business-day granularity:
 - **Red hollow circles**: Current-period projected high/low envelope (expanding along a $\sqrt{t}$ diffusion path).
 - **Orange hollow circles**: Next-period projected high/low envelope.
 
-The inset text box shows the Threshold, projected Volatility, and Bias configuration.
+The inset text box shows the Threshold, projected Volatility, Bias configuration, and (for Natural bias) the **OOS hit rate** with train/validation split sizes.
 
 #### Projection Table
 
 A detailed table showing daily values for Close, High, Low, and both current and next-period projected bounds (iHigh, iLow, iHigh1, iLow1).
 
-### 4.2 Options Portfolio P&L
+### 4.2 Position Sizing
+
+When **Account Size** and **Max Risk per Trade** are configured in the Parameter tab, the Assessment section includes a **Position Sizing** card that calculates how many contracts you can trade while staying within your risk budget.
+
+#### Calculation
+
+$$\text{Max Risk (\$)} = \text{Account Size} \times \frac{\text{Max Risk \%}}{100}$$
+
+$$\text{Max Contracts} = \left\lfloor \frac{\text{Max Risk (\$)}}{\text{Max Loss per Contract}} \right\rfloor$$
+
+where **Max Loss per Contract** is derived from the option P&L matrix (the worst-case loss across all price scenarios).
+
+#### Edge Cases
+
+| Scenario | Behavior |
+|---|---|
+| **Unlimited risk** (e.g., naked call) | Max contracts = 0; a warning is displayed: *"Strategy has unlimited risk — position sizing not applicable"* |
+| **Near-zero max loss** (e.g., deep ITM spread) | Caps at 1,000 contracts to prevent absurdly large positions |
+| **Credit strategy** (net credit received) | Uses the net credit as the risk basis |
+| **No option positions defined** | Position sizing section is hidden |
+
+#### Output Fields
+
+| Field | Description |
+|---|---|
+| **Max Contracts** | Maximum whole number of contracts within risk budget |
+| **Max Loss / Contract** | Worst-case loss for a single contract |
+| **Actual Risk ($)** | Max Contracts × Max Loss — your actual capital at risk |
+| **Risk %** | Actual Risk as a percentage of account equity |
+| **Warnings** | Any edge-case alerts (unlimited risk, capped contracts, etc.) |
+
+### 4.3 Options Portfolio P&L
 
 If option positions are defined in the Parameter tab, a P&L payoff diagram is generated.
 
@@ -278,6 +327,29 @@ The portfolio P&L is the sum across all legs, graphed over a price range of $[0.
 - Red shaded area: Loss zone.
 - Red dashed vertical line: Current underlying price.
 - Info box: Max Profit, Max Loss, and Breakeven point(s).
+
+#### Greeks Overlay
+
+When option positions include DTE and IV data (available when loaded from the Option Chain), the P&L chart displays a **Greeks summary box** in the upper-right corner showing the portfolio-level (net) Black-Scholes Greeks:
+
+| Greek | Symbol | Meaning |
+|---|---|---|
+| **Delta** | $\Delta$ | Sensitivity of portfolio value to a \$1 move in the underlying |
+| **Gamma** | $\Gamma$ | Rate of change of Delta per \$1 move — measures convexity |
+| **Theta** | $\Theta$ | Daily time decay in dollars — how much value the portfolio loses per calendar day |
+| **Vega** | $\nu$ | Sensitivity to a 1-percentage-point change in implied volatility |
+
+Greeks are computed using the **Black-Scholes model** with vectorized NumPy operations for performance:
+
+$$\Delta_{\text{call}} = N(d_1), \quad \Delta_{\text{put}} = N(d_1) - 1$$
+
+$$\Gamma = \frac{n(d_1)}{S \cdot \sigma \cdot \sqrt{T}}$$
+
+$$\Theta_{\text{call}} = -\frac{S \cdot n(d_1) \cdot \sigma}{2\sqrt{T}} - r K e^{-rT} N(d_2)$$
+
+$$\nu = S \cdot n(d_1) \cdot \sqrt{T}$$
+
+where $d_1 = \frac{\ln(S/K) + (r + \sigma^2/2)T}{\sigma\sqrt{T}}$, $d_2 = d_1 - \sigma\sqrt{T}$, $N(\cdot)$ is the standard normal CDF, and $n(\cdot)$ is the standard normal PDF.
 
 ---
 
@@ -312,6 +384,23 @@ $$\text{Prem (Put)} = \text{Last} - \max(K - S, 0)$$
 - **ITM shading**: In-the-money rows are highlighted.
 - **Spot marker**: A labeled row marks the current spot price position.
 
+### Liquidity Score
+
+Each option row receives a **liquidity score** (GOOD / FAIR / AVOID) based on four criteria evaluated independently for the call and put side:
+
+| Criterion | AVOID if | FAIR if |
+|---|---|---|
+| **Bid-Ask Spread** | Spread > 20% of mid price | Spread > 10% of mid price |
+| **Open Interest** | OI < 10 contracts | OI < 100 contracts |
+| **Volume** | Volume = 0 | Volume < 10 |
+| **Moneyness** | Moneyness < 0.80 or > 1.20 | — |
+
+The worst score between the call and put side determines the row's overall score. Visual indicators:
+
+- **AVOID** rows: Dimmed (45% opacity) with strike-through text — these contracts are illiquid and should generally be avoided.
+- **FAIR** rows: Light yellow background — tradeable but check spreads before entering.
+- **GOOD** rows: Default styling — adequate liquidity for most strategies.
+
 ---
 
 ## 6. Volatility Analysis
@@ -333,7 +422,29 @@ A summary table with:
 | **Expected Move** | ATM straddle cost = ATM Call Ask + ATM Put Ask |
 | **Max Pain** | The strike at which total option holder losses are minimized |
 
-### 6.2 Expected Move Table
+### 6.2 Volatility Premium Context
+
+Displayed as a card immediately after the Key Metrics table, the **Vol Premium** panel compares implied volatility against realized (historical) volatility to assess whether options are cheap or expensive.
+
+| Field | Description |
+|---|---|
+| **ATM IV** | At-the-money implied volatility from the nearest expiry |
+| **HV 10d / 20d / 60d** | Annualized historical volatility over 10, 20, and 60 trading-day windows: $\sigma_w = \text{Std}(\ln r_t) \times \sqrt{252}$ |
+| **Vol Premium** | Ratio of ATM IV to 20-day HV: $\text{Premium} = \text{ATM IV} / \text{HV}_{20}$. Values > 1 indicate IV is above realized vol. |
+| **HV Rank** | Percentile rank of the current 20-day HV relative to the full 252-day HV distribution (0 – 100%). |
+| **Term Slope** | Ratio of 60-day HV to 10-day HV. Values > 1 indicate long-term vol exceeds short-term vol (calming regime); < 1 indicates a vol spike. |
+| **Signal** | Qualitative trading signal derived from the vol premium ratio: |
+
+**Signal logic:**
+
+| Condition | Signal | Interpretation |
+|---|---|---|
+| Premium ≥ 1.2 | **Seller** | IV is rich — favor selling premium (e.g., short strangles, iron condors) |
+| Premium ≤ 0.8 | **Buyer** | IV is cheap — favor buying premium (e.g., long straddles, debit spreads) |
+| Premium ≤ 0.8 AND HV Rank > 70% | **Mean-reversion** | IV is cheap but HV is elevated — vol may normalize; selling HV / buying IV |
+| Otherwise | **Neutral** | No clear edge — vol is fairly priced |
+
+### 6.3 Expected Move Table
 
 For each expiry, the table shows:
 
@@ -345,7 +456,7 @@ $$\text{Upper Bound} = S + \text{Expected Move}, \quad \text{Lower Bound} = S - 
 
 where $C_{\text{ATM}}$ and $P_{\text{ATM}}$ are the ask prices of ATM call and put options, and $S$ is the spot price.
 
-### 6.3 IV Smile
+### 6.4 IV Smile
 
 Plots call and put implied volatilities across strikes for the nearest expiry.
 
@@ -353,14 +464,14 @@ Plots call and put implied volatilities across strikes for the nearest expiry.
 - **Symmetric smile**: Equal OTM put and call IV — typical of index options.
 - **Skew (smirk)**: OTM puts have higher IV than OTM calls — reflects tail-risk hedging demand.
 
-### 6.4 IV Term Structure
+### 6.5 IV Term Structure
 
 ATM put IV plotted across all available expiration dates.
 
 - **Contango (normal)**: Near-term IV < far-term IV. Market is calm; term structure slopes upward.
 - **Backwardation (inverted)**: Near-term IV > far-term IV. Elevated short-term uncertainty (e.g., earnings, events).
 
-### 6.5 IV Surface (3D)
+### 6.6 IV Surface (3D)
 
 A three-dimensional scatter plot with:
 - **X-axis**: Moneyness = $K / S$ (filtered to $[0.7, 1.3]$)
@@ -369,7 +480,7 @@ A three-dimensional scatter plot with:
 
 Color-coded by IV level (RdYlGn colormap) showing the full volatility landscape.
 
-### 6.6 Skew Analysis
+### 6.7 Skew Analysis
 
 Two sub-plots for the nearest expiry:
 
@@ -387,7 +498,7 @@ Positive values (red bars) indicate put IV exceeds call IV at that strike — be
 
 The **25Δ Skew** annotation shows the approximate risk reversal at the 25-delta level.
 
-### 6.7 OI / Volume Profile
+### 6.8 OI / Volume Profile
 
 Side-by-side bar charts for the nearest expiry:
 
@@ -398,7 +509,7 @@ Side-by-side bar charts for the nearest expiry:
 
 $$\text{Max Pain} = \arg\min_K \sum_{i} \bigl[\max(K_i^{C} - K, 0) \times \text{OI}_i^C + \max(K - K_i^{P}, 0) \times \text{OI}_i^P\bigr]$$
 
-### 6.8 Put/Call Ratio by Expiry
+### 6.9 Put/Call Ratio by Expiry
 
 Paired horizontal bar charts showing **Volume PCR** and **OI PCR** for each expiration (up to 12).
 
@@ -455,6 +566,7 @@ Each expiration date is rendered as a separate line on the chart, color-coded. T
 | **OTM** | Out-of-the-money — call with strike > spot, or put with strike < spot |
 | **ITM** | In-the-money — call with strike < spot, or put with strike > spot |
 | **IV** | Implied Volatility — the market's expectation of future volatility priced into the option |
+| **HV** | Historical Volatility — realized volatility computed from observed log returns over a lookback window |
 | **OI** | Open Interest — total number of outstanding (unsettled) option contracts |
 | **PCR** | Put/Call Ratio — ratio of put activity to call activity |
 | **DTE** | Days to Expiry — calendar days until the option contract expires |
@@ -463,3 +575,12 @@ Each expiration date is rendered as a separate line on the chart, color-coded. T
 | **25Δ Skew** | Difference in IV between 25-delta put and 25-delta call, measuring volatility asymmetry |
 | **Contango** | Upward-sloping term structure (far-term IV > near-term IV) |
 | **Backwardation** | Inverted term structure (near-term IV > far-term IV) |
+| **Delta (Δ)** | Rate of change of option price with respect to a \$1 change in the underlying |
+| **Gamma (Γ)** | Rate of change of Delta per \$1 move in the underlying — measures convexity of the payoff |
+| **Theta (Θ)** | Daily time decay — dollar amount the option loses per calendar day, all else equal |
+| **Vega (ν)** | Sensitivity of option price to a 1-percentage-point change in implied volatility |
+| **Vol Premium** | Ratio of ATM IV to 20-day HV — values > 1 mean implied vol exceeds realized vol |
+| **HV Rank** | Percentile rank of current HV relative to its trailing 252-day distribution |
+| **Liquidity Score** | GOOD / FAIR / AVOID rating based on bid-ask spread, open interest, volume, and moneyness |
+| **Walk-Forward** | Validation method that trains on earlier data and tests on later data to avoid look-ahead bias |
+| **OOS** | Out-of-Sample — the held-out validation portion of data not used during model fitting |

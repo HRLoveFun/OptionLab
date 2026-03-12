@@ -90,8 +90,14 @@ def init_db(db_path: Optional[str] = None):
 @contextmanager
 def get_conn(db_path: Optional[str] = None):
     path = db_path or DB_PATH
-    conn = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(
+        path,
+        detect_types=sqlite3.PARSE_DECLTYPES,
+        timeout=10
+    )
     try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         yield conn
     finally:
         conn.close()

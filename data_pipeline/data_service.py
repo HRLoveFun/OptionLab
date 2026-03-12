@@ -1,5 +1,7 @@
 import datetime as dt
 import logging
+import threading
+import time
 from typing import Optional
 
 import pandas as pd
@@ -10,6 +12,10 @@ from .cleaning import clean_range
 from .processing import process_frequencies
 
 logger = logging.getLogger(__name__)
+
+_update_locks: dict = {}   # ticker -> last_update_timestamp (monotonic)
+_update_lock_mutex = threading.Lock()
+_UPDATE_COOLDOWN = 60      # same ticker: at most one write per 60 seconds
 
 
 class DataService:
@@ -25,7 +31,18 @@ class DataService:
 
     @staticmethod
     def manual_update(ticker: str, days: int = 7):
-        # Treat end as inclusive
+        """Incremental update with concurrency throttle.
+        Skips if the same ticker was updated within _UPDATE_COOLDOWN seconds.
+        """
+        with _update_lock_mutex:
+            last = _update_locks.get(ticker, 0)
+            now = time.monotonic()
+            if now - last < _UPDATE_COOLDOWN:
+                logger.debug(f"Skipping update for {ticker} (cooldown)")
+                return
+            _update_locks[ticker] = now
+
+        # Actual write happens outside the mutex so other tickers aren't blocked
         end = dt.date.today()
         start = end - dt.timedelta(days=days - 1)
         upsert_raw_prices(ticker, start, end)

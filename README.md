@@ -6,12 +6,12 @@
 
 | 标签页 | 功能说明 |
 |---|---|
-| **Parameter** | 配置分析参数（标的、频率、时间区间、风险阈值、偏差模式）及可选期权持仓 |
+| **Parameter** | 配置分析参数（标的、频率、时间区间、风险阈值、偏差模式）、可选期权持仓及仓位管理 |
 | **Market Review** | 以目标标的为锚，与 USD、US10Y、黄金、SPX、CSI300、HSI、NKY、STOXX 等全球基准横向比较收益率、波动率和相关性 |
 | **Statistical Analysis** | 振荡-收益率散点图（含边际分布）、高低振荡散点图、收益率-振荡动态图（滚动分位预测）、波动率动态图（牛熊分段）、滚动相关性动态图 |
-| **Assessment & Projections** | 基于历史振荡分位数的价格投影图表与明细表，期权组合到期损益图 |
-| **Option Chain** | 实时 T 型期权链（IV、OI、成交量、买卖价、时间价值），支持按到期日切换 |
-| **Volatility Analysis** | IV Smile、IV 期限结构、3D IV 曲面、偏度分析、OI/成交量分布、PCR 摘要、预期波动幅度和关键指标快照 |
+| **Assessment & Projections** | 基于历史振荡的 Walk-Forward 价格投影（含样本外命中率）、期权组合到期损益图（含 BS Greeks 摘要）、仓位管理建议 |
+| **Option Chain** | 实时 T 型期权链（IV、OI、成交量、买卖价、时间价值），支持按到期日切换，流动性评分(GOOD/FAIR/AVOID)标注 |
+| **Volatility Analysis** | IV Smile、IV 期限结构、3D IV 曲面、偏度分析、OI/成交量分布、PCR 摘要、预期波动幅度、关键指标快照、**波动率溢价信号（IV vs HV）** |
 | **Odds** | 给定目标价，计算各行权价多头看涨 / 看跌期权的盈亏赔率，按到期日分色展示 |
 
 > 详细的公式推导与使用说明请参阅 [USER_GUIDE.md](USER_GUIDE.md)。
@@ -21,25 +21,26 @@
 ```
 app.py                 # Flask 入口，路由与调度器启动
 core/                  # 核心分析逻辑
-  price_dynamic.py     #   价格数据获取、频率重采样、振荡 / 收益率 / 波动率计算
-  market_analyzer.py   #   散点图、动态图、投影、期权 P&L 图表生成
+  price_dynamic.py     #   价格数据获取、频率重采样、振荡 / 收益率 / 波动率 / HV 上下文计算
+  market_analyzer.py   #   散点图、动态图、投影（Walk-Forward）、期权 P&L 图表生成
   market_review.py     #   多资产横向比较（收益率、波动率、相关性）
   correlation_validator.py  # 滚动相关性验证（收益率自相关 + 高低振荡相关）
   options_chain_analyzer.py # IV 曲面、偏度、OI 分布、PCR、预期波动
+  options_greeks.py    #   向量化 Black-Scholes Greeks（Delta/Gamma/Theta/Vega）及组合分析
 services/              # 请求编排层
-  form_service.py      #   表单数据提取与解析
-  validation_service.py#   输入校验
-  analysis_service.py  #   完整分析流程编排
+  form_service.py      #   表单数据提取与解析（含仓位管理参数）
+  validation_service.py#   输入校验（含仓位管理参数校验）
+  analysis_service.py  #   完整分析流程编排 + 仓位管理计算
   market_service.py    #   标的验证 + Market Review 生成
-  options_chain_service.py # Options Chain 分析编排
+  options_chain_service.py # Options Chain 分析编排 + Vol Premium 上下文
   chart_service.py     #   图表服务
 data_pipeline/         # 数据管道（下载 → 清洗 → 加工 → 服务）
   downloader.py        #   通过 yfinance 下载 OHLCV 并写入 raw_prices
   cleaning.py          #   对齐交易日、标记异常（5σ 波动、成交量异常）、前向填充
   processing.py        #   日/周/月级聚合及衍生指标（收益率、振幅、Parkinson/GK 方差、动量等）
-  data_service.py      #   数据门面：初始化 DB，按需 7 日增量刷新
+  data_service.py      #   数据门面：初始化 DB，按需 7 日增量刷新，60s 并发节流
   scheduler.py         #   可选 APScheduler 定时任务（每日 16:15 刷新、月度相关性刷新）
-  db.py                #   SQLite 数据库操作
+  db.py                #   SQLite 数据库操作（WAL 模式，10s 超时）
 utils/                 # 工具函数
 static/ & templates/   # 前端（原生 JS + CSS + Jinja2 模板）
 tests/                 # 回归测试
@@ -125,6 +126,8 @@ python app.py
 | `rolling_window` | int | 否 | 滚动窗口期数，默认 120 |
 | `side_bias` | string | 否 | Natural / Neutral，默认 Neutral |
 | `option_position` | JSON | 否 | 期权持仓列表 |
+| `account_size` | number | 否 | 账户规模（$），用于仓位管理 |
+| `max_risk_pct` | number | 否 | 单笔最大风险比例（0.1–20%），用于仓位管理 |
 
 ## 技术栈
 

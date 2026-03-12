@@ -17,6 +17,20 @@ function toggleOptionsSection() {
     }
 }
 
+function toggleSizingSection() {
+    const content = document.getElementById('sizing-content');
+    const icon = document.getElementById('sizing-toggle-icon');
+    if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        content.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    }
+}
+
 function initializeOptionsTable() {
     const tbody = document.getElementById('options-tbody');
     tbody.innerHTML = '';
@@ -418,7 +432,15 @@ function _ocRenderChain(calls, puts) {
         const callItm = c.itm === true;
         const putItm  = p.itm === true;
 
-        html += `<div class="oc-t-row">
+        // Liquidity score: pick worst of call/put for the row
+        const cLiq = c.liq_score || '';
+        const pLiq = p.liq_score || '';
+        const worstLiq = (cLiq === 'AVOID' || pLiq === 'AVOID') ? 'AVOID'
+                       : (cLiq === 'FAIR'  || pLiq === 'FAIR')  ? 'FAIR' : '';
+        const liqClass = worstLiq === 'AVOID' ? ' oc-liq-avoid'
+                       : worstLiq === 'FAIR'  ? ' oc-liq-fair' : '';
+
+        html += `<div class="oc-t-row${liqClass}">
             <div class="oc-t-calls${callItm ? ' oc-itm' : ''}">
                 <span>${fmt(c.iv, 1)}%</span>
                 <span>${fmtInt(c.openInterest)}</span>

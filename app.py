@@ -128,6 +128,43 @@ def option_chain():
         PUT_COLS  = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest',
                      'impliedVolatility', 'inTheMoney']
 
+        # Current price for ATM highlighting and liquidity scoring
+        try:
+            fi = tkr.fast_info
+            price = getattr(fi, 'last_price', None) or getattr(fi, 'regularMarketPrice', None)
+            spot = clean(price)
+        except Exception:
+            spot = None
+
+        def _liquidity_score(strike, bid, ask, last, oi, volume, spot_val):
+            """Liquidity score: GOOD / FAIR / AVOID."""
+            issues = []
+            bid_ = bid if (bid and bid > 0) else None
+            ask_ = ask if (ask and ask > 0) else None
+            if bid_ is not None and ask_ is not None:
+                mid = (bid_ + ask_) / 2
+                spread_pct = (ask_ - bid_) / mid if mid > 0 else 1.0
+                if spread_pct > 0.20:
+                    issues.append(f"spread {spread_pct:.0%}")
+            else:
+                issues.append("spread N/A")
+            oi_ = int(oi) if oi else 0
+            if oi_ < 100:
+                issues.append(f"OI={oi_}")
+            vol_ = int(volume) if volume else 0
+            if vol_ < 10:
+                issues.append(f"Vol={vol_}")
+            if spot_val and spot_val > 0 and strike:
+                m = strike / spot_val
+                if m < 0.75 or m > 1.35:
+                    issues.append("deep OTM")
+            if len(issues) == 0:
+                return 'GOOD', ''
+            elif len(issues) == 1:
+                return 'FAIR', issues[0]
+            else:
+                return 'AVOID', ' | '.join(issues[:2])
+
         chain_data = {}
         for exp in expirations:
             opt = tkr.option_chain(exp)
@@ -139,15 +176,26 @@ def option_chain():
                     return []
                 rows = []
                 for _, r in df.iterrows():
+                    strike = clean(r.get('strike'))
+                    bid_   = clean(r.get('bid'))
+                    ask_   = clean(r.get('ask'))
+                    last_  = clean(r.get('lastPrice'))
+                    oi_    = clean(r.get('openInterest'))
+                    vol_   = clean(r.get('volume'))
+                    score, reason = _liquidity_score(
+                        strike or 0, bid_, ask_, last_, oi_, vol_, spot
+                    )
                     rows.append({
-                        'strike':        clean(r.get('strike')),
-                        'lastPrice':     clean(r.get('lastPrice')),
-                        'bid':           clean(r.get('bid')),
-                        'ask':           clean(r.get('ask')),
-                        'volume':        clean(r.get('volume')),
-                        'openInterest':  clean(r.get('openInterest')),
+                        'strike':        strike,
+                        'lastPrice':     last_,
+                        'bid':           bid_,
+                        'ask':           ask_,
+                        'volume':        vol_,
+                        'openInterest':  oi_,
                         'iv':            clean((r.get('impliedVolatility') or 0) * 100),
                         'itm':           bool(r.get('inTheMoney', False)),
+                        'liq_score':     score,
+                        'liq_reason':    reason,
                     })
                 return rows
 
@@ -155,14 +203,6 @@ def option_chain():
                 'calls': df_to_records(calls_df),
                 'puts':  df_to_records(puts_df),
             }
-
-        # Current price for ATM highlighting
-        try:
-            fi = tkr.fast_info
-            price = getattr(fi, 'last_price', None) or getattr(fi, 'regularMarketPrice', None)
-            spot = clean(price)
-        except Exception:
-            spot = None
 
         return jsonify({'expirations': expirations, 'chain': chain_data, 'spot': spot})
 

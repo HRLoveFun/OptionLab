@@ -292,22 +292,40 @@ class MarketAnalyzer:
             return str(value)
 
     def _calculate_natural_bias_weight(self, data, proj_volatility):
+        """Walk-forward method to calculate optimal high weight, eliminating forward-looking bias.
+
+        Uses a train/validation split so the weight is selected on out-of-sample data.
+        Vectorized across all candidate weights for performance.
+        """
         try:
-            df = data.iloc[:-1].copy()
-            df["ProjHigh"] = df["LastClose"] + df["LastClose"] * proj_volatility / 100 * 0.5
-            df["ProjLow"] = df["LastClose"] - df["LastClose"] * proj_volatility / 100 * 0.5
+            n = len(data) - 1  # last row is current incomplete period
+            if n < 20:
+                return 0.5
+
+            split = max(int(n * 0.7), 15)
+            if n - split < 5:
+                split = max(n - 5, 10)
+
+            valid = data.iloc[split:n]
+
+            lc_arr = valid['LastClose'].values
+            cl_arr = valid['Close'].values
+
             weights = np.linspace(0.3, 0.7, 21)
-            best_weight = 0.5
-            best_accuracy = 0
-            for weight in weights:
-                df["ProjHighTest"] = df["LastClose"] + df["LastClose"] * proj_volatility / 100 * weight
-                df["ProjLowTest"] = df["LastClose"] - df["LastClose"] * proj_volatility / 100 * (1 - weight)
-                within_range = ((df["Close"] >= df["ProjLowTest"]) & (df["Close"] <= df["ProjHighTest"]))
-                accuracy = within_range.sum() / len(df)
-                if accuracy > best_accuracy:
-                    best_accuracy = accuracy
-                    best_weight = weight
-            return best_weight
+
+            # Vectorized: proj_high[i, j] for weight i and sample j
+            proj_high = lc_arr[np.newaxis, :] * (1 + proj_volatility / 100 * weights[:, np.newaxis])
+            proj_low = lc_arr[np.newaxis, :] * (1 - proj_volatility / 100 * (1 - weights[:, np.newaxis]))
+
+            hit_matrix = (cl_arr[np.newaxis, :] >= proj_low) & (cl_arr[np.newaxis, :] <= proj_high)
+            accuracy_arr = hit_matrix.mean(axis=1)
+            best_idx = int(np.argmax(accuracy_arr))
+
+            self._proj_oos_accuracy = float(accuracy_arr[best_idx])
+            self._proj_train_size = split
+            self._proj_valid_size = len(valid)
+
+            return float(weights[best_idx])
         except Exception as e:
             logger.error(f"Error calculating natural bias weight: {e}")
             return 0.5
@@ -492,7 +510,17 @@ class MarketAnalyzer:
         ax.grid(True, alpha=0.3)
         
         # Create parameter info text box in upper left
-        param_text = f'Threshold: {percentile:.0%}\nVolatility: {proj_volatility:.1f}%\nBias: {bias_text}'
+        oos_acc = getattr(self, '_proj_oos_accuracy', None)
+        oos_txt = f"{oos_acc:.1%}" if oos_acc is not None else "N/A"
+        n_train = getattr(self, '_proj_train_size', '?')
+        n_valid = getattr(self, '_proj_valid_size', '?')
+        param_text = (
+            f'Threshold: {percentile:.0%}\n'
+            f'Volatility: {proj_volatility:.1f}%\n'
+            f'Bias: {bias_text}\n'
+            f'OOS Hit Rate: {oos_txt}\n'
+            f'Train/Valid: {n_train}/{n_valid} periods'
+        )
         ax.text(0.02, 0.98, param_text, transform=ax.transAxes,
                 fontsize=12, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
@@ -577,7 +605,7 @@ class MarketAnalyzer:
             if current_price is None:
                 return None
             option_matrix = self._calculate_option_matrix(current_price, option_data)
-            return self._create_option_pnl_chart(option_matrix, current_price)
+            return self._create_option_pnl_chart(option_matrix, current_price, option_data)
         except Exception as e:
             logger.error(f"Error analyzing options: {e}")
             return None
@@ -622,7 +650,7 @@ class MarketAnalyzer:
         else:
             return np.zeros_like(prices)
 
-    def _create_option_pnl_chart(self, matrix_df, current_price):
+    def _create_option_pnl_chart(self, matrix_df, current_price, option_data=None):
         try:
             fig, ax = plt.subplots(figsize=PLOT_SIZE_OPTIONS)
             ax.plot(matrix_df.index, matrix_df['PnL'], linewidth=3, color='blue')
@@ -644,6 +672,37 @@ class MarketAnalyzer:
                 if len(breakeven_points) > 1:
                     stats_text += f', ${breakeven_points[1]:.0f}'
             ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=12, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+
+            # Greeks summary (graceful degradation: only shown when dte/iv present)
+            try:
+                if option_data:
+                    from core.options_greeks import portfolio_greeks_table
+                    positions = []
+                    for opt in option_data:
+                        if opt.get('dte') and opt.get('iv'):
+                            positions.append({
+                                'type': opt['option_type'],
+                                'strike': float(opt['strike']),
+                                'dte': int(opt['dte']),
+                                'iv': float(opt['iv']),
+                                'qty': int(opt['quantity']),
+                                'premium': float(opt['premium']),
+                            })
+                    if positions:
+                        totals, _ = portfolio_greeks_table(positions, float(current_price))
+                        greeks_text = (
+                            f"Net Delta: {totals['delta']:+.3f}\n"
+                            f"Net Gamma: {totals['gamma']:+.5f}\n"
+                            f"Theta/day: {totals['theta']:+.2f}\n"
+                            f"Vega/1%:   {totals['vega']:+.2f}"
+                        )
+                        ax.text(0.98, 0.98, greeks_text, transform=ax.transAxes,
+                                fontsize=10, verticalalignment='top', horizontalalignment='right',
+                                family='monospace',
+                                bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+            except Exception as e:
+                logger.debug(f"Greeks overlay skipped: {e}")
+
             plt.tight_layout()
             return self._fig_to_base64(fig)
         except Exception as e:

@@ -172,6 +172,31 @@
                         </div>
                     </div>
 
+                    <!-- Position Sizing accordion -->
+                    <div class="form-card collapsible" id="sizing-card">
+                        <div class="form-card-title collapsible-trigger" onclick="toggleSizingSection()">
+                            <span><i class="fas fa-calculator"></i> Position Sizing <span class="optional-tag">Optional</span></span>
+                            <i class="fas fa-chevron-down chevron-icon" id="sizing-toggle-icon"></i>
+                        </div>
+                        <div class="collapsible-body" id="sizing-content" style="display:none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="account_size">Account Size <span class="label-unit">$</span></label>
+                                    <input type="number" id="account_size" name="account_size"
+                                           min="0" step="1000" placeholder="e.g. 100000"
+                                           value="{{ account_size if account_size is defined and account_size else '' }}">
+                                </div>
+                                <div class="form-group">
+                                    <label for="max_risk_pct">Max Risk Per Trade <span class="label-unit">%</span></label>
+                                    <input type="number" id="max_risk_pct" name="max_risk_pct"
+                                           min="0.1" max="20" step="0.1" placeholder="e.g. 2"
+                                           value="{{ max_risk_pct if max_risk_pct is defined and max_risk_pct else '' }}">
+                                    <div class="field-hint">Percentage of account to risk on a single trade.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn-primary btn-lg">
                             <i class="fas fa-play"></i> Run Analysis
@@ -317,6 +342,30 @@
                         </div>
                     </div>
                     {% endif %}
+
+                    {% if position_sizing %}
+                    <div class="content-card">
+                        <div class="content-card-title"><i class="fas fa-calculator"></i> Position Sizing</div>
+                        <div class="table-wrapper">
+                            <table class="table table-striped" style="border:0;">
+                                <tbody>
+                                    {% if position_sizing.max_contracts is not none %}
+                                    <tr><td>Max Contracts</td><td><strong>{{ position_sizing.max_contracts }}</strong></td></tr>
+                                    <tr><td>Actual Risk</td><td>${{ position_sizing.actual_risk }}</td></tr>
+                                    <tr><td>Risk %</td><td>{{ position_sizing.risk_pct }}%</td></tr>
+                                    <tr><td>Basis</td><td>{{ position_sizing.basis }}</td></tr>
+                                    {% endif %}
+                                    {% if position_sizing.warning %}
+                                    <tr><td colspan="2" style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> {{ position_sizing.warning }}</td></tr>
+                                    {% endif %}
+                                    {% if position_sizing.margin_note %}
+                                    <tr><td colspan="2" style="color:#6b7280;"><i class="fas fa-info-circle"></i> {{ position_sizing.margin_note }}</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="empty-state">
@@ -401,6 +450,28 @@
                 <div class="content-card">
                     <div class="content-card-title">Key Metrics Snapshot</div>
                     <div class="table-wrapper">{{ oc_key_metrics | safe }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Vol Premium (HV vs IV) -->
+                {% if oc_vol_premium %}
+                <div class="content-card">
+                    <div class="content-card-title">Volatility Premium (IV vs HV)</div>
+                    <div class="table-wrapper">
+                        <table class="table table-striped" style="border:0;">
+                            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                            <tbody>
+                                <tr><td>ATM IV</td><td>{{ oc_vol_premium.atm_iv }}%</td></tr>
+                                <tr><td>HV 10d</td><td>{{ oc_vol_premium.hv_10d }}%</td></tr>
+                                <tr><td>HV 20d</td><td>{{ oc_vol_premium.hv_20d or 'N/A' }}{% if oc_vol_premium.hv_20d %}%{% endif %}</td></tr>
+                                <tr><td>HV 60d</td><td>{{ oc_vol_premium.hv_60d }}%</td></tr>
+                                <tr><td>Vol Premium (IV/HV20)</td><td>{{ oc_vol_premium.vol_premium or 'N/A' }}</td></tr>
+                                <tr><td>HV Rank (252d)</td><td>{{ oc_vol_premium.hv_rank_252d }}{% if oc_vol_premium.hv_rank_252d is number %}%{% endif %}</td></tr>
+                                <tr><td>HV Term Slope (10d−60d)</td><td>{{ oc_vol_premium.hv_term_slope }}</td></tr>
+                                <tr><td><strong>Signal</strong></td><td><strong>{{ oc_vol_premium.signal }}</strong></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 {% endif %}
 

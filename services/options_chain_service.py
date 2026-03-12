@@ -40,6 +40,7 @@ class OptionsChainService:
             'oc_pcr_summary':        None,
             'oc_expected_move':      None,
             'oc_key_metrics':        None,
+            'oc_vol_premium':        None,
         }
 
         # --- Initialise analyzer (fetches chain on construction) ----------
@@ -107,5 +108,26 @@ class OptionsChainService:
             result['oc_key_metrics'] = analyzer.get_key_metrics_table()
         except Exception as e:
             logger.warning(f"get_key_metrics_table failed: {e}")
+
+        # --- Vol Premium context (HV vs IV) --------------------------------
+        try:
+            from core.price_dynamic import PriceDynamic
+            import datetime as dt
+            pd_obj = PriceDynamic(ticker, start_date=dt.date.today() - dt.timedelta(days=365))
+            if pd_obj.is_valid():
+                # Get nearest-expiry ATM IV
+                atm_iv = None
+                nearest_exp = analyzer.expiries[0] if analyzer.expiries else None
+                if nearest_exp and nearest_exp in analyzer.chain:
+                    puts = analyzer.chain[nearest_exp]['puts'].dropna(subset=['impliedVolatility'])
+                    if not puts.empty:
+                        idx = (puts['strike'] - analyzer.spot).abs().idxmin()
+                        atm_iv = float(puts.loc[idx, 'impliedVolatility']) * 100
+
+                vol_ctx = pd_obj.build_vol_premium_context(atm_iv)
+                if vol_ctx:
+                    result['oc_vol_premium'] = vol_ctx
+        except Exception as e:
+            logger.warning(f"Vol premium context failed: {e}")
 
         return result

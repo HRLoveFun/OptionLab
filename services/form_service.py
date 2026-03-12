@@ -49,6 +49,23 @@ class FormService:
         side_bias = request.form.get('side_bias', DEFAULT_SIDE_BIAS)
         target_bias = None if side_bias == 'Natural' else 0
         option_data = FormService.parse_option_data(request)
+
+        # Position sizing (optional)
+        acct_raw = request.form.get('account_size', '').strip()
+        risk_raw = request.form.get('max_risk_pct', '').strip()
+        account_size = None
+        max_risk_pct = None
+        if acct_raw:
+            try:
+                account_size = float(acct_raw)
+            except (ValueError, TypeError):
+                pass
+        if risk_raw:
+            try:
+                max_risk_pct = float(risk_raw)
+            except (ValueError, TypeError):
+                pass
+
         return {
             'ticker': ticker,
             'frequency': frequency,
@@ -60,7 +77,9 @@ class FormService:
             'rolling_window': rolling_window,
             'side_bias': side_bias,
             'target_bias': target_bias,
-            'option_data': option_data
+            'option_data': option_data,
+            'account_size': account_size,
+            'max_risk_pct': max_risk_pct,
         }
     
     @staticmethod

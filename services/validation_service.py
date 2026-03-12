@@ -40,4 +40,35 @@ class ValidationService:
         if form_data['side_bias'] not in ['Natural', 'Neutral']:
             return f"invalid_side_bias_selected: {form_data['side_bias']}"
         
+        # Position sizing parameter validation (optional fields)
+        ps_err = ValidationService.validate_position_sizing_params(form_data)
+        if ps_err:
+            return ps_err
+
+        return None
+
+    @staticmethod
+    def validate_position_sizing_params(params: dict):
+        """Validate position sizing parameters. Returns error string or None."""
+        account_size = params.get('account_size')
+        max_risk_pct = params.get('max_risk_pct')
+
+        if account_size is not None:
+            try:
+                v = float(account_size)
+                if v <= 0:
+                    return "Account size must be positive."
+                if v > 1_000_000_000:
+                    return "Account size exceeds reasonable range (max 1B)."
+            except (ValueError, TypeError):
+                return "Invalid account size format."
+
+        if max_risk_pct is not None:
+            try:
+                v = float(max_risk_pct)
+                if not (0.1 <= v <= 20.0):
+                    return "Risk per trade should be between 0.1% and 20%."
+            except (ValueError, TypeError):
+                return "Invalid risk percentage format."
+
         return None
