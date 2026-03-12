@@ -562,6 +562,58 @@ body {
 .table-wrapper tr:last-child td { border-bottom: none; }
 .table-wrapper tr:hover td { background: var(--slate-50); }
 
+/* ── Market Review – inline bars ── */
+.mr-cell-inner {
+    line-height: 1.3;
+}
+.mr-bar-wrap {
+    position: relative;
+    height: 4px;
+    width: 100%;
+    margin-top: 3px;
+    background: var(--slate-100);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.mr-bar {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 2px;
+}
+.mr-bar-pos  { background: #22c55e; }
+.mr-bar-neg  { background: #ef4444; }
+.mr-bar-neutral { background: #6366f1; left: 0; }
+
+/* center-line for diverging bars */
+.mr-bar-wrap.diverging::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--slate-300);
+}
+
+/* ── Market Review – sortable column headers ── */
+.mr-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.mr-sortable:hover {
+    background: var(--slate-100);
+    color: var(--slate-700);
+}
+.mr-sort-icon {
+    opacity: .5;
+    font-style: normal;
+    font-size: .65rem;
+    margin-left: 2px;
+}
+.mr-sortable.sorted .mr-sort-icon { opacity: 1; color: var(--primary, #6366f1); }
+
 /* ── Alert ── */
 .alert {
     display: flex;
@@ -662,3 +714,270 @@ body {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ============================================================
+   Option Chain – T-format table
+   ============================================================ */
+
+/* Toolbar row (ticker input + button + spot) */
+.oc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.oc-ticker-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.oc-ticker-input {
+    padding: .45rem .75rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .9rem;
+    font-family: var(--font);
+    width: 160px;
+    background: #fff;
+    color: var(--slate-900);
+    transition: border-color .2s;
+}
+.oc-ticker-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-muted); }
+
+/* Target % × Spot widget */
+.oc-target-row {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .85rem;
+    color: var(--slate-500);
+}
+.oc-target-label {
+    font-weight: 600;
+    color: var(--slate-700);
+}
+.oc-target-input {
+    width: 68px;
+    padding: .3rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .85rem;
+    font-family: var(--font);
+    text-align: right;
+    background: #fff;
+    color: var(--slate-900);
+    transition: border-color .2s;
+}
+.oc-target-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-muted); }
+.oc-target-unit { color: var(--slate-500); }
+.oc-target-value {
+    font-size: .78rem;
+    color: #b45309;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius-sm);
+    padding: .2rem .55rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Status / error banner */
+.oc-status {
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-md);
+    padding: .75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: .875rem;
+}
+.oc-status i { margin-right: .4rem; }
+
+/* Expiration subtab list */
+.oc-exp-tabs {
+    margin-bottom: .75rem;
+    overflow-x: auto;
+    padding-bottom: .4rem;
+}
+.oc-exp-tab-list {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: nowrap;
+    min-width: max-content;
+}
+.oc-exp-btn {
+    padding: .3rem .7rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--slate-700);
+    font-size: .78rem;
+    font-family: var(--font);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.oc-exp-btn:hover { background: var(--blue-light); border-color: var(--blue-muted); }
+.oc-exp-btn.active {
+    background: var(--blue);
+    border-color: var(--blue-dark);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Chain wrapper */
+.oc-chain-wrapper {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+}
+
+/* T-format — grid: 6 call cols | 1 strike col | 6 put cols */
+.oc-t-header,
+.oc-t-subheader,
+.oc-t-row {
+    display: grid;
+    grid-template-columns: minmax(320px, 6fr) minmax(80px, 1fr) minmax(320px, 6fr);
+    min-width: 760px;
+}
+
+/* Section headers (Calls / Strike / Puts) */
+.oc-t-header {
+    border-bottom: 2px solid var(--slate-200);
+}
+.oc-t-calls-header,
+.oc-t-strike-header,
+.oc-t-puts-header {
+    padding: .55rem .75rem;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+.oc-t-calls-header  { color: #2563eb; background: #eff6ff; text-align: right; border-right: 1px solid var(--slate-200); }
+.oc-t-strike-header { color: var(--slate-700); background: var(--slate-50); text-align: center; border-right: 1px solid var(--slate-200); }
+.oc-t-puts-header   { color: #7c3aed; background: #f5f3ff; text-align: left; }
+
+/* Sub-column header row */
+.oc-t-subheader {
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--slate-500);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.oc-t-calls-sub,
+.oc-t-puts-sub {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    padding: .3rem .5rem;
+}
+.oc-t-calls-sub  { text-align: right;  border-right: 1px solid var(--slate-200); }
+.oc-t-puts-sub   { text-align: left; }
+.oc-t-calls-sub  span,
+.oc-t-puts-sub   span { padding: 0 .25rem; }
+.oc-t-strike-sub { padding: .3rem .25rem; text-align: center; border-right: 1px solid var(--slate-200); }
+
+/* Data rows */
+.oc-chain-body { font-size: .82rem; }
+.oc-t-row {
+    border-bottom: 1px solid var(--slate-100);
+    transition: background .1s;
+}
+.oc-t-row:last-child { border-bottom: none; }
+.oc-t-row:hover > div { background: var(--slate-50) !important; }
+
+/* Calls & Puts cell grids */
+.oc-t-calls,
+.oc-t-puts {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    align-items: center;
+    padding: .35rem .5rem;
+}
+.oc-t-calls { text-align: right;  border-right: 1px solid var(--slate-200); color: var(--slate-700); }
+.oc-t-puts  { text-align: left;  color: var(--slate-700); }
+.oc-t-calls span,
+.oc-t-puts  span { padding: 0 .25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* In-The-Money highlight */
+.oc-itm { background: var(--blue-light); }
+.oc-itm span { color: var(--blue-dark); font-weight: 500; }
+
+/* Strike column */
+.oc-t-strike {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .35rem .25rem;
+    font-weight: 600;
+    font-size: .82rem;
+    color: var(--slate-900);
+    background: var(--slate-50);
+    border-right: 1px solid var(--slate-200);
+}
+
+/* Spot-price divider row */
+.oc-spot-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fffbeb;
+    border-top: 2px dashed #fbbf24;
+    border-bottom: 2px dashed #fbbf24;
+    padding: .3rem .75rem;
+    min-width: 760px;
+}
+.oc-spot-label {
+    font-size: .8rem;
+    font-weight: 700;
+    color: #b45309;
+    letter-spacing: .03em;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+}
+.oc-spot-label i { color: #f59e0b; font-size: .75rem; }
+.oc-spot-label strong { color: #92400e; font-size: .9rem; }
+
+/* Odd column values */
+.oc-odd-pos  { color: #166534; font-weight: 600; }
+.oc-odd-neg  { color: var(--error); font-weight: 600; }
+.oc-prem-pos { color: #166534; font-weight: 600; }
+.oc-prem-neg { color: var(--error); font-weight: 600; }
+
+/* Null placeholder */
+.oc-null { color: var(--slate-300); }
+
+/* No-data message */
+.oc-no-data {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--slate-500);
+    font-style: italic;
+}
+
+/* ============================================================
+   Odds Tab – stacked charts (Call upper, Put lower)
+   ============================================================ */
+.odds-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+    .odds-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

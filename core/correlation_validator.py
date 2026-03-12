@@ -38,8 +38,9 @@ COLOR_5Y = '#ff7f0e'  # Orange
 class CorrelationValidator:
     """Validates market patterns through rolling correlation analysis."""
     
-    def __init__(self, ticker: str, start_date: dt.date = dt.date(2016, 12, 1), 
-                 frequency: str = 'W', end_date: Optional[dt.date] = None):
+    def __init__(self, ticker: str, start_date: dt.date = dt.date(2016, 12, 1),
+                 frequency: str = 'W', end_date: Optional[dt.date] = None,
+                 price_dynamic: Optional['PriceDynamic'] = None):
         """
         Initialize the correlation validator.
         
@@ -48,15 +49,16 @@ class CorrelationValidator:
             start_date: Start date for output filtering (horizon start)
             frequency: Frequency for analysis ('D', 'W', 'ME', 'QE')
             end_date: End date for output filtering (horizon end, defaults to today)
+            price_dynamic: Optional pre-built PriceDynamic instance to reuse (avoids duplicate download)
         """
         self.ticker = ticker
         self.user_start_date = start_date  # Store for output filtering
         self.frequency = frequency
         self.user_end_date = end_date or dt.date.today()  # Store for output filtering
         self._user_provided_end = end_date is not None
-        
-        # Use PriceDynamic to get full historical data (it now fetches all data)
-        self.price_dynamic = PriceDynamic(ticker, start_date, frequency, end_date)
+
+        # Reuse provided PriceDynamic to avoid duplicate data download; create if not supplied
+        self.price_dynamic = price_dynamic if price_dynamic is not None else PriceDynamic(ticker, start_date, frequency, end_date)
         
         # Build data DataFrame with calculated values from full dataset
         self.data = self._build_data()
@@ -317,7 +319,7 @@ class CorrelationValidator:
             
             # Convert to base64
             buffer = io.BytesIO()
-            fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
             buffer.seek(0)
             plot_data = buffer.getvalue()
             buffer.close()
@@ -392,7 +394,7 @@ class CorrelationValidator:
             
             # Convert to base64
             buffer = io.BytesIO()
-            fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+            fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
             buffer.seek(0)
             plot_data = buffer.getvalue()
             buffer.close()

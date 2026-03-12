@@ -10,6 +10,7 @@ from services.form_service import FormService
 from services.analysis_service import AnalysisService
 from services.market_service import MarketService
 from services.validation_service import ValidationService
+from services.options_chain_service import OptionsChainService
 from data_pipeline.data_service import DataService
 from data_pipeline.scheduler import UpdateScheduler
 from utils.utils import (
@@ -63,6 +64,16 @@ def index():
             
             # Combine form data with results
             template_data = {**form_data, **analysis_results}
+
+            # Options chain analysis (non-blocking)
+            try:
+                oc_results = OptionsChainService.generate_options_chain_analysis(
+                    form_data['ticker']
+                )
+                template_data.update(oc_results)
+            except Exception as e:
+                logger.warning(f"Options chain analysis failed: {e}")
+
             return render_template('index.html', **template_data)
 
         return render_template('index.html',
@@ -81,6 +92,84 @@ def index():
         logger.error(f"Unexpected error in main route: {e}", exc_info=True)
         return render_template('index.html', 
             error=f"An unexpected error occurred: {str(e)}. Please try again.")
+
+@app.route('/api/option_chain', methods=['GET'])
+def option_chain():
+    """
+    API endpoint to fetch live option chain data from Yahoo Finance.
+    Query params: ticker (required)
+    Response: { expirations: [...], chain: { date: { calls: [...], puts: [...] } } }
+    """
+    import yfinance as yf
+    import math
+
+    ticker_sym = request.args.get('ticker', '').strip().upper()
+    if not ticker_sym:
+        return jsonify({'error': 'ticker is required'}), 400
+
+    def clean(v):
+        """Convert NaN / inf to None for JSON serialisation."""
+        try:
+            if v is None:
+                return None
+            fv = float(v)
+            return None if (math.isnan(fv) or math.isinf(fv)) else round(fv, 4)
+        except Exception:
+            return str(v) if v is not None else None
+
+    try:
+        tkr = yf.Ticker(ticker_sym)
+        expirations = list(tkr.options)
+        if not expirations:
+            return jsonify({'error': f'No options available for {ticker_sym}'}), 404
+
+        CALL_COLS = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest',
+                     'impliedVolatility', 'inTheMoney']
+        PUT_COLS  = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest',
+                     'impliedVolatility', 'inTheMoney']
+
+        chain_data = {}
+        for exp in expirations:
+            opt = tkr.option_chain(exp)
+            calls_df = opt.calls[CALL_COLS].sort_values('strike') if hasattr(opt, 'calls') else None
+            puts_df  = opt.puts[PUT_COLS].sort_values('strike')  if hasattr(opt, 'puts')  else None
+
+            def df_to_records(df):
+                if df is None or df.empty:
+                    return []
+                rows = []
+                for _, r in df.iterrows():
+                    rows.append({
+                        'strike':        clean(r.get('strike')),
+                        'lastPrice':     clean(r.get('lastPrice')),
+                        'bid':           clean(r.get('bid')),
+                        'ask':           clean(r.get('ask')),
+                        'volume':        clean(r.get('volume')),
+                        'openInterest':  clean(r.get('openInterest')),
+                        'iv':            clean((r.get('impliedVolatility') or 0) * 100),
+                        'itm':           bool(r.get('inTheMoney', False)),
+                    })
+                return rows
+
+            chain_data[exp] = {
+                'calls': df_to_records(calls_df),
+                'puts':  df_to_records(puts_df),
+            }
+
+        # Current price for ATM highlighting
+        try:
+            fi = tkr.fast_info
+            price = getattr(fi, 'last_price', None) or getattr(fi, 'regularMarketPrice', None)
+            spot = clean(price)
+        except Exception:
+            spot = None
+
+        return jsonify({'expirations': expirations, 'chain': chain_data, 'spot': spot})
+
+    except Exception as e:
+        logger.error(f"Error fetching option chain for {ticker_sym}: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/validate_ticker', methods=['POST'])
 def validate_ticker():

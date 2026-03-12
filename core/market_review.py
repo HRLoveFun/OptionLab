@@ -72,11 +72,11 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
     # 格式化所有 return/volatility/correlation 列
     for col in results.columns:
         if 'Return' in col or 'Volatility' in col:
-            results[col] = results[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "N/A")
+            results[col] = results[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A")
         elif 'Correlation' in col:
-            results[col] = results[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
+            results[col] = results[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
         elif 'Last Close' in col:
-            results[col] = results[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
+            results[col] = results[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
     # 列顺序调整：multiindex，ETD列名用极值点日期
     etd_label = etd_dates[0]
     if pd.notna(etd_label):

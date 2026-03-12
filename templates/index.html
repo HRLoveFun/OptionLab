@@ -48,6 +48,18 @@
                     <i class="fas fa-binoculars"></i>
                     <span>Assessment &amp; Projections</span>
                 </button>
+                <button class="tab-btn" data-tab="tab-option-chain">
+                    <i class="fas fa-th"></i>
+                    <span>Option Chain</span>
+                </button>
+                <button class="tab-btn" data-tab="tab-options-chain">
+                    <i class="fas fa-link"></i>
+                    <span>Volatility Analysis</span>
+                </button>
+                <button class="tab-btn" data-tab="tab-odds">
+                    <i class="fas fa-dice"></i>
+                    <span>Expiry Odds</span>
+                </button>
             </nav>
         </aside>
 
@@ -74,7 +86,7 @@
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="ticker">Ticker Symbol</label>
-                                <input type="text" id="ticker" name="ticker" value="{{ ticker or '' }}"
+                                <input type="text" id="ticker" name="ticker" value=""
                                        placeholder="e.g. AAPL, ^SPX" required>
                                 <div class="ticker-validation" id="ticker-validation"></div>
                             </div>
@@ -314,9 +326,211 @@
                 {% endif %}
             </div>
 
+            <!-- Tab 5: Option Chain -->
+            <div class="tab-content" id="tab-option-chain">
+                <div class="panel-header">
+                    <h2><i class="fas fa-th"></i> Option Chain</h2>
+                    <p class="panel-desc">Live option chain from Yahoo Finance. Select a ticker and load chain data.</p>
+                </div>
+
+                <!-- Ticker selector row -->
+                <div class="oc-toolbar">
+                    <div class="oc-ticker-row">
+                        <button id="oc-load-btn" class="btn-primary" onclick="loadOptionChain()">
+                            <i class="fas fa-download"></i> Load Chain
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status / error messages -->
+                <div id="oc-status" class="oc-status" style="display:none;"></div>
+
+                <!-- Expiration subtabs -->
+                <div id="oc-exp-tabs" class="oc-exp-tabs" style="display:none;">
+                    <div id="oc-exp-tab-list" class="oc-exp-tab-list"></div>
+                </div>
+
+                <!-- T-format chain table -->
+                <div id="oc-chain-wrapper" class="oc-chain-wrapper" style="display:none;">
+                    <!-- T-format header -->
+                    <div class="oc-t-header">
+                        <div class="oc-t-calls-header">Calls</div>
+                        <div class="oc-t-strike-header">Strike</div>
+                        <div class="oc-t-puts-header">Puts</div>
+                    </div>
+                    <!-- Sub-column headers -->
+                    <div class="oc-t-subheader">
+                        <div class="oc-t-calls-sub">
+                            <span>IV%</span><span>OI</span><span>Vol</span><span>Bid</span><span>Ask</span><span>Last</span><span>Prem</span>
+                        </div>
+                        <div class="oc-t-strike-sub"><span>&nbsp;</span></div>
+                        <div class="oc-t-puts-sub">
+                            <span>Prem</span><span>Last</span><span>Bid</span><span>Ask</span><span>Vol</span><span>OI</span><span>IV%</span>
+                        </div>
+                    </div>
+                    <div id="oc-chain-body" class="oc-chain-body"></div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="oc-empty" class="empty-state">
+                    <i class="fas fa-th empty-icon"></i>
+                    <p>Set a ticker in <strong>Parameter</strong> tab, then click <strong>Load Chain</strong> to view live options data.</p>
+                </div>
+            </div>
+
+            <!-- Tab 6: Options Chain Analysis -->
+            <div class="tab-content" id="tab-options-chain">
+                <div class="panel-header">
+                    <h2><i class="fas fa-link"></i> Volatility Analysis</h2>
+                    {% if ticker %}
+                    <p class="panel-desc">Real-time IV surface, skew, OI profile, and expected move for <strong>{{ ticker }}</strong>.</p>
+                    {% endif %}
+                </div>
+
+                {% if oc_snapshot %}
+                <!-- Key Metrics Bar -->
+                <div class="meta-bar">
+                    <span class="meta-chip"><i class="fas fa-dollar-sign"></i> Spot: {{ oc_snapshot.spot | round(2) }}</span>
+                    <span class="meta-chip"><i class="fas fa-calendar"></i> Expiries: {{ oc_snapshot.expiries | length }}</span>
+                    <span class="meta-chip"><i class="fas fa-crosshairs"></i> ATM: {{ oc_snapshot.atm_strike }}</span>
+                    <span class="meta-chip"><i class="fas fa-clock"></i> {{ oc_snapshot.timestamp }}</span>
+                </div>
+
+                <!-- Key Metrics Table -->
+                {% if oc_key_metrics %}
+                <div class="content-card">
+                    <div class="content-card-title">Key Metrics Snapshot</div>
+                    <div class="table-wrapper">{{ oc_key_metrics | safe }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Expected Move Table -->
+                {% if oc_expected_move %}
+                <div class="content-card">
+                    <div class="content-card-title">Expected Move by Expiry</div>
+                    <div class="table-wrapper">{{ oc_expected_move | safe }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Charts Row 1: IV Smile + IV Term Structure -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                    {% if oc_iv_smile %}
+                    <div class="content-card">
+                        <div class="content-card-title">IV Smile (Nearest Expiry)</div>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ oc_iv_smile }}" alt="IV Smile" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if oc_iv_term_structure %}
+                    <div class="content-card">
+                        <div class="content-card-title">IV Term Structure</div>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ oc_iv_term_structure }}" alt="IV Term Structure" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- IV Surface (full width) -->
+                {% if oc_iv_surface %}
+                <div class="content-card">
+                    <div class="content-card-title">IV Surface</div>
+                    <div class="chart-wrapper">
+                        <img src="data:image/png;base64,{{ oc_iv_surface }}" alt="IV Surface" class="analysis-chart">
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Charts Row 2: Skew + OI Profile -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                    {% if oc_skew_analysis %}
+                    <div class="content-card">
+                        <div class="content-card-title">Skew Analysis (Nearest Expiry)</div>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ oc_skew_analysis }}" alt="Skew Analysis" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if oc_oi_volume %}
+                    <div class="content-card">
+                        <div class="content-card-title">OI / Volume Profile</div>
+                        <div class="chart-wrapper">
+                            <img src="data:image/png;base64,{{ oc_oi_volume }}" alt="OI Volume Profile" class="analysis-chart">
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- PCR Summary (full width) -->
+                {% if oc_pcr_summary %}
+                <div class="content-card">
+                    <div class="content-card-title">Put/Call Ratio by Expiry</div>
+                    <div class="chart-wrapper">
+                        <img src="data:image/png;base64,{{ oc_pcr_summary }}" alt="PCR Summary" class="analysis-chart">
+                    </div>
+                </div>
+                {% endif %}
+
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-link empty-icon"></i>
+                    <p>Run an analysis first &mdash; go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+                    <p style="margin-top:.5rem; font-size:.8rem; color:var(--slate-400);">Options chain data requires a ticker with listed options (e.g. ^SPX, AAPL, SPY).</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Tab 7: Expiry Odds -->
+            <div class="tab-content" id="tab-odds">
+                <div class="panel-header">
+                    <h2><i class="fas fa-dice"></i> Expiry Odds</h2>
+                    <p class="panel-desc">Profit odds per strike for a given estimated move.</p>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="oc-toolbar">
+                    <div class="oc-ticker-row">
+                        <button id="odds-load-btn" class="btn-primary" onclick="loadOddsData()">
+                            <i class="fas fa-download"></i> Load Chain
+                        </button>
+                    </div>
+                    <div class="oc-target-row">
+                        <span class="oc-target-label">est. move</span>
+                        <input type="number" id="odds-target-pct" class="oc-target-input" value="10" min="0" step="1" />
+                        <span class="oc-target-unit">% &times; Spot</span>
+                        <span id="odds-target-value" class="oc-target-value"></span>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div id="odds-status" class="oc-status" style="display:none;"></div>
+
+                <!-- Charts -->
+                <div id="odds-charts-wrapper" style="display:none;">
+                    <div class="odds-charts-grid">
+                        <div class="content-card">
+                            <div class="content-card-title">Long Call Odds</div>
+                            <div class="chart-wrapper"><canvas id="odds-call-chart"></canvas></div>
+                        </div>
+                        <div class="content-card">
+                            <div class="content-card-title">Long Put Odds</div>
+                            <div class="chart-wrapper"><canvas id="odds-put-chart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="odds-empty" class="empty-state">
+                    <i class="fas fa-dice empty-icon"></i>
+                    <p>Set a ticker in <strong>Parameter</strong> tab, then click <strong>Load Chain</strong> to view odds charts.</p>
+                </div>
+            </div>
+
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script>
         document.querySelectorAll('.tab-btn').forEach(function(btn) {

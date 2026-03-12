@@ -1,3 +1,4 @@
+import gc
 import logging
 from utils.utils import DEFAULT_ROLLING_WINDOW, DEFAULT_RISK_THRESHOLD, exclusive_month_end
 from core.market_analyzer import MarketAnalyzer
@@ -36,10 +37,12 @@ class AnalysisService:
             # Statistical analysis
             statistical_analysis = AnalysisService._generate_statistical_analysis(analyzer, form_data)
             results.update(statistical_analysis)
-            
+            gc.collect()  # reclaim matplotlib buffers after chart batch
+
             # Market assessment
             assessment = AnalysisService._generate_assessment(analyzer, form_data)
             results.update(assessment)
+            gc.collect()
             
             return results
             
@@ -83,7 +86,8 @@ class AnalysisService:
                     ticker=form_data['ticker'],
                     start_date=form_data['parsed_start_time'],
                     frequency=form_data['frequency'],
-                    end_date=form_data.get('parsed_end_time')
+                    end_date=form_data.get('parsed_end_time'),
+                    price_dynamic=analyzer.price_dynamic,  # reuse already-loaded data
                 )
                 
                 if correlation_validator.is_data_valid():
@@ -93,6 +97,8 @@ class AnalysisService:
                     logger.warning("Correlation validator has no valid data")
             except Exception as e:
                 logger.error(f"Error generating correlation charts: {e}", exc_info=True)
+            finally:
+                gc.collect()  # release matplotlib pixel buffers promptly
                 
         except Exception as e:
             logger.error(f"Error generating statistical analysis: {e}", exc_info=True)
