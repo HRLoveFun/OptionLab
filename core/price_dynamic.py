@@ -208,6 +208,7 @@ class PriceDynamic:
         try:
             if self.frequency == 'D':
                 df['LastClose'] = df["Close"].shift(1)
+                df['LastAdjClose'] = df['Adj Close'].shift(1)
                 return df
             resampled = df.resample(self.frequency).agg({
                 'Open': 'first',
@@ -218,6 +219,7 @@ class PriceDynamic:
                 'Volume': 'sum'
             }).dropna()
             resampled['LastClose'] = resampled["Close"].shift(1)
+            resampled['LastAdjClose'] = resampled['Adj Close'].shift(1)
             if self.frequency != 'D':
                 date_agg = df.resample(self.frequency).agg({
                     'Open': lambda x: x.index[0] if len(x) > 0 else pd.NaT,
@@ -240,7 +242,7 @@ class PriceDynamic:
         try:
             if window is None:
                 window = VOLATILITY_WINDOWS.get(self.frequency, 21)
-            daily_returns = self._daily_data['Close'].pct_change().dropna()
+            daily_returns = self._daily_data['Adj Close'].pct_change().dropna()
             rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(252) * 100
             rolling_vol.name = 'Volatility'
             return self._apply_horizon(rolling_vol.dropna())
@@ -311,11 +313,11 @@ class PriceDynamic:
             return None
         try:
             if on_effect:
-                high_adj = np.maximum(self._data["High"], self._data["LastClose"])
-                low_adj = np.minimum(self._data["Low"], self._data["LastClose"])
-                osc_data = (high_adj - low_adj) / self._data['LastClose'] * 100
+                high_adj = np.maximum(self._data["High"], self._data["LastAdjClose"])
+                low_adj = np.minimum(self._data["Low"], self._data["LastAdjClose"])
+                osc_data = (high_adj - low_adj) / self._data['LastAdjClose'] * 100
             else:
-                osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastClose'] * 100
+                osc_data = (self._data["High"] - self._data["Low"]) / self._data['LastAdjClose'] * 100
             osc_data.name = 'Oscillation'
             if apply_horizon:
                 return self._apply_horizon(osc_data.dropna())
@@ -335,7 +337,7 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
-            osc_high_data = (self._data["High"] / self._data['LastClose'] - 1) * 100
+            osc_high_data = (self._data["High"] / self._data['LastAdjClose'] - 1) * 100
             osc_high_data.name = 'Osc_high'
             if apply_horizon:
                 return self._apply_horizon(osc_high_data.dropna())
@@ -355,7 +357,7 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
-            osc_low_data = (self._data["Low"] / self._data['LastClose'] - 1) * 100
+            osc_low_data = (self._data["Low"] / self._data['LastAdjClose'] - 1) * 100
             osc_low_data.name = 'Osc_low'
             if apply_horizon:
                 return self._apply_horizon(osc_low_data.dropna())
@@ -375,7 +377,7 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
-            ret_data = ((self._data["Close"] - self._data['LastClose']) / self._data['LastClose']) * 100
+            ret_data = ((self._data['Adj Close'] - self._data['LastAdjClose']) / self._data['LastAdjClose']) * 100
             ret_data.name = 'Returns'
             if apply_horizon:
                 return self._apply_horizon(ret_data.dropna())
@@ -389,7 +391,7 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
-            dif_data = self._data["Close"] - self._data['LastClose']
+            dif_data = self._data['Adj Close'] - self._data['LastAdjClose']
             dif_data.name = 'Difference'
             return self._apply_horizon(dif_data.dropna())
         except Exception as e:
@@ -414,7 +416,7 @@ class PriceDynamic:
             return None
 
         try:
-            log_ret = np.log(daily['Close'] / daily['Close'].shift(1)).dropna()
+            log_ret = np.log(daily['Adj Close'] / daily['Adj Close'].shift(1)).dropna()
 
             WINDOWS = [10, 20, 60, 252]
             ANN_FACTOR = np.sqrt(252) * 100

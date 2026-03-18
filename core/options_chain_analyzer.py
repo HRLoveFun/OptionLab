@@ -76,6 +76,78 @@ def _dte(expiry_str: str) -> int:
     return max(0, (exp - today).days)
 
 
+def calc_implied_realized_vol(move_pct: float, dte: int) -> float:
+    """Annualized realized vol implied by a given move over *dte* days."""
+    if dte <= 0:
+        return 0.0
+    T = dte / 365.0
+    return abs(move_pct) / np.sqrt(T)
+
+
+def get_odds_with_vol_context(spot: float, target_pct: float,
+                              chain: dict, expiries: list) -> dict:
+    """Enhanced odds with implied-RV / ATM-IV context per expiry."""
+    target_price = spot * (target_pct / 100.0)
+    move_pct = abs(target_price - spot) / spot
+
+    results = []
+    for exp in expiries:
+        if exp not in chain:
+            continue
+        dte = _dte(exp)
+        if dte <= 0:
+            continue
+
+        calls_df = chain[exp]['calls']
+        puts_df = chain[exp]['puts']
+
+        impl_rv = calc_implied_realized_vol(move_pct, dte)
+
+        # ATM IV from puts (generally more reliable)
+        atm_iv = None
+        try:
+            valid_puts = puts_df.dropna(subset=['impliedVolatility'])
+            if not valid_puts.empty:
+                atm_idx = (valid_puts['strike'] - spot).abs().idxmin()
+                atm_iv = float(valid_puts.loc[atm_idx, 'impliedVolatility'])
+        except Exception:
+            pass
+
+        vol_ratio = round(impl_rv / atm_iv, 3) if atm_iv and atm_iv > 0 else None
+
+        def calc_odds(df, option_type):
+            odds = []
+            for _, row in df.iterrows():
+                K = float(row['strike'])
+                bid = float(row.get('bid', 0) or 0)
+                ask = float(row.get('ask', 0) or 0)
+                mid = (bid + ask) / 2 if bid > 0 and ask > 0 else float(row.get('lastPrice', 0) or 0)
+                if mid <= 0:
+                    continue
+                if option_type == 'call':
+                    payoff = max(target_price - K, 0)
+                else:
+                    payoff = max(K - target_price, 0)
+                odd = (payoff - mid) / mid
+                odds.append({"strike": K, "odd": round(odd, 3)})
+            return odds
+
+        results.append({
+            "expiry": exp,
+            "dte": dte,
+            "target_price": round(target_price, 2),
+            "implied_rv": round(impl_rv, 4),
+            "implied_rv_pct": round(impl_rv * 100, 1),
+            "atm_iv": round(atm_iv, 4) if atm_iv else None,
+            "atm_iv_pct": round(atm_iv * 100, 1) if atm_iv else None,
+            "vol_ratio": vol_ratio,
+            "call_odds": calc_odds(calls_df, 'call'),
+            "put_odds": calc_odds(puts_df, 'put'),
+        })
+
+    return {"expiries_data": results, "spot": spot, "target_pct": target_pct}
+
+
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------

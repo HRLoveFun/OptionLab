@@ -13,7 +13,7 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
     pd.DataFrame: formatted results table
     """
     benchmarks = {
-        'USD': 'DX-Y.NYB',
+        'USD': 'DX=F',
         'US10Y': '^TNX',
         'Gold': 'GC=F',
         'SPX': '^SPX',
@@ -29,10 +29,19 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
         data = yf.download(all_tickers, start=start_date, end=end_date, auto_adjust=False, progress=False)["Close"]
     else:
         data = yf.download(all_tickers, period="300d", auto_adjust=False, progress=False)["Close"]
-    data = data.ffill().dropna()
+    data = data.ffill()
+    # Drop benchmark columns that failed entirely (all NaN); raise only if instrument itself has no data
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.droplevel(1)
+    valid_tickers = [t for t in all_tickers if t in data.columns and data[t].notna().any()]
+    if instrument not in valid_tickers:
+        raise ValueError("No data downloaded - check ticker symbols")
+    data = data[valid_tickers].dropna()
     if data.empty:
         raise ValueError("No data downloaded - check ticker symbols")
-    data = data[all_tickers]
+    # Build aligned display name list for available tickers
+    ticker_to_display = dict(zip(all_tickers, display_names))
+    display_names = [ticker_to_display[t] for t in valid_tickers]
     data.columns = display_names
     returns = data.pct_change().dropna()
     today = data.index[-1]
@@ -108,3 +117,81 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
     results = results[ordered_cols]
     results.columns = multi_index[:len(results.columns)]
     return results
+
+
+def market_review_timeseries(instrument: str, start_date=None, end_date=None) -> dict:
+    """Return time-series data for interactive Chart.js rendering.
+
+    Returns dict with dates, per-asset prices/cum_returns/rolling_vol/rolling_corr,
+    period markers, and the original summary table HTML as fallback.
+    """
+    benchmarks = {
+        'USD': 'DX=F', 'US10Y': '^TNX', 'Gold': 'GC=F',
+        'SPX': '^SPX', 'CSI300': '000300.SS',
+        'HSI': '^HSI', 'NKY': '^N225', 'STOXX': '^STOXX',
+    }
+    all_tickers = [instrument] + list(benchmarks.values())
+    display_names = [instrument] + list(benchmarks.keys())
+
+    kw = dict(auto_adjust=False, progress=False)
+    if start_date:
+        data = yf.download(all_tickers, start=start_date, end=end_date, **kw)["Close"]
+    else:
+        data = yf.download(all_tickers, period="400d", **kw)["Close"]
+
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.droplevel(1)
+
+    valid_tickers = [t for t in all_tickers if t in data.columns and data[t].notna().any()]
+    if instrument not in valid_tickers:
+        raise ValueError("No data for instrument")
+    data = data[valid_tickers].ffill().dropna()
+    ticker_to_display = dict(zip(all_tickers, display_names))
+    valid_display = [ticker_to_display[t] for t in valid_tickers]
+    data.columns = valid_display
+
+    returns = data.pct_change().dropna()
+    dates = data.index.strftime('%Y-%m-%d').tolist()
+
+    def _safe(series):
+        return [round(float(x), 4) if pd.notna(x) else None for x in series]
+
+    assets_out = {}
+    for asset in valid_display:
+        cum_ret = ((data[asset] / data[asset].iloc[0]) - 1) * 100
+        roll_vol = returns[asset].rolling(20).std() * np.sqrt(252) * 100
+        if asset != instrument:
+            roll_corr = returns[instrument].rolling(20).corr(returns[asset])
+        else:
+            roll_corr = pd.Series(1.0, index=returns.index)
+
+        # Align all series to same length as dates (data.index)
+        assets_out[asset] = {
+            "prices": _safe(data[asset]),
+            "cum_returns": _safe(cum_ret),
+            "rolling_vol": _safe(roll_vol.reindex(data.index)),
+            "rolling_corr": _safe(roll_corr.reindex(data.index)),
+        }
+
+    today = data.index[-1]
+    periods = {
+        "1M": (today - pd.Timedelta(days=30)).strftime('%Y-%m-%d'),
+        "1Q": (today - pd.Timedelta(days=90)).strftime('%Y-%m-%d'),
+        "YTD": f"{today.year}-01-01",
+        "ETD": data.index[0].strftime('%Y-%m-%d'),
+    }
+
+    # Generate fallback summary table
+    try:
+        summary_html = market_review(instrument, start_date, end_date).to_html(
+            classes='table table-striped', index=True, escape=False)
+    except Exception:
+        summary_html = ""
+
+    return {
+        "dates": dates,
+        "assets": assets_out,
+        "instrument": instrument,
+        "periods": periods,
+        "summary_table": summary_html,
+    }

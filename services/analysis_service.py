@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class AnalysisService:
     """Service for coordinating all analysis operations"""
-    
+
     @staticmethod
     def generate_complete_analysis(form_data):
         """Generate complete analysis including market review, statistical analysis, and assessment"""
@@ -25,16 +25,16 @@ class AnalysisService:
                 frequency=form_data['frequency'],
                 end_date=end_exclusive
             )
-            
+
             if not analyzer.is_data_valid():
                 return {'error': f"Failed to download data for {form_data['ticker']}. Please check the ticker symbol."}
 
             results = {}
-            
+
             # Market review
             market_review = MarketService.generate_market_review(form_data)
             results.update(market_review)
-            
+
             # Statistical analysis
             statistical_analysis = AnalysisService._generate_statistical_analysis(analyzer, form_data)
             results.update(statistical_analysis)
@@ -44,13 +44,13 @@ class AnalysisService:
             assessment = AnalysisService._generate_assessment(analyzer, form_data)
             results.update(assessment)
             gc.collect()
-            
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Error generating complete analysis: {e}", exc_info=True)
             return {'error': f"analysis_failed: {str(e)}"}
-    
+
     @staticmethod
     def _generate_statistical_analysis(analyzer, form_data):
         """Generate statistical analysis results"""
@@ -59,7 +59,7 @@ class AnalysisService:
             # Extract rolling_window and risk_threshold from form_data (apply defaults if blank/missing)
             rolling_window = form_data.get('rolling_window', DEFAULT_ROLLING_WINDOW)
             risk_threshold = form_data.get('risk_threshold', DEFAULT_RISK_THRESHOLD)
-            
+
             # Generate scatter plot with marginal histograms
             top_plot = analyzer.generate_scatter_plots('Oscillation', rolling_window, risk_threshold)
             if top_plot:
@@ -74,13 +74,13 @@ class AnalysisService:
             return_osc_plot = analyzer.generate_return_osc_high_low_chart(rolling_window, risk_threshold)
             if return_osc_plot:
                 results['return_osc_high_low_url'] = return_osc_plot
-            
+
             volatility_plot = analyzer.generate_volatility_dynamics()
             if volatility_plot:
                 results['volatility_dynamic_url'] = volatility_plot
             else:
                 logger.warning("Volatility dynamics plot generation failed")
-            
+
             # Generate correlation validation charts
             try:
                 correlation_validator = CorrelationValidator(
@@ -90,7 +90,7 @@ class AnalysisService:
                     end_date=form_data.get('parsed_end_time'),
                     price_dynamic=analyzer.price_dynamic,  # reuse already-loaded data
                 )
-                
+
                 if correlation_validator.is_data_valid():
                     corr_charts = correlation_validator.generate_all_correlation_charts()
                     results.update(corr_charts)
@@ -100,11 +100,11 @@ class AnalysisService:
                 logger.error(f"Error generating correlation charts: {e}", exc_info=True)
             finally:
                 gc.collect()  # release matplotlib pixel buffers promptly
-                
+
         except Exception as e:
             logger.error(f"Error generating statistical analysis: {e}", exc_info=True)
         return results
-    
+
     @staticmethod
     def _generate_assessment(analyzer, form_data):
         """Generate assessment results including projections and option analysis"""
@@ -113,20 +113,20 @@ class AnalysisService:
             percentile = form_data['risk_threshold'] / 100.0
             target_bias = form_data['target_bias']
             projection_plot, projection_table = analyzer.generate_oscillation_projection(
-                percentile=percentile, 
+                percentile=percentile,
                 target_bias=target_bias
             )
             if projection_plot:
                 results['feat_projection_url'] = projection_plot
             if projection_table:
                 results['feat_projection_table'] = projection_table
-            
+
             # Option analysis is now optional - only run if valid option data exists
             if form_data.get('option_data') and len(form_data['option_data']) > 0:
                 valid_options = [
                     option for option in form_data['option_data']
-                    if (option.get('strike') and 
-                        option.get('quantity') and 
+                    if (option.get('strike') and
+                        option.get('quantity') and
                         option.get('premium') and
                         float(option['strike']) > 0 and
                         int(option['quantity']) != 0 and
@@ -219,3 +219,53 @@ class AnalysisService:
             'basis':         f"Account ${account_size:,.0f} × {max_risk_pct}% risk / "
                              f"${loss_per_contract:,.0f} max loss per contract",
         }
+
+    @staticmethod
+    def generate_summary_analysis(tickers: list, results_by_ticker: dict) -> dict:
+        """Generate cross-ticker summary data for the 综合 tab (Module 5)."""
+        summary = {}
+
+        # Per-ticker info cards
+        summary['summaries'] = {}
+        for ticker in tickers:
+            res = results_by_ticker.get(ticker, {})
+            vp = res.get('oc_vol_premium') or {}
+            summary['summaries'][ticker] = {
+                'price': res.get('oc_snapshot', {}).get('spot') if res.get('oc_snapshot') else None,
+                'atm_iv': vp.get('atm_iv'),
+                'hv_20d': vp.get('hv_20d'),
+                'vol_premium': vp.get('vol_premium'),
+                'signal': vp.get('signal'),
+            }
+
+        # Correlation matrix
+        try:
+            import yfinance as yf
+            import pandas as pd
+            data = yf.download(tickers, period='90d', auto_adjust=False,
+                               progress=False)['Close']
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.droplevel(1)
+            data = data.ffill().dropna()
+            corr = data.pct_change().dropna().corr().round(3)
+            summary['correlation_matrix'] = {
+                'labels': list(corr.columns),
+                'values': corr.values.tolist(),
+            }
+        except Exception as e:
+            logger.warning(f"Correlation matrix failed: {e}")
+            summary['correlation_matrix'] = None
+
+        # Vol comparison table
+        summary['vol_comparison'] = [
+            {
+                'ticker': t,
+                'atm_iv': results_by_ticker.get(t, {}).get('oc_vol_premium', {}).get('atm_iv') if results_by_ticker.get(t, {}).get('oc_vol_premium') else None,
+                'hv_20d': results_by_ticker.get(t, {}).get('oc_vol_premium', {}).get('hv_20d') if results_by_ticker.get(t, {}).get('oc_vol_premium') else None,
+                'vol_premium': results_by_ticker.get(t, {}).get('oc_vol_premium', {}).get('vol_premium') if results_by_ticker.get(t, {}).get('oc_vol_premium') else None,
+                'signal': results_by_ticker.get(t, {}).get('oc_vol_premium', {}).get('signal') if results_by_ticker.get(t, {}).get('oc_vol_premium') else None,
+            }
+            for t in tickers
+        ]
+
+        return summary

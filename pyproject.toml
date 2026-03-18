@@ -1,0 +1,36 @@
+[project]
+name = "OptionStrategy"
+version = "1.0.0"
+description = "Flask-based market analysis dashboard with options strategy tools"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-x --tb=short -q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["core", "services", "data_pipeline", "utils"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B904",  # raise-without-from-inside-except (too noisy in legacy code)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "services", "data_pipeline", "utils"]
+
+[tool.ruff.format]
+quote-style = "double"

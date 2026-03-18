@@ -98,6 +98,7 @@ def get_conn(db_path: Optional[str] = None):
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         yield conn
     finally:
         conn.close()
