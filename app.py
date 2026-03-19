@@ -171,6 +171,18 @@ def option_chain():
     if not ticker_sym:
         return jsonify({'error': 'ticker is required'}), 400
 
+    source = request.args.get('source', 'yfinance').strip().lower()
+    if source == 'futu':
+        try:
+            from data_pipeline.futu_provider import get_option_chain_futu
+            futu_host = os.environ.get('FUTU_HOST', '127.0.0.1')
+            futu_port = int(os.environ.get('FUTU_PORT', '11111'))
+            result = get_option_chain_futu(ticker_sym, host=futu_host, port=futu_port)
+            return jsonify(result)
+        except Exception as e:
+            logger.error("Error fetching futu option chain for %s: %s", ticker_sym, e, exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
     def clean(v):
         """Convert NaN / inf to None for JSON serialisation."""
         try:
