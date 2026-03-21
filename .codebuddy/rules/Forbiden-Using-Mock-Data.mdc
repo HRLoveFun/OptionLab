@@ -1,0 +1,9 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-03-20T17:41:28.620Z
+provider: 
+---
+
+Never use mock data to do test, always use real data to do test
