@@ -68,6 +68,10 @@
                     <i class="fas fa-dice"></i>
                     <span>Expiry Odds</span>
                 </button>
+                <button class="tab-btn" data-tab="tab-game">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>Put Selector</span>
+                </button>
             </nav>
             {% if tickers is defined and tickers|length > 1 %}
             <div class="ticker-tab-nav" id="ticker-tabs-nav">
@@ -678,6 +682,110 @@
                 <div id="odds-empty" class="empty-state">
                     <i class="fas fa-dice empty-icon"></i>
                     <p>Set a ticker in <strong>Parameter</strong> tab, then click <strong>Load Chain</strong> to view odds charts.</p>
+                </div>
+            </div>
+
+            <!-- Tab 8: Put Option Decision Game -->
+            <div class="tab-content" id="tab-game">
+                <div class="panel-header">
+                    <h2><i class="fas fa-crosshairs"></i> Put Option Selector</h2>
+                    <p class="panel-desc">Quantitative decision process for selecting put options based on directional & volatility convictions.</p>
+                </div>
+
+                <!-- Input controls -->
+                <div class="oc-toolbar">
+                    <div class="oc-ticker-row" style="flex-wrap:wrap;gap:0.5rem;">
+                        <div class="form-group" style="margin:0;min-width:100px;">
+                            <label style="font-size:0.75rem;">Budget ($)</label>
+                            <input type="number" id="game-budget" class="oc-target-input" value="5000" min="100" step="100" style="width:100px;" />
+                        </div>
+                        <div class="form-group" style="margin:0;min-width:100px;">
+                            <label style="font-size:0.75rem;">Target Move (%)</label>
+                            <input type="number" id="game-target-move" class="oc-target-input" value="-8" min="-50" max="-0.1" step="0.5" style="width:80px;" />
+                        </div>
+                        <div class="form-group" style="margin:0;min-width:100px;">
+                            <label style="font-size:0.75rem;">Horizon (days)</label>
+                            <input type="number" id="game-horizon" class="oc-target-input" value="21" min="1" max="365" step="1" style="width:70px;" />
+                        </div>
+                        <div class="form-group" style="margin:0;min-width:120px;">
+                            <label style="font-size:0.75rem;">Directional Conviction</label>
+                            <input type="range" id="game-dir-conv" min="0" max="100" value="70" style="width:110px;" />
+                            <span id="game-dir-conv-val" style="font-size:0.75rem;">0.70</span>
+                        </div>
+                        <div class="form-group" style="margin:0;min-width:120px;">
+                            <label style="font-size:0.75rem;">Vol Conviction</label>
+                            <input type="range" id="game-vol-conv" min="0" max="100" value="65" style="width:110px;" />
+                            <span id="game-vol-conv-val" style="font-size:0.75rem;">0.65</span>
+                        </div>
+                        <div class="form-group" style="margin:0;min-width:100px;">
+                            <label style="font-size:0.75rem;">Vol Timing</label>
+                            <select id="game-vol-timing" style="padding:0.3rem 0.5rem;border-radius:6px;border:1px solid var(--border-color,#ddd);font-size:0.85rem;">
+                                <option value="FAST">Fast (&lt;2 wks)</option>
+                                <option value="MEDIUM" selected>Medium (2-6 wks)</option>
+                                <option value="SLOW">Slow (&gt;6 wks)</option>
+                            </select>
+                        </div>
+                        <button id="game-run-btn" class="btn-primary" onclick="runGameAnalysis()">
+                            <i class="fas fa-play"></i> Run
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div id="game-status" class="oc-status" style="display:none;"></div>
+
+                <!-- Market context -->
+                <div id="game-market-ctx" style="display:none;">
+                    <div class="content-card" style="margin-bottom:1rem;">
+                        <div class="content-card-title">Market Context</div>
+                        <div class="table-wrapper">
+                            <table class="table table-striped" style="max-width:500px;">
+                                <tbody id="game-market-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Heuristic notes -->
+                <div id="game-heuristics" style="display:none;">
+                    <div class="content-card" style="margin-bottom:1rem;">
+                        <div class="content-card-title">Decision Heuristics</div>
+                        <ul id="game-heuristics-list" style="padding-left:1.2rem;"></ul>
+                    </div>
+                </div>
+
+                <!-- Ranked results table -->
+                <div id="game-results" style="display:none;">
+                    <div class="content-card">
+                        <div class="content-card-title">Ranked Candidates <span id="game-filter-info" style="font-weight:normal;font-size:0.8rem;color:var(--text-muted,#888);"></span></div>
+                        <div class="table-wrapper" style="overflow-x:auto;">
+                            <table class="table table-striped" id="game-results-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Strike</th>
+                                        <th>DTE</th>
+                                        <th>Delta</th>
+                                        <th>IV %</th>
+                                        <th>Mid $</th>
+                                        <th>Contracts</th>
+                                        <th>Vega/Theta</th>
+                                        <th>Odds Ratio</th>
+                                        <th>Win Rate</th>
+                                        <th>EV $</th>
+                                        <th>EV/Dollar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="game-results-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="game-empty" class="empty-state">
+                    <i class="fas fa-crosshairs empty-icon"></i>
+                    <p>Configure parameters above and click <strong>Run</strong> to find optimal put options.</p>
                 </div>
             </div>
 

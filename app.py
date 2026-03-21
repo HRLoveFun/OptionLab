@@ -467,6 +467,20 @@ def odds_with_vol():
         return jsonify({"status": "error", "message": str(e)})
 
 
+# ── Module 5: Put Option Decision Game ────────────────────────────
+@app.route('/api/game', methods=['POST'])
+def game():
+    """Run the put-option selection decision process."""
+    data = request.get_json(silent=True) or {}
+    try:
+        from services.game_service import GameService
+        result = GameService.run(data)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"game error: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
