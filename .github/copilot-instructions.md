@@ -54,3 +54,30 @@ gunicorn app:app -b 0.0.0.0:5000  # production
 - Chart generation returns base64-encoded images via `chart_service.py`
 - Options Greeks use vectorized Black-Scholes in `core/options_greeks.py`
 - Data freshness: 60-second cooldown per ticker in `DataService`
+
+## Custom Skills & Agents
+
+Use these when relevant — type `/` in chat to invoke skills/prompts, or select agents from the agent picker.
+
+### Skills (workflows)
+- **`/debug-pipeline`** — Diagnose data pipeline failures (empty charts, stale data, yfinance errors)
+- **`/test-escalation`** — Escalate testing strategy when tests miss root cause (4-level system)
+- **`/fix-review`** — Review a bug fix before committing (architecture, tests, NaN safety)
+
+### Agents (specialists)
+- **`@pipeline-doctor`** — Read-only data pipeline diagnostician
+- **`@test-strategist`** — Analyze test failures and recommend strategy changes (3-strike rule)
+
+### Prompts (quick tasks)
+- **`/diagnose`** — Quick diagnosis: why is ticker data empty/stale?
+- **`/new-test`** — Generate a test following project patterns
+- **`/pipeline-status`** — Check DB row counts, data freshness, NaN rows
+
+### Hooks (automatic)
+- **Import guard**: After editing `data_pipeline/` or `core/`, checks for forbidden imports (logs to `.github/data/import_violations.log`)
+- **Test analyzer**: After running pytest, detects recurring failure patterns using the failure registry and suggests escalation with cooldown
+- **Session context**: At session start, injects active (unresolved) failure patterns from the tracker as context
+
+### Data (feedback loop)
+- **`.github/data/failure-registry.yaml`** — Central source of truth for failure patterns, escalation levels, and resolution status. Updated by skills after diagnosis/fix.
+- **`.github/data/failure_tracker.json`** — Auto-maintained by the test analyzer hook. Tracks occurrence counts and timestamps per failure category.
