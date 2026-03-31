@@ -24,6 +24,9 @@ venv/
 
 # Database (local dev data)
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
 
 # Jupyter
 *.ipynb
