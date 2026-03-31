@@ -58,6 +58,13 @@ class GameService:
             if not ticker:
                 return {'status': 'error', 'message': 'Ticker is required.'}
 
+            # Normalize futu-format tickers to yahoo format
+            from utils.ticker_utils import normalize_ticker
+            try:
+                ticker, _futu = normalize_ticker(ticker)
+            except ValueError:
+                pass
+
             budget = _float_in(
                 data.get('budget', 5000), _BUDGET_MIN, _BUDGET_MAX, 'budget')
             target_move_pct = _float_in(

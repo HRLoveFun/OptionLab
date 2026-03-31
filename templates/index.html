@@ -72,6 +72,10 @@
                     <i class="fas fa-crosshairs"></i>
                     <span>Put Selector</span>
                 </button>
+                <button class="tab-btn" data-tab="tab-config">
+                    <i class="fas fa-cog"></i>
+                    <span>Config</span>
+                </button>
             </nav>
             {% if tickers is defined and tickers|length > 1 %}
             <div class="ticker-tab-nav" id="ticker-tabs-nav">
@@ -101,7 +105,12 @@
                     {% endif %}
 
                     <div class="form-card">
-                        <div class="form-card-title">Analysis Settings</div>
+                        <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                            <span>Analysis Settings</span>
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-play"></i> Run
+                            </button>
+                        </div>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="ticker">Ticker Symbols（多个用逗号分隔）</label>
@@ -109,24 +118,6 @@
                                        placeholder="e.g. AAPL, SPY, ^SPX" required>
                                 <div class="ticker-validation" id="ticker-validation"></div>
                                 <div id="ticker-validation-container" class="ticker-badges"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="frequency">Frequency</label>
-                                <select id="frequency" name="frequency">
-                                    <option value="D" {% if frequency == 'D' %}selected{% endif %}>Daily</option>
-                                    <option value="W" {% if frequency == 'W' %}selected{% endif %}>Weekly</option>
-                                    <option value="ME" {% if frequency == 'ME' or not frequency %}selected{% endif %}>Monthly</option>
-                                    <option value="QE" {% if frequency == 'QE' %}selected{% endif %}>Quarterly</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="side_bias">Side Bias</label>
-                                <select id="side_bias" name="side_bias">
-                                    <option value="Natural" {% if side_bias == 'Natural' %}selected{% endif %}>Natural</option>
-                                    <option value="Neutral" {% if side_bias == 'Neutral' %}selected{% endif %}>Neutral</option>
-                                </select>
                             </div>
 
                             <div class="form-group horizon-group">
@@ -145,111 +136,80 @@
                             </div>
 
                             <div class="form-group">
-                                <label for="risk_threshold">Risk Threshold <span class="label-unit">%</span></label>
-                                <input type="number" id="risk_threshold" name="risk_threshold"
-                                       min="0" max="100" step="1"
-                                       value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}" required>
+                                <label for="account_size">Account Size <span class="label-unit">$</span></label>
+                                <input type="number" id="account_size" name="account_size"
+                                       min="0" step="1000" placeholder="e.g. 100000"
+                                       value="{{ account_size if account_size is defined and account_size else '' }}">
                             </div>
-
                             <div class="form-group">
-                                <label for="rolling_window">Rolling Window <span class="label-unit">periods</span></label>
-                                <input type="number" id="rolling_window" name="rolling_window"
-                                       min="1" step="1"
-                                       value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}" required>
-                                <div class="field-hint">Historical periods used for rolling projections.</div>
+                                <label for="max_risk_pct">Max Risk <span class="label-unit">%</span></label>
+                                <input type="number" id="max_risk_pct" name="max_risk_pct"
+                                       min="0.1" max="20" step="0.1" placeholder="e.g. 2"
+                                       value="{{ max_risk_pct if max_risk_pct is defined and max_risk_pct else '' }}">
                             </div>
                         </div>
                     </div>
 
+                    <!-- Hidden fields for Config tab values (injected by JS from localStorage) -->
+                    <input type="hidden" id="frequency" name="frequency" value="{{ frequency or 'ME' }}">
+                    <input type="hidden" id="side_bias" name="side_bias" value="{{ side_bias or 'Natural' }}">
+                    <input type="hidden" id="risk_threshold" name="risk_threshold" value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}">
+                    <input type="hidden" id="rolling_window" name="rolling_window" value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}">
                     <input type="hidden" id="option_position" name="option_position">
 
-                    <!-- Positions accordion -->
-                    <div class="form-card collapsible" id="positions-card">
-                        <div class="form-card-title collapsible-trigger" onclick="toggleOptionsSection()">
-                            <span><i class="fas fa-layer-group"></i> Positions <span class="optional-tag">Optional</span></span>
-                            <i class="fas fa-chevron-down chevron-icon" id="options-toggle-icon"></i>
+                    <!-- Positions (always visible) -->
+                    <div class="form-card" id="positions-card">
+                        <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                            <span><i class="fas fa-layer-group"></i> Positions</span>
+                            <button type="button" class="btn-primary" id="portfolio-analysis-btn" onclick="runPortfolioAnalysis()">
+                                <i class="fas fa-chart-pie"></i> 组合分析
+                            </button>
                         </div>
-                        <div class="collapsible-body" id="options-content">
-                            <div class="options-table-container">
-                                <table id="positions-table" class="options-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Ticker</th>
-                                            <th>Type</th>
-                                            <th>Expiry</th>
-                                            <th>Strike</th>
-                                            <th>Side</th>
-                                            <th>Price</th>
-                                            <th>Qty</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="positions-tbody"></tbody>
-                                </table>
-                                <div class="add-row-container">
-                                    <button type="button" class="btn-ghost" onclick="addPositionRow()">
-                                        <i class="fas fa-plus"></i> Add Position
-                                    </button>
-                                    <button type="button" class="btn-primary" id="portfolio-analysis-btn" onclick="runPortfolioAnalysis()" style="margin-left:0.5rem;">
-                                        <i class="fas fa-chart-pie"></i> 组合分析
-                                    </button>
-                                </div>
-                            </div>
-                            <!-- Portfolio analysis results panel -->
-                            <div id="portfolio-results-panel" style="display:none;">
-                                <div class="content-card" style="margin-top:1rem;">
-                                    <div class="content-card-title">Greeks Summary</div>
-                                    <div id="greeks-summary-card"></div>
-                                </div>
-                                <div class="content-card" style="margin-top:1rem;">
-                                    <div class="content-card-title">P&L at Expiration</div>
-                                    <div class="chart-wrapper"><img id="pnl-chart-img" class="analysis-chart" style="display:none;"></div>
-                                </div>
-                                <div class="content-card" style="margin-top:1rem;">
-                                    <div class="content-card-title">Theta Decay Path</div>
-                                    <div class="chart-wrapper"><img id="theta-decay-chart-img" class="analysis-chart" style="display:none;"></div>
-                                </div>
-                                <div id="breakeven-card" class="content-card" style="margin-top:1rem;display:none;">
-                                    <div class="content-card-title">Breakeven Points</div>
-                                    <div id="breakeven-values"></div>
-                                </div>
-                                <div id="var-card" class="content-card" style="margin-top:1rem;display:none;">
-                                    <div class="content-card-title">Risk Metrics</div>
-                                    <div id="var-values"></div>
-                                </div>
+                        <div class="options-table-container">
+                            <table id="positions-table" class="options-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>Type</th>
+                                        <th>Expiry</th>
+                                        <th>Strike</th>
+                                        <th>Side</th>
+                                        <th>Price</th>
+                                        <th>Qty</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="positions-tbody"></tbody>
+                            </table>
+                            <div class="add-row-container">
+                                <button type="button" class="btn-ghost" onclick="addPositionRow()">
+                                    <i class="fas fa-plus"></i> Add Position
+                                </button>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Position Sizing accordion -->
-                    <div class="form-card collapsible" id="sizing-card">
-                        <div class="form-card-title collapsible-trigger" onclick="toggleSizingSection()">
-                            <span><i class="fas fa-calculator"></i> Position Sizing <span class="optional-tag">Optional</span></span>
-                            <i class="fas fa-chevron-down chevron-icon" id="sizing-toggle-icon"></i>
-                        </div>
-                        <div class="collapsible-body" id="sizing-content" style="display:none;">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="account_size">Account Size <span class="label-unit">$</span></label>
-                                    <input type="number" id="account_size" name="account_size"
-                                           min="0" step="1000" placeholder="e.g. 100000"
-                                           value="{{ account_size if account_size is defined and account_size else '' }}">
-                                </div>
-                                <div class="form-group">
-                                    <label for="max_risk_pct">Max Risk Per Trade <span class="label-unit">%</span></label>
-                                    <input type="number" id="max_risk_pct" name="max_risk_pct"
-                                           min="0.1" max="20" step="0.1" placeholder="e.g. 2"
-                                           value="{{ max_risk_pct if max_risk_pct is defined and max_risk_pct else '' }}">
-                                    <div class="field-hint">Percentage of account to risk on a single trade.</div>
-                                </div>
+                        <!-- Portfolio analysis results panel -->
+                        <div id="portfolio-results-panel" style="display:none;">
+                            <div class="content-card" style="margin-top:1rem;">
+                                <div class="content-card-title">Greeks Summary</div>
+                                <div id="greeks-summary-card"></div>
+                            </div>
+                            <div class="content-card" style="margin-top:1rem;">
+                                <div class="content-card-title">P&L at Expiration</div>
+                                <div class="chart-wrapper"><img id="pnl-chart-img" class="analysis-chart" style="display:none;"></div>
+                            </div>
+                            <div class="content-card" style="margin-top:1rem;">
+                                <div class="content-card-title">Theta Decay Path</div>
+                                <div class="chart-wrapper"><img id="theta-decay-chart-img" class="analysis-chart" style="display:none;"></div>
+                            </div>
+                            <div id="breakeven-card" class="content-card" style="margin-top:1rem;display:none;">
+                                <div class="content-card-title">Breakeven Points</div>
+                                <div id="breakeven-values"></div>
+                            </div>
+                            <div id="var-card" class="content-card" style="margin-top:1rem;display:none;">
+                                <div class="content-card-title">Risk Metrics</div>
+                                <div id="var-values"></div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary btn-lg">
-                            <i class="fas fa-play"></i> Run Analysis
-                        </button>
                     </div>
                 </form>
             </div>
@@ -324,6 +284,11 @@
                 </div>
 
                 {% if feat_ret_scatter_top_url is defined and (feat_ret_scatter_top_url or feat_ret_scatter_hist_url or high_low_scatter_url or return_osc_high_low_url or volatility_dynamic_url or correlation_dynamics_chart or return_autocorr_chart) %}
+                {% if statistical_warning is defined and statistical_warning %}
+                <div class="alert alert-warning" style="margin-bottom:1rem;padding:0.75rem 1rem;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;color:#92400e;font-size:0.9rem;">
+                    <i class="fas fa-exclamation-triangle"></i> {{ statistical_warning }}
+                </div>
+                {% endif %}
                 <div class="charts-stack">
                     {% if feat_ret_scatter_top_url or feat_ret_scatter_hist_url %}
                     <div class="content-card">
@@ -373,7 +338,13 @@
                 {% else %}
                 <div class="empty-state">
                     <i class="fas fa-chart-bar empty-icon"></i>
-                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+                    {% if statistical_error is defined and statistical_error %}
+                    <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Statistical analysis error: {{ statistical_error }}</p>
+                    {% elif ticker is defined and ticker %}
+                    <p style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> Analysis ran but no charts were generated. The selected time horizon may have insufficient data for statistical analysis.</p>
+                    {% else %}
+                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -441,7 +412,13 @@
                 {% else %}
                 <div class="empty-state">
                     <i class="fas fa-binoculars empty-icon"></i>
-                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+                    {% if assessment_error is defined and assessment_error %}
+                    <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Assessment error: {{ assessment_error }}</p>
+                    {% elif ticker is defined and ticker %}
+                    <p style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> Projection analysis ran but no charts were generated. The selected time horizon may have insufficient data.</p>
+                    {% else %}
+                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -456,9 +433,6 @@
                 <!-- Ticker selector row -->
                 <div class="oc-toolbar">
                     <div class="oc-ticker-row">
-                        <button id="oc-load-btn" class="btn-primary" onclick="loadOptionChain()">
-                            <i class="fas fa-download"></i> Load Chain
-                        </button>
                     </div>
                 </div>
 
@@ -494,7 +468,7 @@
                 <!-- Empty state -->
                 <div id="oc-empty" class="empty-state">
                     <i class="fas fa-th empty-icon"></i>
-                    <p>Set a ticker in <strong>Parameter</strong> tab, then click <strong>Load Chain</strong> to view live options data.</p>
+                    <p>Set a ticker in <strong>Parameter</strong> tab — option chain data loads automatically when you switch to this tab.</p>
                 </div>
             </div>
 
@@ -617,8 +591,11 @@
                 {% else %}
                 <div class="empty-state">
                     <i class="fas fa-link empty-icon"></i>
-                    <p>Run an analysis first &mdash; go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
-                    <p style="margin-top:.5rem; font-size:.8rem; color:var(--slate-400);">Options chain data requires a ticker with listed options (e.g. ^SPX, AAPL, SPY).</p>
+                    {% if ticker is defined and ticker %}
+                    <p>Volatility analysis data was not available for <strong>{{ ticker }}</strong>.</p>
+                    {% else %}
+                    <p>Run an analysis first &mdash; go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -633,9 +610,6 @@
                 <!-- Toolbar -->
                 <div class="oc-toolbar">
                     <div class="oc-ticker-row">
-                        <button id="odds-load-btn" class="btn-primary" onclick="loadOddsDataEnhanced()">
-                            <i class="fas fa-download"></i> Load Chain
-                        </button>
                     </div>
                     <div class="oc-target-row">
                         <span class="oc-target-label">est. move</span>
@@ -681,7 +655,7 @@
                 <!-- Empty state -->
                 <div id="odds-empty" class="empty-state">
                     <i class="fas fa-dice empty-icon"></i>
-                    <p>Set a ticker in <strong>Parameter</strong> tab, then click <strong>Load Chain</strong> to view odds charts.</p>
+                    <p>Set a ticker in <strong>Parameter</strong> tab — odds data loads automatically when you switch to this tab.</p>
                 </div>
             </div>
 
@@ -789,6 +763,70 @@
                 </div>
             </div>
 
+            <!-- Tab: Config -->
+            <div class="tab-content" id="tab-config">
+                <div class="panel-header">
+                    <h2><i class="fas fa-cog"></i> Config</h2>
+                    <p class="panel-desc">Analysis parameters that persist across sessions.</p>
+                </div>
+                <div class="form-card">
+                    <div class="form-card-title">Analysis Config</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="cfg-frequency">Frequency</label>
+                            <select id="cfg-frequency">
+                                <option value="D">Daily</option>
+                                <option value="W">Weekly</option>
+                                <option value="ME" selected>Monthly</option>
+                                <option value="QE">Quarterly</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-side-bias">Side Bias</label>
+                            <select id="cfg-side-bias">
+                                <option value="Natural">Natural</option>
+                                <option value="Neutral">Neutral</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-risk-threshold">Risk Threshold <span class="label-unit">%</span></label>
+                            <input type="number" id="cfg-risk-threshold" min="0" max="100" step="1" value="90">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-rolling-window">Rolling Window <span class="label-unit">periods</span></label>
+                            <input type="number" id="cfg-rolling-window" min="1" step="1" value="120">
+                            <div class="field-hint">Historical periods used for rolling projections.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <div class="form-card-title">Option Chain Filter</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="cfg-max-dte">Max DTE <span class="label-unit">days</span></label>
+                            <input type="number" id="cfg-max-dte" min="1" max="730" step="1" value="45">
+                            <div class="field-hint">Maximum days to expiration (default 45).</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-moneyness-low">Moneyness Low <span class="label-unit">×Spot</span></label>
+                            <input type="number" id="cfg-moneyness-low" min="0.01" max="1.0" step="0.01" value="0.70">
+                            <div class="field-hint">Lower strike bound as fraction of spot (default 0.70).</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-moneyness-high">Moneyness High <span class="label-unit">×Spot</span></label>
+                            <input type="number" id="cfg-moneyness-high" min="1.0" max="5.0" step="0.01" value="1.30">
+                            <div class="field-hint">Upper strike bound as fraction of spot (default 1.30).</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfg-max-contracts">Max Contracts</label>
+                            <input type="number" id="cfg-max-contracts" min="10" max="5000" step="10" value="1000">
+                            <div class="field-hint">Maximum total contracts per query.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
 
         <!-- Summary Tab (only rendered for multi-ticker) -->
@@ -848,6 +886,11 @@
         {% endif %}
     </div>
 
+    <script src="{{ url_for('static', filename='utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='position.js') }}"></script>
+    <script src="{{ url_for('static', filename='option-chain.js') }}"></script>
+    <script src="{{ url_for('static', filename='market-review.js') }}"></script>
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script src="{{ url_for('static', filename='market_review_chart.js') }}"></script>
     <script>
@@ -864,8 +907,71 @@
                     var ticker = '{{ ticker or "" }}';
                     if (ticker) { loadMarketReviewChart(ticker); window._mrLoaded = true; }
                 }
+                // Auto-load Option Chain on tab switch
+                if (target === 'tab-option-chain' && !window._ocAutoLoaded) {
+                    var ticker = (document.getElementById('ticker') || {}).value || '';
+                    if (ticker.trim()) { loadOptionChain(); window._ocAutoLoaded = true; }
+                }
+                // Auto-load Expiry Odds on tab switch
+                if (target === 'tab-odds' && !window._oddsAutoLoaded) {
+                    var ticker = (document.getElementById('ticker') || {}).value || '';
+                    if (ticker.trim()) { loadOddsData(); window._oddsAutoLoaded = true; }
+                }
             });
         });
+
+        // Reset auto-load flags when ticker changes
+        var tickerInput = document.getElementById('ticker');
+        if (tickerInput) {
+            tickerInput.addEventListener('change', function() {
+                window._ocAutoLoaded = false;
+                window._oddsAutoLoaded = false;
+            });
+        }
+
+        // ── Option data auto-refresh (every 60 seconds) ──
+        (function() {
+            var OC_REFRESH_MS = 60 * 1000;
+            var _refreshTimer = null;
+
+            function getActiveTab() {
+                var active = document.querySelector('.tab-btn.active');
+                return active ? active.dataset.tab : null;
+            }
+
+            function startAutoRefresh() {
+                stopAutoRefresh();
+                _refreshTimer = setInterval(function() {
+                    var tab = getActiveTab();
+                    var ticker = (document.getElementById('ticker') || {}).value || '';
+                    if (!ticker.trim()) return;
+                    if (tab === 'tab-option-chain') { loadOptionChain(); }
+                    else if (tab === 'tab-odds') { loadOddsData(); }
+                }, OC_REFRESH_MS);
+            }
+
+            function stopAutoRefresh() {
+                if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+            }
+
+            // Start/stop refresh based on active tab
+            document.querySelectorAll('.tab-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var target = this.dataset.tab;
+                    if (target === 'tab-option-chain' || target === 'tab-odds') {
+                        startAutoRefresh();
+                    } else {
+                        stopAutoRefresh();
+                    }
+                });
+            });
+
+            // Start if already on one of those tabs
+            var initTab = getActiveTab();
+            if (initTab === 'tab-option-chain' || initTab === 'tab-odds') {
+                startAutoRefresh();
+            }
+        })();
 
         {% if summary_data is defined and summary_data and summary_data.correlation_matrix %}
         // Render correlation heatmap from server data

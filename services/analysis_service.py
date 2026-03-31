@@ -54,32 +54,51 @@ class AnalysisService:
     @staticmethod
     def _generate_statistical_analysis(analyzer, form_data):
         """Generate statistical analysis results"""
-        results = {}
+        ticker = form_data.get('ticker', '?')
+        results = {
+            'feat_ret_scatter_top_url': None,
+            'high_low_scatter_url': None,
+            'return_osc_high_low_url': None,
+            'volatility_dynamic_url': None,
+            'correlation_dynamics_chart': None,
+        }
         try:
             # Extract rolling_window and risk_threshold from form_data (apply defaults if blank/missing)
             rolling_window = form_data.get('rolling_window', DEFAULT_ROLLING_WINDOW)
             risk_threshold = form_data.get('risk_threshold', DEFAULT_RISK_THRESHOLD)
 
+            chart_warnings = []
+
             # Generate scatter plot with marginal histograms
             top_plot = analyzer.generate_scatter_plots('Oscillation', rolling_window, risk_threshold)
             if top_plot:
                 results['feat_ret_scatter_top_url'] = top_plot
+            else:
+                chart_warnings.append("Oscillation scatter")
+                logger.warning("Scatter plot generation returned None for %s", ticker)
 
             # Generate High-Low scatter plot
             high_low_scatter = analyzer.generate_high_low_scatter()
             if high_low_scatter:
                 results['high_low_scatter_url'] = high_low_scatter
+            else:
+                chart_warnings.append("High-Low scatter")
+                logger.warning("High-Low scatter plot returned None for %s", ticker)
 
             # Generate Return-Osc_high/low line chart with rolling projections
             return_osc_plot = analyzer.generate_return_osc_high_low_chart(rolling_window, risk_threshold)
             if return_osc_plot:
                 results['return_osc_high_low_url'] = return_osc_plot
+            else:
+                chart_warnings.append("Return-Oscillation dynamics")
+                logger.warning("Return-Osc plot returned None for %s", ticker)
 
             volatility_plot = analyzer.generate_volatility_dynamics()
             if volatility_plot:
                 results['volatility_dynamic_url'] = volatility_plot
             else:
-                logger.warning("Volatility dynamics plot generation failed")
+                chart_warnings.append("Volatility dynamics")
+                logger.warning("Volatility dynamics plot generation failed for %s", ticker)
 
             # Generate correlation validation charts
             try:
@@ -95,20 +114,37 @@ class AnalysisService:
                     corr_charts = correlation_validator.generate_all_correlation_charts()
                     results.update(corr_charts)
                 else:
-                    logger.warning("Correlation validator has no valid data")
+                    chart_warnings.append("Correlation dynamics")
+                    logger.warning("Correlation validator has no valid data for %s", ticker)
             except Exception as e:
+                chart_warnings.append("Correlation dynamics")
                 logger.error(f"Error generating correlation charts: {e}", exc_info=True)
             finally:
                 gc.collect()  # release matplotlib pixel buffers promptly
 
+            # Surface per-chart failures so the user knows which analyses are missing and why
+            all_none = all(v is None for k, v in results.items() if k != 'statistical_error')
+            if all_none and analyzer.is_data_valid():
+                fdf = analyzer.features_df
+                msg = f"All charts returned None. features_df shape: {fdf.shape if fdf is not None else 'None'}"
+                logger.warning("Statistical analysis empty for %s: %s", ticker, msg)
+                results['statistical_error'] = msg
+            elif chart_warnings and not all_none:
+                results['statistical_warning'] = f"Some charts unavailable for {ticker}: {', '.join(chart_warnings)}. This may be due to insufficient data for the selected time range."
+
         except Exception as e:
-            logger.error(f"Error generating statistical analysis: {e}", exc_info=True)
+            logger.error(f"Error generating statistical analysis for {ticker}: {e}", exc_info=True)
+            results['statistical_error'] = str(e)
         return results
 
     @staticmethod
     def _generate_assessment(analyzer, form_data):
         """Generate assessment results including projections and option analysis"""
-        results = {}
+        ticker = form_data.get('ticker', '?')
+        results = {
+            'feat_projection_url': None,
+            'feat_projection_table': None,
+        }
         try:
             percentile = form_data['risk_threshold'] / 100.0
             target_bias = form_data['target_bias']
@@ -118,6 +154,8 @@ class AnalysisService:
             )
             if projection_plot:
                 results['feat_projection_url'] = projection_plot
+            else:
+                logger.warning("Oscillation projection plot returned None for %s", ticker)
             if projection_table:
                 results['feat_projection_table'] = projection_table
 
@@ -146,7 +184,8 @@ class AnalysisService:
             else:
                 logger.info("No option data provided - skipping option analysis")
         except Exception as e:
-            logger.error(f"Error generating assessment: {e}", exc_info=True)
+            logger.error(f"Error generating assessment for {ticker}: {e}", exc_info=True)
+            results['assessment_error'] = str(e)
 
         # Position sizing (only if account_size and option PnL available)
         try:
@@ -242,12 +281,14 @@ class AnalysisService:
         try:
             import yfinance as yf
             import pandas as pd
+            from utils.utils import yf_throttle
+            yf_throttle()
             data = yf.download(tickers, period='90d', auto_adjust=False,
                                progress=False)['Close']
             if isinstance(data.columns, pd.MultiIndex):
                 data.columns = data.columns.droplevel(1)
             data = data.ffill().dropna()
-            corr = data.pct_change().dropna().corr().round(3)
+            corr = data.pct_change(fill_method=None).dropna().corr().round(3)
             summary['correlation_matrix'] = {
                 'labels': list(corr.columns),
                 'values': corr.values.tolist(),

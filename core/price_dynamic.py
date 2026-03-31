@@ -3,14 +3,19 @@ import yfinance as yf
 import numpy as np
 import datetime as dt
 import logging
+import time
 from data_pipeline.data_service import DataService
+from utils.utils import yf_throttle
 
 logger = logging.getLogger(__name__)
+
+_YF_MAX_RETRIES = 2
+_YF_RETRY_BASE_DELAY = 3  # seconds
 
 PERIODS = [12, 36, 60, "ALL"]
 FREQUENCY_MAPPING = {
     'D': 'Daily',
-    'W': 'Weekly', 
+    'W': 'Weekly',
     'ME': 'Monthly',
     'QE': 'Quarterly'
 }
@@ -28,19 +33,25 @@ class PriceDynamic:
     """
     def __init__(self, ticker: str, start_date=dt.date(2016, 12, 1), frequency='D', end_date: dt.date | None = None):
         self._validate_inputs(ticker, start_date, frequency, end_date)
-        self.ticker = ticker
+        # Normalize futu-format tickers (e.g. US.NVDA → NVDA) for yfinance/DB
+        from utils.ticker_utils import normalize_ticker
+        try:
+            yahoo_ticker, _ = normalize_ticker(ticker)
+            self.ticker = yahoo_ticker or ticker
+        except (ValueError, ImportError):
+            self.ticker = ticker
         # Store user-requested horizon for output filtering only
         self.user_start_date = start_date
         self.frequency = frequency
         # If end_date is blank (None), set internal end_date to today, but remember it was not user-provided
         self._user_provided_end = end_date is not None
         self.user_end_date = end_date or dt.date.today()
-        
+
         # Fetch complete historical data - no start_date clamping
         # Use a far-back date to get maximum historical data so any user start_date is honored
         # yfinance will return earliest available history when start is very early
         self._download_start = dt.date(1900, 1, 1)
-        
+
         # Ensure DB is initialized
         try:
             DataService.initialize()
@@ -48,24 +59,22 @@ class PriceDynamic:
             pass
         # Prefer DB-backed cleaned daily data; fallback to direct download if insufficient coverage
         raw_data = self._fetch_daily_from_db()
-        
-        # Check if database data has sufficient coverage for the requested horizon
-        # If database doesn't cover the user's start_date, fall back to yfinance
-        needs_fallback = False
-        if raw_data is None or raw_data.empty:
-            needs_fallback = True
-        elif len(raw_data) > 0:
-            # Check if earliest available data is after user's start_date
-            earliest_db_date = raw_data.index[0]
-            if isinstance(earliest_db_date, pd.Timestamp):
-                earliest_db_date = earliest_db_date.date()
-            if earliest_db_date > start_date:
-                logger.info(f"Database has data from {earliest_db_date}, but user requested from {start_date}. Falling back to yfinance.")
-                needs_fallback = True
-        
-        if needs_fallback:
-            raw_data = self._download_data()
-        
+
+        # If database has data but doesn't cover full user range,
+        # try a single yfinance download (already rate-throttled).
+        # If DB has any data at all, accept it as fallback to avoid
+        # hammering Yahoo when rate-limited.
+        db_data = raw_data  # keep reference to DB data as safety net
+        needs_yfinance = raw_data is None or raw_data.empty
+
+        if needs_yfinance:
+            yf_data = self._download_data()
+            if yf_data is not None and not yf_data.empty:
+                raw_data = yf_data
+            elif db_data is not None and not db_data.empty:
+                logger.warning(f"yfinance download failed for {self.ticker}, using available DB data.")
+                raw_data = db_data
+
         self._data = self._refrequency(raw_data) if raw_data is not None else None
         self._daily_data = raw_data
 
@@ -92,33 +101,43 @@ class PriceDynamic:
         raise KeyError(f"No data available for key: {item}")
 
     def _download_data(self):
-        try:
-            # Fetch all available historical data without date restrictions
-            # yfinance will return all available data when start is far back
-            yf_end = dt.date.today() + dt.timedelta(days=1)
-            df = yf.download(
-                self.ticker,
-                start=self._download_start,
-                end=yf_end,
-                interval='1d',
-                progress=False,
-                auto_adjust=False,
-            )
-            if df.empty:
-                logger.warning(f"No data downloaded for {self.ticker}")
+        for attempt in range(_YF_MAX_RETRIES):
+            try:
+                yf_end = dt.date.today() + dt.timedelta(days=1)
+                yf_throttle()
+                df = yf.download(
+                    self.ticker,
+                    start=self._download_start,
+                    end=yf_end,
+                    interval='1d',
+                    progress=False,
+                    auto_adjust=False,
+                )
+                if df.empty:
+                    logger.warning(f"No data downloaded for {self.ticker} (attempt {attempt + 1})")
+                    if attempt < _YF_MAX_RETRIES - 1:
+                        time.sleep(_YF_RETRY_BASE_DELAY * (attempt + 1))
+                        continue
+                    return None
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.droplevel(1)
+                df.index = pd.DatetimeIndex(df.index)
+                required_columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+                missing_columns = [col for col in required_columns if col not in df.columns]
+                if missing_columns:
+                    logger.error(f"Missing columns: {missing_columns}")
+                    return None
+                return df[required_columns]
+            except Exception as e:
+                is_rate_limit = 'rate' in str(e).lower() or 'too many' in str(e).lower()
+                if is_rate_limit and attempt < _YF_MAX_RETRIES - 1:
+                    delay = _YF_RETRY_BASE_DELAY * (attempt + 1)
+                    logger.warning(f"yfinance rate limited for {self.ticker}, retrying in {delay}s (attempt {attempt + 1})")
+                    time.sleep(delay)
+                    continue
+                logger.error(f"Error downloading data for {self.ticker}: {e}")
                 return None
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.droplevel(1)
-            df.index = pd.DatetimeIndex(df.index)
-            required_columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
-                logger.error(f"Missing columns: {missing_columns}")
-                return None
-            return df[required_columns]
-        except Exception as e:
-            logger.error(f"Error downloading data for {self.ticker}: {e}")
-            return None
+        return None
 
     def _fetch_daily_from_db(self):
         try:
@@ -134,7 +153,18 @@ class PriceDynamic:
                 'adj_close': 'Adj Close',
                 'volume': 'Volume',
             })
-            # No coverage check - we want all available data
+            # Ensure numeric dtype (SQLite may return object columns)
+            for col in ('Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            # Drop pure-filler rows where ALL price columns are NaN.
+            # clean_range() creates these for business days with no raw data;
+            # they must not be treated as real observations.
+            price_cols = [c for c in ('Open', 'High', 'Low', 'Close', 'Adj Close') if c in df.columns]
+            if price_cols:
+                df = df.dropna(subset=price_cols, how='all')
+            if df.empty:
+                return None
             return df
         except Exception as e:
             logger.warning(f"DB fetch failed for {self.ticker}: {e}")
@@ -242,7 +272,7 @@ class PriceDynamic:
         try:
             if window is None:
                 window = VOLATILITY_WINDOWS.get(self.frequency, 21)
-            daily_returns = self._daily_data['Adj Close'].pct_change().dropna()
+            daily_returns = self._daily_data['Adj Close'].pct_change(fill_method=None).dropna()
             rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(252) * 100
             rolling_vol.name = 'Volatility'
             return self._apply_horizon(rolling_vol.dropna())
@@ -257,7 +287,7 @@ class PriceDynamic:
             df = pd.DataFrame(price_series, columns=['Close'])
             df['CumMax'] = df['Close'].cummax()
             df['IsBull'] = df['Close'] >= 0.8 * df['CumMax']
-            
+
             # Handle case where all values are the same
             if df['IsBull'].nunique() == 1:
                 # If all bull or all bear, create one segment
@@ -265,13 +295,13 @@ class PriceDynamic:
                     return {'bull_segments': [price_series], 'bear_segments': []}
                 else:
                     return {'bull_segments': [], 'bear_segments': [price_series]}
-            
+
             trend_changes = df['IsBull'] != df['IsBull'].shift(1)
             trend_changes.iloc[0] = True
             segments = {'bull_segments': [], 'bear_segments': []}
             current_trend = None
             segment_start = None
-            
+
             for i, (date, row) in enumerate(df.iterrows()):
                 is_trend_change = trend_changes.loc[date]
                 if is_trend_change or i == len(df) - 1:
@@ -285,7 +315,7 @@ class PriceDynamic:
                     if i < len(df) - 1:
                         segment_start = date
                         current_trend = row['IsBull']
-            
+
             # Ensure we have at least some segments for visualization
             if not segments['bull_segments'] and not segments['bear_segments']:
                 # Fallback: treat entire series as one segment based on overall trend
@@ -295,7 +325,7 @@ class PriceDynamic:
                         segments['bull_segments'] = [price_series]
                     else:
                         segments['bear_segments'] = [price_series]
-            
+
             return segments
         except Exception as e:
             logger.error(f"Error in bull_bear_plot: {e}")
@@ -303,10 +333,10 @@ class PriceDynamic:
 
     def osc(self, on_effect=False, apply_horizon=True):
         """Calculate oscillation.
-        
+
         Args:
             on_effect: If True, adjust high/low by LastClose
-            apply_horizon: If True, filter results to user-specified horizon. 
+            apply_horizon: If True, filter results to user-specified horizon.
                           If False, return full historical data.
         """
         if self._data is None or self._data.empty:
@@ -329,7 +359,7 @@ class PriceDynamic:
 
     def osc_high(self, apply_horizon=True):
         """Calculate high oscillation.
-        
+
         Args:
             apply_horizon: If True, filter results to user-specified horizon.
                           If False, return full historical data.
@@ -349,7 +379,7 @@ class PriceDynamic:
 
     def osc_low(self, apply_horizon=True):
         """Calculate low oscillation.
-        
+
         Args:
             apply_horizon: If True, filter results to user-specified horizon.
                           If False, return full historical data.
@@ -369,7 +399,7 @@ class PriceDynamic:
 
     def ret(self, apply_horizon=True):
         """Calculate returns.
-        
+
         Args:
             apply_horizon: If True, filter results to user-specified horizon.
                           If False, return full historical data.
@@ -416,7 +446,8 @@ class PriceDynamic:
             return None
 
         try:
-            log_ret = np.log(daily['Adj Close'] / daily['Adj Close'].shift(1)).dropna()
+            adj = pd.to_numeric(daily['Adj Close'], errors='coerce')
+            log_ret = np.log(adj / adj.shift(1)).dropna()
 
             WINDOWS = [10, 20, 60, 252]
             ANN_FACTOR = np.sqrt(252) * 100

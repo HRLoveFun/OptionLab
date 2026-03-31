@@ -80,7 +80,21 @@ def init_db(db_path: Optional[str] = None):
                 mom_10 REAL,
                 mom_20 REAL,
                 mom_60 REAL,
+                osc_high REAL,
+                osc_low REAL,
+                osc REAL,
                 PRIMARY KEY (ticker, date, frequency)
+            )
+            """
+        )
+        # Market review benchmark close prices
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS market_review_prices (
+                ticker TEXT NOT NULL,
+                date TEXT NOT NULL,
+                close REAL,
+                PRIMARY KEY (ticker, date)
             )
             """
         )
@@ -105,13 +119,21 @@ def get_conn(db_path: Optional[str] = None):
 
 
 def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db_path: Optional[str] = None):
+    rows = list(rows)
+    if not rows:
+        return
     cols = list(columns)
     placeholders = ",".join(["?"] * len(cols))
     updates = ",".join([f"{c}=excluded.{c}" for c in cols if c not in ("ticker", "date", "frequency")])
     sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT DO UPDATE SET {updates}"
     with get_conn(db_path) as conn:
-        conn.executemany(sql, rows)
-        conn.commit()
+        try:
+            conn.execute("BEGIN")
+            conn.executemany(sql, rows)
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
 
 
 def fetch_df(query: str, params: tuple = (), db_path: Optional[str] = None):

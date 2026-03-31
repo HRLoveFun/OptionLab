@@ -59,6 +59,7 @@ class MarketAnalyzer:
         self.ticker = ticker
         self.frequency = frequency
         self.end_date = end_date
+        self.features_df = pd.DataFrame()
         if self.price_dynamic.is_valid():
             self._calculate_features()
 
@@ -75,18 +76,50 @@ class MarketAnalyzer:
             self.osc_low = self.price_dynamic.osc_low()
             self.returns = self.price_dynamic.ret()
             self.difference = self.price_dynamic.dif()
+
+            series_lengths = {
+                'Oscillation': 0 if self.oscillation is None else len(self.oscillation),
+                'Osc_high': 0 if self.osc_high is None else len(self.osc_high),
+                'Osc_low': 0 if self.osc_low is None else len(self.osc_low),
+                'Returns': 0 if self.returns is None else len(self.returns),
+                'Difference': 0 if self.difference is None else len(self.difference),
+            }
+            logger.info("Feature series lengths for %s: %s", self.ticker, series_lengths)
+
+            # Guard against None series — replace with empty Series to avoid
+            # DataFrame construction errors
+            def _safe(s):
+                return s if s is not None else pd.Series(dtype=float)
+
+            # Use dropna(how='all') — only drop rows where ALL features
+            # are NaN.  Downstream chart functions already handle partial
+            # NaN via per-column dropna() + index.intersection().
             self.features_df = (
                 pd.DataFrame({
-                    'Oscillation': self.oscillation,
-                    'Osc_high': self.osc_high,
-                    'Osc_low': self.osc_low,
-                    'Returns': self.returns,
-                    'Difference': self.difference,
+                    'Oscillation': _safe(self.oscillation),
+                    'Osc_high': _safe(self.osc_high),
+                    'Osc_low': _safe(self.osc_low),
+                    'Returns': _safe(self.returns),
+                    'Difference': _safe(self.difference),
                 })
-                .dropna()
+                .dropna(how='all')
             )
+            logger.info("features_df shape for %s: %s", self.ticker, self.features_df.shape)
+            if self.features_df.empty and any(v > 0 for v in series_lengths.values()):
+                nan_counts = {
+                    'Oscillation': 0 if self.oscillation is None else int(self.oscillation.isna().sum()),
+                    'Osc_high': 0 if self.osc_high is None else int(self.osc_high.isna().sum()),
+                    'Osc_low': 0 if self.osc_low is None else int(self.osc_low.isna().sum()),
+                    'Returns': 0 if self.returns is None else int(self.returns.isna().sum()),
+                    'Difference': 0 if self.difference is None else int(self.difference.isna().sum()),
+                }
+                logger.warning(
+                    "features_df empty after dropna(how='all') for %s. "
+                    "Series NaN counts=%s, series lengths=%s",
+                    self.ticker, nan_counts, series_lengths,
+                )
         except Exception as e:
-            logger.error(f"Error calculating features: {e}")
+            logger.error(f"Error calculating features for {self.ticker}: {e}", exc_info=True)
             self.features_df = pd.DataFrame()
 
     def is_data_valid(self):
@@ -110,9 +143,12 @@ class MarketAnalyzer:
         if not self.is_data_valid() or feature_name not in self.features_df.columns:
             return None
         try:
-            x = self.features_df[feature_name]
-            y = self.features_df['Returns']
-            fig_top = self._create_scatter_hist_plot(x, y)
+            x = self.features_df[feature_name].dropna()
+            y = self.features_df['Returns'].dropna()
+            common = x.index.intersection(y.index)
+            if len(common) == 0:
+                return None
+            fig_top = self._create_scatter_hist_plot(x.loc[common], y.loc[common])
             return self._fig_to_base64(fig_top)
         except Exception as e:
             logger.error(f"Error generating scatter plot: {e}")
@@ -131,7 +167,7 @@ class MarketAnalyzer:
             if 'Osc_low' not in self.features_df.columns or 'Osc_high' not in self.features_df.columns:
                 logger.error("Osc_low or Osc_high columns not found in features_df")
                 return None
-            
+
             osc_low = self.features_df['Osc_low'].dropna()
             osc_high = self.features_df['Osc_high'].dropna()
 
@@ -139,15 +175,15 @@ class MarketAnalyzer:
             common_index = osc_low.index.intersection(osc_high.index)
             osc_low = osc_low.loc[common_index]
             osc_high = osc_high.loc[common_index]
-            
+
             if osc_low.empty or osc_high.empty:
                 logger.error("No valid Osc_low-Osc_high data")
                 return None
-            
+
             # Set proper names for axis labels
             osc_low.name = 'Osc_low'
             osc_high.name = 'Osc_high'
-            
+
             # Compute spread and select top-5 indices by (Osc_high - Osc_low)
             try:
                 spread = (osc_high - osc_low).dropna()
@@ -164,11 +200,11 @@ class MarketAnalyzer:
 
     def generate_return_osc_high_low_chart(self, rolling_window=20, risk_threshold=90):
         """Generate Return-Oscillation line chart with rolling projections.
-        
+
         Args:
             rolling_window: Number of historical periods for rolling projections
             risk_threshold: Percentile threshold (0-100) for projections
-        
+
         Returns:
             str|None: Base64-encoded chart or None on error
         """
@@ -179,18 +215,18 @@ class MarketAnalyzer:
             returns = self.features_df['Returns']
             osc_high = self.features_df['Osc_high']
             osc_low = self.features_df['Osc_low']
-            
+
             # Get full unfiltered data for rolling projections calculation
             # Use apply_horizon=False to get complete historical data
             osc_high_full = self.price_dynamic.osc_high(apply_horizon=False)
             osc_low_full = self.price_dynamic.osc_low(apply_horizon=False)
-            
+
             if osc_high_full is None or osc_low_full is None:
                 logger.warning("No full osc data available for rolling projections")
                 return None
-            
+
             fig = self._create_return_osc_high_low_plot(
-                returns, osc_high, osc_low, 
+                returns, osc_high, osc_low,
                 osc_high_full, osc_low_full,
                 rolling_window, risk_threshold
             )
@@ -257,37 +293,37 @@ class MarketAnalyzer:
         """Format projection values with dynamic precision based on magnitude"""
         if pd.isna(value) or value == "":
             return ""
-        
+
         try:
             # Convert to float if it's not already
             num_value = float(value)
-            
+
             # Handle zero case
             if num_value == 0:
                 return "0.00"
-            
+
             # Get absolute value for calculations
             abs_value = abs(num_value)
-            
+
             # If value is >= 0.01, use standard 2 decimal places
             if abs_value >= 0.01:
                 return f"{num_value:.2f}"
-            
+
             # For values < 0.01, find first non-zero decimal place
             # and keep 2 decimal places from there
             decimal_places = 2
             temp_value = abs_value
-            
+
             # Count leading zeros after decimal point
             while temp_value < 0.1 and decimal_places < 10:  # Cap at 10 to prevent infinite loop
                 temp_value *= 10
                 decimal_places += 1
-            
+
             # Add one more decimal place to get 2 significant digits
             decimal_places += 1
-            
+
             return f"{num_value:.{decimal_places}f}"
-            
+
         except (ValueError, TypeError):
             return str(value)
 
@@ -355,6 +391,8 @@ class MarketAnalyzer:
             df["ProjLow"] = df["LastClose"] - df["LastClose"] * proj_volatility / 100 * (1 - weight)
             df["Status"] = np.where(df["Close"] > df["ProjHigh"], 1,
                                    np.where(df["Close"] < df["ProjLow"], -1, 0))
+            if len(df) == 0:
+                return 0
             return ((df["Status"] == 1).sum() - (df["Status"] == -1).sum()) / len(df)
         except Exception as e:
             logger.error(f"Error calculating realized bias: {e}")
@@ -367,7 +405,7 @@ class MarketAnalyzer:
             if daily_data is None or daily_data.empty:
                 logger.warning("No daily data available for projection DataFrame")
                 return pd.DataFrame()
-            
+
             close_dates = data.get("CloseDate")
             if isinstance(close_dates, pd.Series) and len(close_dates) >= 2:
                 date_last_close = close_dates.iloc[-2]
@@ -376,33 +414,51 @@ class MarketAnalyzer:
                 # Fallback to data index if CloseDate not available
                 date_last_close = data.index[-2] if len(data) >= 2 else data.index[-1]
                 date_last = data.index[-1]
-            
+
             # Ensure dates are timezone-aware if daily_data is timezone-aware
             if hasattr(daily_data.index, 'tz') and daily_data.index.tz is not None:
                 if not hasattr(date_last_close, 'tz') or date_last_close.tz is None:
                     date_last_close = pd.Timestamp(date_last_close).tz_localize(daily_data.index.tz)
                 if not hasattr(date_last, 'tz') or date_last.tz is None:
                     date_last = pd.Timestamp(date_last).tz_localize(daily_data.index.tz)
-            
+
             end_date = date_last + pd.DateOffset(months=2)
             all_weekdays = pd.date_range(start=date_last_close, end=end_date, freq='B')
-            
-            # Match timezone if needed
+
+            # Match timezone if needed — only localize if not already tz-aware
             if hasattr(daily_data.index, 'tz') and daily_data.index.tz is not None:
-                all_weekdays = all_weekdays.tz_localize(daily_data.index.tz)
-            
+                if all_weekdays.tz is None:
+                    all_weekdays = all_weekdays.tz_localize(daily_data.index.tz)
+
             proj_df = pd.DataFrame(index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow", "iHigh1", "iLow1"])
-            
+
             # Fill historical data from daily_data between date_last_close and date_last
             historical_period = daily_data.loc[date_last_close:date_last]
-            
+
+            if historical_period.empty:
+                logger.warning(
+                    "Empty historical_period for projection: "
+                    "date_last_close=%s (type=%s, tz=%s), "
+                    "date_last=%s (type=%s, tz=%s), "
+                    "daily_data index range=[%s .. %s] (tz=%s), "
+                    "daily_data len=%d",
+                    date_last_close, type(date_last_close).__name__,
+                    getattr(date_last_close, 'tz', None),
+                    date_last, type(date_last).__name__,
+                    getattr(date_last, 'tz', None),
+                    daily_data.index[0] if len(daily_data) > 0 else 'N/A',
+                    daily_data.index[-1] if len(daily_data) > 0 else 'N/A',
+                    getattr(daily_data.index, 'tz', None),
+                    len(daily_data),
+                )
+
             # Fill Close, High, Low values from daily data
             for date in historical_period.index:
                 if date in proj_df.index:
                     proj_df.loc[date, "Close"] = historical_period.loc[date, "Close"]
                     proj_df.loc[date, "High"] = historical_period.loc[date, "High"]
                     proj_df.loc[date, "Low"] = historical_period.loc[date, "Low"]
-            
+
             # Ensure we have the key reference points
             if date_last_close in proj_df.index and date_last_close in historical_period.index:
                 proj_df.loc[date_last_close, "Close"] = historical_period.loc[date_last_close, "Close"]
@@ -410,7 +466,7 @@ class MarketAnalyzer:
                 proj_df.loc[date_last, "Close"] = historical_period.loc[date_last, "Close"]
                 proj_df.loc[date_last, "High"] = historical_period.loc[date_last, "High"]
                 proj_df.loc[date_last, "Low"] = historical_period.loc[date_last, "Low"]
-            
+
             # Determine business-day period length based on selected frequency
             # Mapping: W -> 5, ME -> 22, QE -> 65, default -> 21
             try:
@@ -470,45 +526,45 @@ class MarketAnalyzer:
         # Plot Close values with black circle points
         close_mask = ~proj_df["Close"].isna()
         if close_mask.any():
-            ax.scatter(x_values[close_mask], proj_df["Close"][close_mask], 
+            ax.scatter(x_values[close_mask], proj_df["Close"][close_mask],
                       label="Close", color="green", s=50, marker='o', zorder=3)
-        
+
         # Plot High values with purple upward triangle points
         high_mask = ~proj_df["High"].isna()
         if high_mask.any():
-            ax.scatter(x_values[high_mask], proj_df["High"][high_mask], 
+            ax.scatter(x_values[high_mask], proj_df["High"][high_mask],
                       label="High", color="purple", s=50, marker='^', zorder=3)
             # Connect consecutive High points with a purple line
-            ax.plot(x_values[high_mask], proj_df["High"][high_mask], 
+            ax.plot(x_values[high_mask], proj_df["High"][high_mask],
                     color="purple", linewidth=1.5, alpha=0.8, solid_capstyle='round', label='_nolegend_')
-        
+
         # Plot Low values with blue downward triangle points
         low_mask = ~proj_df["Low"].isna()
         if low_mask.any():
-            ax.scatter(x_values[low_mask], proj_df["Low"][low_mask], 
+            ax.scatter(x_values[low_mask], proj_df["Low"][low_mask],
                       label="Low", color="blue", s=50, marker='v', zorder=3)
             # Connect consecutive Low points with a blue line
-            ax.plot(x_values[low_mask], proj_df["Low"][low_mask], 
+            ax.plot(x_values[low_mask], proj_df["Low"][low_mask],
                     color="blue", linewidth=1.5, alpha=0.8, solid_capstyle='round', label='_nolegend_')
-        
+
         # Plot projection lines
         for col, color, label in [("iHigh", "red", "Proj High (Current)"), ("iLow", "red", "Proj Low (Current)"), ("iHigh1", "orange", "Proj High (Next)"), ("iLow1", "orange", "Proj Low (Next)")]:
             mask = ~proj_df[col].isna()
             if mask.any():
-                ax.scatter(x_values[mask], proj_df[col][mask], label=label, 
+                ax.scatter(x_values[mask], proj_df[col][mask], label=label,
                           facecolors='none', edgecolors=color, s=80, linewidth=2, zorder=3)
 
     def _format_projection_plot(self, ax, proj_df, percentile, proj_volatility, bias_text):
         """Apply consistent labels, ticks, and legend to the projection chart."""
         # Display all x-axis labels with vertical rotation
         ax.set_xticks(range(len(proj_df.index)))
-        ax.set_xticklabels([date.strftime('%m/%d') for date in proj_df.index], 
+        ax.set_xticklabels([date.strftime('%m/%d') for date in proj_df.index],
                           rotation=90, fontsize=8)
         ax.set_xlabel('Date', fontsize=12)
         ax.set_ylabel('Price', fontsize=12)
         ax.set_title('Oscillation Projection', fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
-        
+
         # Create parameter info text box in upper left
         oos_acc = getattr(self, '_proj_oos_accuracy', None)
         oos_txt = f"{oos_acc:.1%}" if oos_acc is not None else "N/A"
@@ -524,7 +580,7 @@ class MarketAnalyzer:
         ax.text(0.02, 0.98, param_text, transform=ax.transAxes,
                 fontsize=12, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-        
+
         ax.legend(fontsize=12, loc='upper right')
         plt.tight_layout()
 
@@ -549,7 +605,7 @@ class MarketAnalyzer:
             fig, ax1 = plt.subplots(figsize=PLOT_SIZE_VOLATILITY)
             ax1.set_xlabel('Date', fontsize=12)
             ax1.set_ylabel('Price ($)', fontsize=12, color='black')
-            
+
             # Plot price data with bull/bear segments
             for segment in bull_bear_segments['bull_segments']:
                 if len(segment) > 1:
@@ -557,7 +613,7 @@ class MarketAnalyzer:
             for segment in bull_bear_segments['bear_segments']:
                 if len(segment) > 1:
                     ax1.plot(segment.index, segment.values, color=COLOR_BEAR, linewidth=2, alpha=0.5)
-            
+
             ax1.set_yscale('log')
             from matplotlib.ticker import FuncFormatter, NullFormatter, LogLocator
             ax1.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 4.0], numticks=15))
@@ -566,22 +622,22 @@ class MarketAnalyzer:
             ax1.yaxis.set_minor_formatter(NullFormatter())
             ax1.tick_params(axis='y', labelcolor='black')
             ax1.grid(True, alpha=0.3)
-            
+
             # Create second y-axis for volatility
             ax2 = ax1.twinx()
             ax2.set_ylabel('Volatility (%)', fontsize=12, color='blue')
             ax2.plot(volatility.index, volatility.values, color=COLOR_VOL, linewidth=3, alpha=0.7, label='Historical Volatility', linestyle='-')
             ax2.tick_params(axis='y', labelcolor='blue')
-            
+
             # Add current volatility point
             current_vol = volatility.iloc[-1] if len(volatility) > 0 else volatility.mean()
             ax2.scatter(x=volatility.index[-1], y=current_vol, color='purple', s=100, marker='o', linewidth=1.5, alpha=0.8, zorder=5)
-            
+
             # Set title and legend
             frequency_name = FREQUENCY_LABELS.get(self.frequency, self.frequency)
             window = VOLATILITY_WINDOWS.get(self.frequency, 21)
             ax1.set_title(f'{self.ticker} - Price & Volatility Dynamics\nVolatility Window: {window} days ({frequency_name} frequency)', fontsize=14, fontweight='bold', pad=20)
-            
+
             # Create legend
             from matplotlib.lines import Line2D
             legend_elements = [
@@ -590,7 +646,7 @@ class MarketAnalyzer:
                 Line2D([0], [0], color=COLOR_VOL, linewidth=2, label=f'Volatility, *{current_vol:.1f}%'),
             ]
             ax1.legend(handles=legend_elements, loc='upper left', fontsize=10, framealpha=0.8, bbox_to_anchor=(0.0, 1.0), borderaxespad=0.1)
-            
+
             plt.tight_layout()
             return self._fig_to_base64(fig)
         except Exception as e:
@@ -741,12 +797,12 @@ class MarketAnalyzer:
         """
         fig = plt.figure(figsize=PLOT_SIZE_SCATTER)
         gs = fig.add_gridspec(
-            2, 2, 
-            width_ratios=(3, 1), 
-            height_ratios=(1, 3), 
-            left=0.05, right=0.95, 
-            bottom=0.05, top=0.95, 
-            wspace=0.05,  
+            2, 2,
+            width_ratios=(3, 1),
+            height_ratios=(1, 3),
+            left=0.05, right=0.95,
+            bottom=0.05, top=0.95,
+            wspace=0.05,
             hspace=0.05
         )
         ax = fig.add_subplot(gs[1, 0])
@@ -781,44 +837,44 @@ class MarketAnalyzer:
                 indices_to_label = [idx for idx in label_indices if idx in x.index and idx in y.index]
             elif len(x) >= 5:
                 indices_to_label = x.nlargest(5).index
-            
+
             # Get recent indices
             recent_indices = x.index[-5:] if len(x) >= 5 else []
-            
+
             # Separate into three groups: top only, recent only, and both
             top_only = []
             recent_only = []
             both = []
-            
+
             if indices_to_label is not None:
                 for idx in indices_to_label:
                     if idx in recent_indices:
                         both.append(idx)
                     else:
                         top_only.append(idx)
-            
+
             for idx in recent_indices:
                 if indices_to_label is None or idx not in indices_to_label:
                     recent_only.append(idx)
-            
+
             # Plot colored spots for top maximums (red) - exclude ones that are also recent
             if len(top_only) > 0:
-                ax.scatter([x.loc[idx] for idx in top_only], 
+                ax.scatter([x.loc[idx] for idx in top_only],
                           [y.loc[idx] for idx in top_only],
                           color='red', s=20, zorder=4, alpha=0.7,  )
-            
+
             # Plot colored spots for recent periods (blue) - exclude ones that are also top
             if len(recent_only) > 0:
-                ax.scatter([x.loc[idx] for idx in recent_only], 
+                ax.scatter([x.loc[idx] for idx in recent_only],
                           [y.loc[idx] for idx in recent_only],
                           color='blue', s=20, zorder=4, alpha=0.7, )
-            
+
             # Plot colored spots for both (purple) - points that are both recent and top maximum
             if len(both) > 0:
-                ax.scatter([x.loc[idx] for idx in both], 
+                ax.scatter([x.loc[idx] for idx in both],
                           [y.loc[idx] for idx in both],
                           color='purple', s=20, zorder=5, alpha=0.7, )
-            
+
             # Add labels for top maximums
             if indices_to_label is not None and len(indices_to_label) > 0:
                 for idx in indices_to_label:
@@ -828,7 +884,7 @@ class MarketAnalyzer:
                         xytext=(5, -5), textcoords='offset points',
                         fontsize=6, color='red',
                     )
-            
+
             # Add labels for recent periods
             for idx in recent_indices:
                 ax.annotate(
@@ -912,20 +968,20 @@ class MarketAnalyzer:
 
     def _calculate_rolling_projections(self, series, rolling_window, risk_threshold):
         """Calculate rolling projections using historical percentiles.
-        
+
         For each data point, calculates the percentile of the previous rolling_window points.
-        
+
         Args:
             series: Time series data (e.g., osc_high or osc_low)
             rolling_window: Number of historical periods to use
             risk_threshold: Percentile threshold (0-100)
-            
+
         Returns:
             pd.Series: Rolling projection values
         """
         percentile = risk_threshold / 100.0
         projections = []
-        
+
         for i in range(len(series)):
             if i < rolling_window:
                 # Not enough historical data
@@ -935,14 +991,14 @@ class MarketAnalyzer:
                 historical_window = series.iloc[i - rolling_window:i]
                 proj_value = historical_window.quantile(percentile)
                 projections.append(proj_value)
-        
+
         return pd.Series(projections, index=series.index)
 
-    def _create_return_osc_high_low_plot(self, returns, osc_high, osc_low, 
+    def _create_return_osc_high_low_plot(self, returns, osc_high, osc_low,
                                           osc_high_full, osc_low_full,
                                           rolling_window=20, risk_threshold=90):
         """Create a line chart showing Returns, Osc_high, Osc_low, and their rolling projections over time.
-        
+
         Args:
             returns: Returns series (filtered to display horizon)
             osc_high: Osc_high series (filtered to display horizon)
@@ -951,39 +1007,39 @@ class MarketAnalyzer:
             osc_low_full: Osc_low series (complete historical dataset, before horizon filtering)
             rolling_window: Number of historical periods for rolling projections
             risk_threshold: Percentile threshold (0-100) for projections
-            
+
         Returns:
             matplotlib.figure.Figure: The generated figure
         """
         from matplotlib.lines import Line2D
         fig, ax = plt.subplots(figsize=PLOT_SIZE_DYNAMICS)
-        
+
         # Prepare valid data for display
         valid_mask = returns.notna() & osc_high.notna() & osc_low.notna()
         returns_valid = returns[valid_mask]
         osc_high_valid = osc_high[valid_mask]
         osc_low_valid = osc_low[valid_mask]
         n = len(returns_valid)
-        
+
         if n == 0:
             ax.text(0.5, 0.5, 'No data', transform=ax.transAxes, ha='center', va='center')
             ax.axis('off')
             return fig
-            
+
         t_idx = np.arange(n)
-        
+
         # Calculate rolling projections using FULL historical dataset
         # This ensures accurate projections based on complete history
         high_proj_full = self._calculate_rolling_projections(osc_high_full, rolling_window, risk_threshold)
         low_proj_full = self._calculate_rolling_projections(osc_low_full, rolling_window, 100-risk_threshold)
-        
+
         # Filter projections to match display horizon
         high_proj = high_proj_full.reindex(osc_high_valid.index)
         low_proj = low_proj_full.reindex(osc_low_valid.index)
-        
+
         # Plot main series as spots
         ax.scatter(t_idx, returns_valid.values, color=COLOR_RET, s=25, marker='o', label='Returns', alpha=0.8, zorder=3)
-        
+
         ax.scatter(
             t_idx,
             osc_high_valid.values,
@@ -1008,7 +1064,7 @@ class MarketAnalyzer:
             alpha=0.9,
             zorder=4,
         )
-        
+
 
         # Plot rolling projections with last value in legend
         last_high_proj = high_proj.iloc[-1] if high_proj is not None and not high_proj.empty else None
@@ -1017,23 +1073,23 @@ class MarketAnalyzer:
             label_high = f'High Proj ({risk_threshold}%)'
             if last_high_proj is not None:
                 label_high += f' *{last_high_proj:.2f}'
-            ax.plot(t_idx, high_proj.to_numpy(), color='darkgreen', linewidth=1.2, linestyle='--', 
+            ax.plot(t_idx, high_proj.to_numpy(), color='darkgreen', linewidth=1.2, linestyle='--',
                 label=label_high, alpha=0.6)
         if low_proj is not None and not low_proj.empty:
             label_low = f'Low Proj ({risk_threshold}%)'
             if last_low_proj is not None:
                 label_low += f' *{last_low_proj:.2f}'
-            ax.plot(t_idx, low_proj.to_numpy(), color='darkred', linewidth=1.2, linestyle='--', 
+            ax.plot(t_idx, low_proj.to_numpy(), color='darkred', linewidth=1.2, linestyle='--',
                 label=label_low, alpha=0.6)
-            
+
         # Add reference line at y=0
         ax.axhline(y=0, color='gray', linestyle='-', linewidth=1, alpha=0.3)
-        
+
         # Set labels and grid
         ax.set_xlabel('Index', fontsize=11)
         ax.set_ylabel('Percentage (%)', fontsize=11)
         ax.grid(True, alpha=0.3)
-        
+
         # Add date ticks
         try:
             tick_pos, tick_labels = self._build_date_ticks(returns_valid.index, n, approx_ticks=20)
@@ -1041,7 +1097,7 @@ class MarketAnalyzer:
             ax.set_xticklabels(tick_labels, rotation=90, fontsize=9)
         except Exception:
             pass
-            
+
         ax.legend(loc='upper left', fontsize=8, framealpha=0.85)
         ax.set_title('Return-Oscillation Dynamics', fontsize=13, fontweight='bold')
         plt.tight_layout()
@@ -1054,58 +1110,58 @@ class MarketAnalyzer:
             if oscillation_data is None or oscillation_data.empty or returns_data is None or returns_data.empty:
                 logger.warning("No oscillation or returns data available for table generation")
                 return
-            
+
             # Get the latest oscillation and return values (most recent data points)
             latest_oscillation = oscillation_data.iloc[-1]
             latest_return = returns_data.iloc[-1]
-            
+
             # Align oscillation and returns data by index to ensure consistency
             aligned_data = pd.DataFrame({
                 'oscillation': oscillation_data,
                 'returns': returns_data
             }).dropna()
-            
+
             if aligned_data.empty:
                 logger.warning("No aligned oscillation and returns data available")
                 return
-            
+
             # Filter stronger_oscillation: Historical oscillation value >= latest oscillation value
             filter_stronger_oscillation_data = aligned_data[aligned_data['oscillation'] >= latest_oscillation]
-            
+
             if filter_stronger_oscillation_data.empty:
                 logger.warning("No data points found meeting stronger_oscillation criteria")
                 return
-            
+
             # Filter stronger_returns_momentum: sign(current_return) × historical return >= sign(current_return) × current_return
             # This isolates periods where historical returns moved stronger to current return direction
             latest_return_sign = 1 if latest_return >= 0 else -1
             filter_stronger_returns_momentum_condition = (
-                latest_return_sign * filter_stronger_oscillation_data['returns'] 
+                latest_return_sign * filter_stronger_oscillation_data['returns']
                 >= latest_return_sign * latest_return
             )
-    
+
             filter_stronger_returns_momentum_data = filter_stronger_oscillation_data[
                 filter_stronger_returns_momentum_condition
             ]  # stronger momentum (risk scenarios)
-            
+
             # Calculate Overall metrics (Filter 1 only)
             total_points = len(aligned_data)
             overall_counts = len(filter_stronger_oscillation_data)
             overall_frequency = (overall_counts / total_points) * 100 if total_points > 0 else 0
             overall_median_returns = filter_stronger_oscillation_data['returns'].median()
-            
+
             # Calculate Risk metrics (Filter 1 + Filter 2)
             risk_counts = len(filter_stronger_returns_momentum_data)
             risk_frequency = (risk_counts / total_points) * 100 if total_points > 0 else 0
             risk_median_returns = filter_stronger_returns_momentum_data['returns'].median() if not filter_stronger_returns_momentum_data.empty else float('nan')
-            
+
             # Create table data
             table_data = [
                 ["#No", f"{overall_counts}", f"{risk_counts}"],
                 ["Freq", f"{overall_frequency:.1f}%", f"{risk_frequency:.1f}%"],
                 ["Ret Median", f"{overall_median_returns:.2f}%", f"{risk_median_returns:.2f}%" if not pd.isna(risk_median_returns) else "N/A"]
             ]
-            
+
             # Create table in upper left corner with Overall and Risk columns
             table = ax.table(
                 cellText=table_data,
@@ -1114,39 +1170,39 @@ class MarketAnalyzer:
                 loc='upper left',
                 bbox=[0.02, 0.8, 0.20, 0.20]  # [x, y, width, height]
             )
-            
+
             # Style the table
             table.auto_set_font_size(False)
             # Reduce font size for all text within the in-chart table
             table.set_fontsize(6)
             table.scale(1, 1.2)
-            
+
             # Style header
             for i in range(3):  # Now 3 columns
                 table[(0, i)].set_facecolor('#E6E6FA')
                 table[(0, i)].set_text_props(weight='bold')
-            
+
             # Style data cells
             for i in range(1, len(table_data) + 1):
                 table[(i, 0)].set_facecolor('#F8F8FF')
                 for j in range(1, 3):  # Overall and Risk columns
                     table[(i, j)].set_facecolor('#FFFFFF')
                     table[(i, j)].set_text_props(weight='bold', color='#333333')
-            
+
             # Add border
             for key, cell in table.get_celld().items():
                 cell.set_linewidth(1)
                 cell.set_edgecolor('#CCCCCC')
-            
+
             # Add a subtitle to clarify what the table shows with enhanced context
             subtitle_text = (
                 f'Historical Analysis\n'
                 f'* Osc={latest_oscillation:.1f}%, Ret={latest_return:.1f}%'
                 )
-            ax.text(0.02, 0.75, subtitle_text, 
+            ax.text(0.02, 0.75, subtitle_text,
                    transform=ax.transAxes, fontsize=7, ha='left', va='top',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgray', alpha=0.7))
-                    
+
         except Exception as e:
             logger.error(f"Error adding oscillation analysis table: {e}")
 
