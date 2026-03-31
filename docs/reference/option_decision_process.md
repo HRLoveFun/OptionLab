@@ -1,5 +1,5 @@
 # Put Option Selection: Quantitative Decision Process
-> Pseudocode for AI execution using project functions.  
+> Pseudocode for AI execution using project functions.
 > Scenario: Bearish directional view + rising volatility conviction, fixed cash budget.
 
 ---
@@ -32,10 +32,10 @@ FUNCTION fetch_market_data(ticker):
 
   # Use OptionsChainAnalyzer to get spot price and option chain data
   from core.options_chain_analyzer import OptionsChainAnalyzer
-  
+
   analyzer = OptionsChainAnalyzer(ticker)
   spot_price = analyzer.spot
-  
+
   # Calculate IV Rank and Percentile from available chain data
   # (Project doesn't have direct get_iv_rank/get_iv_percentile functions)
   iv_rank = _calculate_iv_rank(analyzer)          # 0–100 percentile
@@ -47,7 +47,7 @@ FUNCTION fetch_market_data(ticker):
 # Helper: Extract term structure from analyzer
 FUNCTION _get_term_structure(analyzer):
   from core.options_chain_analyzer import _dte
-  
+
   term_structure = {}
   for exp in analyzer.expiries:
     if exp in analyzer.chain:
@@ -68,30 +68,30 @@ FUNCTION _get_term_structure(analyzer):
 FUNCTION build_candidate_matrix(analyzer, spot_price, CANDIDATE_DELTAS, CANDIDATE_DTES):
 
   from core.options_chain_analyzer import _dte
-  
+
   matrix = []
 
   FOR each target_dte IN CANDIDATE_DTES:
     # Find expiry closest to target DTE
     closest_exp = None
     closest_dte_diff = float('inf')
-    
+
     FOR exp IN analyzer.expiries:
       dte = _dte(exp)
       IF ABS(dte - target_dte) < closest_dte_diff:
         closest_dte_diff = ABS(dte - target_dte)
         closest_exp = exp
-    
+
     IF closest_exp IS None OR closest_exp NOT IN analyzer.chain:
       CONTINUE
-    
+
     puts_df = analyzer.chain[closest_exp]['puts']
-    
+
     FOR each target_delta IN CANDIDATE_DELTAS:
       # Find put with delta closest to target_delta
       # Note: Delta available in futu data as 'delta' column after subscribing
       put_row = _find_put_by_delta(puts_df, target_delta)
-      
+
       IF put_row IS None:
         CONTINUE
 
@@ -103,8 +103,8 @@ FUNCTION build_candidate_matrix(analyzer, spot_price, CANDIDATE_DELTAS, CANDIDAT
         'bid': float(put_row.get('bid', 0) or 0),
         'ask': float(put_row.get('ask', 0) or 0),
         'last_price': float(put_row.get('lastPrice', 0) or 0),
-        'mid_price': (float(put_row.get('bid', 0) or 0) + float(put_row.get('ask', 0) or 0)) / 2 
-                     IF put_row.get('bid') and put_row.get('ask') 
+        'mid_price': (float(put_row.get('bid', 0) or 0) + float(put_row.get('ask', 0) or 0)) / 2
+                     IF put_row.get('bid') and put_row.get('ask')
                      ELSE float(put_row.get('lastPrice', 0) or 0),
         'delta': float(put_row.get('delta', target_delta)),  # Use target as fallback
         'gamma': float(put_row.get('gamma', 0)),
@@ -121,14 +121,14 @@ FUNCTION build_candidate_matrix(analyzer, spot_price, CANDIDATE_DELTAS, CANDIDAT
 FUNCTION _find_put_by_delta(puts_df, target_delta):
   IF puts_df IS None OR puts_df.empty:
     RETURN None
-  
+
   # If delta column exists, find closest
   IF 'delta' IN puts_df.columns AND puts_df['delta'].notna().any():
     valid_puts = puts_df.dropna(subset=['delta'])
     IF NOT valid_puts.empty:
       idx = (valid_puts['delta'] - target_delta).abs().idxmin()
       RETURN valid_puts.loc[idx]
-  
+
   # Fallback: approximate by strike distance from ATM
   # OTM puts have strikes < spot, so filter for those
   # This is a simplified approximation
@@ -143,11 +143,11 @@ FUNCTION _find_put_by_delta(puts_df, target_delta):
 FUNCTION enrich_contract(contract, budget, spot_price, target_move_pct):
 
   mid_price   = contract['mid_price']
-  
+
   # Handle zero or invalid mid_price
   IF mid_price <= 0:
     RETURN None
-    
+
   contracts_n = FLOOR(budget / (mid_price * 100))   # whole contracts only
 
   IF contracts_n == 0:
@@ -165,7 +165,7 @@ FUNCTION enrich_contract(contract, budget, spot_price, target_move_pct):
   odds_ratio = total_payoff / budget   # gross multiple on budget if right
 
   # --- Volatility metrics ---
-  vega_theta_ratio = ABS(contract['vega']) / ABS(contract['theta']) 
+  vega_theta_ratio = ABS(contract['vega']) / ABS(contract['theta'])
                      IF contract['theta'] != 0 ELSE float('inf')
     # vol sensitivity per $1/day of time decay
 
@@ -383,9 +383,6 @@ CALL main()
 |---|---|---|---|
 | `OptionsChainAnalyzer` | `core.options_chain_analyzer` | ticker: str | Class instance with `.spot`, `.expiries`, `.chain` |
 | `_dte(expiry_str)` | `core.options_chain_analyzer` | expiry_str: str | int (days to expiry) |
-| `get_spot_price()` | `futu_tested_functions` | ticker: str, host: str, port: int | float |
-| `get_option_expiration_dates()` | `futu_tested_functions` | ticker: str, host: str, port: int | list[str] |
-| `get_option_chain()` | `futu_tested_functions` | ticker: str, start: str, end: str | pd.DataFrame |
 | `get_odds_with_vol_context()` | `core.options_chain_analyzer` | spot, target_pct, chain, expiries | dict |
 
 ### OptionsChainAnalyzer Data Structure
@@ -406,10 +403,10 @@ CALL main()
 
 | Aspect | Original | Corrected |
 |---|---|---|
-| API prefix | `optionview.*` | Direct imports from `core.options_chain_analyzer`, `futu_tested_functions` |
+| API prefix | `optionview.*` | Direct imports from `core.options_chain_analyzer` |
 | IV metrics | `get_iv_rank()`, `get_iv_percentile()` | Must calculate from `OptionsChainAnalyzer` data |
 | Strike selection | `get_strike_by_delta()` | `_find_put_by_delta()` helper using analyzer data |
-| Option type | `"put"` / `"call"` | `"PUT"` / `"CALL"` (uppercase for futu) |
+| Option type | `"put"` / `"call"` | `"PUT"` / `"CALL"` (uppercase) |
 | Expiry format | `expiry_dte: int` | `exp: str` (e.g., `"2026-03-20"`) with `_dte()` helper |
 | Contract access | Direct function call | Via `analyzer.chain[exp]['puts']` DataFrame |
 
