@@ -1,0 +1,12 @@
+{
+    "hooks": {
+        "PostToolUse": [
+            {
+                "type": "command",
+                "osx": "bash .github/hooks/scripts/check_imports.sh",
+                "command": "bash .github/hooks/scripts/check_imports.sh",
+                "timeout": 10
+            }
+        ]
+    }
+}

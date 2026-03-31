@@ -1,0 +1,12 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "type": "command",
+                "osx": "python3 .github/hooks/scripts/inject_failure_context.py",
+                "command": "python3 .github/hooks/scripts/inject_failure_context.py",
+                "timeout": 10
+            }
+        ]
+    }
+}

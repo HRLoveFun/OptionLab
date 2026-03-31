@@ -1,0 +1,109 @@
+# Failure Registry — Central source of truth for failure patterns
+# Both hooks and skills read/update this file to coordinate detection,
+# escalation, and resolution of recurring issues.
+#
+# Fields:
+#   hook_regex:       regex used by analyze_test_output.py to classify failures
+#   skill_pattern:    human-readable label used in skill references
+#   effective_level:  current recommended escalation level (1-4)
+#   times_seen:       total occurrences detected by hooks
+#   last_seen:        ISO timestamp of last occurrence
+#   last_escalated:   ISO timestamp of last escalation suggestion (cooldown reference)
+#   resolved:         whether this pattern is considered resolved
+#   resolution_note:  brief description of how it was resolved
+#   related_files:    files commonly involved in this failure
+
+patterns:
+
+  nan-propagation:
+    hook_regex: "NaN|nan|isna|notna|fillna|dropna"
+    skill_pattern: "Pattern A — NaN filler rows from failed download"
+    effective_level: 2
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - data_pipeline/cleaning.py
+      - data_pipeline/downloader.py
+      - core/price_dynamic.py
+
+  empty-dataframe:
+    hook_regex: "Empty|empty|shape.*\\(0|0 rows|DataFrame\\(\\)"
+    skill_pattern: "Pattern B — Empty DataFrame propagation"
+    effective_level: 2
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - data_pipeline/downloader.py
+      - data_pipeline/processing.py
+      - services/analysis_service.py
+
+  dtype-mismatch:
+    hook_regex: "object.*dtype|dtype.*object|to_numeric|astype"
+    skill_pattern: "Pattern C — SQLite object-dtype → math failure"
+    effective_level: 1
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - data_pipeline/db.py
+      - core/options_greeks.py
+      - core/market_analyzer.py
+
+  yfinance-error:
+    hook_regex: "yfinance|YF|429|rate.?limit|timeout|curl"
+    skill_pattern: "Pattern D — yfinance download failure"
+    effective_level: 1
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - data_pipeline/downloader.py
+      - utils/utils.py
+
+  db-error:
+    hook_regex: "sqlite|OperationalError|locked|busy|IntegrityError"
+    skill_pattern: "Pattern E — SQLite contention / DB errors"
+    effective_level: 2
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - data_pipeline/db.py
+
+  greeks-edge-case:
+    hook_regex: "greeks|black.?scholes|delta|gamma|theta|vega.*nan"
+    skill_pattern: "Greeks return NaN for edge-case inputs"
+    effective_level: 3
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - core/options_greeks.py
+
+  import-violation:
+    hook_regex: "ImportError|ModuleNotFoundError|circular"
+    skill_pattern: "Architecture import direction violation"
+    effective_level: 1
+    times_seen: 0
+    last_seen: null
+    last_escalated: null
+    resolved: false
+    resolution_note: null
+    related_files:
+      - data_pipeline/__init__.py
+      - core/__init__.py
+      - services/__init__.py
