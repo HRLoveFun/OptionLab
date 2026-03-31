@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .db import fetch_df, upsert_many
+from . import PipelineResult
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,10 @@ def _get_business_days(start: dt.date, end: dt.date) -> pd.DatetimeIndex:
 
 def _flag_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    # Ensure numeric dtype for OHLCV (SQLite may return object dtype)
+    for col in ('open', 'high', 'low', 'close', 'adj_close', 'volume'):
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors='coerce')
     # Price jumps: difference in Close vs previous Close
     ret = np.log(out["close"]).diff()
     thr = 5 * ret.std(skipna=True)
@@ -35,11 +40,11 @@ def _flag_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def clean_range(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> int:
+def clean_range(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> PipelineResult:
     """
     Clean data for [start, end). Align to business days, mark missing days as NA
     (no interpolation for full missing days), flag anomalies, and upsert to clean_prices.
-    Returns number of rows written.
+    Returns a PipelineResult with row count and any warnings.
     """
     # Treat end as inclusive date
     end = end or dt.date.today()
@@ -119,4 +124,4 @@ def clean_range(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.d
             ],
             rows,
         )
-    return len(rows)
+    return PipelineResult(rows=len(rows))

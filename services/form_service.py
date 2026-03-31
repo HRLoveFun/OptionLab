@@ -7,6 +7,7 @@ from utils.utils import (
     DEFAULT_SIDE_BIAS,
     parse_month_str,
 )
+from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +21,17 @@ class FormService:
     def extract_form_data(request):
         """
         Extract and process form data from request.
+        Accepts futu-format (US.NVDA) or yahoo-format (NVDA) tickers.
+        Normalizes ticker to yahoo format for data pipeline consumption.
         Args:
             request (flask.Request): Incoming request
         Returns:
             dict: Parsed form data (ticker, frequency, start_time/end_time, etc.)
         """
-        ticker = request.form.get('ticker', '').upper()
+        raw_ticker = request.form.get('ticker', '').upper()
+        # normalize_ticker handled in app.py parse_tickers for multi-ticker;
+        # here we just pass through the raw value for parse_tickers to handle
+        ticker = raw_ticker
         frequency = request.form.get('frequency', DEFAULT_FREQUENCY)
         start_time = request.form.get('start_time', '')
         end_time = request.form.get('end_time', '')
@@ -81,7 +87,7 @@ class FormService:
             'account_size': account_size,
             'max_risk_pct': max_risk_pct,
         }
-    
+
     @staticmethod
     def parse_option_data(request):
         """
@@ -94,9 +100,9 @@ class FormService:
             try:
                 option_rows = json.loads(option_position_str)
                 for row in option_rows:
-                    if (row.get('option_type') and 
-                        row.get('strike') and 
-                        row.get('quantity') and 
+                    if (row.get('option_type') and
+                        row.get('strike') and
+                        row.get('quantity') and
                         row.get('premium')):
                         try:
                             option_entry = {
@@ -105,8 +111,8 @@ class FormService:
                                 'quantity': int(row['quantity']),
                                 'premium': float(row['premium'])
                             }
-                            if (option_entry['strike'] > 0 and 
-                                option_entry['quantity'] != 0 and 
+                            if (option_entry['strike'] > 0 and
+                                option_entry['quantity'] != 0 and
                                 option_entry['premium'] > 0):
                                 option_data.append(option_entry)
                             else:

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .db import fetch_df, upsert_many
+from . import PipelineResult
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,10 @@ def _agg_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
 
 def _features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    # Ensure numeric dtype for OHLCV (SQLite may return object dtype)
+    for col in ('open', 'high', 'low', 'close', 'adj_close', 'volume'):
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors='coerce')
     out["last_close"] = out["close"].shift(1)
     # 1. Returns
     out["log_return"] = np.log(out["close"]) - np.log(out["close"].shift(1))
@@ -48,10 +53,11 @@ def _features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> int:
+def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> PipelineResult:
     """
     Build processed tables for D/W/M using cleaned daily data. Only data within [start, end)
     will be recomputed and upserted.
+    Returns a PipelineResult with total row count.
     """
     # Treat end as inclusive
     end = end or dt.date.today()
@@ -63,13 +69,13 @@ def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optio
     )
     if daily.empty:
         logger.info(f"No cleaned data to process for {ticker}")
-        return 0
+        return PipelineResult(rows=0, warnings=[f"No cleaned data to process for {ticker}"])
     daily = daily.sort_index()
     # Ensure datetime index without tz
     daily.index = pd.to_datetime(daily.index).tz_localize(None)
 
     total_rows = 0
-    for freq, rule in ("D", "D"), ("W", "W-FRI"), ("M", "ME"):
+    for freq, rule in ("D", "D"), ("W", "W-FRI"), ("ME", "ME"):
         if freq == "D":
             agg = daily.copy()
         else:
@@ -148,4 +154,4 @@ def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optio
                 rows,
             )
             total_rows += len(rows)
-    return total_rows
+    return PipelineResult(rows=total_rows)

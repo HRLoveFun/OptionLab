@@ -21,15 +21,34 @@ let mrData = null;
 let mrMode = 'return';
 let mrPeriod = 'ETD';
 let mrVisibleAssets = new Set();
-
+let _mrTickerCache = {};  // per-ticker response cache
+const _MR_CACHE_TTL = 5 * 60 * 1000;  // 5 minutes in ms
+let _mrAbort = null;
 
 async function loadMarketReviewChart(ticker, startDate) {
     const container = document.getElementById('market-review-chart-container');
     if (!container) return;
+
+    // Check client-side cache first (with TTL)
+    const cacheKey = ticker + '|' + (startDate || '');
+    const cached = _mrTickerCache[cacheKey];
+    if (cached && (Date.now() - cached._ts) < _MR_CACHE_TTL) {
+        mrData = cached.data;
+        container.innerHTML = '<canvas id="market-review-chart"></canvas>';
+        mrVisibleAssets = new Set(Object.keys(mrData.assets));
+        renderMarketReviewChart();
+        renderAssetToggleButtons();
+        return;
+    }
+
     container.innerHTML = '<div style="text-align:center;padding:4rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading time-series data...</div>';
+
+    if (_mrAbort) _mrAbort.abort();
+    _mrAbort = new AbortController();
 
     try {
         const resp = await fetch('/api/market_review_ts', {
+            signal: _mrAbort.signal,
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ticker, start_date: startDate || null })
@@ -41,12 +60,16 @@ async function loadMarketReviewChart(ticker, startDate) {
             return;
         }
 
+        // Cache the successful response (with TTL timestamp)
+        _mrTickerCache[cacheKey] = { data: mrData, _ts: Date.now() };
+
         // Restore canvas
         container.innerHTML = '<canvas id="market-review-chart"></canvas>';
         mrVisibleAssets = new Set(Object.keys(mrData.assets));
         renderMarketReviewChart();
         renderAssetToggleButtons();
     } catch (e) {
+        if (e.name === 'AbortError') return;
         container.innerHTML = `<div style="color:#ef4444;padding:2rem;">Network error: ${e.message}</div>`;
     }
 }

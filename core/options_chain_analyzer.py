@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from utils.utils import yf_throttle
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,11 @@ class OptionsChainAnalyzer:
 
     def __init__(self, ticker: str = "^SPX"):
         self.ticker = ticker
+        self._init_from_yfinance(ticker)
+
+    def _init_from_yfinance(self, ticker: str):
+        """Initialize chain data from yfinance."""
+        yf_throttle()
         tk = yf.Ticker(ticker)
 
         # Spot price

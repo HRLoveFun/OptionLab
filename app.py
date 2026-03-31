@@ -19,14 +19,18 @@ from data_pipeline.data_service import DataService
 from data_pipeline.scheduler import UpdateScheduler
 from utils.utils import (
     DEFAULT_TICKER, DEFAULT_FREQUENCY, DEFAULT_RISK_THRESHOLD,
-    DEFAULT_ROLLING_WINDOW, DEFAULT_SIDE_BIAS
+    DEFAULT_ROLLING_WINDOW, DEFAULT_SIDE_BIAS, init_yf_proxy, yf_throttle
 )
+from utils.ticker_utils import normalize_ticker
 
 app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Propagate YF_PROXY → HTTP_PROXY/HTTPS_PROXY for curl_cffi (used by yfinance)
+init_yf_proxy()
 
 # Initialize DB
 DataService.initialize()
@@ -48,13 +52,103 @@ if _scheduler is not None:
     atexit.register(lambda: _scheduler.scheduler.shutdown(wait=False))
 
 def parse_tickers(raw: str) -> list[str]:
-    """Parse comma/newline separated tickers, deduplicate, max 6."""
-    tickers = [t.strip().upper() for t in re.split(r'[,\n]+', raw) if t.strip()]
-    seen = []
-    for t in tickers:
-        if t not in seen:
-            seen.append(t)
-    return seen[:6]
+    """Parse comma/newline separated tickers, deduplicate, max 6.
+
+    Accepts both futu-format (US.NVDA) and yahoo-format (NVDA).
+    Normalizes all to yahoo format for data pipeline consumption.
+    """
+    raw_parts = [t.strip().upper() for t in re.split(r'[,\n]+', raw) if t.strip()]
+    tickers = []
+    for t in raw_parts:
+        try:
+            yahoo, _futu = normalize_ticker(t)
+            if yahoo and yahoo not in tickers:
+                tickers.append(yahoo)
+        except ValueError:
+            # Skip invalid tickers silently
+            logger.warning(f"Skipping invalid ticker: {t}")
+    return tickers[:6]
+
+
+def _filter_option_chain(result: dict, max_dte: int = 60,
+                          moneyness_low: float = 0.7, moneyness_high: float = 1.3,
+                          max_contracts: int = 1000) -> dict:
+    """Filter option chain result by DTE, moneyness range, and total contract count.
+
+    If total contracts exceed max_contracts after DTE + moneyness filtering,
+    progressively narrow the moneyness range until count ≤ max_contracts.
+    """
+    from datetime import datetime
+
+    spot = result.get('spot')
+    chain = result.get('chain', {})
+    expirations = result.get('expirations', [])
+
+    today = datetime.now().date()
+
+    # Step 1: Filter expirations by DTE (always applies, does not need spot)
+    filtered_exps = []
+    for exp in expirations:
+        try:
+            exp_date = datetime.strptime(exp, '%Y-%m-%d').date()
+            dte = (exp_date - today).days
+            if 0 <= dte <= max_dte:
+                filtered_exps.append(exp)
+        except (ValueError, TypeError):
+            continue
+
+    # If spot is missing, skip moneyness filter — just apply DTE filter
+    if not spot or spot <= 0:
+        filtered_chain = {exp: chain[exp] for exp in filtered_exps if exp in chain}
+        final_exps = [exp for exp in filtered_exps if exp in filtered_chain]
+        return {
+            'expirations': final_exps,
+            'chain': filtered_chain,
+            'spot': spot,
+        }
+
+    # Step 2: Filter by moneyness range
+    def _filter_by_moneyness(chain_data, exps, m_low, m_high):
+        filtered_chain = {}
+        total_count = 0
+        for exp in exps:
+            if exp not in chain_data:
+                continue
+            exp_data = chain_data[exp]
+            low_strike = spot * m_low
+            high_strike = spot * m_high
+
+            filtered_calls = [r for r in exp_data.get('calls', [])
+                              if r.get('strike') and low_strike <= r['strike'] <= high_strike]
+            filtered_puts = [r for r in exp_data.get('puts', [])
+                             if r.get('strike') and low_strike <= r['strike'] <= high_strike]
+
+            if filtered_calls or filtered_puts:
+                filtered_chain[exp] = {'calls': filtered_calls, 'puts': filtered_puts}
+                total_count += len(filtered_calls) + len(filtered_puts)
+        return filtered_chain, total_count
+
+    filtered_chain, total_count = _filter_by_moneyness(chain, filtered_exps, moneyness_low, moneyness_high)
+
+    # Step 3: If over max_contracts, progressively narrow moneyness
+    if total_count > max_contracts:
+        step = 0.05
+        m_low = moneyness_low
+        m_high = moneyness_high
+        while total_count > max_contracts and (m_high - m_low) > 0.1:
+            m_low += step
+            m_high -= step
+            filtered_chain, total_count = _filter_by_moneyness(chain, filtered_exps, m_low, m_high)
+            logger.info(f"Narrowed moneyness to [{m_low:.2f}, {m_high:.2f}], contracts: {total_count}")
+
+    # Build filtered expirations list (only those with data)
+    final_exps = [exp for exp in filtered_exps if exp in filtered_chain]
+
+    return {
+        'expirations': final_exps,
+        'chain': filtered_chain,
+        'spot': spot,
+    }
 
 
 def _run_single_ticker_analysis(ticker: str, form_data: dict) -> dict:
@@ -161,9 +255,10 @@ def index():
 @app.route('/api/option_chain', methods=['GET'])
 def option_chain():
     """
-    API endpoint to fetch live option chain data from Yahoo Finance.
-    Query params: ticker (required)
-    Response: { expirations: [...], chain: { date: { calls: [...], puts: [...] } } }
+    API endpoint to fetch live option chain data via Yahoo Finance.
+    Query params: ticker (required), max_dte (default 45),
+                  moneyness_low (default 0.7), moneyness_high (default 1.3), max_contracts (default 1000)
+    Response: { expirations: [...], chain: { date: { calls: [...], puts: [...] } }, spot: float }
     """
     import yfinance as yf
 
@@ -171,17 +266,17 @@ def option_chain():
     if not ticker_sym:
         return jsonify({'error': 'ticker is required'}), 400
 
-    source = request.args.get('source', 'yfinance').strip().lower()
-    if source == 'futu':
-        try:
-            from data_pipeline.futu_provider import get_option_chain_futu
-            futu_host = os.environ.get('FUTU_HOST', '127.0.0.1')
-            futu_port = int(os.environ.get('FUTU_PORT', '11111'))
-            result = get_option_chain_futu(ticker_sym, host=futu_host, port=futu_port)
-            return jsonify(result)
-        except Exception as e:
-            logger.error("Error fetching futu option chain for %s: %s", ticker_sym, e, exc_info=True)
-            return jsonify({'error': str(e)}), 500
+    # Normalize ticker: accept futu-format (US.NVDA) or yahoo-format (NVDA)
+    try:
+        ticker_sym, _ = normalize_ticker(ticker_sym)
+    except ValueError:
+        pass  # keep as-is
+
+    # Option filtering parameters
+    max_dte = int(request.args.get('max_dte', 45))
+    moneyness_low = float(request.args.get('moneyness_low', 0.7))
+    moneyness_high = float(request.args.get('moneyness_high', 1.3))
+    max_contracts = int(request.args.get('max_contracts', 1000))
 
     def clean(v):
         """Convert NaN / inf to None for JSON serialisation."""
@@ -194,6 +289,7 @@ def option_chain():
             return str(v) if v is not None else None
 
     try:
+        yf_throttle()
         tkr = yf.Ticker(ticker_sym)
         expirations = list(tkr.options)
         if not expirations:
@@ -280,29 +376,31 @@ def option_chain():
                 'puts':  df_to_records(puts_df),
             }
 
-        return jsonify({'expirations': expirations, 'chain': chain_data, 'spot': spot})
+        result = {'expirations': expirations, 'chain': chain_data, 'spot': spot}
+        result = _filter_option_chain(result, max_dte, moneyness_low, moneyness_high, max_contracts)
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"Error fetching option chain for {ticker_sym}: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'获取期权链失败: {str(e)}'}), 500
 
 
 @app.route('/api/validate_ticker', methods=['POST'])
 def validate_ticker():
     """
     API endpoint to validate ticker symbol.
-    Request: JSON {"ticker": "AAPL"}
+    Request: JSON {"ticker": "AAPL"} or {"ticker": "US.AAPL"}
     Response: {"valid": true/false, "message": "..."}
     """
     try:
         data = request.get_json()
-        ticker = data.get('ticker', '').upper()
+        raw_ticker = data.get('ticker', '').upper()
 
-        if not ticker:
+        if not raw_ticker:
             return jsonify({'valid': False, 'message': 'Please enter a ticker symbol'})
 
-        # Validate ticker using market service
-        is_valid, message = MarketService.validate_ticker(ticker)
+        yahoo_ticker, _futu = normalize_ticker(raw_ticker)
+        is_valid, message = MarketService.validate_ticker(yahoo_ticker)
 
         return jsonify({
             'valid': is_valid,
@@ -317,24 +415,30 @@ def validate_ticker():
 # ── Module 0: Bulk ticker validation ──────────────────────────────
 @app.route('/api/validate_tickers', methods=['POST'])
 def validate_tickers_bulk():
-    """Validate multiple tickers at once. Returns {status, results: {TICKER: {valid, price, message}}}."""
+    """Validate multiple tickers at once. Returns {status, results: {TICKER: {valid, price, message}}}.
+
+    Accepts both futu-format (US.NVDA) and yahoo-format (NVDA) tickers.
+    Results are keyed by the original input ticker for frontend mapping.
+    """
     data = request.get_json(silent=True) or {}
     tickers = data.get('tickers', [])
     results = {}
-    for ticker in tickers[:10]:
+    for raw_ticker in tickers[:10]:
         try:
-            is_valid, message = MarketService.validate_ticker(ticker)
+            yahoo_ticker, _futu = normalize_ticker(raw_ticker)
+            is_valid, message = MarketService.validate_ticker(yahoo_ticker)
             price = None
             if is_valid:
                 try:
                     import yfinance as yf
-                    info = yf.Ticker(ticker).fast_info
+                    yf_throttle()
+                    info = yf.Ticker(yahoo_ticker).fast_info
                     price = float(info.get('lastPrice', 0) or info.get('regularMarketPrice', 0))
                 except Exception:
                     pass
-            results[ticker] = {"valid": is_valid, "price": price, "message": message}
+            results[raw_ticker] = {"valid": is_valid, "price": price, "message": message}
         except Exception:
-            results[ticker] = {"valid": False, "price": None, "message": "validation error"}
+            results[raw_ticker] = {"valid": False, "price": None, "message": "validation error"}
     return jsonify({"status": "ok", "results": results})
 
 
@@ -347,9 +451,15 @@ CACHE_TTL_MINUTES = 15
 def preload_option_chain():
     """Pre-load option chain for Position module dropdowns."""
     data = request.get_json(silent=True) or {}
-    ticker = data.get('ticker', '').strip().upper()
-    if not ticker:
+    raw_ticker = data.get('ticker', '').strip().upper()
+    if not raw_ticker:
         return jsonify({"status": "error", "message": "No ticker provided"})
+
+    # Normalize ticker to yahoo format
+    try:
+        ticker, _futu = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
 
     cached = _option_chain_cache.get(ticker)
     if cached:
@@ -432,10 +542,14 @@ def portfolio_analysis():
 def market_review_ts():
     """Return time-series data for interactive Market Review chart."""
     data = request.get_json(silent=True) or {}
-    ticker = data.get('ticker', '').strip().upper()
+    raw_ticker = data.get('ticker', '').strip().upper()
     start_date = data.get('start_date')
-    if not ticker:
+    if not raw_ticker:
         return jsonify({"status": "error", "message": "No ticker provided"})
+    try:
+        ticker, _futu = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
     try:
         from core.market_review import market_review_timeseries
         result = market_review_timeseries(ticker, start_date=start_date)
@@ -450,10 +564,14 @@ def market_review_ts():
 def odds_with_vol():
     """Return odds data enriched with implied realized vol vs ATM IV."""
     data = request.get_json(silent=True) or {}
-    ticker = data.get('ticker', '').strip().upper()
+    raw_ticker = data.get('ticker', '').strip().upper()
     target_pct = float(data.get('target_pct', 105))
-    if not ticker:
+    if not raw_ticker:
         return jsonify({"status": "error", "message": "No ticker provided"})
+    try:
+        ticker, _futu = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
     try:
         from core.options_chain_analyzer import OptionsChainAnalyzer, get_odds_with_vol_context
         analyzer = OptionsChainAnalyzer(ticker)
@@ -482,5 +600,5 @@ def game():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5001))
     app.run(host="0.0.0.0", port=port, debug=True)

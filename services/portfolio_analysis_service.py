@@ -102,7 +102,9 @@ class PortfolioAnalysisService:
         spots = {}
         try:
             import yfinance as yf
+            from utils.utils import yf_throttle
             for t in tickers:
+                yf_throttle()
                 tk = yf.Ticker(t)
                 fi = tk.fast_info
                 price = getattr(fi, 'last_price', None) or getattr(fi, 'regularMarketPrice', None)
