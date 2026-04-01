@@ -75,7 +75,7 @@ class TestUpsertMany:
         init_db()
         cols = ["ticker", "date", "open", "high", "low", "close", "adj_close", "volume", "provider"]
         good = ("RB", "2024-01-01", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance")
-        bad = ("RB", "2024-01-02", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance")
+        bad = ("RB", "2024-01-02", 100.0, 105.0)  # 字段数量不足，会触发错误
         with pytest.raises(sqlite3.ProgrammingError):
             upsert_many("raw_prices", cols, [good, bad])
         # Good row should also be rolled back
