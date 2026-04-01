@@ -8,18 +8,20 @@ This module calculates and visualizes rolling correlations for:
 Charts are generated for 1-year and 5-year rolling windows across different frequencies.
 """
 
-import pandas as pd
-import numpy as np
 import matplotlib
+import numpy as np
+import pandas as pd
+
 matplotlib.use('Agg')
+import base64
+import datetime as dt
+import io
+import logging
+from typing import Optional
+
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
-import io
-import base64
-import logging
-import datetime as dt
-import os
-from typing import Optional, Tuple
+
 from core.price_dynamic import PriceDynamic
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,7 @@ class CorrelationValidator:
     """Validates market patterns through rolling correlation analysis."""
 
     def __init__(self, ticker: str, start_date: dt.date = dt.date(2016, 12, 1),
-                 frequency: str = 'W', end_date: Optional[dt.date] = None,
+                 frequency: str = 'W', end_date: dt.date | None = None,
                  price_dynamic: Optional['PriceDynamic'] = None):
         """
         Initialize the correlation validator.
@@ -62,7 +64,7 @@ class CorrelationValidator:
         # Build data DataFrame with calculated values from full dataset
         self.data = self._build_data()
 
-    def _build_data(self) -> Optional[pd.DataFrame]:
+    def _build_data(self) -> pd.DataFrame | None:
         """Build data DataFrame from FULL underlying dataset (no horizon filtering).
 
         Computes:
@@ -146,7 +148,7 @@ class CorrelationValidator:
             eff = today
         return pd.Timestamp(eff)
 
-    def calculate_return_autocorrelation(self, window_years: int = 1) -> Optional[pd.Series]:
+    def calculate_return_autocorrelation(self, window_years: int = 1) -> pd.Series | None:
         """
         Calculate rolling correlation between return and return.shift(1) using the FULL historical dataset.
         Horizon filtering is applied only at the output stage so earlier values are retained,
@@ -193,7 +195,7 @@ class CorrelationValidator:
             logger.error(f"Error calculating return autocorrelation: {e}")
             return None
 
-    def calculate_osc_correlation(self, window_years: int = 1) -> Optional[pd.Series]:
+    def calculate_osc_correlation(self, window_years: int = 1) -> pd.Series | None:
         """
         Calculate rolling correlation between osc_high and osc_low using the FULL historical dataset.
         Horizon filtering is applied only at the output stage so earlier values are retained,
@@ -242,7 +244,7 @@ class CorrelationValidator:
             logger.error(f"Error calculating osc correlation: {e}")
             return None
 
-    def generate_consolidated_correlation_chart(self) -> Optional[str]:
+    def generate_consolidated_correlation_chart(self) -> str | None:
         """
         Generate consolidated chart showing both Return Autocorrelation and
         Oscillation Correlation (Osc_high vs Osc_low) in a single visualization.
@@ -332,7 +334,7 @@ class CorrelationValidator:
             logger.error(f"Error generating consolidated correlation chart: {e}")
             return None
 
-    def generate_correlation_chart(self, corr_type: str = 'return') -> Optional[str]:
+    def generate_correlation_chart(self, corr_type: str = 'return') -> str | None:
         """
         Generate line chart showing 1-year and 5-year rolling correlations.
         DEPRECATED: Use generate_consolidated_correlation_chart instead.

@@ -2,13 +2,12 @@ import datetime as dt
 import logging
 import threading
 import time
-from typing import Optional
 
 import pandas as pd
 
-from .db import init_db, fetch_df
-from .downloader import upsert_raw_prices
 from .cleaning import clean_range
+from .db import fetch_df, init_db
+from .downloader import upsert_raw_prices
 from .processing import process_frequencies
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ _query_cache: dict = {}  # key -> (timestamp, DataFrame)
 _query_cache_lock = threading.Lock()
 
 
-def _cache_get(key: tuple) -> Optional[pd.DataFrame]:
+def _cache_get(key: tuple) -> pd.DataFrame | None:
     """Return cached DataFrame if key exists and is within TTL, else None."""
     with _query_cache_lock:
         entry = _query_cache.get(key)
@@ -140,7 +139,7 @@ class DataService:
         process_frequencies(ticker, start, end)
 
     @staticmethod
-    def get_cleaned_daily(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> pd.DataFrame:
+    def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> pd.DataFrame:
         start = start or (dt.date.today() - dt.timedelta(days=365*5))
         end = end or dt.date.today()
         DataService.manual_update(ticker, days=7)  # manual update on access
@@ -156,7 +155,7 @@ class DataService:
         return df
 
     @staticmethod
-    def get_processed(ticker: str, frequency: str = "D", start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> pd.DataFrame:
+    def get_processed(ticker: str, frequency: str = "D", start: dt.date | None = None, end: dt.date | None = None) -> pd.DataFrame:
         start = start or (dt.date.today() - dt.timedelta(days=365*5))
         end = end or dt.date.today()
         DataService.manual_update(ticker, days=7)
@@ -212,8 +211,9 @@ class DataService:
 
         # Fallback: live yfinance quote
         try:
-            from utils.utils import yf_throttle
             import yfinance as yf
+
+            from utils.utils import yf_throttle
             yf_throttle()
             price = yf.Ticker(ticker).fast_info.last_price
             if price and price > 0:

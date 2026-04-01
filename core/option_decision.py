@@ -13,7 +13,6 @@ for JSON serialisation in the service layer.
 
 import logging
 import math
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -37,7 +36,7 @@ RISK_FREE_RATE: float = 0.05
 # Module 1 — Market data helpers
 # ---------------------------------------------------------------------------
 
-def _atm_iv_for_expiry(puts: pd.DataFrame, spot: float) -> Optional[float]:
+def _atm_iv_for_expiry(puts: pd.DataFrame, spot: float) -> float | None:
     """Return ATM implied volatility (as %) for a puts DataFrame."""
     valid = puts.dropna(subset=['impliedVolatility'])
     if valid.empty:
@@ -59,7 +58,7 @@ def get_term_structure(analyzer: OptionsChainAnalyzer) -> dict[int, float]:
     return ts
 
 
-def calculate_iv_rank(term_structure: dict[int, float]) -> Optional[float]:
+def calculate_iv_rank(term_structure: dict[int, float]) -> float | None:
     """IV rank (0–100) from term structure ATM IVs."""
     ivs = list(term_structure.values())
     if len(ivs) < 2:
@@ -71,7 +70,7 @@ def calculate_iv_rank(term_structure: dict[int, float]) -> Optional[float]:
     return round((current - lo) / (hi - lo) * 100, 1)
 
 
-def calculate_iv_percentile(term_structure: dict[int, float]) -> Optional[float]:
+def calculate_iv_percentile(term_structure: dict[int, float]) -> float | None:
     """IV percentile (0–100): % of expiries whose ATM IV < current."""
     ivs = list(term_structure.values())
     if len(ivs) < 2:
@@ -99,7 +98,7 @@ def fetch_market_data(ticker: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def _find_put_by_delta(puts_df: pd.DataFrame, target_delta: float,
-                       spot: float) -> Optional[pd.Series]:
+                       spot: float) -> pd.Series | None:
     """Find the put row whose BS-delta is closest to *target_delta*."""
     if puts_df is None or puts_df.empty:
         return None
@@ -206,7 +205,7 @@ def build_candidate_matrix(analyzer: OptionsChainAnalyzer,
 # ---------------------------------------------------------------------------
 
 def enrich_contract(contract: dict, budget: float, spot_price: float,
-                    target_move_pct: float) -> Optional[dict]:
+                    target_move_pct: float) -> dict | None:
     """Module 3: compute derived metrics for a single contract."""
     mid = contract['mid_price']
     if mid <= 0:
@@ -325,7 +324,7 @@ def filter_and_rank(enriched: list[dict], min_dte: int, max_dte: int,
 def get_heuristic_notes(directional_conviction: float,
                         vol_conviction: float,
                         vol_timing: str,
-                        iv_rank: Optional[float]) -> list[str]:
+                        iv_rank: float | None) -> list[str]:
     """Return readable heuristic insights from the Appendix rules."""
     notes: list[str] = []
 

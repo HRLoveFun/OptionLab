@@ -5,20 +5,20 @@ Fetches live option chain data via yfinance and generates matplotlib charts
 (returned as base64 PNG strings) and HTML tables for the Options Chain Analysis tab.
 """
 
-import io
 import base64
-import logging
 import datetime as dt
-from typing import Optional
+import io
+import logging
 
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
 
 from utils.utils import yf_throttle
 
@@ -53,7 +53,7 @@ def _calc_max_pain(calls: pd.DataFrame, puts: pd.DataFrame) -> float:
     return strikes[losses.index(min(losses))]
 
 
-def _calc_expected_move(calls: pd.DataFrame, puts: pd.DataFrame, spot: float) -> Optional[float]:
+def _calc_expected_move(calls: pd.DataFrame, puts: pd.DataFrame, spot: float) -> float | None:
     atm = _atm_strike(calls['strike'].tolist(), spot)
     c_ask = calls.loc[calls['strike'] == atm, 'ask'].values
     p_ask = puts.loc[puts['strike']  == atm, 'ask'].values
@@ -62,7 +62,7 @@ def _calc_expected_move(calls: pd.DataFrame, puts: pd.DataFrame, spot: float) ->
     return None
 
 
-def _calc_25d_skew(puts: pd.DataFrame, calls: pd.DataFrame, spot: float) -> Optional[float]:
+def _calc_25d_skew(puts: pd.DataFrame, calls: pd.DataFrame, spot: float) -> float | None:
     try:
         put_iv  = puts.loc[(puts['strike'] / spot - 0.97).abs().idxmin(), 'impliedVolatility']
         call_iv = calls.loc[(calls['strike'] / spot - 1.03).abs().idxmin(), 'impliedVolatility']
@@ -223,7 +223,7 @@ class OptionsChainAnalyzer:
     # 1.2  IV Smile
     # ------------------------------------------------------------------
 
-    def plot_iv_smile(self, expiry: str) -> Optional[str]:
+    def plot_iv_smile(self, expiry: str) -> str | None:
         try:
             if expiry not in self.chain:
                 return None
@@ -258,7 +258,7 @@ class OptionsChainAnalyzer:
     # 1.3  IV Term Structure
     # ------------------------------------------------------------------
 
-    def plot_iv_term_structure(self) -> Optional[str]:
+    def plot_iv_term_structure(self) -> str | None:
         try:
             dates, atm_ivs = [], []
             for exp in self.expiries:
@@ -282,7 +282,7 @@ class OptionsChainAnalyzer:
                 ax.plot([i, i + 1], [atm_ivs[i], atm_ivs[i + 1]],
                         color=color, linewidth=2)
             ax.scatter(x, atm_ivs, color='tab:blue', zorder=5, s=40)
-            for xi, iv in zip(x, atm_ivs):
+            for xi, iv in zip(x, atm_ivs, strict=False):
                 ax.annotate(f'{iv:.1f}%', (xi, iv), textcoords='offset points',
                             xytext=(0, 6), ha='center', fontsize=7)
 
@@ -309,7 +309,7 @@ class OptionsChainAnalyzer:
     # 1.4  IV Surface (3D)
     # ------------------------------------------------------------------
 
-    def plot_iv_surface(self) -> Optional[str]:
+    def plot_iv_surface(self) -> str | None:
         try:
             records = []
             for exp in self.expiries:
@@ -350,7 +350,7 @@ class OptionsChainAnalyzer:
     # 1.5  Skew Analysis
     # ------------------------------------------------------------------
 
-    def plot_skew_analysis(self, expiry: str) -> Optional[str]:
+    def plot_skew_analysis(self, expiry: str) -> str | None:
         try:
             if expiry not in self.chain:
                 return None
@@ -411,7 +411,7 @@ class OptionsChainAnalyzer:
     # 1.6  OI / Volume Profile
     # ------------------------------------------------------------------
 
-    def plot_oi_volume_profile(self, expiry: str) -> Optional[str]:
+    def plot_oi_volume_profile(self, expiry: str) -> str | None:
         try:
             if expiry not in self.chain:
                 return None
@@ -463,7 +463,7 @@ class OptionsChainAnalyzer:
     # 1.7  PCR Summary
     # ------------------------------------------------------------------
 
-    def plot_pcr_summary(self) -> Optional[str]:
+    def plot_pcr_summary(self) -> str | None:
         try:
             rows = []
             for exp in self.expiries[:12]:   # limit to 12 expiries for readability
@@ -512,7 +512,7 @@ class OptionsChainAnalyzer:
     # 1.8  Expected Move Table (HTML)
     # ------------------------------------------------------------------
 
-    def get_expected_move_table(self) -> Optional[str]:
+    def get_expected_move_table(self) -> str | None:
         try:
             rows = []
             for exp in self.expiries:
@@ -551,7 +551,7 @@ class OptionsChainAnalyzer:
     # 1.9  Key Metrics Table (HTML)
     # ------------------------------------------------------------------
 
-    def get_key_metrics_table(self) -> Optional[str]:
+    def get_key_metrics_table(self) -> str | None:
         try:
             nearest = self.expiries[0] if self.expiries else None
             second  = self.expiries[1] if len(self.expiries) > 1 else None

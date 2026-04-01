@@ -9,13 +9,13 @@ If Yahoo is rate-limiting, the test is skipped rather than failing.
 """
 
 import datetime as dt
+import logging
 import os
 import socket
-import logging
 
+import pandas as pd
 import pytest
 import yfinance as yf
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 

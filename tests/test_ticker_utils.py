@@ -3,10 +3,13 @@
 import pytest
 
 from utils.ticker_utils import (
-    from_futu_ticker, to_futu_ticker,
-    is_futu_format, futu_to_yahoo, yahoo_to_futu, normalize_ticker,
+    from_futu_ticker,
+    futu_to_yahoo,
+    is_futu_format,
+    normalize_ticker,
+    to_futu_ticker,
+    yahoo_to_futu,
 )
-
 
 # ── to_futu_ticker ──────────────────────────────────────────────
 

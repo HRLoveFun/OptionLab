@@ -1,13 +1,13 @@
 import json
 import logging
+
 from utils.utils import (
+    DEFAULT_FREQUENCY,
     DEFAULT_RISK_THRESHOLD,
     DEFAULT_ROLLING_WINDOW,
-    DEFAULT_FREQUENCY,
     DEFAULT_SIDE_BIAS,
     parse_month_str,
 )
-from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
 

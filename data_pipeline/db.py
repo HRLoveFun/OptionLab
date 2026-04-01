@@ -1,13 +1,13 @@
 import os
 import sqlite3
+from collections.abc import Iterable
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable, Optional
 
 DB_PATH = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "market_data.sqlite"))
 
 
-def init_db(db_path: Optional[str] = None):
+def init_db(db_path: str | None = None):
     path = db_path or DB_PATH
     Path(os.path.dirname(path)).mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
@@ -102,7 +102,7 @@ def init_db(db_path: Optional[str] = None):
 
 
 @contextmanager
-def get_conn(db_path: Optional[str] = None):
+def get_conn(db_path: str | None = None):
     path = db_path or DB_PATH
     conn = sqlite3.connect(
         path,
@@ -118,7 +118,7 @@ def get_conn(db_path: Optional[str] = None):
         conn.close()
 
 
-def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db_path: Optional[str] = None):
+def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db_path: str | None = None):
     rows = list(rows)
     if not rows:
         return
@@ -136,7 +136,7 @@ def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db
             raise
 
 
-def fetch_df(query: str, params: tuple = (), db_path: Optional[str] = None):
+def fetch_df(query: str, params: tuple = (), db_path: str | None = None):
     import pandas as pd
     with get_conn(db_path) as conn:
         df = pd.read_sql_query(query, conn, params=params, parse_dates=["date"])  # type: ignore

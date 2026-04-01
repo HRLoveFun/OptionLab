@@ -11,10 +11,10 @@ dashboard tab, verifying that:
 
 import datetime as dt
 import json
-import pytest
+
 import numpy as np
 import pandas as pd
-
+import pytest
 
 # ---------------------------------------------------------------------------
 # Flask test client
@@ -106,7 +106,7 @@ class TestOptionChainAPI:
         assert resp.status_code != 500 or 'error' in data
         # If Futu available and returns data, expirations should be within max_dte
         if resp.status_code == 200 and 'expirations' in data:
-            from datetime import datetime, timedelta
+            from datetime import datetime
             today = datetime.now().date()
             for exp in data['expirations']:
                 exp_date = datetime.strptime(exp, '%Y-%m-%d').date()
@@ -181,15 +181,14 @@ class TestFeaturesDF:
 
     def test_features_df_nonempty_with_synthetic_data(self, monkeypatch):
         """features_df should have rows when PriceDynamic has adequate data."""
-        from core.price_dynamic import PriceDynamic
         from core.market_analyzer import MarketAnalyzer
+        from core.price_dynamic import PriceDynamic
 
         fake_df = self._make_price_df(60)
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
         # Patch PriceDynamic to use synthetic data
-        original_init = PriceDynamic.__init__
 
         def mock_init(self, ticker, start_date=None, frequency='D', end_date=None):
             self.ticker = ticker
@@ -212,8 +211,8 @@ class TestFeaturesDF:
 
     def test_features_df_tolerates_partial_nan(self, monkeypatch):
         """features_df should retain rows even when one column has NaN at a few spots."""
-        from core.price_dynamic import PriceDynamic
         from core.market_analyzer import MarketAnalyzer
+        from core.price_dynamic import PriceDynamic
 
         fake_df = self._make_price_df(60)
         # Introduce NaN in High for a few rows (osc_high will be NaN there)
@@ -244,8 +243,8 @@ class TestFeaturesDF:
 
     def test_features_df_empty_when_all_nan(self, monkeypatch):
         """features_df should have 0 rows when all data is NaN."""
-        from core.price_dynamic import PriceDynamic
         from core.market_analyzer import MarketAnalyzer
+        from core.price_dynamic import PriceDynamic
 
         fake_df = self._make_price_df(10)
         fake_df['Adj Close'] = np.nan

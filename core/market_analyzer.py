@@ -16,18 +16,21 @@ Refactoring highlights:
     - Improved docstrings and inline comments
 """
 
-from core.price_dynamic import PriceDynamic
+import matplotlib
+import numpy as np
 import pandas as pd
 from pandas.tseries.offsets import BDay
-import numpy as np
-import matplotlib
+
+from core.price_dynamic import PriceDynamic
+
 matplotlib.use('Agg')  # Use non-GUI backend once at module import
+import base64
+import datetime as dt
+import io
+import logging
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker
-import io
-import base64
-import logging
-import datetime as dt
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -615,7 +618,7 @@ class MarketAnalyzer:
                     ax1.plot(segment.index, segment.values, color=COLOR_BEAR, linewidth=2, alpha=0.5)
 
             ax1.set_yscale('log')
-            from matplotlib.ticker import FuncFormatter, NullFormatter, LogLocator
+            from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
             ax1.yaxis.set_major_locator(LogLocator(base=10.0, subs=[1.0, 2.0, 4.0], numticks=15))
             ax1.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{x:,.0f}'))
             ax1.yaxis.set_minor_locator(LogLocator(base=10.0, subs='auto', numticks=15))
@@ -1011,7 +1014,6 @@ class MarketAnalyzer:
         Returns:
             matplotlib.figure.Figure: The generated figure
         """
-        from matplotlib.lines import Line2D
         fig, ax = plt.subplots(figsize=PLOT_SIZE_DYNAMICS)
 
         # Prepare valid data for display
@@ -1190,7 +1192,7 @@ class MarketAnalyzer:
                     table[(i, j)].set_text_props(weight='bold', color='#333333')
 
             # Add border
-            for key, cell in table.get_celld().items():
+            for _key, cell in table.get_celld().items():
                 cell.set_linewidth(1)
                 cell.set_edgecolor('#CCCCCC')
 

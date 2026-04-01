@@ -5,16 +5,13 @@ futu-format before being passed to Futu API calls. This prevents the
 production bug where 'NVDA' was sent to futu instead of 'US.NVDA'.
 """
 import datetime as dt
-import json
-import math
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from utils.ticker_utils import normalize_ticker, yahoo_to_futu, is_futu_format
-
+from utils.ticker_utils import is_futu_format, normalize_ticker
 
 # ---------------------------------------------------------------------------
 # 1. Ticker normalisation sanity checks
@@ -166,7 +163,7 @@ class TestOptionsChainAnalyzerFutuInit:
             'data_pipeline.futu_provider.get_option_chain_futu',
             return_value=fake_result,
         ) as mock_futu:
-            analyzer = OptionsChainAnalyzer('NVDA', source='futu')
+            OptionsChainAnalyzer('NVDA', source='futu')
             mock_futu.assert_called_once()
             call_ticker = mock_futu.call_args[0][0]
             assert call_ticker == 'US.NVDA', (
@@ -264,7 +261,7 @@ class TestMarketAnalyzerFeaturesNotEmpty:
             data_days=80,
         )
         assert not analyzer.features_df.empty, (
-            f"features_df should not be empty for 1-month horizon"
+            "features_df should not be empty for 1-month horizon"
         )
 
     def test_features_empty_when_no_overlap(self):

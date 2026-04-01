@@ -3,9 +3,8 @@
 
 Usage: python scripts/seed_history.py AAPL 5
 """
-import sys
 import logging
-import datetime as dt
+import sys
 
 from data_pipeline.data_service import DataService
 

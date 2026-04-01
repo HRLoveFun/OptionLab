@@ -1,27 +1,34 @@
-from flask import Flask, request, render_template, jsonify
 import atexit
+import datetime as dt
 import logging
 import math
 import os
 import re
-import datetime as dt
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from dotenv import load_dotenv
-load_dotenv()
+from flask import Flask, jsonify, render_template, request
 
-
-from services.form_service import FormService
-from services.analysis_service import AnalysisService
-from services.market_service import MarketService
-from services.validation_service import ValidationService
-from services.options_chain_service import OptionsChainService
 from data_pipeline.data_service import DataService
 from data_pipeline.scheduler import UpdateScheduler
-from utils.utils import (
-    DEFAULT_TICKER, DEFAULT_FREQUENCY, DEFAULT_RISK_THRESHOLD,
-    DEFAULT_ROLLING_WINDOW, DEFAULT_SIDE_BIAS, init_yf_proxy, yf_throttle
-)
+from services.analysis_service import AnalysisService
+from services.form_service import FormService
+from services.market_service import MarketService
+from services.options_chain_service import OptionsChainService
+from services.validation_service import ValidationService
 from utils.ticker_utils import normalize_ticker
+from utils.utils import (
+    DEFAULT_FREQUENCY,
+    DEFAULT_RISK_THRESHOLD,
+    DEFAULT_ROLLING_WINDOW,
+    DEFAULT_SIDE_BIAS,
+    DEFAULT_TICKER,
+    init_yf_proxy,
+    yf_throttle,
+)
+
+load_dotenv()
+
 
 app = Flask(__name__)
 
@@ -477,7 +484,7 @@ def preload_option_chain():
             calls_df = analyzer.chain[exp]['calls']
             puts_df = analyzer.chain[exp]['puts']
 
-            def df_to_list(df):
+            def df_to_list(df, exp=exp):
                 result = []
                 for _, row in df.iterrows():
                     bid = float(row.get('bid', 0) or 0)

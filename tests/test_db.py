@@ -1,8 +1,9 @@
 """Tests for data_pipeline/db.py — init, get_conn, upsert, fetch."""
 import sqlite3
+
 import pytest
 
-from data_pipeline.db import init_db, get_conn, upsert_many, fetch_df
+from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:
@@ -40,7 +41,7 @@ class TestGetConn:
         with get_conn(db) as conn:
             conn.execute("SELECT 1")
         # After exiting context, connection should be closed
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.OperationalError):
             conn.execute("SELECT 1")
 
 

@@ -1,15 +1,11 @@
 """Tests for core.market_review — data processing, caching, and output format."""
 import datetime as dt
-import threading
-import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from data_pipeline.db import init_db, get_conn
-
+from data_pipeline.db import get_conn, init_db
 
 # ── Helpers ───────────────────────────────────────────────────────
 
@@ -46,8 +42,7 @@ def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
 class TestMarketReviewCache:
     def test_cache_hit_avoids_refetch(self):
         """After first fetch, second call should use L1 cache."""
-        from core.market_review import _mr_cache, _mr_cache_lock, _MR_CACHE_TTL
-        from core.market_review import BENCHMARKS
+        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock
 
         all_tickers = ["AAPL"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=60)
@@ -58,7 +53,7 @@ class TestMarketReviewCache:
 
         from core.market_review import _fetch_market_data
 
-        with patch("core.market_review._yf_download_with_retry") as mock_yf:
+        with patch("core.market_review._yf_download_with_retry"):
             # First call — should use DB (not yfinance since we seeded)
             data1, ret1, disp1 = _fetch_market_data("AAPL")
             # Second call — should hit L1 cache
@@ -68,7 +63,7 @@ class TestMarketReviewCache:
 
     def test_cache_returns_copy(self):
         """Cached data should be a copy — mutations don't affect cache."""
-        from core.market_review import _mr_cache, _mr_cache_lock, BENCHMARKS, _fetch_market_data
+        from core.market_review import BENCHMARKS, _fetch_market_data, _mr_cache, _mr_cache_lock
 
         all_tickers = ["MSFT"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=60)
@@ -89,7 +84,7 @@ class TestMarketReviewCache:
 class TestMarketReviewOutput:
     def test_returns_dataframe(self):
         """market_review() returns a DataFrame with MultiIndex columns."""
-        from core.market_review import market_review, BENCHMARKS, _mr_cache, _mr_cache_lock
+        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review
 
         all_tickers = ["GOOGL"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
@@ -105,7 +100,7 @@ class TestMarketReviewOutput:
 
     def test_result_contains_expected_assets(self):
         """Result index should contain the primary ticker and benchmark names."""
-        from core.market_review import market_review, BENCHMARKS, _mr_cache, _mr_cache_lock
+        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review
 
         all_tickers = ["TSLA"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
@@ -123,7 +118,7 @@ class TestMarketReviewOutput:
 class TestMarketReviewTimeseries:
     def test_returns_dict_structure(self):
         """market_review_timeseries() returns dict with expected keys."""
-        from core.market_review import market_review_timeseries, BENCHMARKS, _mr_cache, _mr_cache_lock
+        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review_timeseries
 
         all_tickers = ["AMZN"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
@@ -140,7 +135,7 @@ class TestMarketReviewTimeseries:
 
     def test_assets_have_expected_fields(self):
         """Each asset entry should have prices, cum_return, rolling_vol."""
-        from core.market_review import market_review_timeseries, BENCHMARKS, _mr_cache, _mr_cache_lock
+        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review_timeseries
 
         all_tickers = ["META"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
@@ -150,7 +145,7 @@ class TestMarketReviewTimeseries:
 
         with patch("core.market_review._yf_download_with_retry"):
             result = market_review_timeseries("META")
-            for asset_name, asset_data in result["assets"].items():
+            for _asset_name, asset_data in result["assets"].items():
                 assert "prices" in asset_data
                 assert "cum_returns" in asset_data
                 assert "rolling_vol" in asset_data

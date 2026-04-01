@@ -1,6 +1,5 @@
-import os
 import logging
-from datetime import time
+import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger

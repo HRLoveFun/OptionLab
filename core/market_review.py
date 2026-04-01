@@ -1,10 +1,12 @@
+import datetime as dt
+import logging
+import threading
+import time
+
 import numpy as np
 import pandas as pd
-import datetime as dt
-import time
-import threading
-import logging
 import yfinance as yf
+
 from utils.data_utils import calculate_recent_extreme_change
 from utils.utils import yf_throttle
 
@@ -79,10 +81,10 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
 
     all_tickers = [instrument] + list(BENCHMARKS.values())
     display_names = [instrument] + list(BENCHMARKS.keys())
-    ticker_to_display = dict(zip(all_tickers, display_names))
+    ticker_to_display = dict(zip(all_tickers, display_names, strict=False))
 
     # ── L2/L3: DB-first with incremental yfinance download ──
-    from data_pipeline.db import get_conn, DB_PATH, init_db
+    from data_pipeline.db import get_conn, init_db
     init_db()  # ensure table exists
 
     today_str = dt.date.today().isoformat()
@@ -227,7 +229,7 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
         etd_dates.append(extreme_date)
     results['Return (ETD)'] = etd_values
     # 相关性矩阵
-    corr = returns.corr()
+    returns.corr()
     for period, start_date in periods.items():
         period_returns = returns[returns.index >= start_date]
         corr_period = period_returns.corr()
@@ -254,7 +256,7 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
         ['Last Close'] + ['Return']*4 + ['Volatility']*4 + ['Correlation']*4,
         [''] + ['1M', '1Q', 'YTD', etd_label_str]*3
     ]
-    tuples = list(zip(*arrays))
+    tuples = list(zip(*arrays, strict=False))
     multi_index = pd.MultiIndex.from_tuples(tuples, names=["Metric", "Period"])
     col_map = {
         ('Return', '1M'): 'Return (1M)',

@@ -1,8 +1,6 @@
 """Tests for utils/data_utils.py — recent extreme change calculation."""
-import datetime as dt
 import numpy as np
 import pandas as pd
-import pytest
 
 from utils.data_utils import calculate_recent_extreme_change
 

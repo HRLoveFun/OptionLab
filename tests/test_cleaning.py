@@ -1,8 +1,8 @@
 """Tests for data_pipeline/cleaning.py — anomaly flags and business-day alignment."""
 import datetime as dt
+
 import numpy as np
 import pandas as pd
-import pytest
 
 from data_pipeline.cleaning import _flag_anomalies, _get_business_days
 

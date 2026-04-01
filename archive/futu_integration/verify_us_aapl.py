@@ -30,7 +30,7 @@ if chain:
 
 # Verify itm field - with no spot, all itm should be False
 itm_values = set()
-for date, data in chain.items():
+for _date, data in chain.items():
     for c in data.get("calls", []):
         itm_values.add(c.get("itm"))
     for p in data.get("puts", []):

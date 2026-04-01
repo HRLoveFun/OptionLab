@@ -3,11 +3,9 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from data_pipeline.db import init_db, upsert_many
-from data_pipeline.processing import _features, _agg_ohlcv, process_frequencies
-
+from data_pipeline.processing import _agg_ohlcv, _features, process_frequencies
 
 # ── Helpers ───────────────────────────────────────────────────────
 

@@ -1,9 +1,11 @@
-import pandas as pd
-import yfinance as yf
-import numpy as np
 import datetime as dt
 import logging
 import time
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+
 from data_pipeline.data_service import DataService
 from utils.utils import yf_throttle
 
