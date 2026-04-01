@@ -21,6 +21,7 @@ const FormManager = {
             moneyness_low: (document.getElementById('cfg-moneyness-low') || {}).value || '0.70',
             moneyness_high: (document.getElementById('cfg-moneyness-high') || {}).value || '1.30',
             max_contracts: (document.getElementById('cfg-max-contracts') || {}).value || '1000',
+            refresh_interval: (document.getElementById('cfg-refresh-interval') || {}).value || '60',
         };
         localStorage.setItem('marketAnalysisConfig', JSON.stringify(cfg));
         this.syncConfigToForm();
@@ -39,6 +40,7 @@ const FormManager = {
                 if (cfg.moneyness_low && el('cfg-moneyness-low')) el('cfg-moneyness-low').value = cfg.moneyness_low;
                 if (cfg.moneyness_high && el('cfg-moneyness-high')) el('cfg-moneyness-high').value = cfg.moneyness_high;
                 if (cfg.max_contracts && el('cfg-max-contracts')) el('cfg-max-contracts').value = cfg.max_contracts;
+                if (cfg.refresh_interval && el('cfg-refresh-interval')) el('cfg-refresh-interval').value = cfg.refresh_interval;
             } catch (e) { /* ignore */ }
         }
         this.syncConfigToForm();
@@ -246,7 +248,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     ['cfg-frequency', 'cfg-side-bias', 'cfg-risk-threshold', 'cfg-rolling-window',
-        'cfg-max-dte', 'cfg-moneyness-low', 'cfg-moneyness-high', 'cfg-max-contracts'].forEach(id => {
+        'cfg-max-dte', 'cfg-moneyness-low', 'cfg-moneyness-high', 'cfg-max-contracts', 'cfg-refresh-interval'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', () => FormManager.saveConfig());
         });
