@@ -1,5 +1,4 @@
 """Tests for services/validation_service.py."""
-import pytest
 
 from services.validation_service import ValidationService
 

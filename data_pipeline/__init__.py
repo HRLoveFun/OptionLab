@@ -12,7 +12,6 @@ Modules:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -27,5 +26,5 @@ class PipelineResult:
     """
     ok: bool = True
     rows: int = 0
-    error: Optional[str] = None
+    error: str | None = None
     warnings: list[str] = field(default_factory=list)

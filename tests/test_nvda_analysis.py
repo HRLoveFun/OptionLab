@@ -8,13 +8,12 @@ Covers:
 """
 
 import datetime as dt
-import os
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from data_pipeline.db import init_db, get_conn
-
+from data_pipeline.db import get_conn, init_db
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,8 +50,8 @@ def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False)
 @pytest.fixture()
 def _patch_downloads(monkeypatch):
     """Disable real yfinance downloads and DataService.manual_update."""
-    from data_pipeline.data_service import DataService
     from core.price_dynamic import PriceDynamic
+    from data_pipeline.data_service import DataService
 
     monkeypatch.setattr(DataService, 'manual_update', staticmethod(lambda *a, **kw: None))
     monkeypatch.setattr(PriceDynamic, '_download_data', lambda self: None)

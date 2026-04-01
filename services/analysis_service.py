@@ -1,9 +1,12 @@
 import gc
 import logging
+
 import numpy as np
-from utils.utils import DEFAULT_ROLLING_WINDOW, DEFAULT_RISK_THRESHOLD, exclusive_month_end
-from core.market_analyzer import MarketAnalyzer
+
 from core.correlation_validator import CorrelationValidator
+from core.market_analyzer import MarketAnalyzer
+from utils.utils import DEFAULT_RISK_THRESHOLD, DEFAULT_ROLLING_WINDOW, exclusive_month_end
+
 from .market_service import MarketService
 
 logger = logging.getLogger(__name__)
@@ -279,8 +282,9 @@ class AnalysisService:
 
         # Correlation matrix
         try:
-            import yfinance as yf
             import pandas as pd
+            import yfinance as yf
+
             from utils.utils import yf_throttle
             yf_throttle()
             data = yf.download(tickers, period='90d', auto_adjust=False,

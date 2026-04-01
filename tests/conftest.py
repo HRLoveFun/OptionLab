@@ -1,7 +1,6 @@
 """Shared pytest fixtures."""
-import os
-import tempfile
 import pytest
+
 
 # Use in-memory or temp DB for tests — avoid touching the real database
 @pytest.fixture(autouse=True)

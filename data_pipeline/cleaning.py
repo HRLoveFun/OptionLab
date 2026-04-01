@@ -1,12 +1,11 @@
-import logging
-from typing import Optional
 import datetime as dt
+import logging
 
 import numpy as np
 import pandas as pd
 
-from .db import fetch_df, upsert_many
 from . import PipelineResult
+from .db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ def _flag_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def clean_range(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> PipelineResult:
+def clean_range(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> PipelineResult:
     """
     Clean data for [start, end). Align to business days, mark missing days as NA
     (no interpolation for full missing days), flag anomalies, and upsert to clean_prices.

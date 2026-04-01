@@ -18,14 +18,10 @@ when connecting to Futu, Interactive Brokers, or other data providers.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
-import json
+from typing import Any
 
 import pandas as pd
-import numpy as np
-
 
 # ============================================================================
 # Mock API Client Classes (Placeholder implementations)
@@ -45,7 +41,7 @@ class MockOptionsChainAPI:
         self.base_url = base_url
         self._mock_data = self._generate_mock_data()
 
-    def _generate_mock_data(self) -> Dict[str, Any]:
+    def _generate_mock_data(self) -> dict[str, Any]:
         """Generate realistic mock options chain data for testing."""
         spot_price = 150.0
         strikes = [140, 145, 150, 155, 160, 165, 170]
@@ -53,7 +49,7 @@ class MockOptionsChainAPI:
         calls = []
         puts = []
 
-        for i, strike in enumerate(strikes):
+        for _i, strike in enumerate(strikes):
             # ATM options have higher IV
             moneyness = abs(strike - spot_price) / spot_price
             iv_base = 0.25 + moneyness * 0.15  # IV increases as we go OTM
@@ -119,7 +115,7 @@ class MockOptionsChainAPI:
         self,
         ticker: str,
         expiration: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch options chain for a specific ticker and expiration date.
 
@@ -167,8 +163,8 @@ class MockSnapshotAPI:
 
     def batch_get_snapshot(
         self,
-        instruments: List[str],
-    ) -> Dict[str, Any]:
+        instruments: list[str],
+    ) -> dict[str, Any]:
         """
         Batch retrieve market snapshots for multiple instruments.
 
@@ -233,7 +229,7 @@ class MockSnapshotAPI:
 # Data Processing and Filtering Functions
 # ============================================================================
 
-def parse_options_chain(api_response: Dict[str, Any]) -> pd.DataFrame:
+def parse_options_chain(api_response: dict[str, Any]) -> pd.DataFrame:
     """
     Parse API response into a unified DataFrame with calls and puts.
 
@@ -295,16 +291,16 @@ def calculate_dte(expiration: str) -> int:
 
 def filter_options(
     df: pd.DataFrame,
-    option_type: Optional[str] = None,
-    min_strike: Optional[float] = None,
-    max_strike: Optional[float] = None,
-    min_volume: Optional[int] = None,
-    min_oi: Optional[int] = None,
+    option_type: str | None = None,
+    min_strike: float | None = None,
+    max_strike: float | None = None,
+    min_volume: int | None = None,
+    min_oi: int | None = None,
     itm_only: bool = False,
     otm_only: bool = False,
-    min_dte: Optional[int] = None,
-    max_dte: Optional[int] = None,
-    expiry_list: Optional[List[str]] = None,
+    min_dte: int | None = None,
+    max_dte: int | None = None,
+    expiry_list: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Filter options DataFrame based on multiple criteria.
@@ -351,9 +347,9 @@ def filter_options(
 
     # Filter by moneyness (ITM/OTM)
     if itm_only:
-        filtered = filtered[filtered["itm"] == True]
+        filtered = filtered[filtered["itm"]]
     if otm_only:
-        filtered = filtered[filtered["itm"] == False]
+        filtered = filtered[not filtered["itm"]]
 
     # Filter by specific expiry list
     if expiry_list:
@@ -406,7 +402,7 @@ def get_atm_options(
     return df[df["strike"].isin(selected_strikes)].reset_index(drop=True)
 
 
-def extract_strikes_from_options(df: pd.DataFrame) -> List[float]:
+def extract_strikes_from_options(df: pd.DataFrame) -> list[float]:
     """
     Extract unique strike prices from options DataFrame.
 
@@ -684,15 +680,15 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
 
         # ITM only
         itm_calls = filter_options(df, option_type="CALL", itm_only=True)
-        self.assertTrue(all(itm_calls["itm"] == True))
+        self.assertTrue(all(itm_calls["itm"]))
 
         # OTM only
         otm_calls = filter_options(df, option_type="CALL", otm_only=True)
-        self.assertTrue(all(otm_calls["itm"] == False))
+        self.assertTrue(all(not otm_calls["itm"]))
 
         # ITM puts (puts ITM when strike > spot)
         itm_puts = filter_options(df, option_type="PUT", itm_only=True)
-        self.assertTrue(all(itm_puts["itm"] == True))
+        self.assertTrue(all(itm_puts["itm"]))
 
     def test_10_get_atm_options(self):
         """

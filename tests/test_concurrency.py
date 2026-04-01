@@ -1,26 +1,24 @@
 """Tests for data_service.py — cooldown, throttle, and concurrency behavior."""
-import datetime as dt
 import threading
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
 from data_pipeline import PipelineResult
-from data_pipeline.db import init_db
 from data_pipeline.data_service import (
+    _QUERY_CACHE_TTL,
     DataService,
-    _update_locks,
-    _update_lock_mutex,
-    _UPDATE_COOLDOWN,
     _cache_get,
-    _cache_set,
     _cache_invalidate,
+    _cache_set,
     _query_cache,
     _query_cache_lock,
-    _QUERY_CACHE_TTL,
+    _update_lock_mutex,
+    _update_locks,
 )
+from data_pipeline.db import init_db
 
 
 @pytest.fixture(autouse=True)

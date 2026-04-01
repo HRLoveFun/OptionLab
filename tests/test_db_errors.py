@@ -1,12 +1,11 @@
 """Tests for data_pipeline.db — error scenarios and edge cases."""
 import os
 import sqlite3
-import tempfile
 
 import pandas as pd
 import pytest
 
-from data_pipeline.db import init_db, get_conn, upsert_many, fetch_df
+from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:
@@ -78,7 +77,7 @@ class TestUpsertMany:
         cols = ["ticker", "date", "open", "high", "low", "close", "adj_close", "volume", "provider"]
         good = ("RB", "2024-01-01", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance")
         bad = ("RB", "2024-01-02", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance", "EXTRA")  # too many columns
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.OperationalError):
             upsert_many("raw_prices", cols, [good, bad])
         # Good row should also be rolled back
         df = fetch_df("SELECT * FROM raw_prices WHERE ticker='RB'", ())
@@ -116,7 +115,7 @@ class TestDbEdgeCases:
         try:
             # Attempting to create a new DB in read-only dir should fail
             bad_path = str(readonly_dir / "sub" / "test2.sqlite")
-            with pytest.raises(Exception):
+            with pytest.raises(sqlite3.OperationalError):
                 init_db(bad_path)
         finally:
             os.chmod(str(readonly_dir), 0o755)

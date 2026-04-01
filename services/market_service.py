@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+
 from core.market_analyzer import MarketAnalyzer
 from core.market_review import market_review
 from utils.utils import exclusive_month_end
@@ -12,7 +13,7 @@ class MarketService:
     - validate_ticker: Check if ticker is valid (data available)
     - generate_market_review: Produce multi-asset review table for dashboard
     """
-    
+
     @staticmethod
     def validate_ticker(ticker):
         """
@@ -27,7 +28,7 @@ class MarketService:
         except Exception as e:
             logger.error(f"Error validating ticker {ticker}: {e}")
             return False, f'error_validating_ticker: {str(e)}'
-    
+
     @staticmethod
     def generate_market_review(form_data):
         """

@@ -1,12 +1,11 @@
 import datetime as dt
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
-from .db import fetch_df, upsert_many
 from . import PipelineResult
+from .db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ def _features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def process_frequencies(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None) -> PipelineResult:
+def process_frequencies(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> PipelineResult:
     """
     Build processed tables for D/W/M using cleaned daily data. Only data within [start, end)
     will be recomputed and upserted.

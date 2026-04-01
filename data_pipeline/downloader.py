@@ -1,13 +1,13 @@
 import datetime as dt
 import logging
-from typing import Optional
 
 import pandas as pd
 import yfinance as yf
 
-from .db import upsert_many, fetch_df
 from utils.utils import yf_throttle
+
 from . import PipelineResult
+from .db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def _download_yf(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
     return df[cols].rename(columns={"Adj Close": "Adj_Close"})
 
 
-def upsert_raw_prices(ticker: str, start: Optional[dt.date] = None, end: Optional[dt.date] = None, days: int = 7) -> PipelineResult:
+def upsert_raw_prices(ticker: str, start: dt.date | None = None, end: dt.date | None = None, days: int = 7) -> PipelineResult:
     """
     Download OHLCV for [start, end) and upsert into raw_prices.
     If df for a day is entirely NA, skip and keep existing row.
@@ -81,7 +81,7 @@ def upsert_raw_prices(ticker: str, start: Optional[dt.date] = None, end: Optiona
         df_old = df_old.rename(columns={"adj_close": "Adj_Close"})
 
     rows = []
-    for d, row in df_new.iterrows():
+    for _d, row in df_new.iterrows():
         date_str = row["date"].isoformat()
         # If all new values are NA, retain old data (skip insert) and log
         if row[["Open", "High", "Low", "Close", "Adj_Close", "Volume"]].isna().all():

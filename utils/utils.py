@@ -1,7 +1,11 @@
 """Unified utility module for market analysis application"""
 
+import datetime as dt
 import logging
 import os
+import threading as _threading
+
+import pandas as pd
 
 DEFAULT_RISK_THRESHOLD = 90
 DEFAULT_ROLLING_WINDOW = 120
@@ -17,8 +21,6 @@ FREQUENCY_DISPLAY = {
     'QE': 'Quarterly'
 }
 
-import datetime as dt
-from typing import List, Any
 
 
 def parse_month_str(value: str) -> dt.date | None:
@@ -48,9 +50,6 @@ class DateHelper:
             return dt.datetime.strptime(date_str, format_str).date()
         except ValueError:
             return None
-
-import pandas as pd
-import numpy as np
 
 
 # ── yfinance proxy ────────────────────────────────────────────────
@@ -98,7 +97,6 @@ def init_yf_proxy() -> None:
 # ── yfinance global rate throttle ──────────────────────────────────
 # Prevents self-inflicted 429 errors by serialising yf.download /
 # yf.Ticker calls with a minimum gap between them.
-import threading as _threading
 
 _yf_throttle_lock = _threading.Lock()
 _yf_last_call: float = 0.0

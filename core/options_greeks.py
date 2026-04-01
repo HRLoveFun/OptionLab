@@ -5,10 +5,11 @@ All functions accept scalar or NumPy array inputs (broadcast-compatible).
 Invalid inputs produce np.nan in the output rather than raising exceptions.
 """
 
-import numpy as np
-from scipy.stats import norm
-import pandas as pd
 import logging
+
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,10 @@ def portfolio_greeks_table(positions: list, spot: float, r: float = 0.05) -> tup
 
     Returns (totals_dict, detail_df).
     """
+    def _get_val(g: dict, key: str) -> float:
+        v = g[key]
+        return float(v) if np.isfinite(v) else 0.0
+
     totals = {'delta': 0.0, 'gamma': 0.0, 'theta': 0.0,
               'vega': 0.0, 'net_premium': 0.0}
     rows = []
@@ -127,14 +132,10 @@ def portfolio_greeks_table(positions: list, spot: float, r: float = 0.05) -> tup
 
             qty = int(pos['qty']) * sign
 
-            def _val(key):
-                v = g[key]
-                return float(v) if np.isfinite(v) else 0.0
-
-            totals['delta']       += _val('delta')  * qty
-            totals['gamma']       += _val('gamma')  * qty
-            totals['theta']       += _val('theta')  * qty
-            totals['vega']        += _val('vega')   * qty
+            totals['delta']       += _get_val(g, 'delta')  * qty
+            totals['gamma']       += _get_val(g, 'gamma')  * qty
+            totals['theta']       += _get_val(g, 'theta')  * qty
+            totals['vega']        += _get_val(g, 'vega')   * qty
             totals['net_premium'] += float(pos['premium']) * int(pos['qty']) * (-sign)
 
             rows.append({
@@ -143,10 +144,10 @@ def portfolio_greeks_table(positions: list, spot: float, r: float = 0.05) -> tup
                 'DTE':     pos['dte'],
                 'IV':      f"{pos['iv'] * 100:.1f}%",
                 'Qty':     qty,
-                'Delta':   f"{_val('delta') * qty:+.3f}",
-                'Gamma':   f"{_val('gamma') * qty:+.5f}",
-                'Theta/d': f"{_val('theta') * qty:+.2f}",
-                'Vega/1%': f"{_val('vega') * qty:+.2f}",
+                'Delta':   f"{_get_val(g, 'delta') * qty:+.3f}",
+                'Gamma':   f"{_get_val(g, 'gamma') * qty:+.5f}",
+                'Theta/d': f"{_get_val(g, 'theta') * qty:+.2f}",
+                'Vega/1%': f"{_get_val(g, 'vega') * qty:+.2f}",
             })
         except (KeyError, ValueError, TypeError) as e:
             logger.warning(f"Skipping leg {pos} due to error: {e}")

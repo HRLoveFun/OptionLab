@@ -1,8 +1,7 @@
 """Tests for utils/utils.py — parse helpers and constants."""
 import datetime as dt
-import pytest
 
-from utils.utils import parse_month_str, exclusive_month_end
+from utils.utils import exclusive_month_end, parse_month_str
 
 
 class TestParseMonthStr:

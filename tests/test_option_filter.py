@@ -1,5 +1,4 @@
 """Tests for option chain filtering in app.py."""
-import pytest
 from datetime import datetime, timedelta
 
 

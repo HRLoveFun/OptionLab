@@ -4,6 +4,7 @@ all charts / tables as a single result dictionary for the Flask route.
 """
 
 import logging
+
 from core.options_chain_analyzer import OptionsChainAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -111,8 +112,9 @@ class OptionsChainService:
 
         # --- Vol Premium context (HV vs IV) --------------------------------
         try:
-            from core.price_dynamic import PriceDynamic
             import datetime as dt
+
+            from core.price_dynamic import PriceDynamic
             pd_obj = PriceDynamic(ticker, start_date=dt.date.today() - dt.timedelta(days=365))
             if pd_obj.is_valid():
                 # Get nearest-expiry ATM IV

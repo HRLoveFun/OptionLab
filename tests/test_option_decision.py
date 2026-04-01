@@ -1,20 +1,16 @@
 """Tests for core.option_decision — pure computation logic."""
 
-import math
 import pytest
-import pandas as pd
-import numpy as np
 
 from core.option_decision import (
-    enrich_contract,
+    calculate_iv_percentile,
+    calculate_iv_rank,
     compute_ev,
-    select_dte_range,
+    enrich_contract,
     filter_and_rank,
     get_heuristic_notes,
-    calculate_iv_rank,
-    calculate_iv_percentile,
+    select_dte_range,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -72,8 +68,7 @@ class TestEnrichContract:
         result = enrich_contract(c, budget=5000, spot_price=160.0,
                                  target_move_pct=-0.10)
         d = result['derived']
-        target_price = 160.0 * 0.90  # 144
-        intrinsic = max(150.0 - 144.0, 0)  # 6
+        max(150.0 - 144.0, 0)  # 6
         expected_payoff = 6.0 - 3.25  # 2.75
         assert d['payoff_at_target'] == pytest.approx(expected_payoff, abs=0.01)
 

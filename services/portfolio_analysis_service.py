@@ -5,13 +5,13 @@ Coordinates Greeks, PnL, theta decay, risk breakdown, and VaR
 for a multi-leg option portfolio.
 """
 
-import io
 import base64
+import io
 import logging
 
-import numpy as np
-import pandas as pd
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.stats import norm
@@ -102,6 +102,7 @@ class PortfolioAnalysisService:
         spots = {}
         try:
             import yfinance as yf
+
             from utils.utils import yf_throttle
             for t in tickers:
                 yf_throttle()
