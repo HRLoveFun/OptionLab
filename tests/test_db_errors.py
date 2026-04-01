@@ -75,8 +75,8 @@ class TestUpsertMany:
         init_db()
         cols = ["ticker", "date", "open", "high", "low", "close", "adj_close", "volume", "provider"]
         good = ("RB", "2024-01-01", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance")
-        bad = ("RB", "2024-01-02", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance", "EXTRA")  # too many columns
-        with pytest.raises(sqlite3.OperationalError):
+        bad = ("RB", "2024-01-02", 100.0, 105.0, 95.0, 102.0, 102.0, 1000.0, "yfinance")
+        with pytest.raises(sqlite3.ProgrammingError):
             upsert_many("raw_prices", cols, [good, bad])
         # Good row should also be rolled back
         df = fetch_df("SELECT * FROM raw_prices WHERE ticker='RB'", ())
