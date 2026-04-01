@@ -1,4 +1,5 @@
 """Shared pytest fixtures."""
+
 import pytest
 
 
@@ -10,4 +11,5 @@ def _isolate_db(monkeypatch, tmp_path):
     monkeypatch.setenv("MARKET_DB_PATH", db_file)
     # Also patch the module-level DB_PATH that was already evaluated at import time
     import data_pipeline.db as db_mod
+
     monkeypatch.setattr(db_mod, "DB_PATH", db_file)

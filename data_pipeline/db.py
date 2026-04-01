@@ -104,11 +104,7 @@ def init_db(db_path: str | None = None):
 @contextmanager
 def get_conn(db_path: str | None = None):
     path = db_path or DB_PATH
-    conn = sqlite3.connect(
-        path,
-        detect_types=sqlite3.PARSE_DECLTYPES,
-        timeout=10
-    )
+    conn = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES, timeout=10)
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
@@ -138,6 +134,7 @@ def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db
 
 def fetch_df(query: str, params: tuple = (), db_path: str | None = None):
     import pandas as pd
+
     with get_conn(db_path) as conn:
         df = pd.read_sql_query(query, conn, params=params, parse_dates=["date"])  # type: ignore
     if not df.empty:

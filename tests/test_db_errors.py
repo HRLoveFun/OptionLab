@@ -1,4 +1,5 @@
 """Tests for data_pipeline.db — error scenarios and edge cases."""
+
 import os
 import sqlite3
 
@@ -13,9 +14,7 @@ class TestInitDb:
         db_path = str(tmp_path / "test.sqlite")
         init_db(db_path)
         with sqlite3.connect(db_path) as conn:
-            tables = [r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()]
+            tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
         assert "raw_prices" in tables
         assert "clean_prices" in tables
         assert "processed_prices" in tables

@@ -3,12 +3,14 @@
 
 Usage: python scripts/seed_history.py AAPL 5
 """
+
 import logging
 import sys
 
 from data_pipeline.data_service import DataService
 
 logging.basicConfig(level=logging.INFO)
+
 
 def main():
     if len(sys.argv) < 2:
@@ -20,5 +22,6 @@ def main():
     DataService.seed_history(ticker, years=years)
     print("Done")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

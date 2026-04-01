@@ -27,6 +27,7 @@ import pandas as pd
 # Mock API Client Classes (Placeholder implementations)
 # ============================================================================
 
+
 class MockOptionsChainAPI:
     """
     Mock Options Chain API client.
@@ -59,41 +60,45 @@ class MockOptionsChainAPI:
             time_value = max(2.0 - moneyness * 1.5, 0.1)
             call_price = intrinsic_call + time_value
 
-            calls.append({
-                "strike": strike,
-                "option_type": "CALL",
-                "bid": round(call_price * 0.95, 2),
-                "ask": round(call_price * 1.05, 2),
-                "last_price": round(call_price, 2),
-                "volume": int(1000 * (1 - moneyness)),
-                "open_interest": int(5000 * (1 - moneyness * 0.5)),
-                "implied_volatility": round(iv_base, 4),
-                "delta": round(0.5 + (spot_price - strike) / 20, 3),
-                "gamma": 0.03,
-                "theta": -0.05,
-                "vega": 0.15,
-                "itm": strike < spot_price,
-            })
+            calls.append(
+                {
+                    "strike": strike,
+                    "option_type": "CALL",
+                    "bid": round(call_price * 0.95, 2),
+                    "ask": round(call_price * 1.05, 2),
+                    "last_price": round(call_price, 2),
+                    "volume": int(1000 * (1 - moneyness)),
+                    "open_interest": int(5000 * (1 - moneyness * 0.5)),
+                    "implied_volatility": round(iv_base, 4),
+                    "delta": round(0.5 + (spot_price - strike) / 20, 3),
+                    "gamma": 0.03,
+                    "theta": -0.05,
+                    "vega": 0.15,
+                    "itm": strike < spot_price,
+                }
+            )
 
             # Generate put option
             intrinsic_put = max(strike - spot_price, 0)
             put_price = intrinsic_put + time_value
 
-            puts.append({
-                "strike": strike,
-                "option_type": "PUT",
-                "bid": round(put_price * 0.95, 2),
-                "ask": round(put_price * 1.05, 2),
-                "last_price": round(put_price, 2),
-                "volume": int(800 * (1 - moneyness * 0.8)),
-                "open_interest": int(4000 * (1 - moneyness * 0.6)),
-                "implied_volatility": round(iv_base + 0.02, 4),  # Put skew
-                "delta": round(-0.5 + (spot_price - strike) / 20, 3),
-                "gamma": 0.03,
-                "theta": -0.04,
-                "vega": 0.14,
-                "itm": strike > spot_price,
-            })
+            puts.append(
+                {
+                    "strike": strike,
+                    "option_type": "PUT",
+                    "bid": round(put_price * 0.95, 2),
+                    "ask": round(put_price * 1.05, 2),
+                    "last_price": round(put_price, 2),
+                    "volume": int(800 * (1 - moneyness * 0.8)),
+                    "open_interest": int(4000 * (1 - moneyness * 0.6)),
+                    "implied_volatility": round(iv_base + 0.02, 4),  # Put skew
+                    "delta": round(-0.5 + (spot_price - strike) / 20, 3),
+                    "gamma": 0.03,
+                    "theta": -0.04,
+                    "vega": 0.14,
+                    "itm": strike > spot_price,
+                }
+            )
 
         return {
             "ticker": "AAPL",
@@ -179,9 +184,7 @@ class MockSnapshotAPI:
             ConnectionError: If API request fails
         """
         if len(instruments) > self._batch_size_limit:
-            raise ValueError(
-                f"Batch size {len(instruments)} exceeds limit of {self._batch_size_limit}"
-            )
+            raise ValueError(f"Batch size {len(instruments)} exceeds limit of {self._batch_size_limit}")
 
         # Generate mock snapshot data for each instrument
         snapshots = {}
@@ -228,6 +231,7 @@ class MockSnapshotAPI:
 # ============================================================================
 # Data Processing and Filtering Functions
 # ============================================================================
+
 
 def parse_options_chain(api_response: dict[str, Any]) -> pd.DataFrame:
     """
@@ -421,6 +425,7 @@ def extract_strikes_from_options(df: pd.DataFrame) -> list[float]:
 # Test Class
 # ============================================================================
 
+
 class TestOptionsAPISnapshotFiltering(unittest.TestCase):
     """
     Test suite validating:
@@ -447,9 +452,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - Both calls and puts are present
         - Each option has required fields (strike, bid, ask, iv, etc.)
         """
-        response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
 
         # Verify response structure
         self.assertIn("ticker", response)
@@ -502,12 +505,12 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         """
         # Create a list of instrument symbols including underlying and options
         instruments = [
-            "AAPL",                    # Underlying stock
-            "AAPL240417C140",          # Call option @ 140 strike
-            "AAPL240417C145",          # Call option @ 145 strike
-            "AAPL240417C150",          # ATM Call option
-            "AAPL240417P150",          # ATM Put option
-            "AAPL240417P155",          # Put option @ 155 strike
+            "AAPL",  # Underlying stock
+            "AAPL240417C140",  # Call option @ 140 strike
+            "AAPL240417C145",  # Call option @ 145 strike
+            "AAPL240417C150",  # ATM Call option
+            "AAPL240417P150",  # ATM Put option
+            "AAPL240417P155",  # Put option @ 155 strike
         ]
 
         response = self.snapshot_api.batch_get_snapshot(instruments)
@@ -558,9 +561,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - Both calls and puts are included
         - Strike prices are extracted correctly
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
 
         df = parse_options_chain(raw_response)
 
@@ -570,9 +571,18 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
 
         # Verify required columns
         required_cols = [
-            "ticker", "expiration", "strike", "option_type",
-            "bid", "ask", "last_price", "volume", "open_interest",
-            "implied_volatility", "itm", "spot_price"
+            "ticker",
+            "expiration",
+            "strike",
+            "option_type",
+            "bid",
+            "ask",
+            "last_price",
+            "volume",
+            "open_interest",
+            "implied_volatility",
+            "itm",
+            "spot_price",
         ]
         for col in required_cols:
             self.assertIn(col, df.columns)
@@ -594,9 +604,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - Filter by CALL returns only calls
         - Filter by PUT returns only puts
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
 
         # Filter calls only
@@ -616,9 +624,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - max_strike filter excludes strikes above threshold
         - Combined range filter works correctly
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
 
         spot = raw_response["spot_price"]
@@ -634,11 +640,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         self.assertTrue(all(filtered["strike"] <= max_strike))
 
         # Filter by range (near ATM)
-        range_filtered = filter_options(
-            df,
-            min_strike=spot * 0.95,
-            max_strike=spot * 1.05
-        )
+        range_filtered = filter_options(df, min_strike=spot * 0.95, max_strike=spot * 1.05)
         self.assertTrue(all(range_filtered["strike"] >= spot * 0.95))
         self.assertTrue(all(range_filtered["strike"] <= spot * 1.05))
 
@@ -650,9 +652,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - min_volume filter excludes low-volume options
         - min_oi filter excludes low open-interest options
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
 
         # Filter by minimum volume
@@ -673,9 +673,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - itm_only filter returns only ITM options
         - otm_only filter returns only OTM options
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
 
         # ITM only
@@ -698,9 +696,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - Returns options near current spot price
         - Respects n_strikes parameter
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
         spot = raw_response["spot_price"]
 
@@ -724,9 +720,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - Returns sorted list of unique strikes
         - Handles empty DataFrame gracefully
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
 
         strikes = extract_strikes_from_options(df)
@@ -752,9 +746,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - Min volume: 200
         - Min open interest: 1000
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
         spot = raw_response["spot_price"]
 
@@ -784,9 +776,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         - All columns preserved after filtering
         - Data types maintained
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
         original_columns = set(df.columns)
 
@@ -820,13 +810,14 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         test_data = {
             "ticker": ["AAPL"] * 12,
             "expiration": [
-                (today + timedelta(days=3)).strftime("%Y-%m-%d"),   # 3 DTE
-                (today + timedelta(days=7)).strftime("%Y-%m-%d"),   # 7 DTE
+                (today + timedelta(days=3)).strftime("%Y-%m-%d"),  # 3 DTE
+                (today + timedelta(days=7)).strftime("%Y-%m-%d"),  # 7 DTE
                 (today + timedelta(days=14)).strftime("%Y-%m-%d"),  # 14 DTE
                 (today + timedelta(days=21)).strftime("%Y-%m-%d"),  # 21 DTE
                 (today + timedelta(days=30)).strftime("%Y-%m-%d"),  # 30 DTE
                 (today + timedelta(days=45)).strftime("%Y-%m-%d"),  # 45 DTE
-            ] * 2,  # 2 option types each
+            ]
+            * 2,  # 2 option types each
             "strike": [150] * 12,
             "option_type": ["CALL", "PUT"] * 6,
             "bid": [3.0] * 12,
@@ -862,9 +853,7 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         Verifies:
         - Only specified expiry dates are included
         """
-        raw_response = self.options_api.fetch_options_chain(
-            self.test_ticker, self.test_expiration
-        )
+        raw_response = self.options_api.fetch_options_chain(self.test_ticker, self.test_expiration)
         df = parse_options_chain(raw_response)
 
         # Filter by specific expiry list
@@ -901,8 +890,8 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
 
         # Create expiries: 3 DTE, 7 DTE, 14 DTE, 21 DTE, 30 DTE, 45 DTE
         expiries = [
-            (today + timedelta(days=3)).strftime("%Y-%m-%d"),   # Outside range
-            (today + timedelta(days=7)).strftime("%Y-%m-%d"),   # In range
+            (today + timedelta(days=3)).strftime("%Y-%m-%d"),  # Outside range
+            (today + timedelta(days=7)).strftime("%Y-%m-%d"),  # In range
             (today + timedelta(days=14)).strftime("%Y-%m-%d"),  # In range
             (today + timedelta(days=21)).strftime("%Y-%m-%d"),  # In range
             (today + timedelta(days=30)).strftime("%Y-%m-%d"),  # In range
@@ -916,21 +905,23 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
                     # Only expiries 7, 14, 21, 30 DTE should match (6-30 range)
                     moneyness = abs(strike - spot_price) / spot_price
 
-                    records.append({
-                        "ticker": "US.NVDA",
-                        "expiration": exp,
-                        "strike": strike,
-                        "option_type": opt_type,
-                        "bid": round(5.0 - moneyness * 3, 2),
-                        "ask": round(5.2 - moneyness * 3, 2),
-                        "last_price": round(5.1 - moneyness * 3, 2),
-                        "volume": int(200 * (1 - moneyness)),
-                        "open_interest": int(1500 * (1 - moneyness * 0.5)),
-                        "implied_volatility": round(0.45 + moneyness * 0.1, 4),
-                        "itm": (opt_type == "CALL" and strike < spot_price) or
-                               (opt_type == "PUT" and strike > spot_price),
-                        "spot_price": spot_price,
-                    })
+                    records.append(
+                        {
+                            "ticker": "US.NVDA",
+                            "expiration": exp,
+                            "strike": strike,
+                            "option_type": opt_type,
+                            "bid": round(5.0 - moneyness * 3, 2),
+                            "ask": round(5.2 - moneyness * 3, 2),
+                            "last_price": round(5.1 - moneyness * 3, 2),
+                            "volume": int(200 * (1 - moneyness)),
+                            "open_interest": int(1500 * (1 - moneyness * 0.5)),
+                            "implied_volatility": round(0.45 + moneyness * 0.1, 4),
+                            "itm": (opt_type == "CALL" and strike < spot_price)
+                            or (opt_type == "PUT" and strike > spot_price),
+                            "spot_price": spot_price,
+                        }
+                    )
 
         df = pd.DataFrame(records)
 
@@ -968,8 +959,8 @@ class TestOptionsAPISnapshotFiltering(unittest.TestCase):
         exp_dates = candidates["expiration"].unique()
         self.assertNotIn(expiries[0], exp_dates)  # 3 DTE
         self.assertNotIn(expiries[5], exp_dates)  # 45 DTE
-        self.assertIn(expiries[1], exp_dates)     # 7 DTE
-        self.assertIn(expiries[4], exp_dates)     # 30 DTE
+        self.assertIn(expiries[1], exp_dates)  # 7 DTE
+        self.assertIn(expiries[4], exp_dates)  # 30 DTE
 
 
 # ============================================================================

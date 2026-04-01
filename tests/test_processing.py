@@ -1,4 +1,5 @@
 """Tests for data_pipeline.processing — feature computation correctness."""
+
 import datetime as dt
 
 import numpy as np
@@ -8,6 +9,7 @@ from data_pipeline.db import init_db, upsert_many
 from data_pipeline.processing import _agg_ohlcv, _features, process_frequencies
 
 # ── Helpers ───────────────────────────────────────────────────────
+
 
 def _make_daily(n: int = 30, base_close: float = 100.0) -> pd.DataFrame:
     """Generate a simple OHLCV DataFrame with n business days."""
@@ -33,42 +35,71 @@ def _seed_clean_prices(ticker: str, df: pd.DataFrame) -> None:
     init_db()
     rows = []
     for d, r in df.iterrows():
-        rows.append((
-            ticker,
-            d.date().isoformat(),
-            float(r["open"]),
-            float(r["high"]),
-            float(r["low"]),
-            float(r["close"]),
-            float(r["adj_close"]),
-            float(r["volume"]),
-            1,  # is_trading_day
-            0,  # missing_any
-            0,  # price_jump_flag
-            0,  # vol_anom_flag
-            0,  # ohlc_inconsistent
-        ))
+        rows.append(
+            (
+                ticker,
+                d.date().isoformat(),
+                float(r["open"]),
+                float(r["high"]),
+                float(r["low"]),
+                float(r["close"]),
+                float(r["adj_close"]),
+                float(r["volume"]),
+                1,  # is_trading_day
+                0,  # missing_any
+                0,  # price_jump_flag
+                0,  # vol_anom_flag
+                0,  # ohlc_inconsistent
+            )
+        )
     upsert_many(
         "clean_prices",
-        ["ticker", "date", "open", "high", "low", "close", "adj_close", "volume",
-         "is_trading_day", "missing_any", "price_jump_flag", "vol_anom_flag", "ohlc_inconsistent"],
+        [
+            "ticker",
+            "date",
+            "open",
+            "high",
+            "low",
+            "close",
+            "adj_close",
+            "volume",
+            "is_trading_day",
+            "missing_any",
+            "price_jump_flag",
+            "vol_anom_flag",
+            "ohlc_inconsistent",
+        ],
         rows,
     )
 
 
 # ── _features() unit tests ───────────────────────────────────────
 
+
 class TestFeatures:
     def test_output_columns(self):
         df = _make_daily(20)
         out = _features(df)
         expected_cols = {
-            "log_return", "amplitude", "log_hl_spread",
-            "parkinson_var", "gk_var",
-            "log_vol_delta", "vol_zscore",
-            "ma_5", "ma_10", "ma_20", "ma_60", "ma_120", "ma_250",
-            "mom_10", "mom_20", "mom_60",
-            "osc_high", "osc_low", "osc",
+            "log_return",
+            "amplitude",
+            "log_hl_spread",
+            "parkinson_var",
+            "gk_var",
+            "log_vol_delta",
+            "vol_zscore",
+            "ma_5",
+            "ma_10",
+            "ma_20",
+            "ma_60",
+            "ma_120",
+            "ma_250",
+            "mom_10",
+            "mom_20",
+            "mom_60",
+            "osc_high",
+            "osc_low",
+            "osc",
             "last_close",
         }
         assert expected_cols.issubset(set(out.columns))
@@ -122,6 +153,7 @@ class TestFeatures:
 
 # ── _agg_ohlcv() tests ──────────────────────────────────────────
 
+
 class TestAggOHLCV:
     def test_weekly_aggregation(self):
         df = _make_daily(20)
@@ -138,6 +170,7 @@ class TestAggOHLCV:
 
 
 # ── process_frequencies() integration tests ──────────────────────
+
 
 class TestProcessFrequencies:
     def test_basic_pipeline(self):

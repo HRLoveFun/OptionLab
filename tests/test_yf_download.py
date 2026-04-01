@@ -24,9 +24,11 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _proxy_reachable(url: str, timeout: float = 2.0) -> bool:
     """TCP probe for the proxy endpoint."""
     from urllib.parse import urlparse
+
     try:
         p = urlparse(url)
         with socket.create_connection((p.hostname, p.port or 1080), timeout=timeout):
@@ -54,12 +56,15 @@ def _is_rate_limited(exc: Exception) -> bool:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def clean_proxy():
     """Ensure proxy env is sane before every test in this module."""
     from dotenv import load_dotenv
+
     load_dotenv()
     from utils.utils import init_yf_proxy
+
     init_yf_proxy()
     _ensure_clean_proxy_env()
 
@@ -67,6 +72,7 @@ def clean_proxy():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestYFinanceDownload:
     """Download NVDA daily data for the last year."""

@@ -17,7 +17,7 @@ def calculate_recent_extreme_change(series):
     rolling_min = series.expanding(min_periods=1).min()
     trend = "up" if latest > series.iloc[-2] else "down"
     if trend == "up":
-        mask = (series == rolling_min)
+        mask = series == rolling_min
         recent_lows = series[mask]
         if not recent_lows.empty:
             extreme_value = recent_lows.iloc[-1]
@@ -26,7 +26,7 @@ def calculate_recent_extreme_change(series):
             extreme_value = series.min()
             extreme_date = series.idxmin()
     else:
-        mask = (series == rolling_max)
+        mask = series == rolling_max
         recent_highs = series[mask]
         if not recent_highs.empty:
             extreme_value = recent_highs.iloc[-1]

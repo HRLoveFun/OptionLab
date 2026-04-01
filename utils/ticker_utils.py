@@ -16,15 +16,15 @@ FUTU_MARKETS = {"US", "HK", "SH", "SZ", "SG", "JP", "AU", "MY", "CA", "FX"}
 
 # --- Regex patterns per WORKFLOW spec §6.1 ---
 # Futu format
-_RE_FUTU_US_STOCK = re.compile(r'^US\.[A-Z.\-]+$')
-_RE_FUTU_US_INDEX = re.compile(r'^US\.\.[A-Z.\-]+$')
-_RE_FUTU_HK_STOCK = re.compile(r'^HK\.\d{5}$')
+_RE_FUTU_US_STOCK = re.compile(r"^US\.[A-Z.\-]+$")
+_RE_FUTU_US_INDEX = re.compile(r"^US\.\.[A-Z.\-]+$")
+_RE_FUTU_HK_STOCK = re.compile(r"^HK\.\d{5}$")
 
 # Yahoo format
-_RE_YAHOO_US_STOCK = re.compile(r'^[A-Z\-]+$')
-_RE_YAHOO_US_INDEX = re.compile(r'^\^[A-Z]+$')
-_RE_YAHOO_HK_STOCK = re.compile(r'^\d{4,5}\.HK$')
-_RE_YAHOO_FUTURES  = re.compile(r'^[A-Z]+=F$')
+_RE_YAHOO_US_STOCK = re.compile(r"^[A-Z\-]+$")
+_RE_YAHOO_US_INDEX = re.compile(r"^\^[A-Z]+$")
+_RE_YAHOO_HK_STOCK = re.compile(r"^\d{4,5}\.HK$")
+_RE_YAHOO_FUTURES = re.compile(r"^[A-Z]+=F$")
 
 
 def is_futu_format(ticker: str) -> bool:

@@ -21,14 +21,16 @@ def _download_yf(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
         return pd.DataFrame()
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(1)
-    cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+    cols = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
     for c in cols:
         if c not in df.columns:
             df[c] = pd.NA
     return df[cols].rename(columns={"Adj Close": "Adj_Close"})
 
 
-def upsert_raw_prices(ticker: str, start: dt.date | None = None, end: dt.date | None = None, days: int = 7) -> PipelineResult:
+def upsert_raw_prices(
+    ticker: str, start: dt.date | None = None, end: dt.date | None = None, days: int = 7
+) -> PipelineResult:
     """
     Download OHLCV for [start, end) and upsert into raw_prices.
     If df for a day is entirely NA, skip and keep existing row.

@@ -18,19 +18,19 @@ _YF_RETRY_BASE_DELAY = 3  # seconds
 # ---------------------------------------------------------------------------
 # In-memory cache for market review data (5-min TTL)
 # ---------------------------------------------------------------------------
-_mr_cache: dict = {}          # key: (instrument, start_str, end_str) → (monotonic_ts, data, returns, valid_display)
+_mr_cache: dict = {}  # key: (instrument, start_str, end_str) → (monotonic_ts, data, returns, valid_display)
 _mr_cache_lock = threading.Lock()
 _MR_CACHE_TTL = 300  # seconds
 
 BENCHMARKS = {
-    'USD': 'DX-Y.NYB',
-    'US10Y': '^TNX',
-    'Gold': 'GC=F',
-    'SPX': '^SPX',
-    'CSI300': '000300.SS',
-    'HSI': '^HSI',
-    'NKY': '^N225',
-    'STOXX': '^STOXX',
+    "USD": "DX-Y.NYB",
+    "US10Y": "^TNX",
+    "Gold": "GC=F",
+    "SPX": "^SPX",
+    "CSI300": "000300.SS",
+    "HSI": "^HSI",
+    "NKY": "^N225",
+    "STOXX": "^STOXX",
 }
 
 
@@ -47,7 +47,7 @@ def _yf_download_with_retry(tickers, **kwargs) -> pd.DataFrame:
                 logger.warning(f"yfinance returned empty data, retrying in {delay}s (attempt {attempt + 1})")
                 time.sleep(delay)
         except Exception as e:
-            is_rate_limit = 'rate' in str(e).lower() or 'too many' in str(e).lower()
+            is_rate_limit = "rate" in str(e).lower() or "too many" in str(e).lower()
             if is_rate_limit and attempt < _YF_MAX_RETRIES - 1:
                 delay = _YF_RETRY_BASE_DELAY * (attempt + 1)
                 logger.warning(f"yfinance rate limited, retrying in {delay}s (attempt {attempt + 1})")
@@ -85,6 +85,7 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
 
     # ── L2/L3: DB-first with incremental yfinance download ──
     from data_pipeline.db import get_conn, init_db
+
     init_db()  # ensure table exists
 
     today_str = dt.date.today().isoformat()
@@ -99,9 +100,7 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
     tickers_needing_download = []
     with get_conn() as conn:
         for t in all_tickers:
-            row = conn.execute(
-                "SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)
-            ).fetchone()
+            row = conn.execute("SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)).fetchone()
             latest = row[0] if row and row[0] else None
             if latest is None or latest < today_str:
                 tickers_needing_download.append(t)
@@ -113,9 +112,7 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
             download_start = range_start
             with get_conn() as conn:
                 for t in tickers_needing_download:
-                    row = conn.execute(
-                        "SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)
-                    ).fetchone()
+                    row = conn.execute("SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)).fetchone()
                     latest = row[0] if row and row[0] else None
                     if latest is None:
                         download_start = range_start
@@ -124,9 +121,7 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
                         download_start = latest
 
             kw = dict(auto_adjust=False, progress=False)
-            yf_data = _yf_download_with_retry(
-                tickers_needing_download, start=download_start, end=today_str, **kw
-            )
+            yf_data = _yf_download_with_retry(tickers_needing_download, start=download_start, end=today_str, **kw)
             if yf_data is not None and not yf_data.empty:
                 close_data = yf_data["Close"]
                 if isinstance(close_data, pd.Series):
@@ -140,7 +135,7 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
                     if t in close_data.columns:
                         series = close_data[t].dropna()
                         for date_idx, val in series.items():
-                            rows.append((t, date_idx.strftime('%Y-%m-%d'), float(val)))
+                            rows.append((t, date_idx.strftime("%Y-%m-%d"), float(val)))
                 if rows:
                     with get_conn() as conn:
                         conn.executemany(
@@ -149,17 +144,19 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
                             rows,
                         )
                         conn.commit()
-                    logger.info("Upserted %d market review rows for %s", len(rows),
-                                [t for t in tickers_needing_download])
+                    logger.info(
+                        "Upserted %d market review rows for %s", len(rows), [t for t in tickers_needing_download]
+                    )
         except Exception as e:
             logger.warning("Market review yfinance download failed: %s", e)
 
     # Read all data from DB
     with get_conn() as conn:
         df = pd.read_sql_query(
-            "SELECT ticker, date, close FROM market_review_prices "
-            "WHERE date >= ? ORDER BY date",
-            conn, params=(range_start,), parse_dates=["date"],
+            "SELECT ticker, date, close FROM market_review_prices WHERE date >= ? ORDER BY date",
+            conn,
+            params=(range_start,),
+            parse_dates=["date"],
         )
 
     if df.empty:
@@ -175,7 +172,7 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
             data.columns = data.columns.droplevel(1)
     else:
         # Pivot from long-format to wide-format
-        data = df.pivot(index='date', columns='ticker', values='close').sort_index().ffill()
+        data = df.pivot(index="date", columns="ticker", values="close").sort_index().ffill()
 
     valid_tickers = [t for t in all_tickers if t in data.columns and data[t].notna().any()]
     if instrument not in valid_tickers:
@@ -206,20 +203,20 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
     data, returns, display_names = _fetch_market_data(instrument, start_date, end_date)
     today = data.index[-1]
     periods = {
-        '1M': today - dt.timedelta(days=30),
-        '1Q': today - dt.timedelta(days=90),
-        'YTD': dt.datetime(today.year, 1, 1),
-        'ETD': data.index[0]
+        "1M": today - dt.timedelta(days=30),
+        "1Q": today - dt.timedelta(days=90),
+        "YTD": dt.datetime(today.year, 1, 1),
+        "ETD": data.index[0],
     }
     results = pd.DataFrame(index=display_names)
-    results['Last Close'] = data.iloc[-1]
+    results["Last Close"] = data.iloc[-1]
     # 计算各周期 return 和 volatility
     for period, start_date in periods.items():
         period_data = data[data.index >= start_date]
         period_returns = returns[returns.index >= start_date]
         volatility = period_returns.std() * np.sqrt(252) * 100
-        results[f'Return ({period})'] = ((period_data.iloc[-1] / period_data.iloc[0]) - 1) * 100
-        results[f'Volatility ({period})'] = volatility
+        results[f"Return ({period})"] = ((period_data.iloc[-1] / period_data.iloc[0]) - 1) * 100
+        results[f"Volatility ({period})"] = volatility
     # ETD return 用极值法，记录极值点日期
     etd_values = []
     etd_dates = []
@@ -227,7 +224,7 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
         pct_change, _, extreme_date = calculate_recent_extreme_change(data[asset])
         etd_values.append(pct_change)
         etd_dates.append(extreme_date)
-    results['Return (ETD)'] = etd_values
+    results["Return (ETD)"] = etd_values
     # 相关性矩阵
     returns.corr()
     for period, start_date in periods.items():
@@ -235,47 +232,47 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
         corr_period = period_returns.corr()
         for asset in display_names:
             if asset == instrument:
-                results.loc[asset, f'Correlation ({period})'] = 1.0
+                results.loc[asset, f"Correlation ({period})"] = 1.0
             else:
-                results.loc[asset, f'Correlation ({period})'] = corr_period.loc[instrument, asset]
+                results.loc[asset, f"Correlation ({period})"] = corr_period.loc[instrument, asset]
     # 格式化所有 return/volatility/correlation 列
     for col in results.columns:
-        if 'Return' in col or 'Volatility' in col:
+        if "Return" in col or "Volatility" in col:
             results[col] = results[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A")
-        elif 'Correlation' in col:
+        elif "Correlation" in col:
             results[col] = results[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
-        elif 'Last Close' in col:
+        elif "Last Close" in col:
             results[col] = results[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
     # 列顺序调整：multiindex，ETD列名用极值点日期
     etd_label = etd_dates[0]
     if pd.notna(etd_label):
-        etd_label_str = pd.to_datetime(etd_label).strftime('%y%b%d').upper()
+        etd_label_str = pd.to_datetime(etd_label).strftime("%y%b%d").upper()
     else:
-        etd_label_str = 'ETD'
+        etd_label_str = "ETD"
     arrays = [
-        ['Last Close'] + ['Return']*4 + ['Volatility']*4 + ['Correlation']*4,
-        [''] + ['1M', '1Q', 'YTD', etd_label_str]*3
+        ["Last Close"] + ["Return"] * 4 + ["Volatility"] * 4 + ["Correlation"] * 4,
+        [""] + ["1M", "1Q", "YTD", etd_label_str] * 3,
     ]
     tuples = list(zip(*arrays, strict=False))
     multi_index = pd.MultiIndex.from_tuples(tuples, names=["Metric", "Period"])
     col_map = {
-        ('Return', '1M'): 'Return (1M)',
-        ('Return', '1Q'): 'Return (1Q)',
-        ('Return', 'YTD'): 'Return (YTD)',
-        ('Return', etd_label_str): 'Return (ETD)',
-        ('Volatility', '1M'): 'Volatility (1M)',
-        ('Volatility', '1Q'): 'Volatility (1Q)',
-        ('Volatility', 'YTD'): 'Volatility (YTD)',
-        ('Volatility', etd_label_str): 'Volatility (ETD)',
-        ('Correlation', '1M'): 'Correlation (1M)',
-        ('Correlation', '1Q'): 'Correlation (1Q)',
-        ('Correlation', 'YTD'): 'Correlation (YTD)',
-        ('Correlation', etd_label_str): 'Correlation (ETD)',
-        ('Last Close', ''): 'Last Close'
+        ("Return", "1M"): "Return (1M)",
+        ("Return", "1Q"): "Return (1Q)",
+        ("Return", "YTD"): "Return (YTD)",
+        ("Return", etd_label_str): "Return (ETD)",
+        ("Volatility", "1M"): "Volatility (1M)",
+        ("Volatility", "1Q"): "Volatility (1Q)",
+        ("Volatility", "YTD"): "Volatility (YTD)",
+        ("Volatility", etd_label_str): "Volatility (ETD)",
+        ("Correlation", "1M"): "Correlation (1M)",
+        ("Correlation", "1Q"): "Correlation (1Q)",
+        ("Correlation", "YTD"): "Correlation (YTD)",
+        ("Correlation", etd_label_str): "Correlation (ETD)",
+        ("Last Close", ""): "Last Close",
     }
     ordered_cols = [col_map.get(t, None) for t in tuples if col_map.get(t, None) in results.columns]
     results = results[ordered_cols]
-    results.columns = multi_index[:len(results.columns)]
+    results.columns = multi_index[: len(results.columns)]
     return results
 
 
@@ -287,7 +284,7 @@ def market_review_timeseries(instrument: str, start_date=None, end_date=None) ->
     """
     data, returns, valid_display = _fetch_market_data(instrument, start_date, end_date)
 
-    dates = data.index.strftime('%Y-%m-%d').tolist()
+    dates = data.index.strftime("%Y-%m-%d").tolist()
 
     def _safe(series):
         return [round(float(x), 4) if pd.notna(x) else None for x in series]
@@ -311,16 +308,17 @@ def market_review_timeseries(instrument: str, start_date=None, end_date=None) ->
 
     today = data.index[-1]
     periods = {
-        "1M": (today - pd.Timedelta(days=30)).strftime('%Y-%m-%d'),
-        "1Q": (today - pd.Timedelta(days=90)).strftime('%Y-%m-%d'),
+        "1M": (today - pd.Timedelta(days=30)).strftime("%Y-%m-%d"),
+        "1Q": (today - pd.Timedelta(days=90)).strftime("%Y-%m-%d"),
         "YTD": f"{today.year}-01-01",
-        "ETD": data.index[0].strftime('%Y-%m-%d'),
+        "ETD": data.index[0].strftime("%Y-%m-%d"),
     }
 
     # Generate fallback summary table (reuses cached data — no extra download)
     try:
         summary_html = market_review(instrument, start_date, end_date).to_html(
-            classes='table table-striped', index=True, escape=False)
+            classes="table table-striped", index=True, escape=False
+        )
     except Exception:
         summary_html = ""
 

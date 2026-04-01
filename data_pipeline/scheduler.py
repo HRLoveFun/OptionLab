@@ -54,12 +54,7 @@ class UpdateScheduler:
                 except Exception as e:
                     logger.exception(f"Monthly correlation update failed for {t}: {e}")
 
-        self.scheduler.add_job(
-            correlation_job,
-            trigger,
-            id="monthly_correlation_update",
-            replace_existing=True
-        )
+        self.scheduler.add_job(correlation_job, trigger, id="monthly_correlation_update", replace_existing=True)
 
         # Start scheduler if not already running
         if not self.scheduler.running:

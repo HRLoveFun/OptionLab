@@ -11,9 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_business_days(start: dt.date, end: dt.date) -> pd.DatetimeIndex:
-    """Return business days (Mon-Fri) index for [start, end).
-
-    """
+    """Return business days (Mon-Fri) index for [start, end)."""
     # Use pandas 'B' frequency which excludes weekends. Holidays are not removed here.
     # pd.date_range with start and end includes the end if it matches the frequency.
     return pd.date_range(start, end, freq="B")
@@ -22,9 +20,9 @@ def _get_business_days(start: dt.date, end: dt.date) -> pd.DatetimeIndex:
 def _flag_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     # Ensure numeric dtype for OHLCV (SQLite may return object dtype)
-    for col in ('open', 'high', 'low', 'close', 'adj_close', 'volume'):
+    for col in ("open", "high", "low", "close", "adj_close", "volume"):
         if col in out.columns:
-            out[col] = pd.to_numeric(out[col], errors='coerce')
+            out[col] = pd.to_numeric(out[col], errors="coerce")
     # Price jumps: difference in Close vs previous Close
     ret = np.log(out["close"]).diff()
     thr = 5 * ret.std(skipna=True)
@@ -35,7 +33,9 @@ def _flag_anomalies(df: pd.DataFrame) -> pd.DataFrame:
     thr_v = 5 * d_lv.std(skipna=True)
     out["vol_anom_flag"] = ((d_lv.abs() > thr_v).astype(int)).values
     # OHLC consistency
-    out["ohlc_inconsistent"] = (~((out["low"] <= out["open"]).fillna(True) & (out["close"] <= out["high"]).fillna(True))).astype(int)
+    out["ohlc_inconsistent"] = (
+        ~((out["low"] <= out["open"]).fillna(True) & (out["close"] <= out["high"]).fillna(True))
+    ).astype(int)
     return out
 
 
@@ -59,23 +59,29 @@ def clean_range(ticker: str, start: dt.date | None = None, end: dt.date | None =
     if df.empty:
         # Create an empty aligned frame with expected columns so subsequent
         # column-based operations work without KeyError.
-        aligned = pd.DataFrame(index=idx, columns=[
-            "ticker", "open", "high", "low", "close", "adj_close", "volume", "provider"
-        ])
+        aligned = pd.DataFrame(
+            index=idx, columns=["ticker", "open", "high", "low", "close", "adj_close", "volume", "provider"]
+        )
     else:
-        df = df.rename(columns={
-            "open": "open",
-            "high": "high",
-            "low": "low",
-            "close": "close",
-            "adj_close": "adj_close",
-            "volume": "volume",
-        })
+        df = df.rename(
+            columns={
+                "open": "open",
+                "high": "high",
+                "low": "low",
+                "close": "close",
+                "adj_close": "adj_close",
+                "volume": "volume",
+            }
+        )
         df.index = pd.to_datetime(df.index).tz_localize(None)
         aligned = df.reindex(idx)
 
-    aligned["is_trading_day"] = aligned[["open", "high", "low", "close", "adj_close", "volume"]].notna().any(axis=1).astype(int)
-    aligned["missing_any"] = aligned[["open", "high", "low", "close", "adj_close", "volume"]].isna().any(axis=1).astype(int)
+    aligned["is_trading_day"] = (
+        aligned[["open", "high", "low", "close", "adj_close", "volume"]].notna().any(axis=1).astype(int)
+    )
+    aligned["missing_any"] = (
+        aligned[["open", "high", "low", "close", "adj_close", "volume"]].isna().any(axis=1).astype(int)
+    )
 
     # Interpolate missing field values within trading days: forward fill for volume only (policy)
     aligned["volume"] = aligned["volume"].ffill()

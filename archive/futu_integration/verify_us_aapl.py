@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Quick verification of US.AAPL futu response."""
+
 import json
 import subprocess
 
 r = subprocess.run(
-    ["curl", "-s", "--max-time", "30",
-     "http://127.0.0.1:5001/api/option_chain?ticker=US.AAPL&source=futu"],
-    capture_output=True, text=True,
+    ["curl", "-s", "--max-time", "30", "http://127.0.0.1:5001/api/option_chain?ticker=US.AAPL&source=futu"],
+    capture_output=True,
+    text=True,
 )
 d = json.loads(r.stdout)
 

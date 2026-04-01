@@ -11,38 +11,40 @@ logger = logging.getLogger(__name__)
 
 
 def _agg_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
-    return (
-        df.resample(rule).agg(
-            open=("open", "first"),
-            high=("high", "max"),
-            low=("low", "min"),
-            close=("close", "last"),
-            adj_close=("adj_close", "last"),
-            volume=("volume", "sum"),
-        )
+    return df.resample(rule).agg(
+        open=("open", "first"),
+        high=("high", "max"),
+        low=("low", "min"),
+        close=("close", "last"),
+        adj_close=("adj_close", "last"),
+        volume=("volume", "sum"),
     )
 
 
 def _features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     # Ensure numeric dtype for OHLCV (SQLite may return object dtype)
-    for col in ('open', 'high', 'low', 'close', 'adj_close', 'volume'):
+    for col in ("open", "high", "low", "close", "adj_close", "volume"):
         if col in out.columns:
-            out[col] = pd.to_numeric(out[col], errors='coerce')
+            out[col] = pd.to_numeric(out[col], errors="coerce")
     out["last_close"] = out["close"].shift(1)
     # 1. Returns
     out["log_return"] = np.log(out["close"]) - np.log(out["close"].shift(1))
-    out["amplitude"] = (np.maximum(out["high"], out["close"].shift(1)) - np.minimum(out["low"], out["close"].shift(1))) / out["close"].shift(1)
+    out["amplitude"] = (
+        np.maximum(out["high"], out["close"].shift(1)) - np.minimum(out["low"], out["close"].shift(1))
+    ) / out["close"].shift(1)
     out["log_hl_spread"] = np.log(out["high"]) - np.log(out["low"])
     # 2. Volatility proxies
     out["parkinson_var"] = (1.0 / (4.0 * np.log(2.0))) * (np.log(out["high"] / out["low"]) ** 2)
-    out["gk_var"] = 0.5 * (np.log(out["high"] / out["low"]) ** 2) - (2 * np.log(2) - 1) * (np.log(out["close"] / out["open"]) ** 2)
+    out["gk_var"] = 0.5 * (np.log(out["high"] / out["low"]) ** 2) - (2 * np.log(2) - 1) * (
+        np.log(out["close"] / out["open"]) ** 2
+    )
     # 3. Volume
     out["log_vol_delta"] = np.log(out["volume"]) - np.log(out["volume"].shift(1))
     out["vol_zscore"] = out["volume"] / out["volume"].rolling(20, min_periods=5).mean()
     # 4. MA and Momentum
     for k in [5, 10, 20, 60, 120, 250]:
-        out[f"ma_{k}"] = out["close"].rolling(k, min_periods=max(2, int(k/2))).mean()
+        out[f"ma_{k}"] = out["close"].rolling(k, min_periods=max(2, int(k / 2))).mean()
     for k in [10, 20, 60]:
         out[f"mom_{k}"] = out["close"] / out["close"].shift(k) - 1.0
     # 5. Oscillation metrics

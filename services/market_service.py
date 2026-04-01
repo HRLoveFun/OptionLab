@@ -7,6 +7,7 @@ from utils.utils import exclusive_month_end
 
 logger = logging.getLogger(__name__)
 
+
 class MarketService:
     """
     Service for market data operations and market review generation.
@@ -21,13 +22,13 @@ class MarketService:
         Returns (is_valid: bool, message: str)
         """
         try:
-            analyzer = MarketAnalyzer(ticker, dt.date.today() - dt.timedelta(days=30), 'D', end_date=None)
+            analyzer = MarketAnalyzer(ticker, dt.date.today() - dt.timedelta(days=30), "D", end_date=None)
             is_valid = analyzer.is_data_valid()
-            message = 'valid_ticker' if is_valid else 'invalid_ticker_or_no_data_available'
+            message = "valid_ticker" if is_valid else "invalid_ticker_or_no_data_available"
             return is_valid, message
         except Exception as e:
             logger.error(f"Error validating ticker {ticker}: {e}")
-            return False, f'error_validating_ticker: {str(e)}'
+            return False, f"error_validating_ticker: {str(e)}"
 
     @staticmethod
     def generate_market_review(form_data):
@@ -37,10 +38,12 @@ class MarketService:
         """
         results = {}
         try:
-            start_d = form_data.get('parsed_start_time')
-            end_exclusive = exclusive_month_end(form_data.get('parsed_end_time'))
-            review_table = market_review(form_data['ticker'], start_d, end_exclusive)
-            results['market_review_table'] = review_table.to_html(classes='table table-striped', index=True, escape=False)
+            start_d = form_data.get("parsed_start_time")
+            end_exclusive = exclusive_month_end(form_data.get("parsed_end_time"))
+            review_table = market_review(form_data["ticker"], start_d, end_exclusive)
+            results["market_review_table"] = review_table.to_html(
+                classes="table table-striped", index=True, escape=False
+            )
         except Exception as e:
             logger.error(f"Error generating market review: {e}", exc_info=True)
         return results

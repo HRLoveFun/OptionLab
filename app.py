@@ -58,13 +58,14 @@ except Exception as e:
 if _scheduler is not None:
     atexit.register(lambda: _scheduler.scheduler.shutdown(wait=False))
 
+
 def parse_tickers(raw: str) -> list[str]:
     """Parse comma/newline separated tickers, deduplicate, max 6.
 
     Accepts both futu-format (US.NVDA) and yahoo-format (NVDA).
     Normalizes all to yahoo format for data pipeline consumption.
     """
-    raw_parts = [t.strip().upper() for t in re.split(r'[,\n]+', raw) if t.strip()]
+    raw_parts = [t.strip().upper() for t in re.split(r"[,\n]+", raw) if t.strip()]
     tickers = []
     for t in raw_parts:
         try:
@@ -77,9 +78,9 @@ def parse_tickers(raw: str) -> list[str]:
     return tickers[:6]
 
 
-def _filter_option_chain(result: dict, max_dte: int = 60,
-                          moneyness_low: float = 0.7, moneyness_high: float = 1.3,
-                          max_contracts: int = 1000) -> dict:
+def _filter_option_chain(
+    result: dict, max_dte: int = 60, moneyness_low: float = 0.7, moneyness_high: float = 1.3, max_contracts: int = 1000
+) -> dict:
     """Filter option chain result by DTE, moneyness range, and total contract count.
 
     If total contracts exceed max_contracts after DTE + moneyness filtering,
@@ -87,9 +88,9 @@ def _filter_option_chain(result: dict, max_dte: int = 60,
     """
     from datetime import datetime
 
-    spot = result.get('spot')
-    chain = result.get('chain', {})
-    expirations = result.get('expirations', [])
+    spot = result.get("spot")
+    chain = result.get("chain", {})
+    expirations = result.get("expirations", [])
 
     today = datetime.now().date()
 
@@ -97,7 +98,7 @@ def _filter_option_chain(result: dict, max_dte: int = 60,
     filtered_exps = []
     for exp in expirations:
         try:
-            exp_date = datetime.strptime(exp, '%Y-%m-%d').date()
+            exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
             dte = (exp_date - today).days
             if 0 <= dte <= max_dte:
                 filtered_exps.append(exp)
@@ -109,9 +110,9 @@ def _filter_option_chain(result: dict, max_dte: int = 60,
         filtered_chain = {exp: chain[exp] for exp in filtered_exps if exp in chain}
         final_exps = [exp for exp in filtered_exps if exp in filtered_chain]
         return {
-            'expirations': final_exps,
-            'chain': filtered_chain,
-            'spot': spot,
+            "expirations": final_exps,
+            "chain": filtered_chain,
+            "spot": spot,
         }
 
     # Step 2: Filter by moneyness range
@@ -125,13 +126,15 @@ def _filter_option_chain(result: dict, max_dte: int = 60,
             low_strike = spot * m_low
             high_strike = spot * m_high
 
-            filtered_calls = [r for r in exp_data.get('calls', [])
-                              if r.get('strike') and low_strike <= r['strike'] <= high_strike]
-            filtered_puts = [r for r in exp_data.get('puts', [])
-                             if r.get('strike') and low_strike <= r['strike'] <= high_strike]
+            filtered_calls = [
+                r for r in exp_data.get("calls", []) if r.get("strike") and low_strike <= r["strike"] <= high_strike
+            ]
+            filtered_puts = [
+                r for r in exp_data.get("puts", []) if r.get("strike") and low_strike <= r["strike"] <= high_strike
+            ]
 
             if filtered_calls or filtered_puts:
-                filtered_chain[exp] = {'calls': filtered_calls, 'puts': filtered_puts}
+                filtered_chain[exp] = {"calls": filtered_calls, "puts": filtered_puts}
                 total_count += len(filtered_calls) + len(filtered_puts)
         return filtered_chain, total_count
 
@@ -152,20 +155,20 @@ def _filter_option_chain(result: dict, max_dte: int = 60,
     final_exps = [exp for exp in filtered_exps if exp in filtered_chain]
 
     return {
-        'expirations': final_exps,
-        'chain': filtered_chain,
-        'spot': spot,
+        "expirations": final_exps,
+        "chain": filtered_chain,
+        "spot": spot,
     }
 
 
 def _run_single_ticker_analysis(ticker: str, form_data: dict) -> dict:
     """Run full analysis pipeline for one ticker (designed for ThreadPoolExecutor)."""
-    single_form = {**form_data, 'ticker': ticker}
+    single_form = {**form_data, "ticker": ticker}
     try:
         analysis_results = AnalysisService.generate_complete_analysis(single_form)
     except Exception as e:
         logger.error(f"Analysis failed for {ticker}: {e}", exc_info=True)
-        analysis_results = {'error': str(e)}
+        analysis_results = {"error": str(e)}
 
     # Options chain analysis (non-blocking per ticker)
     try:
@@ -177,7 +180,7 @@ def _run_single_ticker_analysis(ticker: str, form_data: dict) -> dict:
     return analysis_results
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def index():
     """
     Main dashboard route — supports multi-ticker analysis.
@@ -185,27 +188,26 @@ def index():
     POST: Parse tickers, run analysis per ticker, render results.
     """
     try:
-        if request.method == 'POST':
+        if request.method == "POST":
             # Extract and validate form data
             form_data = FormService.extract_form_data(request)
             validation_error = ValidationService.validate_input_data(form_data)
 
             if validation_error:
-                return render_template('index.html', error=validation_error)
+                return render_template("index.html", error=validation_error)
 
             # Parse multi-ticker input
-            tickers_raw = form_data.get('ticker', '')
+            tickers_raw = form_data.get("ticker", "")
             tickers = parse_tickers(tickers_raw)
             if not tickers:
-                return render_template('index.html', error='Please enter at least one ticker symbol.')
+                return render_template("index.html", error="Please enter at least one ticker symbol.")
 
             # Concurrent analysis for each ticker
             results_by_ticker = {}
             max_workers = min(len(tickers), 4)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
-                    executor.submit(_run_single_ticker_analysis, ticker, form_data): ticker
-                    for ticker in tickers
+                    executor.submit(_run_single_ticker_analysis, ticker, form_data): ticker for ticker in tickers
                 }
                 for future in as_completed(futures):
                     ticker = futures[future]
@@ -213,15 +215,13 @@ def index():
                         results_by_ticker[ticker] = future.result()
                     except Exception as e:
                         logger.error(f"Ticker {ticker} analysis exception: {e}")
-                        results_by_ticker[ticker] = {'error': str(e)}
+                        results_by_ticker[ticker] = {"error": str(e)}
 
             # Generate summary analysis (multi-ticker only)
             summary_data = None
             if len(tickers) > 1:
                 try:
-                    summary_data = AnalysisService.generate_summary_analysis(
-                        tickers, results_by_ticker
-                    )
+                    summary_data = AnalysisService.generate_summary_analysis(tickers, results_by_ticker)
                 except Exception as e:
                     logger.warning(f"Summary analysis failed: {e}")
 
@@ -231,23 +231,22 @@ def index():
             template_data = {
                 **form_data,
                 **first_result,
-                'ticker': first_ticker,
-                'tickers': tickers,
-                'tickers_raw': ', '.join(tickers),
-                'results_by_ticker': results_by_ticker,
-                'summary_data': summary_data,
+                "ticker": first_ticker,
+                "tickers": tickers,
+                "tickers_raw": ", ".join(tickers),
+                "results_by_ticker": results_by_ticker,
+                "summary_data": summary_data,
             }
 
-            return render_template('index.html', **template_data)
+            return render_template("index.html", **template_data)
 
-        return render_template('index.html',
+        return render_template(
+            "index.html",
             ticker=DEFAULT_TICKER,
             tickers=[DEFAULT_TICKER],
             tickers_raw=DEFAULT_TICKER,
-            start_time=(
-                lambda today: f"{today.year - 5}-{today.month:02d}"
-            )(dt.date.today()),
-            end_time='',
+            start_time=(lambda today: f"{today.year - 5}-{today.month:02d}")(dt.date.today()),
+            end_time="",
             frequency=DEFAULT_FREQUENCY,
             risk_threshold=DEFAULT_RISK_THRESHOLD,
             rolling_window=DEFAULT_ROLLING_WINDOW,
@@ -256,10 +255,10 @@ def index():
 
     except Exception as e:
         logger.error(f"Unexpected error in main route: {e}", exc_info=True)
-        return render_template('index.html',
-            error=f"An unexpected error occurred: {str(e)}. Please try again.")
+        return render_template("index.html", error=f"An unexpected error occurred: {str(e)}. Please try again.")
 
-@app.route('/api/option_chain', methods=['GET'])
+
+@app.route("/api/option_chain", methods=["GET"])
 def option_chain():
     """
     API endpoint to fetch live option chain data via Yahoo Finance.
@@ -269,9 +268,9 @@ def option_chain():
     """
     import yfinance as yf
 
-    ticker_sym = request.args.get('ticker', '').strip().upper()
+    ticker_sym = request.args.get("ticker", "").strip().upper()
     if not ticker_sym:
-        return jsonify({'error': 'ticker is required'}), 400
+        return jsonify({"error": "ticker is required"}), 400
 
     # Normalize ticker: accept futu-format (US.NVDA) or yahoo-format (NVDA)
     try:
@@ -280,10 +279,10 @@ def option_chain():
         pass  # keep as-is
 
     # Option filtering parameters
-    max_dte = int(request.args.get('max_dte', 45))
-    moneyness_low = float(request.args.get('moneyness_low', 0.7))
-    moneyness_high = float(request.args.get('moneyness_high', 1.3))
-    max_contracts = int(request.args.get('max_contracts', 1000))
+    max_dte = int(request.args.get("max_dte", 45))
+    moneyness_low = float(request.args.get("moneyness_low", 0.7))
+    moneyness_high = float(request.args.get("moneyness_high", 1.3))
+    max_contracts = int(request.args.get("max_contracts", 1000))
 
     def clean(v):
         """Convert NaN / inf to None for JSON serialisation."""
@@ -300,17 +299,15 @@ def option_chain():
         tkr = yf.Ticker(ticker_sym)
         expirations = list(tkr.options)
         if not expirations:
-            return jsonify({'error': f'No options available for {ticker_sym}'}), 404
+            return jsonify({"error": f"No options available for {ticker_sym}"}), 404
 
-        CALL_COLS = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest',
-                     'impliedVolatility', 'inTheMoney']
-        PUT_COLS  = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest',
-                     'impliedVolatility', 'inTheMoney']
+        CALL_COLS = ["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility", "inTheMoney"]
+        PUT_COLS = ["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility", "inTheMoney"]
 
         # Current price for ATM highlighting and liquidity scoring
         try:
             fi = tkr.fast_info
-            price = getattr(fi, 'last_price', None) or getattr(fi, 'regularMarketPrice', None)
+            price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
             spot = clean(price)
         except Exception:
             spot = None
@@ -338,61 +335,61 @@ def option_chain():
                 if m < 0.75 or m > 1.35:
                     issues.append("deep OTM")
             if len(issues) == 0:
-                return 'GOOD', ''
+                return "GOOD", ""
             elif len(issues) == 1:
-                return 'FAIR', issues[0]
+                return "FAIR", issues[0]
             else:
-                return 'AVOID', ' | '.join(issues[:2])
+                return "AVOID", " | ".join(issues[:2])
 
         chain_data = {}
         for exp in expirations:
             opt = tkr.option_chain(exp)
-            calls_df = opt.calls[CALL_COLS].sort_values('strike') if hasattr(opt, 'calls') else None
-            puts_df  = opt.puts[PUT_COLS].sort_values('strike')  if hasattr(opt, 'puts')  else None
+            calls_df = opt.calls[CALL_COLS].sort_values("strike") if hasattr(opt, "calls") else None
+            puts_df = opt.puts[PUT_COLS].sort_values("strike") if hasattr(opt, "puts") else None
 
             def df_to_records(df):
                 if df is None or df.empty:
                     return []
                 rows = []
                 for _, r in df.iterrows():
-                    strike = clean(r.get('strike'))
-                    bid_   = clean(r.get('bid'))
-                    ask_   = clean(r.get('ask'))
-                    last_  = clean(r.get('lastPrice'))
-                    oi_    = clean(r.get('openInterest'))
-                    vol_   = clean(r.get('volume'))
-                    score, reason = _liquidity_score(
-                        strike or 0, bid_, ask_, last_, oi_, vol_, spot
+                    strike = clean(r.get("strike"))
+                    bid_ = clean(r.get("bid"))
+                    ask_ = clean(r.get("ask"))
+                    last_ = clean(r.get("lastPrice"))
+                    oi_ = clean(r.get("openInterest"))
+                    vol_ = clean(r.get("volume"))
+                    score, reason = _liquidity_score(strike or 0, bid_, ask_, last_, oi_, vol_, spot)
+                    rows.append(
+                        {
+                            "strike": strike,
+                            "lastPrice": last_,
+                            "bid": bid_,
+                            "ask": ask_,
+                            "volume": vol_,
+                            "openInterest": oi_,
+                            "iv": clean((r.get("impliedVolatility") or 0) * 100),
+                            "itm": bool(r.get("inTheMoney", False)),
+                            "liq_score": score,
+                            "liq_reason": reason,
+                        }
                     )
-                    rows.append({
-                        'strike':        strike,
-                        'lastPrice':     last_,
-                        'bid':           bid_,
-                        'ask':           ask_,
-                        'volume':        vol_,
-                        'openInterest':  oi_,
-                        'iv':            clean((r.get('impliedVolatility') or 0) * 100),
-                        'itm':           bool(r.get('inTheMoney', False)),
-                        'liq_score':     score,
-                        'liq_reason':    reason,
-                    })
                 return rows
 
             chain_data[exp] = {
-                'calls': df_to_records(calls_df),
-                'puts':  df_to_records(puts_df),
+                "calls": df_to_records(calls_df),
+                "puts": df_to_records(puts_df),
             }
 
-        result = {'expirations': expirations, 'chain': chain_data, 'spot': spot}
+        result = {"expirations": expirations, "chain": chain_data, "spot": spot}
         result = _filter_option_chain(result, max_dte, moneyness_low, moneyness_high, max_contracts)
         return jsonify(result)
 
     except Exception as e:
         logger.error(f"Error fetching option chain for {ticker_sym}: {e}", exc_info=True)
-        return jsonify({'error': f'获取期权链失败: {str(e)}'}), 500
+        return jsonify({"error": f"获取期权链失败: {str(e)}"}), 500
 
 
-@app.route('/api/validate_ticker', methods=['POST'])
+@app.route("/api/validate_ticker", methods=["POST"])
 def validate_ticker():
     """
     API endpoint to validate ticker symbol.
@@ -401,26 +398,23 @@ def validate_ticker():
     """
     try:
         data = request.get_json()
-        raw_ticker = data.get('ticker', '').upper()
+        raw_ticker = data.get("ticker", "").upper()
 
         if not raw_ticker:
-            return jsonify({'valid': False, 'message': 'Please enter a ticker symbol'})
+            return jsonify({"valid": False, "message": "Please enter a ticker symbol"})
 
         yahoo_ticker, _futu = normalize_ticker(raw_ticker)
         is_valid, message = MarketService.validate_ticker(yahoo_ticker)
 
-        return jsonify({
-            'valid': is_valid,
-            'message': message
-        })
+        return jsonify({"valid": is_valid, "message": message})
 
     except Exception as e:
         logger.error(f"Error validating ticker: {e}")
-        return jsonify({'valid': False, 'message': f'Error validating ticker: {str(e)}'})
+        return jsonify({"valid": False, "message": f"Error validating ticker: {str(e)}"})
 
 
 # ── Module 0: Bulk ticker validation ──────────────────────────────
-@app.route('/api/validate_tickers', methods=['POST'])
+@app.route("/api/validate_tickers", methods=["POST"])
 def validate_tickers_bulk():
     """Validate multiple tickers at once. Returns {status, results: {TICKER: {valid, price, message}}}.
 
@@ -428,7 +422,7 @@ def validate_tickers_bulk():
     Results are keyed by the original input ticker for frontend mapping.
     """
     data = request.get_json(silent=True) or {}
-    tickers = data.get('tickers', [])
+    tickers = data.get("tickers", [])
     results = {}
     for raw_ticker in tickers[:10]:
         try:
@@ -438,9 +432,10 @@ def validate_tickers_bulk():
             if is_valid:
                 try:
                     import yfinance as yf
+
                     yf_throttle()
                     info = yf.Ticker(yahoo_ticker).fast_info
-                    price = float(info.get('lastPrice', 0) or info.get('regularMarketPrice', 0))
+                    price = float(info.get("lastPrice", 0) or info.get("regularMarketPrice", 0))
                 except Exception:
                     pass
             results[raw_ticker] = {"valid": is_valid, "price": price, "message": message}
@@ -454,11 +449,11 @@ _option_chain_cache: dict = {}
 CACHE_TTL_MINUTES = 15
 
 
-@app.route('/api/preload_option_chain', methods=['POST'])
+@app.route("/api/preload_option_chain", methods=["POST"])
 def preload_option_chain():
     """Pre-load option chain for Position module dropdowns."""
     data = request.get_json(silent=True) or {}
-    raw_ticker = data.get('ticker', '').strip().upper()
+    raw_ticker = data.get("ticker", "").strip().upper()
     if not raw_ticker:
         return jsonify({"status": "error", "message": "No ticker provided"})
 
@@ -470,38 +465,41 @@ def preload_option_chain():
 
     cached = _option_chain_cache.get(ticker)
     if cached:
-        age = (dt.datetime.now() - cached['ts']).total_seconds() / 60
+        age = (dt.datetime.now() - cached["ts"]).total_seconds() / 60
         if age < CACHE_TTL_MINUTES:
-            return jsonify({"status": "ok", **cached['data']})
+            return jsonify({"status": "ok", **cached["data"]})
 
     try:
         from core.options_chain_analyzer import OptionsChainAnalyzer, _dte
+
         analyzer = OptionsChainAnalyzer(ticker)
         chain_out = {}
         for exp in analyzer.expiries:
             if exp not in analyzer.chain:
                 continue
-            calls_df = analyzer.chain[exp]['calls']
-            puts_df = analyzer.chain[exp]['puts']
+            calls_df = analyzer.chain[exp]["calls"]
+            puts_df = analyzer.chain[exp]["puts"]
 
             def df_to_list(df, exp=exp):
                 result = []
                 for _, row in df.iterrows():
-                    bid = float(row.get('bid', 0) or 0)
-                    ask = float(row.get('ask', 0) or 0)
-                    mid = (bid + ask) / 2 if bid > 0 and ask > 0 else float(row.get('lastPrice', 0) or 0)
-                    result.append({
-                        "strike": float(row['strike']),
-                        "bid": round(bid, 2),
-                        "ask": round(ask, 2),
-                        "mid": round(mid, 2),
-                        "last": round(float(row.get('lastPrice', 0) or 0), 2),
-                        "iv": round(float(row.get('impliedVolatility', 0) or 0), 4),
-                        "iv_pct": round(float(row.get('impliedVolatility', 0) or 0) * 100, 1),
-                        "oi": int(row.get('openInterest', 0) or 0),
-                        "volume": int(row.get('volume', 0) or 0),
-                        "dte": _dte(exp),
-                    })
+                    bid = float(row.get("bid", 0) or 0)
+                    ask = float(row.get("ask", 0) or 0)
+                    mid = (bid + ask) / 2 if bid > 0 and ask > 0 else float(row.get("lastPrice", 0) or 0)
+                    result.append(
+                        {
+                            "strike": float(row["strike"]),
+                            "bid": round(bid, 2),
+                            "ask": round(ask, 2),
+                            "mid": round(mid, 2),
+                            "last": round(float(row.get("lastPrice", 0) or 0), 2),
+                            "iv": round(float(row.get("impliedVolatility", 0) or 0), 4),
+                            "iv_pct": round(float(row.get("impliedVolatility", 0) or 0) * 100, 1),
+                            "oi": int(row.get("openInterest", 0) or 0),
+                            "volume": int(row.get("volume", 0) or 0),
+                            "dte": _dte(exp),
+                        }
+                    )
                 return result
 
             chain_out[exp] = {
@@ -524,19 +522,20 @@ def preload_option_chain():
 
 
 # ── Module 3: Portfolio analysis  ─────────────────────────────────
-@app.route('/api/portfolio_analysis', methods=['POST'])
+@app.route("/api/portfolio_analysis", methods=["POST"])
 def portfolio_analysis():
     """Analyse a multi-leg option portfolio."""
     data = request.get_json(silent=True) or {}
-    positions = data.get('positions', [])
-    account_size = data.get('account_size')
-    max_risk_pct = data.get('max_risk_pct', 2.0)
+    positions = data.get("positions", [])
+    account_size = data.get("account_size")
+    max_risk_pct = data.get("max_risk_pct", 2.0)
 
     if not positions:
         return jsonify({"status": "error", "message": "No positions provided"})
 
     try:
         from services.portfolio_analysis_service import PortfolioAnalysisService
+
         result = PortfolioAnalysisService.run(positions, account_size, max_risk_pct)
         return jsonify(result)
     except Exception as e:
@@ -545,12 +544,12 @@ def portfolio_analysis():
 
 
 # ── Module 4A: Market Review time-series ──────────────────────────
-@app.route('/api/market_review_ts', methods=['POST'])
+@app.route("/api/market_review_ts", methods=["POST"])
 def market_review_ts():
     """Return time-series data for interactive Market Review chart."""
     data = request.get_json(silent=True) or {}
-    raw_ticker = data.get('ticker', '').strip().upper()
-    start_date = data.get('start_date')
+    raw_ticker = data.get("ticker", "").strip().upper()
+    start_date = data.get("start_date")
     if not raw_ticker:
         return jsonify({"status": "error", "message": "No ticker provided"})
     try:
@@ -559,6 +558,7 @@ def market_review_ts():
         ticker = raw_ticker
     try:
         from core.market_review import market_review_timeseries
+
         result = market_review_timeseries(ticker, start_date=start_date)
         return jsonify({"status": "ok", **result})
     except Exception as e:
@@ -567,12 +567,12 @@ def market_review_ts():
 
 
 # ── Module 4B: Odds with vol context ─────────────────────────────
-@app.route('/api/odds_with_vol', methods=['POST'])
+@app.route("/api/odds_with_vol", methods=["POST"])
 def odds_with_vol():
     """Return odds data enriched with implied realized vol vs ATM IV."""
     data = request.get_json(silent=True) or {}
-    raw_ticker = data.get('ticker', '').strip().upper()
-    target_pct = float(data.get('target_pct', 105))
+    raw_ticker = data.get("ticker", "").strip().upper()
+    target_pct = float(data.get("target_pct", 105))
     if not raw_ticker:
         return jsonify({"status": "error", "message": "No ticker provided"})
     try:
@@ -581,10 +581,13 @@ def odds_with_vol():
         ticker = raw_ticker
     try:
         from core.options_chain_analyzer import OptionsChainAnalyzer, get_odds_with_vol_context
+
         analyzer = OptionsChainAnalyzer(ticker)
         result = get_odds_with_vol_context(
-            spot=analyzer.spot, target_pct=target_pct,
-            chain=analyzer.chain, expiries=analyzer.expiries,
+            spot=analyzer.spot,
+            target_pct=target_pct,
+            chain=analyzer.chain,
+            expiries=analyzer.expiries,
         )
         return jsonify({"status": "ok", **result})
     except Exception as e:
@@ -593,12 +596,13 @@ def odds_with_vol():
 
 
 # ── Module 5: Put Option Decision Game ────────────────────────────
-@app.route('/api/game', methods=['POST'])
+@app.route("/api/game", methods=["POST"])
 def game():
     """Run the put-option selection decision process."""
     data = request.get_json(silent=True) or {}
     try:
         from services.game_service import GameService
+
         result = GameService.run(data)
         return jsonify(result)
     except Exception as e:

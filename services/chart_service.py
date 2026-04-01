@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
+
 class ChartService:
     """Service for generating charts and visualizations"""
 
@@ -14,7 +15,7 @@ class ChartService:
         """Convert matplotlib figure to base64 string"""
         try:
             buffer = io.BytesIO()
-            fig.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            fig.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
             buffer.seek(0)
             plot_data = buffer.getvalue()
             buffer.close()

@@ -32,16 +32,16 @@ class OptionsChainService:
             oc_key_metrics       – HTML str | None
         """
         result = {
-            'oc_snapshot':           None,
-            'oc_iv_smile':           None,
-            'oc_iv_term_structure':  None,
-            'oc_iv_surface':         None,
-            'oc_skew_analysis':      None,
-            'oc_oi_volume':          None,
-            'oc_pcr_summary':        None,
-            'oc_expected_move':      None,
-            'oc_key_metrics':        None,
-            'oc_vol_premium':        None,
+            "oc_snapshot": None,
+            "oc_iv_smile": None,
+            "oc_iv_term_structure": None,
+            "oc_iv_surface": None,
+            "oc_skew_analysis": None,
+            "oc_oi_volume": None,
+            "oc_pcr_summary": None,
+            "oc_expected_move": None,
+            "oc_key_metrics": None,
+            "oc_vol_premium": None,
         }
 
         # --- Initialise analyzer (fetches chain on construction) ----------
@@ -55,58 +55,58 @@ class OptionsChainService:
 
         # --- Snapshot summary -------------------------------------------
         try:
-            result['oc_snapshot'] = analyzer.get_snapshot_summary()
+            result["oc_snapshot"] = analyzer.get_snapshot_summary()
         except Exception as e:
             logger.warning(f"get_snapshot_summary failed: {e}")
 
         # --- IV Smile (nearest expiry) ------------------------------------
         if nearest:
             try:
-                result['oc_iv_smile'] = analyzer.plot_iv_smile(nearest)
+                result["oc_iv_smile"] = analyzer.plot_iv_smile(nearest)
             except Exception as e:
                 logger.warning(f"plot_iv_smile failed: {e}")
 
         # --- IV Term Structure --------------------------------------------
         try:
-            result['oc_iv_term_structure'] = analyzer.plot_iv_term_structure()
+            result["oc_iv_term_structure"] = analyzer.plot_iv_term_structure()
         except Exception as e:
             logger.warning(f"plot_iv_term_structure failed: {e}")
 
         # --- IV Surface ---------------------------------------------------
         try:
-            result['oc_iv_surface'] = analyzer.plot_iv_surface()
+            result["oc_iv_surface"] = analyzer.plot_iv_surface()
         except Exception as e:
             logger.warning(f"plot_iv_surface failed: {e}")
 
         # --- Skew Analysis (nearest expiry) -------------------------------
         if nearest:
             try:
-                result['oc_skew_analysis'] = analyzer.plot_skew_analysis(nearest)
+                result["oc_skew_analysis"] = analyzer.plot_skew_analysis(nearest)
             except Exception as e:
                 logger.warning(f"plot_skew_analysis failed: {e}")
 
         # --- OI / Volume Profile (nearest expiry) -------------------------
         if nearest:
             try:
-                result['oc_oi_volume'] = analyzer.plot_oi_volume_profile(nearest)
+                result["oc_oi_volume"] = analyzer.plot_oi_volume_profile(nearest)
             except Exception as e:
                 logger.warning(f"plot_oi_volume_profile failed: {e}")
 
         # --- PCR Summary --------------------------------------------------
         try:
-            result['oc_pcr_summary'] = analyzer.plot_pcr_summary()
+            result["oc_pcr_summary"] = analyzer.plot_pcr_summary()
         except Exception as e:
             logger.warning(f"plot_pcr_summary failed: {e}")
 
         # --- Expected Move Table ------------------------------------------
         try:
-            result['oc_expected_move'] = analyzer.get_expected_move_table()
+            result["oc_expected_move"] = analyzer.get_expected_move_table()
         except Exception as e:
             logger.warning(f"get_expected_move_table failed: {e}")
 
         # --- Key Metrics Table --------------------------------------------
         try:
-            result['oc_key_metrics'] = analyzer.get_key_metrics_table()
+            result["oc_key_metrics"] = analyzer.get_key_metrics_table()
         except Exception as e:
             logger.warning(f"get_key_metrics_table failed: {e}")
 
@@ -115,20 +115,21 @@ class OptionsChainService:
             import datetime as dt
 
             from core.price_dynamic import PriceDynamic
+
             pd_obj = PriceDynamic(ticker, start_date=dt.date.today() - dt.timedelta(days=365))
             if pd_obj.is_valid():
                 # Get nearest-expiry ATM IV
                 atm_iv = None
                 nearest_exp = analyzer.expiries[0] if analyzer.expiries else None
                 if nearest_exp and nearest_exp in analyzer.chain:
-                    puts = analyzer.chain[nearest_exp]['puts'].dropna(subset=['impliedVolatility'])
+                    puts = analyzer.chain[nearest_exp]["puts"].dropna(subset=["impliedVolatility"])
                     if not puts.empty:
-                        idx = (puts['strike'] - analyzer.spot).abs().idxmin()
-                        atm_iv = float(puts.loc[idx, 'impliedVolatility']) * 100
+                        idx = (puts["strike"] - analyzer.spot).abs().idxmin()
+                        atm_iv = float(puts.loc[idx, "impliedVolatility"]) * 100
 
                 vol_ctx = pd_obj.build_vol_premium_context(atm_iv)
                 if vol_ctx:
-                    result['oc_vol_premium'] = vol_ctx
+                    result["oc_vol_premium"] = vol_ctx
         except Exception as e:
             logger.warning(f"Vol premium context failed: {e}")
 
