@@ -37,7 +37,7 @@ class TestGetConn:
         with get_conn(db) as conn:
             conn.execute("SELECT 1")
         # After exiting context, connection should be closed
-        with pytest.raises(sqlite3.OperationalError):
+        with pytest.raises(sqlite3.ProgrammingError):
             conn.execute("SELECT 1")
 
 
