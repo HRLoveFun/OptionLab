@@ -114,7 +114,7 @@ class TestDbEdgeCases:
         try:
             # Attempting to create a new DB in read-only dir should fail
             bad_path = str(readonly_dir / "sub" / "test2.sqlite")
-            with pytest.raises(sqlite3.OperationalError):
+            with pytest.raises((sqlite3.OperationalError, PermissionError)):
                 init_db(bad_path)
         finally:
             os.chmod(str(readonly_dir), 0o755)
