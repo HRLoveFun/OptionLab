@@ -267,14 +267,12 @@ body {
 
 .form-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 1rem 1.25rem;
     padding: 1.25rem;
 }
 
-.horizon-group {
-    grid-column: span 3;
-}
+/* Time Horizon compact layout - no longer needed as separate styling */
 
 /* ── Form Fields ── */
 .form-group {
@@ -332,6 +330,39 @@ body {
 .to-separator {
     color: var(--slate-400);
     font-size: .75rem;
+    flex-shrink: 0;
+}
+
+/* Compact range input for Time Horizon */
+.compact-range-input {
+    display: flex;
+    align-items: center;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    overflow: hidden;
+}
+
+.compact-range-input input {
+    flex: 1;
+    border: none;
+    padding: .55rem .5rem;
+    font-size: .875rem;
+    font-family: var(--font);
+    background: transparent;
+    color: var(--slate-900);
+    outline: none;
+    min-width: 0;
+}
+
+.compact-range-input input:focus {
+    background: var(--blue-light);
+}
+
+.compact-range-input .range-separator {
+    color: var(--slate-400);
+    font-size: .75rem;
+    padding: 0 .25rem;
     flex-shrink: 0;
 }
 
@@ -779,9 +810,7 @@ body {
         grid-template-columns: 1fr 1fr;
     }
 
-    .horizon-group {
-        grid-column: span 2;
-    }
+    /* Responsive layout - 2 columns on tablet */
 }
 
 @media (max-width: 768px) {
@@ -812,9 +841,7 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .horizon-group {
-        grid-column: span 1;
-    }
+    /* Responsive layout - 1 column on mobile */
 
     .horizon-fields {
         flex-direction: column;
