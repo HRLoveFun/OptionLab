@@ -12,9 +12,9 @@ from .processing import process_frequencies
 
 logger = logging.getLogger(__name__)
 
-_update_locks: dict = {}   # ticker -> last_update_timestamp (monotonic)
+_update_locks: dict = {}  # ticker -> last_update_timestamp (monotonic)
 _update_lock_mutex = threading.Lock()
-_UPDATE_COOLDOWN = 60      # same ticker: at most one write per 60 seconds
+_UPDATE_COOLDOWN = 60  # same ticker: at most one write per 60 seconds
 
 # ── TTL cache for DB query results ────────────────────────────────
 _QUERY_CACHE_TTL = 60  # seconds
@@ -140,7 +140,7 @@ class DataService:
 
     @staticmethod
     def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> pd.DataFrame:
-        start = start or (dt.date.today() - dt.timedelta(days=365*5))
+        start = start or (dt.date.today() - dt.timedelta(days=365 * 5))
         end = end or dt.date.today()
         DataService.manual_update(ticker, days=7)  # manual update on access
         cache_key = (ticker, "clean", str(start), str(end))
@@ -155,8 +155,10 @@ class DataService:
         return df
 
     @staticmethod
-    def get_processed(ticker: str, frequency: str = "D", start: dt.date | None = None, end: dt.date | None = None) -> pd.DataFrame:
-        start = start or (dt.date.today() - dt.timedelta(days=365*5))
+    def get_processed(
+        ticker: str, frequency: str = "D", start: dt.date | None = None, end: dt.date | None = None
+    ) -> pd.DataFrame:
+        start = start or (dt.date.today() - dt.timedelta(days=365 * 5))
         end = end or dt.date.today()
         DataService.manual_update(ticker, days=7)
         cache_key = (ticker, "processed", frequency, str(start), str(end))
@@ -198,12 +200,11 @@ class DataService:
         """
         init_db()
         df = fetch_df(
-            "SELECT close FROM clean_prices WHERE ticker=? AND close IS NOT NULL "
-            "ORDER BY date DESC LIMIT 1",
+            "SELECT close FROM clean_prices WHERE ticker=? AND close IS NOT NULL ORDER BY date DESC LIMIT 1",
             (ticker,),
         )
         if not df.empty:
-            val = df.iloc[0]['close'] if 'close' in df.columns else df.iloc[0, 0]
+            val = df.iloc[0]["close"] if "close" in df.columns else df.iloc[0, 0]
             try:
                 return float(val)
             except (TypeError, ValueError):
@@ -214,6 +215,7 @@ class DataService:
             import yfinance as yf
 
             from utils.utils import yf_throttle
+
             yf_throttle()
             price = yf.Ticker(ticker).fast_info.last_price
             if price and price > 0:

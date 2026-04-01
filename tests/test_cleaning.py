@@ -1,4 +1,5 @@
 """Tests for data_pipeline/cleaning.py — anomaly flags and business-day alignment."""
+
 import datetime as dt
 
 import numpy as np
@@ -34,13 +35,15 @@ class TestFlagAnomalies:
         n = len(closes)
         if volumes is None:
             volumes = [1_000_000] * n
-        return pd.DataFrame({
-            "open": closes,
-            "high": np.array(closes) + 1,
-            "low": np.array(closes) - 1,
-            "close": closes,
-            "volume": volumes,
-        })
+        return pd.DataFrame(
+            {
+                "open": closes,
+                "high": np.array(closes) + 1,
+                "low": np.array(closes) - 1,
+                "close": closes,
+                "volume": volumes,
+            }
+        )
 
     def test_no_anomalies_in_smooth_data(self):
         df = self._make_df(None, n=100)
@@ -57,12 +60,14 @@ class TestFlagAnomalies:
 
     def test_ohlc_inconsistent_detected(self):
         # Low is above close → inconsistent
-        df = pd.DataFrame({
-            "open": [100, 100],
-            "high": [105, 105],
-            "low": [103, 103],   # low > close
-            "close": [101, 101],
-            "volume": [1e6, 1e6],
-        })
+        df = pd.DataFrame(
+            {
+                "open": [100, 100],
+                "high": [105, 105],
+                "low": [103, 103],  # low > close
+                "close": [101, 101],
+                "volume": [1e6, 1e6],
+            }
+        )
         flagged = _flag_anomalies(df)
         assert flagged["ohlc_inconsistent"].sum() > 0

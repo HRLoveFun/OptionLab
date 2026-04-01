@@ -13,6 +13,7 @@ from utils.ticker_utils import (
 
 # ── to_futu_ticker ──────────────────────────────────────────────
 
+
 class TestToFutuTicker:
     """Tests for to_futu_ticker()."""
 
@@ -59,6 +60,7 @@ class TestToFutuTicker:
 
 
 # ── from_futu_ticker ────────────────────────────────────────────
+
 
 class TestFromFutuTicker:
     """Tests for from_futu_ticker()."""
@@ -109,17 +111,21 @@ class TestFromFutuTicker:
 
 # ── round-trip ──────────────────────────────────────────────────
 
+
 class TestRoundTrip:
     """Verify bidirectional conversion is consistent."""
 
-    @pytest.mark.parametrize("symbol,market", [
-        ("AAPL", "US"),
-        ("SPY", "US"),
-        ("00700", "HK"),
-        ("02800", "HK"),
-        ("600519", "SH"),
-        ("000001", "SZ"),
-    ])
+    @pytest.mark.parametrize(
+        "symbol,market",
+        [
+            ("AAPL", "US"),
+            ("SPY", "US"),
+            ("00700", "HK"),
+            ("02800", "HK"),
+            ("600519", "SH"),
+            ("000001", "SZ"),
+        ],
+    )
     def test_round_trip(self, symbol: str, market: str):
         futu = to_futu_ticker(symbol, market)
         got_symbol, got_market = from_futu_ticker(futu)
@@ -128,6 +134,7 @@ class TestRoundTrip:
 
 
 # ── is_futu_format ──────────────────────────────────────────────
+
 
 class TestIsFutuFormat:
     """Tests for is_futu_format()."""
@@ -159,6 +166,7 @@ class TestIsFutuFormat:
 
 # ── futu_to_yahoo ───────────────────────────────────────────────
 
+
 class TestFutuToYahoo:
     """Tests for futu_to_yahoo()."""
 
@@ -186,6 +194,7 @@ class TestFutuToYahoo:
 
 
 # ── yahoo_to_futu ───────────────────────────────────────────────
+
 
 class TestYahooToFutu:
     """Tests for yahoo_to_futu()."""
@@ -215,6 +224,7 @@ class TestYahooToFutu:
 
 
 # ── normalize_ticker ────────────────────────────────────────────
+
 
 class TestNormalizeTicker:
     """Tests for normalize_ticker()."""

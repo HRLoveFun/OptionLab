@@ -12,6 +12,7 @@ Features:
 - fcntl file locking for concurrent-safe tracker updates
 - 7-day escalation cooldown to avoid repeated suggestions
 """
+
 import fcntl
 import json
 import re
@@ -88,19 +89,19 @@ def classify_failure(error_text: str, classifier: dict[str, str]) -> str:
 def extract_failures(output: str, classifier: dict[str, str]) -> list[dict]:
     """Extract failure info from pytest output."""
     failures = []
-    for match in re.finditer(
-        r"FAILED\s+(tests/\S+)(?:\s+-\s+(\S+):\s*(.*))?", output
-    ):
+    for match in re.finditer(r"FAILED\s+(tests/\S+)(?:\s+-\s+(\S+):\s*(.*))?", output):
         test_path = match.group(1)
         error_type = match.group(2) or "Unknown"
         message = match.group(3) or ""
         category = classify_failure(f"{error_type}: {message}", classifier)
-        failures.append({
-            "test": test_path,
-            "error_type": error_type,
-            "message": message[:200],
-            "category": category,
-        })
+        failures.append(
+            {
+                "test": test_path,
+                "error_type": error_type,
+                "message": message[:200],
+                "category": category,
+            }
+        )
     return failures
 
 
@@ -169,12 +170,14 @@ def main():
                 entry = tracker["failures"][cat]
                 entry["count"] += 1
                 entry["last_seen"] = now_iso
-                entry["recent"].append({
-                    "test": f["test"],
-                    "error": f["error_type"],
-                    "message": f["message"][:100],
-                    "timestamp": now_iso,
-                })
+                entry["recent"].append(
+                    {
+                        "test": f["test"],
+                        "error": f["error_type"],
+                        "message": f["message"][:100],
+                        "timestamp": now_iso,
+                    }
+                )
                 # Keep only last 10 entries
                 entry["recent"] = entry["recent"][-10:]
 
@@ -201,15 +204,12 @@ def main():
             count = tracker["failures"][cat]["count"]
 
             messages.append(
-                f"⚠️ **{cat}** ({skill_pattern}): {count} occurrences"
-                f" — recommended escalation level {level}"
+                f"⚠️ **{cat}** ({skill_pattern}): {count} occurrences — recommended escalation level {level}"
             )
             if related:
                 messages.append(f"   Related files: {', '.join(related)}")
 
-        messages.append(
-            "\nUse `/test-escalation` to upgrade testing strategy for these patterns."
-        )
+        messages.append("\nUse `/test-escalation` to upgrade testing strategy for these patterns.")
 
     result = {"systemMessage": "\n".join(messages)}
     json.dump(result, sys.stdout)

@@ -1,4 +1,5 @@
 """Tests for core.market_review — data processing, caching, and output format."""
+
 import datetime as dt
 from unittest.mock import patch
 
@@ -8,6 +9,7 @@ import pandas as pd
 from data_pipeline.db import get_conn, init_db
 
 # ── Helpers ───────────────────────────────────────────────────────
+
 
 def _make_benchmark_prices(tickers: list[str], days: int = 60) -> pd.DataFrame:
     """Generate synthetic close prices for multiple tickers."""
@@ -27,7 +29,7 @@ def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
     rows = []
     for t in tickers:
         for date_idx, val in df[t].items():
-            rows.append((t, date_idx.strftime('%Y-%m-%d'), float(val)))
+            rows.append((t, date_idx.strftime("%Y-%m-%d"), float(val)))
     with get_conn() as conn:
         conn.executemany(
             "INSERT INTO market_review_prices (ticker, date, close) "
@@ -38,6 +40,7 @@ def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
 
 
 # ── Cache tests ──────────────────────────────────────────────────
+
 
 class TestMarketReviewCache:
     def test_cache_hit_avoids_refetch(self):
@@ -81,6 +84,7 @@ class TestMarketReviewCache:
 
 # ── market_review output format tests ────────────────────────────
 
+
 class TestMarketReviewOutput:
     def test_returns_dataframe(self):
         """market_review() returns a DataFrame with MultiIndex columns."""
@@ -114,6 +118,7 @@ class TestMarketReviewOutput:
 
 
 # ── market_review_timeseries tests ───────────────────────────────
+
 
 class TestMarketReviewTimeseries:
     def test_returns_dict_structure(self):

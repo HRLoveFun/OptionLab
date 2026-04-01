@@ -21,44 +21,44 @@ def test_full_time_range():
 
     test_cases = [
         {
-            'ticker': 'AAPL',
-            'start': dt.date(2020, 1, 1),
-            'end': dt.date(2024, 1, 1),
-            'frequency': 'W',
-            'expected_min_points': 200,  # ~4 years of weekly data
-            'description': '4-year Weekly data for AAPL'
+            "ticker": "AAPL",
+            "start": dt.date(2020, 1, 1),
+            "end": dt.date(2024, 1, 1),
+            "frequency": "W",
+            "expected_min_points": 200,  # ~4 years of weekly data
+            "description": "4-year Weekly data for AAPL",
         },
         {
-            'ticker': 'SPY',
-            'start': dt.date(2019, 1, 1),
-            'end': dt.date(2024, 1, 1),
-            'frequency': 'W',
-            'expected_min_points': 250,  # ~5 years of weekly data
-            'description': '5-year Weekly data for SPY'
+            "ticker": "SPY",
+            "start": dt.date(2019, 1, 1),
+            "end": dt.date(2024, 1, 1),
+            "frequency": "W",
+            "expected_min_points": 250,  # ~5 years of weekly data
+            "description": "5-year Weekly data for SPY",
         },
         {
-            'ticker': 'MSFT',
-            'start': dt.date(2021, 1, 1),
-            'end': dt.date(2023, 12, 31),
-            'frequency': 'ME',
-            'expected_min_points': 30,  # ~3 years of monthly data
-            'description': '3-year Monthly data for MSFT'
+            "ticker": "MSFT",
+            "start": dt.date(2021, 1, 1),
+            "end": dt.date(2023, 12, 31),
+            "frequency": "ME",
+            "expected_min_points": 30,  # ~3 years of monthly data
+            "description": "3-year Monthly data for MSFT",
         },
     ]
 
     all_passed = True
 
     for i, test_case in enumerate(test_cases, 1):
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"Test {i}: {test_case['description']}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
 
         try:
             analyzer = MarketAnalyzer(
-                ticker=test_case['ticker'],
-                start_date=test_case['start'],
-                frequency=test_case['frequency'],
-                end_date=test_case['end']
+                ticker=test_case["ticker"],
+                start_date=test_case["start"],
+                frequency=test_case["frequency"],
+                end_date=test_case["end"],
             )
 
             if not analyzer.is_data_valid():
@@ -69,7 +69,7 @@ def test_full_time_range():
             # Check number of data points
             df = analyzer.features_df
             num_points = len(df)
-            expected_min = test_case['expected_min_points']
+            expected_min = test_case["expected_min_points"]
 
             print(f"\nData Points: {num_points}")
             print(f"Expected Minimum: {expected_min}")
@@ -81,7 +81,7 @@ def test_full_time_range():
                 continue
 
             # Check data variation (not just single point)
-            osc_std = df['Oscillation'].std()
+            osc_std = df["Oscillation"].std()
             if osc_std < 0.1:
                 print(f"❌ FAILED: Oscillation std={osc_std:.4f} too low (data might be single point)")
                 all_passed = False
@@ -90,7 +90,7 @@ def test_full_time_range():
             # Test chart generation
             charts_ok = True
 
-            scatter = analyzer.generate_scatter_plots('Oscillation')
+            scatter = analyzer.generate_scatter_plots("Oscillation")
             if not scatter:
                 print("❌ Scatter plot failed")
                 charts_ok = False
@@ -127,18 +127,20 @@ def test_full_time_range():
             print(f"❌ FAILED: Exception occurred: {e}")
             all_passed = False
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     if all_passed:
         print("✅ ALL TESTS PASSED")
         print("Charts correctly use full time range defined by Horizon parameter")
     else:
         print("❌ SOME TESTS FAILED")
         print("Please review the failures above")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     return all_passed
 
+
 if __name__ == "__main__":
     import sys
+
     success = test_full_time_range()
     sys.exit(0 if success else 1)

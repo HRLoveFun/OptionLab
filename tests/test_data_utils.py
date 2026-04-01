@@ -1,4 +1,5 @@
 """Tests for utils/data_utils.py — recent extreme change calculation."""
+
 import numpy as np
 import pandas as pd
 

@@ -5,6 +5,7 @@ Reads the failure tracker and failure registry, finds unresolved patterns
 that have been seen recently, and injects them as a system message so the
 agent starts each session aware of recurring issues.
 """
+
 import json
 import sys
 from datetime import datetime, timedelta

@@ -24,6 +24,7 @@ class PipelineResult:
         error: Human-readable error message when ok is False.
         warnings: Non-fatal issues encountered during the stage.
     """
+
     ok: bool = True
     rows: int = 0
     error: str | None = None

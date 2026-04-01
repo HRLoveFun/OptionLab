@@ -12,7 +12,7 @@ import logging
 import matplotlib
 import numpy as np
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def _fig_to_base64(fig) -> str:
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
     buf.seek(0)
     result = base64.b64encode(buf.getvalue()).decode()
     plt.close(fig)
@@ -31,31 +31,32 @@ def _fig_to_base64(fig) -> str:
 
 
 class PortfolioAnalysisService:
-
     @staticmethod
     def run(positions: list, account_size=None, max_risk_pct=2.0) -> dict:
         result = {"status": "ok", "warnings": []}
 
         spots = PortfolioAnalysisService._get_spots(positions)
-        main_ticker = positions[0]['ticker']
+        main_ticker = positions[0]["ticker"]
         spot = spots.get(main_ticker, 100)
 
         # Build position list for greeks engine
         greeks_positions = []
         for pos in positions:
-            greeks_positions.append({
-                "type": pos["option_type"],
-                "strike": pos["strike"],
-                "dte": pos.get("dte", 30),
-                "iv": pos.get("iv", 0.25),
-                "qty": pos["quantity"],
-                "premium": pos["price"],
-            })
+            greeks_positions.append(
+                {
+                    "type": pos["option_type"],
+                    "strike": pos["strike"],
+                    "dte": pos.get("dte", 30),
+                    "iv": pos.get("iv", 0.25),
+                    "qty": pos["quantity"],
+                    "premium": pos["price"],
+                }
+            )
 
         # Greeks
         totals, detail_df = portfolio_greeks_table(greeks_positions, spot, r=0.05)
         result["greeks_summary"] = {k: round(v, 4) for k, v in totals.items()}
-        result["greeks_detail"] = detail_df.to_dict(orient='records')
+        result["greeks_detail"] = detail_df.to_dict(orient="records")
 
         # PnL chart
         try:
@@ -74,14 +75,10 @@ class PortfolioAnalysisService:
             result["theta_decay_chart"] = None
 
         # Risk breakdown
-        result["risk_breakdown"] = PortfolioAnalysisService._risk_breakdown(
-            positions, spots, totals
-        )
+        result["risk_breakdown"] = PortfolioAnalysisService._risk_breakdown(positions, spots, totals)
 
         # Breakevens
-        result["breakevens"] = PortfolioAnalysisService._find_breakevens(
-            greeks_positions, spot
-        )
+        result["breakevens"] = PortfolioAnalysisService._find_breakevens(greeks_positions, spot)
 
         # Position sizing
         if account_size:
@@ -90,25 +87,24 @@ class PortfolioAnalysisService:
             )
 
         # VaR
-        result["portfolio_var_1d"] = PortfolioAnalysisService._calc_var(
-            positions, spots, totals
-        )
+        result["portfolio_var_1d"] = PortfolioAnalysisService._calc_var(positions, spots, totals)
 
         return result
 
     @staticmethod
     def _get_spots(positions: list) -> dict:
-        tickers = list({p['ticker'] for p in positions})
+        tickers = list({p["ticker"] for p in positions})
         spots = {}
         try:
             import yfinance as yf
 
             from utils.utils import yf_throttle
+
             for t in tickers:
                 yf_throttle()
                 tk = yf.Ticker(t)
                 fi = tk.fast_info
-                price = getattr(fi, 'last_price', None) or getattr(fi, 'regularMarketPrice', None)
+                price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
                 if price:
                     spots[t] = float(price)
         except Exception as e:
@@ -118,23 +114,23 @@ class PortfolioAnalysisService:
     @staticmethod
     def _plot_pnl(positions, spots):
         """Plot payoff diagram at expiration."""
-        main_ticker = positions[0]['ticker']
+        main_ticker = positions[0]["ticker"]
         spot = spots.get(main_ticker, 100)
 
         # Price range
-        strikes = [p['strike'] for p in positions]
+        strikes = [p["strike"] for p in positions]
         lo = min(min(strikes), spot) * 0.85
         hi = max(max(strikes), spot) * 1.15
         prices = np.linspace(lo, hi, 500)
 
         total_pnl = np.zeros_like(prices)
         for pos in positions:
-            is_call = pos['option_type'] in ('LC', 'SC')
-            is_long = pos['option_type'] in ('LC', 'LP')
+            is_call = pos["option_type"] in ("LC", "SC")
+            is_long = pos["option_type"] in ("LC", "LP")
             sign = 1 if is_long else -1
-            K = pos['strike']
-            premium = pos['price']
-            qty = pos['quantity']
+            K = pos["strike"]
+            premium = pos["price"]
+            qty = pos["quantity"]
 
             if is_call:
                 intrinsic = np.maximum(prices - K, 0)
@@ -145,16 +141,14 @@ class PortfolioAnalysisService:
             total_pnl += leg_pnl
 
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(prices, total_pnl, color='#3b82f6', linewidth=2)
-        ax.axhline(0, color='grey', linewidth=0.8, linestyle='--')
-        ax.axvline(spot, color='#f59e0b', linewidth=1.2, linestyle=':', label=f'Spot {spot:.2f}')
-        ax.fill_between(prices, total_pnl, 0,
-                        where=total_pnl >= 0, alpha=0.15, color='green')
-        ax.fill_between(prices, total_pnl, 0,
-                        where=total_pnl < 0, alpha=0.15, color='red')
-        ax.set_xlabel('Underlying Price')
-        ax.set_ylabel('P&L ($)')
-        ax.set_title('Portfolio P&L at Expiration')
+        ax.plot(prices, total_pnl, color="#3b82f6", linewidth=2)
+        ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
+        ax.axvline(spot, color="#f59e0b", linewidth=1.2, linestyle=":", label=f"Spot {spot:.2f}")
+        ax.fill_between(prices, total_pnl, 0, where=total_pnl >= 0, alpha=0.15, color="green")
+        ax.fill_between(prices, total_pnl, 0, where=total_pnl < 0, alpha=0.15, color="red")
+        ax.set_xlabel("Underlying Price")
+        ax.set_ylabel("P&L ($)")
+        ax.set_title("Portfolio P&L at Expiration")
         ax.legend(fontsize=9)
         ax.grid(alpha=0.3)
         fig.tight_layout()
@@ -164,11 +158,11 @@ class PortfolioAnalysisService:
     def _plot_theta_decay(greeks_positions, spot):
         days, total_theta = theta_decay_path(greeks_positions, spot, r=0.05)
         fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(days, total_theta, color='#ef4444', linewidth=1.8)
-        ax.axhline(0, color='grey', linewidth=0.8, linestyle='--')
-        ax.set_xlabel('Days from Now')
-        ax.set_ylabel('Portfolio Theta ($/day)')
-        ax.set_title('Theta Decay Path')
+        ax.plot(days, total_theta, color="#ef4444", linewidth=1.8)
+        ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
+        ax.set_xlabel("Days from Now")
+        ax.set_ylabel("Portfolio Theta ($/day)")
+        ax.set_title("Theta Decay Path")
         ax.grid(alpha=0.3)
         fig.tight_layout()
         return fig
@@ -178,13 +172,13 @@ class PortfolioAnalysisService:
         by_ticker = {}
         by_side = {"long": 0, "short": 0}
         for pos in positions:
-            t = pos['ticker']
-            side = pos.get('side', 'long')
-            qty = pos['quantity']
+            t = pos["ticker"]
+            side = pos.get("side", "long")
+            qty = pos["quantity"]
             if t not in by_ticker:
                 by_ticker[t] = {"delta": 0, "count": 0}
             by_ticker[t]["count"] += qty
-            if side == 'long':
+            if side == "long":
                 by_side["long"] += qty
             else:
                 by_side["short"] += qty
@@ -199,12 +193,12 @@ class PortfolioAnalysisService:
         total_pnl = np.zeros_like(prices)
 
         for pos in greeks_positions:
-            is_call = pos['type'] in ('LC', 'SC')
-            is_long = pos['type'] in ('LC', 'LP')
+            is_call = pos["type"] in ("LC", "SC")
+            is_long = pos["type"] in ("LC", "LP")
             sign = 1 if is_long else -1
-            K = pos['strike']
-            premium = pos['premium']
-            qty = pos['qty']
+            K = pos["strike"]
+            premium = pos["premium"]
+            qty = pos["qty"]
             if is_call:
                 intrinsic = np.maximum(prices - K, 0)
             else:
@@ -229,12 +223,12 @@ class PortfolioAnalysisService:
         total_pnl = np.zeros_like(prices)
 
         for pos in greeks_positions:
-            is_call = pos['type'] in ('LC', 'SC')
-            is_long = pos['type'] in ('LC', 'LP')
+            is_call = pos["type"] in ("LC", "SC")
+            is_long = pos["type"] in ("LC", "LP")
             sign = 1 if is_long else -1
-            K = pos['strike']
-            premium = pos['premium']
-            qty = pos['qty']
+            K = pos["strike"]
+            premium = pos["premium"]
+            qty = pos["qty"]
             if is_call:
                 intrinsic = np.maximum(prices - K, 0)
             else:
@@ -259,10 +253,10 @@ class PortfolioAnalysisService:
         if not positions:
             return 0.0
 
-        avg_iv = np.mean([p.get('iv', 0.25) for p in positions]) or 0.25
-        main_ticker = positions[0]['ticker']
+        avg_iv = np.mean([p.get("iv", 0.25) for p in positions]) or 0.25
+        main_ticker = positions[0]["ticker"]
         S = spots.get(main_ticker, 100)
-        delta = greeks_totals.get('delta', 0)
+        delta = greeks_totals.get("delta", 0)
         sigma_1d = avg_iv / np.sqrt(252)
         z = norm.ppf(confidence)
         var_1d = abs(delta) * S * sigma_1d * z * 100

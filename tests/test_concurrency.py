@@ -1,4 +1,5 @@
 """Tests for data_service.py — cooldown, throttle, and concurrency behavior."""
+
 import threading
 import time
 from unittest.mock import patch
@@ -37,6 +38,7 @@ def _reset_state():
 
 # ── Cooldown tests ───────────────────────────────────────────────
 
+
 class TestCooldown:
     @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
     @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
@@ -67,8 +69,9 @@ class TestCooldown:
         assert result is True
         assert mock_dl.call_count == 2
 
-    @patch("data_pipeline.data_service.upsert_raw_prices",
-           return_value=PipelineResult(ok=False, error="download_failed"))
+    @patch(
+        "data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(ok=False, error="download_failed")
+    )
     def test_failed_pipeline_clears_cooldown(self, mock_dl):
         """If download fails, cooldown should NOT prevent retry (since we return False, not raise)."""
         init_db()
@@ -80,6 +83,7 @@ class TestCooldown:
 
 
 # ── Concurrent update tests ──────────────────────────────────────
+
 
 class TestConcurrentUpdates:
     @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
@@ -125,6 +129,7 @@ class TestConcurrentUpdates:
 
 
 # ── TTL query cache tests ────────────────────────────────────────
+
 
 class TestQueryCache:
     def test_cache_set_and_get(self):
