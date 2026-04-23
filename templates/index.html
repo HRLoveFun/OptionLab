@@ -72,6 +72,10 @@
                     <i class="fas fa-crosshairs"></i>
                     <span>Put Selector</span>
                 </button>
+                <button class="tab-btn" data-tab="tab-regime">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Market Regime</span>
+                </button>
                 <button class="tab-btn" data-tab="tab-config">
                     <i class="fas fa-cog"></i>
                     <span>Config</span>
@@ -762,6 +766,60 @@
                 </div>
             </div>
 
+            <!-- Tab: Market Regime -->
+            <div class="tab-content" id="tab-regime">
+                <div class="panel-header">
+                    <h2><i class="fas fa-chart-line"></i> Market Regime</h2>
+                    <p class="panel-desc">
+                        Composite regime label derived from <strong>^VIX</strong> (volatility)
+                        &amp; <strong>SPY</strong> vs its 20-day SMA (direction).
+                        Pure labeling — no signals, no predictions.
+                    </p>
+                </div>
+
+                <div id="regime-current-card" class="content-card">
+                    <div class="content-card-title">Current Regime</div>
+                    <div id="regime-current-body" style="padding:1rem 0;">
+                        <span class="muted">Loading…</span>
+                    </div>
+                </div>
+
+                <div class="content-card" style="margin-top:1rem;">
+                    <div class="mr-toolbar">
+                        <div class="btn-group" id="regime-range-btns">
+                            <button class="btn-toggle" data-days="30">30D</button>
+                            <button class="btn-toggle active" data-days="180">180D</button>
+                            <button class="btn-toggle" data-days="365">1Y</button>
+                            <button class="btn-toggle" data-days="1095">3Y</button>
+                        </div>
+                        <button class="btn-ghost btn-sm" id="regime-refresh-btn">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                        <button class="btn-ghost btn-sm" id="regime-backfill-btn">
+                            <i class="fas fa-database"></i> Backfill &amp; Persist
+                        </button>
+                        <span id="regime-source-tag" class="meta-chip" style="margin-left:auto;"></span>
+                    </div>
+                    <div id="regime-strip-container" style="margin-top:.75rem;height:320px;position:relative;">
+                        <canvas id="regime-strip-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="content-card" style="margin-top:1rem;">
+                    <div class="content-card-title">Coverage Summary</div>
+                    <div id="regime-coverage-body" style="padding:.5rem 0;">
+                        <span class="muted">—</span>
+                    </div>
+                </div>
+
+                <div class="content-card" style="margin-top:1rem;">
+                    <div class="content-card-title">Recent Transitions</div>
+                    <div id="regime-transitions-body" class="table-wrapper">
+                        <span class="muted">—</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tab: Config -->
             <div class="tab-content" id="tab-config">
                 <div class="panel-header">
@@ -895,6 +953,7 @@
     <script src="{{ url_for('static', filename='game.js') }}"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script src="{{ url_for('static', filename='market_review_chart.js') }}"></script>
+    <script src="{{ url_for('static', filename='regime.js') }}"></script>
     <script>
         document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -918,6 +977,10 @@
                 if (target === 'tab-odds' && !window._oddsAutoLoaded) {
                     var ticker = (document.getElementById('ticker') || {}).value || '';
                     if (ticker.trim()) { loadOddsData(); window._oddsAutoLoaded = true; }
+                }
+                // Auto-load Market Regime on tab switch
+                if (target === 'tab-regime' && !window._regimeLoaded) {
+                    if (typeof loadRegimeTab === 'function') { loadRegimeTab(); window._regimeLoaded = true; }
                 }
             });
         });
