@@ -610,6 +610,58 @@ def game():
         return jsonify({"status": "error", "message": str(e)})
 
 
+# ── Market Regime (Volatility × Direction labeling) ───────────────
+@app.route("/api/regime/current", methods=["GET"])
+def regime_current():
+    """Current composite regime label (VIX / SPY)."""
+    from services.regime_service import RegimeService
+
+    persist = request.args.get("persist", "0").lower() in ("1", "true", "yes")
+    try:
+        result = (
+            RegimeService.append_today() if persist else RegimeService.compute_current()
+        )
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        logger.error(f"regime_current error: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/regime/history", methods=["GET"])
+def regime_history():
+    """Regime history (persisted log, or live fallback if log is empty)."""
+    from services.regime_service import RegimeService
+
+    try:
+        days = int(request.args.get("days", 180))
+    except (TypeError, ValueError):
+        days = 180
+    try:
+        result = RegimeService.history(days=days)
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        logger.error(f"regime_history error: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/regime/backfill", methods=["POST"])
+def regime_backfill():
+    """Backfill regime log for the last N trading days."""
+    from services.regime_service import RegimeService
+
+    data = request.get_json(silent=True) or {}
+    try:
+        days = int(data.get("days", 30))
+    except (TypeError, ValueError):
+        days = 30
+    try:
+        result = RegimeService.backfill(days=days)
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        logger.error(f"regime_backfill error: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
     app.run(host="0.0.0.0", port=port, debug=True)

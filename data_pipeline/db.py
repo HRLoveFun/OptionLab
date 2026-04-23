@@ -98,6 +98,23 @@ def init_db(db_path: str | None = None):
             )
             """
         )
+        # Market regime daily log (see core.regime)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS regime_log (
+                date TEXT PRIMARY KEY,
+                vol_regime TEXT,
+                dir_regime TEXT,
+                vix_value REAL,
+                sma_20 REAL,
+                sma_slope_5d REAL,
+                close_vs_sma_pct REAL,
+                regime_changed_from_previous INTEGER DEFAULT 0,
+                fetch_timestamp TEXT,
+                notes TEXT
+            )
+            """
+        )
         conn.commit()
 
 
@@ -137,6 +154,8 @@ def fetch_df(query: str, params: tuple = (), db_path: str | None = None):
 
     with get_conn(db_path) as conn:
         df = pd.read_sql_query(query, conn, params=params, parse_dates=["date"])  # type: ignore
-    if not df.empty:
+    # Only index by date when the query actually returned a 'date' column
+    # (aggregate queries like `SELECT MAX(date) as max_date` don't include it).
+    if not df.empty and "date" in df.columns:
         df = df.sort_values("date").set_index("date")
     return df
