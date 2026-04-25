@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+import os
 import threading
 import time
 
@@ -7,7 +8,7 @@ import pandas as pd
 
 from .cleaning import clean_range
 from .db import fetch_df, init_db
-from .downloader import upsert_raw_prices
+from .downloader import find_missing_business_days, upsert_raw_prices
 from .processing import process_frequencies
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,11 @@ logger = logging.getLogger(__name__)
 _update_locks: dict = {}  # ticker -> last_update_timestamp (monotonic)
 _update_lock_mutex = threading.Lock()
 _UPDATE_COOLDOWN = 60  # same ticker: at most one write per 60 seconds
+
+# How far back manual_update scans for missing business days. The cost-path
+# download window stays small (`days` arg, default 7), but the gap scan looks
+# further so historical holes from past outages get back-filled automatically.
+GAP_SCAN_DAYS = int(os.environ.get("GAP_SCAN_DAYS", "30"))
 
 # ── TTL cache for DB query results ────────────────────────────────
 _QUERY_CACHE_TTL = 60  # seconds
@@ -76,6 +82,18 @@ class DataService:
         try:
             end = dt.date.today()
             start = end - dt.timedelta(days=days - 1)
+            # Widen the start to cover any historical gaps within GAP_SCAN_DAYS.
+            # The downloader is gap-aware: when no gaps exist this is essentially
+            # free (no extra Yahoo round-trip). When gaps exist, we recompute
+            # clean/processed over the actual download range so analyzer tables
+            # stay in sync with raw.
+            scan_start = end - dt.timedelta(days=GAP_SCAN_DAYS)
+            gaps = find_missing_business_days(ticker, scan_start, end)
+            if gaps and min(gaps) < start:
+                logger.info(
+                    f"Gap detected for {ticker} at {min(gaps)}; expanding update range to {min(gaps)}..{end}"
+                )
+                start = min(gaps)
             dl_result = upsert_raw_prices(ticker, start, end)
             if not dl_result.ok:
                 logger.warning(f"Download stage failed for {ticker}: {dl_result.error}")

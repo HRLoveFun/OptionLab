@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+import os
 
 import pandas as pd
 import yfinance as yf
@@ -10,6 +11,38 @@ from . import PipelineResult
 from .db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
+
+# Maximum window the gap-aware downloader will auto-expand to. Larger ranges
+# require explicit `DataService.seed_history` to avoid runaway yfinance load
+# after a long outage.
+MAX_AUTO_BACKFILL_DAYS = int(os.environ.get("MAX_AUTO_BACKFILL_DAYS", "90"))
+
+
+def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> list[dt.date]:
+    """Return business days in [start, end] (inclusive) that have no row in raw_prices.
+
+    Uses the same Mon-Fri business-day calendar as `cleaning._get_business_days`
+    so gaps map 1:1 with cleaning's expected index. Holidays are intentionally
+    NOT excluded — they will appear as harmless empty download attempts.
+    """
+    expected = pd.bdate_range(start, end)
+    if len(expected) == 0:
+        return []
+    df = fetch_df(
+        "SELECT date FROM raw_prices WHERE ticker=? AND date>=? AND date<=?",
+        (ticker, start.isoformat(), end.isoformat()),
+    )
+    have: set[dt.date] = set()
+    # NOTE: `df.empty` is True for a (N rows, 0 cols) frame, which is exactly
+    # what `fetch_df` returns for a SELECT-only-date query (the date column is
+    # promoted to the index). Check `len(df.index)` instead.
+    if len(df.index) > 0:
+        for ts in df.index:
+            try:
+                have.add(pd.Timestamp(ts).date())
+            except (ValueError, TypeError):
+                continue
+    return [ts.date() for ts in expected if ts.date() not in have]
 
 
 def _download_yf(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
@@ -43,22 +76,34 @@ def upsert_raw_prices(
     if start is None:
         start = end - dt.timedelta(days=days - 1)
 
-    # ── Staleness check: skip download if DB already has recent data ──
-    existing = fetch_df(
-        "SELECT MAX(date) as max_date FROM raw_prices WHERE ticker=?",
-        (ticker,),
-    )
-    if not existing.empty and existing.iloc[0]["max_date"] is not None:
-        max_date_str = existing.iloc[0]["max_date"]
-        try:
-            max_date = dt.date.fromisoformat(max_date_str)
-            # Consider data fresh if latest row is within 1 calendar day of requested end
-            if max_date >= end - dt.timedelta(days=1):
-                logger.debug(f"DB data for {ticker} is fresh (max_date={max_date}), skipping download")
-                result.warnings.append(f"Skipped download: DB data fresh (max_date={max_date})")
-                return result
-        except (ValueError, TypeError):
-            pass  # Can't parse date, proceed with download
+    # ── Gap-aware coverage check ──
+    # Skip the network only when every business day in [start, end] is already
+    # present in raw_prices. Otherwise expand the download range to cover the
+    # earliest gap so back-fills happen automatically after an outage.
+    missing = find_missing_business_days(ticker, start, end)
+    if not missing:
+        logger.debug(f"DB data for {ticker} fully covers {start}..{end}; skipping download")
+        result.warnings.append(f"Skipped download: full coverage in {start}..{end}")
+        return result
+
+    # Expand start to the earliest missing business day. Cap the auto-expansion
+    # so a multi-year outage does not silently trigger a giant download — those
+    # cases must use `DataService.seed_history` explicitly.
+    gap_start = min(missing)
+    effective_start = min(start, gap_start)
+    if (end - effective_start).days > MAX_AUTO_BACKFILL_DAYS:
+        capped_start = end - dt.timedelta(days=MAX_AUTO_BACKFILL_DAYS)
+        logger.warning(
+            f"Gap for {ticker} spans {(end - effective_start).days}d (>{MAX_AUTO_BACKFILL_DAYS}); "
+            f"capping backfill at {capped_start}. Use seed_history for older data."
+        )
+        result.warnings.append(
+            f"Backfill capped at {MAX_AUTO_BACKFILL_DAYS} days; oldest gaps require seed_history"
+        )
+        effective_start = capped_start
+    if effective_start != start:
+        logger.info(f"Expanding download range for {ticker}: {start}..{end} → {effective_start}..{end}")
+        start = effective_start
 
     try:
         df_new = _download_yf(ticker, start, end)
