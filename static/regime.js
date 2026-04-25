@@ -4,19 +4,33 @@
 (function () {
     'use strict';
 
+    // Regime palettes are sourced from CSS custom properties defined in
+    // static/styles.css (`--regime-*`) so the design tokens stay in one
+    // place. Keep these maps in sync with that token group.
+    function cssVar(name, fallback) {
+        try {
+            const v = getComputedStyle(document.documentElement)
+                .getPropertyValue(name).trim();
+            return v || fallback;
+        } catch (_e) {
+            return fallback;
+        }
+    }
     const VOL_COLORS = {
-        LOW_VOL: '#10b981',
-        MID_VOL: '#3b82f6',
-        HIGH_VOL: '#f59e0b',
-        STRESS_VOL: '#ef4444',
-        UNKNOWN_VOL: '#94a3b8'
+        LOW_VOL: cssVar('--regime-low-vol', '#10b981'),
+        MID_VOL: cssVar('--regime-mid-vol', '#3b82f6'),
+        HIGH_VOL: cssVar('--regime-high-vol', '#f59e0b'),
+        STRESS_VOL: cssVar('--regime-stress-vol', '#ef4444'),
+        UNKNOWN_VOL: cssVar('--regime-unknown', '#94a3b8')
     };
     const DIR_COLORS = {
-        UP_TREND: '#10b981',
-        DOWN_TREND: '#ef4444',
-        CHOP: '#f59e0b',
-        UNKNOWN_DIR: '#94a3b8'
+        UP_TREND: cssVar('--regime-up-trend', '#10b981'),
+        DOWN_TREND: cssVar('--regime-down-trend', '#ef4444'),
+        CHOP: cssVar('--regime-chop', '#f59e0b'),
+        UNKNOWN_DIR: cssVar('--regime-unknown', '#94a3b8')
     };
+    const REGIME_UNKNOWN_COLOR = cssVar('--regime-unknown', '#94a3b8');
+    const REGIME_BADGE_FALLBACK = cssVar('--regime-badge-fallback', '#64748b');
 
     let stripChart = null;
     let currentDays = 180;
@@ -30,7 +44,7 @@
         return Number(v).toFixed(digits === undefined ? 2 : digits);
     }
     function regimeBadge(value, palette) {
-        const color = palette[value] || '#64748b';
+        const color = palette[value] || REGIME_BADGE_FALLBACK;
         return `<span style="display:inline-block;padding:.15rem .55rem;border-radius:999px;background:${color};color:#fff;font-weight:600;font-size:.85rem;">${value || '—'}</span>`;
     }
 
@@ -76,8 +90,8 @@
         }
         const volData = rows.map(r => ({ x: r.date, y: 1, _regime: r.vol_regime }));
         const dirData = rows.map(r => ({ x: r.date, y: 0, _regime: r.dir_regime }));
-        const volColors = rows.map(r => VOL_COLORS[r.vol_regime] || '#94a3b8');
-        const dirColors = rows.map(r => DIR_COLORS[r.dir_regime] || '#94a3b8');
+        const volColors = rows.map(r => VOL_COLORS[r.vol_regime] || REGIME_UNKNOWN_COLOR);
+        const dirColors = rows.map(r => DIR_COLORS[r.dir_regime] || REGIME_UNKNOWN_COLOR);
         const vixLine = rows
             .filter(r => r.vix_value !== null && r.vix_value !== undefined)
             .map(r => ({ x: r.date, y: r.vix_value }));

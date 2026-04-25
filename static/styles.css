@@ -12,39 +12,102 @@
     padding: 0;
 }
 
+/* ============================================================
+   Design Tokens (CSS custom properties)
+   ------------------------------------------------------------
+   Naming convention:
+     --<group>-<role|shade>
+   Groups:
+     blue/slate  → palette primitives (raw colors)
+     success/warning/error → semantic intent colors
+     regime-*    → market regime classification colors
+                   (consumed by both CSS and JS via
+                   getComputedStyle(document.documentElement)
+                   .getPropertyValue('--regime-...'))
+     font/radius/sidebar/header/shadow → typography & geometry
+   When adding a new token:
+     1. Document its semantic meaning here
+     2. Prefer extending the existing group over creating new ones
+     3. If consumed from JS (e.g. Chart.js datasets), keep the
+        token in the regime-* group so the contract stays clear.
+   ============================================================ */
 :root {
-    /* Brand */
+    /* Brand — primary blue used for accents, links, focus rings */
     --blue: #3b82f6;
+    /* default accent */
     --blue-dark: #2563eb;
+    /* hover / pressed state */
     --blue-light: #eff6ff;
+    /* tinted background (info banners) */
     --blue-muted: #bfdbfe;
+    /* borders, subtle separators */
 
-    /* Neutrals */
+    /* Neutrals — slate palette for text, surfaces, dividers */
     --slate-50: #f8fafc;
+    /* lightest surface */
     --slate-100: #f1f5f9;
+    /* page background */
     --slate-200: #e2e8f0;
+    /* hairline borders */
     --slate-300: #cbd5e1;
+    /* disabled / placeholder */
     --slate-500: #64748b;
+    /* muted text */
     --slate-700: #334155;
+    /* secondary text */
     --slate-900: #0f172a;
+    /* primary text, header bg */
 
-    /* Semantic */
+    /* Semantic — convey intent independent of palette */
     --success: #10b981;
+    /* positive outcomes, gains */
     --warning: #f59e0b;
+    /* caution, incomplete data */
     --error: #ef4444;
+    /* failures, losses */
     --error-bg: #fef2f2;
+    /* tinted error background */
+
+    /* Regime — market regime classification (shared with regime.js)
+       Volatility regimes: ascending stress level                   */
+    --regime-low-vol: #10b981;
+    /* LOW_VOL    — calm market      */
+    --regime-mid-vol: #3b82f6;
+    /* MID_VOL    — normal vol       */
+    --regime-high-vol: #f59e0b;
+    /* HIGH_VOL   — elevated vol     */
+    --regime-stress-vol: #ef4444;
+    /* STRESS_VOL — crisis territory */
+    /*    Direction regimes                                         */
+    --regime-up-trend: #10b981;
+    /* UP_TREND                       */
+    --regime-down-trend: #ef4444;
+    /* DOWN_TREND                     */
+    --regime-chop: #f59e0b;
+    /* CHOP — sideways / no trend     */
+    /*    Fallback for UNKNOWN_VOL / UNKNOWN_DIR / missing data     */
+    --regime-unknown: #94a3b8;
+    /*    Fallback color used by regimeBadge() when label not in map */
+    --regime-badge-fallback: #64748b;
 
     /* Typography */
     --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-    /* Geometry */
+    /* Geometry — radii, layout sizes, elevation */
     --radius-sm: 6px;
+    /* inputs, small chips */
     --radius-md: 10px;
+    /* cards, panels */
     --radius-lg: 14px;
+    /* hero containers */
     --sidebar-w: 220px;
+    /* left navigation width */
     --header-h: 60px;
+    /* sticky top header height */
     --shadow: 0 1px 4px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04);
+    /* resting */
     --shadow-md: 0 4px 16px rgb(0 0 0 / .10);
+    /* raised */
 }
 
 html {
