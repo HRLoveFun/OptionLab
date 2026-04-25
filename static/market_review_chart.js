@@ -38,6 +38,7 @@ async function loadMarketReviewChart(ticker, startDate) {
         mrVisibleAssets = new Set(Object.keys(mrData.assets));
         renderMarketReviewChart();
         renderAssetToggleButtons();
+        renderMrKpiStrip();
         return;
     }
 
@@ -57,6 +58,7 @@ async function loadMarketReviewChart(ticker, startDate) {
 
         if (mrData.status !== 'ok') {
             container.innerHTML = `<div style="color:#ef4444;padding:2rem;">${mrData.message || 'Error loading data'}</div>`;
+            renderMrKpiStrip(/* error */ true);
             return;
         }
 
@@ -68,9 +70,105 @@ async function loadMarketReviewChart(ticker, startDate) {
         mrVisibleAssets = new Set(Object.keys(mrData.assets));
         renderMarketReviewChart();
         renderAssetToggleButtons();
+        renderMrKpiStrip();
     } catch (e) {
         if (e.name === 'AbortError') return;
         container.innerHTML = `<div style="color:#ef4444;padding:2rem;">Network error: ${e.message}</div>`;
+        renderMrKpiStrip(/* error */ true);
+    }
+}
+
+
+/* Compute and render the KPI strip (Design Principle P1).
+   Shows Total Return / Annualized Volatility / Sharpe over the entire-to-date
+   window for the main instrument. Pure browser-side derivation from the
+   already-loaded mrData time-series; no extra HTTP request.
+
+   When `errored` is truthy, renders a neutral fallback (em-dash) so the
+   strip never gets stuck on "Loading…" after a fetch failure. */
+function renderMrKpiStrip(errored) {
+    const strip = document.getElementById('mr-kpi-strip');
+    if (!strip) return;
+
+    const setCard = (kpi, value, sub, semanticClass) => {
+        const card = strip.querySelector(`[data-mr-kpi="${kpi}"]`);
+        if (!card) return;
+        const valEl = card.querySelector('[data-mr-kpi-value]');
+        const subEl = card.querySelector('[data-mr-kpi-sub]');
+        if (valEl) {
+            valEl.textContent = value;
+            valEl.classList.remove('semantic-pos', 'semantic-neg', 'semantic-info', 'semantic-warn');
+            if (semanticClass) valEl.classList.add(semanticClass);
+        }
+        if (subEl && sub !== undefined) subEl.textContent = sub;
+    };
+
+    if (errored || !mrData || !mrData.instrument || !mrData.assets) {
+        setCard('total_return', '—', errored ? 'Unavailable' : 'No data');
+        setCard('volatility', '—', '');
+        setCard('sharpe', '—', '');
+        return;
+    }
+
+    const series = mrData.assets[mrData.instrument];
+    if (!series || !Array.isArray(series.prices)) {
+        setCard('total_return', '—', 'No data');
+        setCard('volatility', '—', '');
+        setCard('sharpe', '—', '');
+        return;
+    }
+
+    // Drop nulls for total-return (first / last finite price).
+    const prices = series.prices.filter(p => p !== null && !isNaN(p));
+    if (prices.length < 2) {
+        setCard('total_return', '—', 'Insufficient data');
+        setCard('volatility', '—', '');
+        setCard('sharpe', '—', '');
+        return;
+    }
+
+    const totalReturnPct = ((prices[prices.length - 1] / prices[0]) - 1) * 100;
+
+    // Daily log returns from full price series.
+    const logRets = [];
+    for (let i = 1; i < prices.length; i++) {
+        if (prices[i - 1] > 0) logRets.push(Math.log(prices[i] / prices[i - 1]));
+    }
+    let mean = 0, variance = 0, annVolPct = NaN, sharpe = NaN;
+    if (logRets.length > 1) {
+        mean = logRets.reduce((a, b) => a + b, 0) / logRets.length;
+        variance = logRets.reduce((s, r) => s + (r - mean) ** 2, 0) / (logRets.length - 1);
+        const std = Math.sqrt(variance);
+        annVolPct = std * Math.sqrt(252) * 100;
+        const annRet = mean * 252;
+        sharpe = std > 0 ? annRet / (std * Math.sqrt(252)) : NaN;
+    }
+
+    // Total Return — semantic color (green positive / red negative / blue zero).
+    const trClass = totalReturnPct > 0.05 ? 'semantic-pos'
+        : totalReturnPct < -0.05 ? 'semantic-neg'
+            : 'semantic-info';
+    const trSign = totalReturnPct > 0 ? '+' : '';
+    setCard('total_return', `${trSign}${totalReturnPct.toFixed(2)}%`,
+        `${prices.length} days · ${mrData.instrument}`, trClass);
+
+    // Volatility — orange when elevated (> 30% annualized).
+    if (isFinite(annVolPct)) {
+        const volClass = annVolPct > 30 ? 'semantic-warn' : null;
+        setCard('volatility', `${annVolPct.toFixed(1)}%`,
+            '20-day rolling, σ × √252', volClass);
+    } else {
+        setCard('volatility', '—', 'Insufficient data');
+    }
+
+    // Sharpe — green if > 0.5, red if < -0.5, neutral otherwise.
+    if (isFinite(sharpe)) {
+        const sClass = sharpe > 0.5 ? 'semantic-pos'
+            : sharpe < -0.5 ? 'semantic-neg' : 'semantic-info';
+        setCard('sharpe', sharpe.toFixed(2),
+            'Annualized return / vol', sClass);
+    } else {
+        setCard('sharpe', '—', 'Insufficient data');
     }
 }
 
@@ -271,12 +369,62 @@ function corrToColor(corr) {
    Multi-ticker context switcher
    ============================================================ */
 
+// Tabs that are rendered via HTMX streaming (must match _RENDER_KIND_SLICES
+// in app.py). Each entry maps the kind suffix to the DOM container id that
+// the fragment will swap into.
+const STREAMING_TABS = [
+    { kind: 'market_review', containerId: 'tab-market-review-content', parentId: 'tab-market-review' },
+    { kind: 'statistical', containerId: 'tab-statistical-analysis-content', parentId: 'tab-statistical-analysis' },
+    { kind: 'assessment', containerId: 'tab-market-assessment-content', parentId: 'tab-market-assessment' },
+    { kind: 'options_chain', containerId: 'tab-options-chain-content', parentId: 'tab-options-chain' },
+];
+
 function switchTickerContext(ticker) {
     document.querySelectorAll('.ticker-tab-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.ticker === ticker);
     });
-    // Reload Market Review chart for selected ticker
-    if (window._mrLoaded) {
+
+    // Streaming-mode: replace each streamed tab body with a fresh skeleton
+    // and fire a new /render/<kind>?ticker=<new>&job=<id> request. The
+    // server's JobCache memoises per (ticker, kind) so re-clicking a ticker
+    // is cheap after the first switch.
+    const jobId = window.STREAMING_JOB_ID || '';
+    if (jobId && typeof htmx !== 'undefined') {
+        STREAMING_TABS.forEach(tab => {
+            // Find current content (could be the original swapped fragment or
+            // a skeleton from a previous switch). Replace it with a skeleton
+            // and trigger a fresh load.
+            const parent = document.getElementById(tab.parentId);
+            if (!parent) return;
+            const old = document.getElementById(tab.containerId);
+            const skel = document.createElement('div');
+            skel.id = tab.containerId;
+            skel.className = 'loading-skeleton';
+            skel.setAttribute('hx-get', `/render/${tab.kind}?job=${encodeURIComponent(jobId)}&ticker=${encodeURIComponent(ticker)}`);
+            skel.setAttribute('hx-trigger', 'load');
+            skel.setAttribute('hx-swap', 'outerHTML');
+            skel.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin empty-icon"></i><p>Loading ${tab.kind.replace('_', ' ')}…</p></div>`;
+            if (old && old.parentNode === parent) {
+                parent.replaceChild(skel, old);
+            } else {
+                parent.appendChild(skel);
+            }
+            htmx.process(skel);
+        });
+    }
+
+    // Update the global ticker input so existing tab-load handlers
+    // (Option Chain, Odds, Regime) target the new ticker on activation.
+    const tickerInput = document.getElementById('ticker');
+    if (tickerInput) tickerInput.value = ticker;
+    if (window.appState && window.appState.tabFlags) {
+        // Force re-fetch of lazy-loaded tabs against the new ticker.
+        ['option_chain', 'odds', 'regime', 'market_review'].forEach(k => window.appState.tabFlags.reset(k));
+    }
+
+    // Reload the JS-driven Market Review chart for the new ticker if its tab
+    // has been visited before (otherwise it loads on first activation).
+    if (window.appState && window.appState.tabFlags.isLoaded('market_review')) {
         loadMarketReviewChart(ticker);
     }
 }

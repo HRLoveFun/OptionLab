@@ -4,12 +4,13 @@ import logging
 import math
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 from data_pipeline.data_service import DataService
+from data_pipeline.db import close_thread_conn
+from data_pipeline.job_cache import compute_or_get, create_job, get_job
 from data_pipeline.scheduler import UpdateScheduler
 from services.analysis_service import AnalysisService
 from services.form_service import FormService
@@ -161,31 +162,25 @@ def _filter_option_chain(
     }
 
 
-def _run_single_ticker_analysis(ticker: str, form_data: dict) -> dict:
-    """Run full analysis pipeline for one ticker (designed for ThreadPoolExecutor)."""
-    single_form = {**form_data, "ticker": ticker}
-    try:
-        analysis_results = AnalysisService.generate_complete_analysis(single_form)
-    except Exception as e:
-        logger.error(f"Analysis failed for {ticker}: {e}", exc_info=True)
-        analysis_results = {"error": str(e)}
-
-    # Options chain analysis (non-blocking per ticker)
-    try:
-        oc_results = OptionsChainService.generate_options_chain_analysis(ticker)
-        analysis_results.update(oc_results)
-    except Exception as e:
-        logger.warning(f"Options chain analysis failed for {ticker}: {e}")
-
-    return analysis_results
+@app.route("/api/ping", methods=["GET"])
+def api_ping():
+    """Lightweight liveness probe used by the HTMX scaffold probe in index.html."""
+    return jsonify({"ok": True})
 
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     """
-    Main dashboard route — supports multi-ticker analysis.
-    GET: Render dashboard form.
-    POST: Parse tickers, run analysis per ticker, render results.
+    Main dashboard route.
+
+    GET:  render the empty form / skeleton.
+    POST: validate form, register a JobCache entry, and immediately render the
+          *skeleton* index.html with `streaming_mode=True`. Tab partials emit
+          HTMX `hx-get="/render/<kind>?job=…&ticker=…"` placeholders that
+          resolve in parallel after the browser receives the skeleton.
+
+    No analysis runs in the POST handler — the time-to-first-byte is just the
+    cost of form parsing + template rendering (well under 1s).
     """
     try:
         if request.method == "POST":
@@ -202,42 +197,23 @@ def index():
             if not tickers:
                 return render_template("index.html", error="Please enter at least one ticker symbol.")
 
-            # Concurrent analysis for each ticker
-            results_by_ticker = {}
-            max_workers = min(len(tickers), 4)
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(_run_single_ticker_analysis, ticker, form_data): ticker for ticker in tickers
-                }
-                for future in as_completed(futures):
-                    ticker = futures[future]
-                    try:
-                        results_by_ticker[ticker] = future.result()
-                    except Exception as e:
-                        logger.error(f"Ticker {ticker} analysis exception: {e}")
-                        results_by_ticker[ticker] = {"error": str(e)}
-
-            # Generate summary analysis (multi-ticker only)
-            summary_data = None
-            if len(tickers) > 1:
-                try:
-                    summary_data = AnalysisService.generate_summary_analysis(tickers, results_by_ticker)
-                except Exception as e:
-                    logger.warning(f"Summary analysis failed: {e}")
-
-            # Use first ticker's form_data for template defaults
+            # Register job and stream the skeleton. The render endpoints will
+            # consume `form_data` from the JobCache when each tab loads.
             first_ticker = tickers[0]
-            first_result = results_by_ticker.get(first_ticker, {})
+            job_id = create_job({**form_data, "ticker": first_ticker}, tickers)
+
             template_data = {
                 **form_data,
-                **first_result,
                 "ticker": first_ticker,
                 "tickers": tickers,
                 "tickers_raw": ", ".join(tickers),
-                "results_by_ticker": results_by_ticker,
-                "summary_data": summary_data,
+                "streaming_mode": True,
+                "job_id": job_id,
+                # Multi-ticker summary tab is computed on demand via its own
+                # render endpoint (see /render/summary). Pass a flag so the
+                # template knows whether to include the summary skeleton.
+                "summary_pending": len(tickers) > 1,
             }
-
             return render_template("index.html", **template_data)
 
         return render_template(
@@ -256,6 +232,114 @@ def index():
     except Exception as e:
         logger.error(f"Unexpected error in main route: {e}", exc_info=True)
         return render_template("index.html", error=f"An unexpected error occurred: {str(e)}. Please try again.")
+
+
+# ── HTMX streaming render endpoints ──────────────────────────────────────────
+# Each endpoint returns an HTML *fragment* (no <html><body>) suitable for
+# `hx-swap="outerHTML"`. They share form_data via the JobCache so duplicate
+# triggers/refetches don't recompute.
+
+_RENDER_KIND_SLICES = {
+    # kind: (slice_fn_attr_name | None, fragment_template)
+    # We store the attribute name (not the bound function) so that monkey-
+    # patching AnalysisService methods in tests is honoured at call time.
+    "market_review": ("generate_market_review_slice", "partials/fragments/market_review.html"),
+    "statistical": ("generate_statistical_slice", "partials/fragments/statistical.html"),
+    "assessment": ("generate_assessment_slice", "partials/fragments/assessment.html"),
+    "options_chain": (None, "partials/fragments/options_chain.html"),  # special-cased below
+}
+
+
+def _render_error_fragment(kind: str, message: str, status: int = 500) -> tuple[str, int]:
+    """Uniform error fragment for any /render/* endpoint failure.
+
+    The shape mirrors the empty-state block so styling matches the partials.
+    """
+    html = (
+        f'<div id="tab-{kind.replace("_", "-")}-content">'
+        f'<div class="empty-state" style="color:#ef4444;">'
+        f'<i class="fas fa-exclamation-circle empty-icon"></i>'
+        f'<p>Failed to render {kind.replace("_", " ")}: {message}</p>'
+        f"</div></div>"
+    )
+    return html, status
+
+
+def _render_streaming_slice(kind: str):
+    """Shared handler for /render/<kind>?job=…&ticker=….
+
+    Looks up the job, dispatches to the slice fn, memoises the result in the
+    JobCache, and renders the matching fragment template.
+    """
+    job_id = request.args.get("job", "")
+    ticker = (request.args.get("ticker", "") or "").upper()
+    if not job_id or not ticker:
+        return _render_error_fragment(kind, "missing job or ticker", 400)
+
+    job = get_job(job_id)
+    if job is None:
+        # Treat as a soft 200 so HTMX swaps a useful message instead of a
+        # browser-default error toast — but include the job-expired hint so
+        # the user knows to re-submit the form.
+        return _render_error_fragment(
+            kind, "session expired (job no longer cached); please re-submit the form", 200
+        )
+
+    slice_fn_name, template = _RENDER_KIND_SLICES[kind]
+
+    # The form_data captured at POST time was for the first ticker. When the
+    # user switches tickers via the sidebar we re-target by overriding
+    # `ticker` in a per-call form_data copy.
+    def _compute(form_data: dict) -> dict:
+        # Worker-thread cleanup so we don't leak DB connections.
+        try:
+            local_form = {**form_data, "ticker": ticker}
+            if kind == "options_chain":
+                # Direct OptionsChainService call — no MarketAnalyzer needed.
+                try:
+                    return OptionsChainService.generate_options_chain_analysis(ticker) or {}
+                except Exception as e:
+                    logger.error("options_chain slice failed for %s: %s", ticker, e, exc_info=True)
+                    return {"oc_error": str(e)}
+            # Late-bind the slice attr so test monkey-patches are honoured.
+            slice_fn = getattr(AnalysisService, slice_fn_name)
+            return slice_fn(local_form)
+        finally:
+            close_thread_conn()
+
+    try:
+        result = compute_or_get(job_id, ticker, kind, _compute)
+    except KeyError:
+        return _render_error_fragment(kind, "session expired", 200)
+    except Exception as e:
+        logger.error("/render/%s failed for ticker=%s: %s", kind, ticker, e, exc_info=True)
+        return _render_error_fragment(kind, str(e), 500)
+
+    # Build the template context. The fragment templates expect form-style
+    # variables (frequency, start_time, etc.) so we merge job form_data with
+    # the slice result.
+    context = {**(job.form_data or {}), "ticker": ticker, **(result or {})}
+    return render_template(template, **context)
+
+
+@app.route("/render/market_review", methods=["GET"])
+def render_market_review():
+    return _render_streaming_slice("market_review")
+
+
+@app.route("/render/statistical", methods=["GET"])
+def render_statistical():
+    return _render_streaming_slice("statistical")
+
+
+@app.route("/render/assessment", methods=["GET"])
+def render_assessment():
+    return _render_streaming_slice("assessment")
+
+
+@app.route("/render/options_chain", methods=["GET"])
+def render_options_chain():
+    return _render_streaming_slice("options_chain")
 
 
 @app.route("/api/option_chain", methods=["GET"])

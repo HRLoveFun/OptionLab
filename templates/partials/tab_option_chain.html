@@ -1,0 +1,84 @@
+<div class="tab-content" id="tab-option-chain" x-data="panelState('option_chain')"
+     role="region" aria-labelledby="oc-heading">
+    <div class="toolbar">
+        <div class="panel-header" style="margin:0;">
+            <h2 id="oc-heading"><i class="fas fa-th" aria-hidden="true"></i> Option Chain</h2>
+            <p class="panel-desc">Live option chain from Yahoo Finance. Select a ticker and load chain data.</p>
+        </div>
+        <div class="toolbar-actions">
+            <button type="button" class="btn-primary" data-action="oc-reload"
+                    aria-label="Reload option chain"
+                    :disabled="phase === 'loading'">
+                <template x-if="phase !== 'loading'"><span><i class="fas fa-sync" aria-hidden="true"></i> Reload</span></template>
+                <template x-if="phase === 'loading'"><span><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading…</span></template>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading banner — P2 four-state machine, role=status for SR announcement -->
+    <div class="panel-banner panel-banner--loading" role="status" aria-live="polite"
+         x-show="phase === 'loading'" x-cloak>
+        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+        <span x-text="message || 'Loading option chain...'"></span>
+    </div>
+
+    <!-- Error banner -->
+    <div class="panel-banner panel-banner--error" role="alert" aria-live="assertive"
+         x-show="phase === 'error'" x-cloak>
+        <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+        <span x-text="message"></span>
+    </div>
+
+    <!-- Loaded content -->
+    <div x-show="phase === 'loaded'" x-cloak aria-live="polite">
+        <!-- Hero metric — Design Principle P1: Spot price is the primary
+             reference for every option-chain decision; render it large. -->
+        <section class="kpi-strip" id="oc-kpi-strip" aria-label="Option chain key metrics">
+            <div class="kpi-card kpi-card--primary" data-oc-kpi="spot">
+                <span class="kpi-card__label">Spot Price</span>
+                <span class="kpi-card__value" data-oc-kpi-value>—</span>
+                <span class="kpi-card__sub" data-oc-kpi-sub>—</span>
+            </div>
+            <div class="kpi-card" data-oc-kpi="expirations">
+                <span class="kpi-card__label">Expirations</span>
+                <span class="kpi-card__value" data-oc-kpi-value>—</span>
+                <span class="kpi-card__sub" data-oc-kpi-sub>Available maturities</span>
+            </div>
+            <div class="kpi-card" data-oc-kpi="active-exp">
+                <span class="kpi-card__label">Active Expiry</span>
+                <span class="kpi-card__value" data-oc-kpi-value>—</span>
+                <span class="kpi-card__sub" data-oc-kpi-sub>Days to expiry</span>
+            </div>
+        </section>
+
+        <div id="oc-exp-tabs" class="oc-exp-tabs" role="tablist" aria-label="Expiration date tabs">
+            <div id="oc-exp-tab-list" class="oc-exp-tab-list"></div>
+        </div>
+
+        <div id="oc-chain-wrapper" class="oc-chain-wrapper"
+             role="table" aria-label="Option chain — calls and puts by strike">
+            <div class="oc-t-header" role="row">
+                <div class="oc-t-calls-header" role="columnheader">Calls</div>
+                <div class="oc-t-strike-header" role="columnheader">Strike</div>
+                <div class="oc-t-puts-header" role="columnheader">Puts</div>
+            </div>
+            <div class="oc-t-subheader" role="row">
+                <div class="oc-t-calls-sub">
+                    <span>IV%</span><span>OI</span><span>Vol</span><span>Bid</span><span>Ask</span><span>Last</span><span>Prem</span>
+                </div>
+                <div class="oc-t-strike-sub"><span>&nbsp;</span></div>
+                <div class="oc-t-puts-sub">
+                    <span>Prem</span><span>Last</span><span>Bid</span><span>Ask</span><span>Vol</span><span>OI</span><span>IV%</span>
+                </div>
+            </div>
+            <div id="oc-chain-body" class="oc-chain-body"></div>
+        </div>
+    </div>
+
+    <!-- Empty / idle -->
+    <div class="empty-state" role="status" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
+        <i class="fas fa-th empty-icon" aria-hidden="true"></i>
+        <p x-show="phase === 'idle'">Set a ticker in <strong>Parameter</strong> tab — option chain data loads automatically when you switch to this tab.</p>
+        <p x-show="phase === 'empty'" x-text="message || 'No option chain data available for this ticker.'"></p>
+    </div>
+</div>

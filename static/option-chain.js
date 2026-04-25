@@ -2,34 +2,28 @@
    Option Chain – T-format display with maturity-date subtabs
    ============================================================ */
 
-let _ocChainData = null;   // { expirations, chain, spot }
-let _ocActivExp = null;   // currently selected expiration
-let _ocAbort = null;       // AbortController for loadOptionChain
-
-// No auto-fill needed — Option Chain now reads from the main Parameter ticker directly
-
-// No auto-fill needed — Option Chain now reads from the main Parameter ticker directly
+// State (data + active expiration + abort controller) is encapsulated in
+// static/state/optionChainState.js (window.appState.optionChain).
+// UI phase ('idle'|'loading'|'loaded'|'error'|'empty') is driven via
+// appState.panels.set('option_chain', ...) — the partial subscribes through
+// Alpine's `panelState('option_chain')`. NEVER toggle .style.display here;
+// the state machine guarantees exactly one block is visible at a time.
+const _ocState = () => window.appState.optionChain;
+const _ocPanel = (phase, opts) => window.appState.panels.set('option_chain', phase, opts);
 
 function loadOptionChain() {
     const input = document.getElementById('ticker');
     const rawTicker = (input ? input.value : '').trim().toUpperCase();
     // Extract first ticker from potentially comma-separated list
     const ticker = rawTicker.split(/[,\n]+/)[0].trim();
-    const status = document.getElementById('oc-status');
-    const empty = document.getElementById('oc-empty');
-    const expTabs = document.getElementById('oc-exp-tabs');
-    const wrapper = document.getElementById('oc-chain-wrapper');
 
-    if (!ticker) { _ocShowError('Please enter a ticker symbol in the Parameter tab.'); return; }
+    if (!ticker) {
+        _ocPanel('error', { message: 'Please enter a ticker symbol in the Parameter tab.' });
+        return;
+    }
 
-    // Loading state
-    if (status) { status.style.display = 'block'; status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading option chain...'; }
-    if (empty) { empty.style.display = 'none'; }
-    if (expTabs) { expTabs.style.display = 'none'; }
-    if (wrapper) { wrapper.style.display = 'none'; }
-
-    _ocChainData = null;
-    _ocActivExp = null;
+    _ocPanel('loading', { message: 'Loading option chain...' });
+    _ocState().reset();
 
     // Build URL with config-driven filter params
     const params = new URLSearchParams({ ticker });
@@ -40,10 +34,9 @@ function loadOptionChain() {
     if (cfgMLow && cfgMLow.value) params.set('moneyness_low', cfgMLow.value);
     if (cfgMHigh && cfgMHigh.value) params.set('moneyness_high', cfgMHigh.value);
 
-    if (_ocAbort) _ocAbort.abort();
-    _ocAbort = new AbortController();
+    const signal = _ocState().beginRequest();
 
-    fetch(`/api/option_chain?${params}`, { signal: _ocAbort.signal })
+    fetch(`/api/option_chain?${params}`, { signal })
         .then(r => {
             if (!r.ok) {
                 return r.json().catch(() => ({ error: `Server error (${r.status})` }));
@@ -51,35 +44,27 @@ function loadOptionChain() {
             return r.json();
         })
         .then(data => {
-            if (data.error) { _ocShowError(data.error); return; }
-            if (status) { status.style.display = 'none'; }
-            _ocChainData = data;
-            _ocBuildExpTabs(data.expirations);
-            if (data.expirations && data.expirations.length > 0) {
-                _ocSelectExp(data.expirations[0]);
+            if (data.error) { _ocPanel('error', { message: data.error }); return; }
+            _ocState().setData(data);
+            const exps = data.expirations || [];
+            if (exps.length === 0) {
+                _ocPanel('empty', { message: 'No expirations returned for this ticker.' });
+                return;
             }
+            _ocPanel('loaded', { data });
+            _ocBuildExpTabs(exps);
+            _ocSelectExp(exps[0]);
+            _ocRenderKpiStrip(data, exps[0]);
         })
         .catch(err => {
             if (err.name === 'AbortError') return;
-            _ocShowError('Network error: ' + err.message);
+            _ocPanel('error', { message: 'Network error: ' + err.message });
         });
-}
-
-function _ocShowError(msg) {
-    const status = document.getElementById('oc-status');
-    const empty = document.getElementById('oc-empty');
-    const expTabs = document.getElementById('oc-exp-tabs');
-    const wrapper = document.getElementById('oc-chain-wrapper');
-    if (status) { status.style.display = 'block'; status.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHtml(msg)}`; }
-    if (empty) { empty.style.display = 'none'; }
-    if (expTabs) { expTabs.style.display = 'none'; }
-    if (wrapper) { wrapper.style.display = 'none'; }
 }
 
 function _ocBuildExpTabs(expirations) {
     const list = document.getElementById('oc-exp-tab-list');
-    const expTabs = document.getElementById('oc-exp-tabs');
-    if (!list || !expTabs) return;
+    if (!list) return;
     list.innerHTML = '';
     expirations.forEach(exp => {
         const btn = document.createElement('button');
@@ -89,28 +74,74 @@ function _ocBuildExpTabs(expirations) {
         btn.addEventListener('click', function () { _ocSelectExp(this.dataset.exp); });
         list.appendChild(btn);
     });
-    expTabs.style.display = 'block';
 }
 
 function _ocSelectExp(exp) {
-    _ocActivExp = exp;
+    _ocState().setActiveExp(exp);
 
     // Highlight active tab
     document.querySelectorAll('.oc-exp-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.exp === exp);
     });
 
-    if (!_ocChainData || !_ocChainData.chain[exp]) return;
+    const data = _ocState().getData();
+    if (!data || !data.chain[exp]) return;
 
-    const { calls, puts } = _ocChainData.chain[exp];
+    const { calls, puts } = data.chain[exp];
     _ocRenderChain(calls, puts);
+    _ocRenderKpiStrip(data, exp);
+}
+
+
+/* Populate Option Chain KPI strip — Design Principle P1 (one primary
+   metric per panel: spot price). Pure DOM work; safe to call any time
+   after the loaded data is in state.
+
+   `data`:    response payload with `spot` and `expirations`.
+   `activeExp`: ISO-date string for the currently selected expiration. */
+function _ocRenderKpiStrip(data, activeExp) {
+    const strip = document.getElementById('oc-kpi-strip');
+    if (!strip || !data) return;
+
+    const setCard = (key, value, sub) => {
+        const card = strip.querySelector(`[data-oc-kpi="${key}"]`);
+        if (!card) return;
+        const v = card.querySelector('[data-oc-kpi-value]');
+        const s = card.querySelector('[data-oc-kpi-sub]');
+        if (v) v.textContent = value;
+        if (s && sub !== undefined) s.textContent = sub;
+    };
+
+    const spot = (data.spot !== null && data.spot !== undefined && !isNaN(data.spot))
+        ? Number(data.spot) : null;
+    setCard('spot',
+        spot !== null ? `$${spot.toFixed(2)}` : '—',
+        data.ticker ? `${data.ticker} · live` : 'Live');
+
+    const expCount = (data.expirations || []).length;
+    setCard('expirations', String(expCount),
+        expCount > 0 ? `Through ${data.expirations[expCount - 1]}` : 'No data');
+
+    if (activeExp) {
+        const days = _ocDaysToExpiry(activeExp);
+        setCard('active-exp', activeExp,
+            days !== null ? `${days} day${days === 1 ? '' : 's'} to expiry` : 'Days to expiry');
+    } else {
+        setCard('active-exp', '—', 'Days to expiry');
+    }
+}
+
+function _ocDaysToExpiry(isoDate) {
+    if (!isoDate) return null;
+    const exp = new Date(isoDate + 'T00:00:00');
+    if (isNaN(exp.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.round((exp - today) / (1000 * 60 * 60 * 24)));
 }
 
 function _ocRenderChain(calls, puts) {
     const body = document.getElementById('oc-chain-body');
-    const wrapper = document.getElementById('oc-chain-wrapper');
-    const empty = document.getElementById('oc-empty');
-    const status = document.getElementById('oc-status');
     if (!body) return;
 
     // Build strike-keyed maps
@@ -126,14 +157,13 @@ function _ocRenderChain(calls, puts) {
     ])).sort((a, b) => a - b);
 
     if (strikes.length === 0) {
-        body.innerHTML = '<div class="oc-no-data">No data for this expiration.</div>';
-        wrapper.style.display = 'block';
-        if (empty) empty.style.display = 'none';
-        if (status) status.style.display = 'none';
+        body.innerHTML = '';
+        _ocPanel('empty', { message: 'No data for this expiration.' });
         return;
     }
 
-    const spot = _ocChainData ? _ocChainData.spot : null;
+    const _ocData = _ocState().getData();
+    const spot = _ocData ? _ocData.spot : null;
 
     const fmt = (v, digits = 2) => (v === null || v === undefined) ? '<span class="oc-null">—</span>' : Number(v).toFixed(digits);
     const fmtInt = (v) => (v === null || v === undefined) ? '<span class="oc-null">—</span>' : Math.round(Number(v)).toLocaleString();
@@ -214,9 +244,6 @@ function _ocRenderChain(calls, puts) {
     if (spotInsertIdx === strikes.length) html += spotRow;
 
     body.innerHTML = html;
-    wrapper.style.display = 'block';
-    if (empty) empty.style.display = 'none';
-    if (status) status.style.display = 'none';
 }
 
 
@@ -224,8 +251,10 @@ function _ocRenderChain(calls, puts) {
    Odds Tab – Line charts for Long Call / Long Put odds
    ============================================================ */
 
-let _oddsChainData = null;   // same shape as _ocChainData
-let _oddsAbort = null;
+// State (data + abort) is encapsulated in static/state/oddsChainState.js.
+// UI phase driven via appState.panels.set('odds', ...).
+const _oddsState = () => window.appState.oddsChain;
+const _oddsPanel = (phase, opts) => window.appState.panels.set('odds', phase, opts);
 let _oddsCallChart = null;
 let _oddsPutChart = null;
 
@@ -241,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tgt) {
         tgt.addEventListener('input', function () {
             _oddsUpdateTargetDisplay();
-            if (_oddsChainData) _oddsRenderCharts();
+            if (_oddsState().getData()) _oddsRenderCharts();
         });
     }
 });
@@ -249,7 +278,8 @@ document.addEventListener('DOMContentLoaded', function () {
 function _oddsUpdateTargetDisplay() {
     const el = document.getElementById('odds-target-value');
     const estMove = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
-    const spot = _oddsChainData ? _oddsChainData.spot : null;
+    const data = _oddsState().getData();
+    const spot = data ? data.spot : null;
     if (!el) return;
     if (spot !== null && spot !== undefined) {
         const callTarget = (1 + estMove / 100) * spot;
@@ -265,22 +295,17 @@ function loadOddsData() {
     const rawTicker = (input ? input.value : '').trim().toUpperCase();
     // Extract first ticker from potentially comma-separated list
     const ticker = rawTicker.split(/[,\n]+/)[0].trim();
-    const status = document.getElementById('odds-status');
-    const empty = document.getElementById('odds-empty');
-    const wrap = document.getElementById('odds-charts-wrapper');
     const tvEl = document.getElementById('odds-target-value');
 
-    if (!ticker) { _oddsShowError('Please enter a ticker symbol in the Parameter tab.'); return; }
+    if (!ticker) {
+        _oddsPanel('error', { message: 'Please enter a ticker symbol in the Parameter tab.' });
+        return;
+    }
 
-    if (status) { status.style.display = 'block'; status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading odds data...'; }
-    if (empty) { empty.style.display = 'none'; }
-    if (wrap) { wrap.style.display = 'none'; }
     if (tvEl) { tvEl.textContent = ''; }
-
-    _oddsChainData = null;
-
-    if (typeof _oddsAbort !== 'undefined' && _oddsAbort) _oddsAbort.abort();
-    _oddsAbort = new AbortController();
+    _oddsPanel('loading', { message: 'Loading odds data...' });
+    _oddsState().reset();
+    const signal = _oddsState().beginRequest();
 
     // Build URL with config-driven filter params
     const params = new URLSearchParams({ ticker });
@@ -291,7 +316,7 @@ function loadOddsData() {
     if (cfgMLow && cfgMLow.value) params.set('moneyness_low', cfgMLow.value);
     if (cfgMHigh && cfgMHigh.value) params.set('moneyness_high', cfgMHigh.value);
 
-    fetch(`/api/option_chain?${params}`, { signal: _oddsAbort.signal })
+    fetch(`/api/option_chain?${params}`, { signal })
         .then(r => {
             if (!r.ok) {
                 return r.json().catch(() => ({ error: `Server error (${r.status})` }));
@@ -299,29 +324,20 @@ function loadOddsData() {
             return r.json();
         })
         .then(data => {
-            if (data.error) { _oddsShowError(data.error); return; }
-            if (status) { status.style.display = 'none'; }
-            _oddsChainData = data;
+            if (data.error) { _oddsPanel('error', { message: data.error }); return; }
+            _oddsState().setData(data);
             _oddsUpdateTargetDisplay();
+            _oddsPanel('loaded', { data });
             _oddsRenderCharts();
         })
         .catch(err => {
             if (err.name === 'AbortError') return;
-            _oddsShowError('Network error: ' + err.message);
+            _oddsPanel('error', { message: 'Network error: ' + err.message });
         });
 }
 
-function _oddsShowError(msg) {
-    const status = document.getElementById('odds-status');
-    const empty = document.getElementById('odds-empty');
-    const wrap = document.getElementById('odds-charts-wrapper');
-    if (status) { status.style.display = 'block'; status.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHtml(msg)}`; }
-    if (empty) { empty.style.display = 'none'; }
-    if (wrap) { wrap.style.display = 'none'; }
-}
-
 function _oddsRenderCharts() {
-    const data = _oddsChainData;
+    const data = _oddsState().getData();
     if (!data || !data.chain || !data.spot) return;
 
     const estMove = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
@@ -397,7 +413,7 @@ function _oddsRenderCharts() {
     });
 
     if (callDatasets.length === 0 && putDatasets.length === 0) {
-        _oddsShowError('No valid option data to compute odds.');
+        _oddsPanel('empty', { message: 'No valid option data to compute odds.' });
         return;
     }
 
@@ -495,13 +511,8 @@ function _oddsRenderCharts() {
         });
     }
 
-    // Show wrapper
-    const wrap = document.getElementById('odds-charts-wrapper');
-    const empty = document.getElementById('odds-empty');
-    const status = document.getElementById('odds-status');
-    if (wrap) wrap.style.display = 'block';
-    if (empty) empty.style.display = 'none';
-    if (status) status.style.display = 'none';
+    // UI visibility is driven by appState.panels.set('odds', 'loaded') in
+    // loadOddsData(); no display-toggle needed here.
 
     // Module 4B: Load vol-context data
     _oddsLoadVolContext();

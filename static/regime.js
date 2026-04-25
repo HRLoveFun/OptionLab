@@ -45,7 +45,21 @@
     }
     function regimeBadge(value, palette) {
         const color = palette[value] || REGIME_BADGE_FALLBACK;
-        return `<span style="display:inline-block;padding:.15rem .55rem;border-radius:999px;background:${color};color:#fff;font-weight:600;font-size:.85rem;">${value || '—'}</span>`;
+        return `<span class="regime-badge" style="background:${color};">${value || '—'}</span>`;
+    }
+
+    /* Compose a human-readable composite regime label, e.g.
+       "Mid-Vol · Up-Trend".  Pure formatting — no inference. */
+    function composeRegimeTitle(volRegime, dirRegime) {
+        const pretty = (v) => {
+            if (!v) return '—';
+            return v
+                .replace('_VOL', '-Vol')
+                .replace('_TREND', '-Trend')
+                .toLowerCase()
+                .replace(/(^|[\s-])\w/g, c => c.toUpperCase());
+        };
+        return `${pretty(volRegime)} · ${pretty(dirRegime)}`;
     }
 
     async function fetchJSON(url, opts) {
@@ -58,24 +72,51 @@
         const container = document.getElementById('regime-current-body');
         if (!container) return;
         if (!data || !data.label) {
-            container.innerHTML = '<span class="muted">No data.</span>';
+            container.innerHTML =
+                '<div class="regime-hero regime-hero--placeholder"><span>No data.</span></div>';
             return;
         }
         const L = data.label;
-        const complete = data.data_complete ? '' :
-            '<div style="color:#f59e0b;margin-top:.5rem;font-size:.9rem;"><i class="fas fa-exclamation-triangle"></i> Data incomplete — regime may be UNKNOWN.</div>';
+        const volColor = VOL_COLORS[L.vol_regime] || REGIME_UNKNOWN_COLOR;
+        const dirColor = DIR_COLORS[L.dir_regime] || REGIME_UNKNOWN_COLOR;
+        const incomplete = !data.data_complete;
+        const incompleteNote = incomplete
+            ? '<div class="semantic-warn" style="margin-top:.5rem;font-size:.85rem;">' +
+            '<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' +
+            'Data incomplete — regime may be UNKNOWN.</div>'
+            : '';
+        // Hero layout — Design Principle P1.
         container.innerHTML = `
-            <div style="display:flex;gap:2rem;flex-wrap:wrap;align-items:center;">
-                <div><div class="muted" style="font-size:.8rem;">Date</div><div style="font-weight:600;">${L.date}</div></div>
-                <div><div class="muted" style="font-size:.8rem;">Volatility</div><div>${regimeBadge(L.vol_regime, VOL_COLORS)}</div></div>
-                <div><div class="muted" style="font-size:.8rem;">Direction</div><div>${regimeBadge(L.dir_regime, DIR_COLORS)}</div></div>
-                <div><div class="muted" style="font-size:.8rem;">VIX</div><div>${fmtNum(L.vix_value)}</div></div>
-                <div><div class="muted" style="font-size:.8rem;">SPY 20-day SMA</div><div>${fmtNum(L.sma_20)}</div></div>
-                <div><div class="muted" style="font-size:.8rem;">5-day SMA slope</div><div>${fmtPct(L.sma_slope_5d)}</div></div>
-                <div><div class="muted" style="font-size:.8rem;">Close vs SMA</div><div>${fmtPct(L.close_vs_sma_pct)}</div></div>
+            <div class="regime-hero">
+                <div class="regime-hero__primary">
+                    <div class="regime-hero__date">As of ${L.date || '—'}</div>
+                    <div class="regime-hero__label">${composeRegimeTitle(L.vol_regime, L.dir_regime)}</div>
+                    <div class="regime-hero__badges">
+                        <span class="regime-badge" style="background:${volColor};">${L.vol_regime || '—'}</span>
+                        <span class="regime-badge" style="background:${dirColor};">${L.dir_regime || '—'}</span>
+                    </div>
+                    ${incompleteNote}
+                </div>
+                <div class="regime-hero__metrics" role="list" aria-label="Regime supporting metrics">
+                    <div class="regime-hero__metric" role="listitem">
+                        <div class="regime-hero__metric-label">VIX</div>
+                        <div class="regime-hero__metric-value">${fmtNum(L.vix_value)}</div>
+                    </div>
+                    <div class="regime-hero__metric" role="listitem">
+                        <div class="regime-hero__metric-label">SPY 20-day SMA</div>
+                        <div class="regime-hero__metric-value">${fmtNum(L.sma_20)}</div>
+                    </div>
+                    <div class="regime-hero__metric" role="listitem">
+                        <div class="regime-hero__metric-label">5-day SMA Slope</div>
+                        <div class="regime-hero__metric-value">${fmtPct(L.sma_slope_5d)}</div>
+                    </div>
+                    <div class="regime-hero__metric" role="listitem">
+                        <div class="regime-hero__metric-label">Close vs SMA</div>
+                        <div class="regime-hero__metric-value">${fmtPct(L.close_vs_sma_pct)}</div>
+                    </div>
+                </div>
             </div>
             ${L.notes ? `<div class="muted" style="margin-top:.5rem;font-size:.8rem;">Notes: ${L.notes}</div>` : ''}
-            ${complete}
         `;
     }
 
@@ -249,7 +290,7 @@
         } catch (e) {
             console.error('regime history failed', e);
             const el = document.getElementById('regime-coverage-body');
-            if (el) el.innerHTML = `<span style="color:#ef4444;">Failed to load history: ${e.message}</span>`;
+            if (el) el.innerHTML = `<span class="semantic-neg">Failed to load history: ${e.message}</span>`;
         }
     }
 
@@ -261,7 +302,7 @@
         } catch (e) {
             console.error('regime current failed', e);
             const el = document.getElementById('regime-current-body');
-            if (el) el.innerHTML = `<span style="color:#ef4444;">Failed to load current regime: ${e.message}</span>`;
+            if (el) el.innerHTML = `<span class="semantic-neg">Failed to load current regime: ${e.message}</span>`;
         }
     }
 

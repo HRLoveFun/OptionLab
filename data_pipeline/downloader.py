@@ -1,6 +1,7 @@
 import datetime as dt
 import logging
 import os
+from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
@@ -16,6 +17,51 @@ logger = logging.getLogger(__name__)
 # require explicit `DataService.seed_history` to avoid runaway yfinance load
 # after a long outage.
 MAX_AUTO_BACKFILL_DAYS = int(os.environ.get("MAX_AUTO_BACKFILL_DAYS", "90"))
+
+# Local fixture directory for `TEST_*` tickers — see `_load_test_fixture`.
+# Tests should never hit the network; routing TEST_* through this fixture
+# also keeps the global yfinance throttle uncontended for real tickers.
+_FIXTURE_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "yf"
+
+
+def _last_business_day_on_or_before(d: dt.date) -> dt.date:
+    """Snap ``d`` back to the most recent Mon–Fri (inclusive)."""
+    while d.weekday() >= 5:  # 5=Sat, 6=Sun
+        d -= dt.timedelta(days=1)
+    return d
+
+
+def _load_test_fixture(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Synthesise OHLCV for ``TEST_*`` tickers without touching the network.
+
+    Matches the column shape produced by ``_download_yf`` so the rest of the
+    pipeline is fixture-agnostic. If a CSV exists at
+    ``tests/fixtures/yf/<TICKER>.csv`` it is used verbatim; otherwise a
+    deterministic synthetic series is generated.
+    """
+    csv_path = _FIXTURE_DIR / f"{ticker}.csv"
+    if csv_path.exists():
+        df = pd.read_csv(csv_path, parse_dates=["Date"]).set_index("Date")
+        df = df.loc[(df.index >= pd.Timestamp(start)) & (df.index <= pd.Timestamp(end))]
+        return df
+
+    idx = pd.bdate_range(start, end)
+    if len(idx) == 0:
+        return pd.DataFrame()
+    base = 100.0 + (sum(ord(c) for c in ticker) % 50)
+    closes = [base + i * 0.1 for i in range(len(idx))]
+    df = pd.DataFrame(
+        {
+            "Open": closes,
+            "High": [c + 0.5 for c in closes],
+            "Low": [c - 0.5 for c in closes],
+            "Close": closes,
+            "Adj_Close": closes,
+            "Volume": [1_000_000] * len(idx),
+        },
+        index=idx,
+    )
+    return df
 
 
 def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> list[dt.date]:
@@ -46,6 +92,11 @@ def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> lis
 
 
 def _download_yf(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    # Test tickers never hit the network. Useful for unit tests + ad-hoc
+    # smoke tests under rate-limit conditions; see `_load_test_fixture`.
+    if ticker.startswith("TEST_"):
+        logger.info("Loading fixture data for test ticker %s (%s..%s)", ticker, start, end)
+        return _load_test_fixture(ticker, start, end)
     # yfinance 'end' is exclusive, so pass end + 1 day to include the requested end date
     yf_end = end + dt.timedelta(days=1)
     yf_throttle()
@@ -72,6 +123,10 @@ def upsert_raw_prices(
     result = PipelineResult()
     # Interpret end as inclusive date
     end = end or dt.date.today()
+    # Weekend short-circuit: Yahoo only publishes data for trading days, so
+    # snap a Sat/Sun `end` back to the most recent Friday before computing
+    # gaps. Avoids spurious "no new data" downloads on weekend page loads.
+    end = _last_business_day_on_or_before(end)
     # If start is None, include the past `days` calendar days ending at `end` inclusive
     if start is None:
         start = end - dt.timedelta(days=days - 1)

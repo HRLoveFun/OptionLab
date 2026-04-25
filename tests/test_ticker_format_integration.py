@@ -52,6 +52,10 @@ class TestTickerNormalisationForFutu:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="Futu integration was archived (see archive/futu_integration/); "
+    "the option-chain route now uses yfinance exclusively."
+)
 class TestOptionChainRouteFutuFormat:
     """The /api/option_chain endpoint must convert any incoming ticker to
     futu-format before calling get_option_chain_futu()."""
@@ -137,6 +141,10 @@ class TestOptionChainRouteFutuFormat:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="Futu integration was archived; OptionsChainAnalyzer no longer "
+    "delegates to a Futu provider."
+)
 class TestOptionsChainAnalyzerFutuInit:
     """OptionsChainAnalyzer must convert yahoo tickers to futu format."""
 

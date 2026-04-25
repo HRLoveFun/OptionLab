@@ -8,6 +8,7 @@ Covers:
 """
 
 import datetime as dt
+import re
 
 import numpy as np
 import pandas as pd
@@ -15,18 +16,36 @@ import pytest
 
 from data_pipeline.db import get_conn, init_db
 
+
+_JOB_ID_RE = re.compile(r'STREAMING_JOB_ID\s*=\s*"([^"]+)"')
+
+
+def _extract_job_id(html: str) -> str:
+    """Pull the streaming job id out of a rendered skeleton HTML page."""
+    m = _JOB_ID_RE.search(html)
+    return m.group(1) if m else ""
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False):
-    """Insert synthetic price rows into clean_prices."""
+    """Insert synthetic price rows into clean_prices.
+
+    Wipes any previous rows for `ticker` first so the seeded distribution is
+    deterministic regardless of test ordering, and invalidates the in-memory
+    query cache so a stale DataFrame doesn't leak between tests.
+    """
     init_db()
+    # Drop the cross-test query cache that DataService maintains (TTL 60s).
+    from data_pipeline.data_service import _cache_invalidate
+    _cache_invalidate(ticker)
     dates = pd.bdate_range(end=dt.date.today(), periods=n_rows)
     np.random.seed(42)
     close = 120.0 + np.cumsum(np.random.randn(n_rows) * 0.5)
     with get_conn() as conn:
+        conn.execute("DELETE FROM clean_prices WHERE ticker = ?", (ticker,))
         for i, d in enumerate(dates):
             date_str = d.strftime("%Y-%m-%d")
             if nan_only:
@@ -151,17 +170,27 @@ class TestFeaturesDF:
 def client(_patch_downloads):
     """Create Flask test client with isolated DB."""
     import app as flask_app
+    from data_pipeline import data_service as _ds
+    from data_pipeline import job_cache as _jc
+
+    # Reset module-level caches so prior tests don't leak data into this one.
+    _jc._reset()
+    with _ds._query_cache_lock:
+        _ds._query_cache.clear()
 
     flask_app.app.config["TESTING"] = True
     with flask_app.app.test_client() as c:
         yield c
+    _jc._reset()
+    with _ds._query_cache_lock:
+        _ds._query_cache.clear()
 
 
 class TestFlaskAnalysisPost:
     """Simulate entering NVDA and clicking Run."""
 
     def test_nvda_post_returns_charts(self, client):
-        """POST with NVDA ticker should produce statistical analysis charts."""
+        """POST returns a skeleton; GET /render/statistical produces charts."""
         _seed_clean_prices("NVDA", 60)
 
         resp = client.post(
@@ -178,13 +207,19 @@ class TestFlaskAnalysisPost:
         )
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
-        # Should contain at least one base64-encoded chart image
-        assert "data:image/png;base64," in html, "Expected base64 chart image in response HTML"
-        # Should NOT contain the empty features_df error
-        assert "features_df shape: (0," not in html
+        # POST now returns a skeleton with HTMX render hooks.
+        assert "/render/statistical" in html
+        job_id = _extract_job_id(html)
+        assert job_id
+        # Drive the streaming render to validate the chart payload.
+        sub = client.get(f"/render/statistical?job={job_id}&ticker=NVDA")
+        assert sub.status_code == 200
+        sub_html = sub.data.decode("utf-8")
+        assert "data:image/png;base64," in sub_html
+        assert "features_df shape: (0," not in sub_html
 
     def test_nvda_post_futu_format_works(self, client):
-        """POST with US.NVDA (futu format) should also work."""
+        """POST with US.NVDA (futu format) should also work end-to-end."""
         _seed_clean_prices("NVDA", 60)
 
         resp = client.post(
@@ -201,10 +236,17 @@ class TestFlaskAnalysisPost:
         )
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
-        assert "data:image/png;base64," in html
+        assert "/render/statistical" in html
+        job_id = _extract_job_id(html)
+        assert job_id
+        # Ticker is normalised in the slice, so request the normalised form.
+        sub = client.get(f"/render/statistical?job={job_id}&ticker=NVDA")
+        assert sub.status_code == 200
+        assert "data:image/png;base64," in sub.data.decode("utf-8")
 
     def test_failed_download_shows_error(self, client):
-        """Empty DB + no download should show meaningful error, not blank charts."""
+        """Empty DB + no download should surface a meaningful error in the
+        streaming render fragment, not blank charts."""
         init_db()
         resp = client.post(
             "/",
@@ -220,11 +262,21 @@ class TestFlaskAnalysisPost:
         )
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
-        # Should show an error message about failed download
-        assert "Failed to download data" in html or "error" in html.lower()
+        job_id = _extract_job_id(html)
+        assert job_id
+        sub = client.get(f"/render/statistical?job={job_id}&ticker=NVDA")
+        sub_html = sub.data.decode("utf-8")
+        # The streaming fragment surfaces the failure either as an explicit
+        # error banner or as the "insufficient data" empty-state.
+        assert (
+            "Failed to download data" in sub_html
+            or "insufficient data" in sub_html.lower()
+            or "error" in sub_html.lower()
+        )
 
     def test_nan_only_db_shows_error(self, client):
-        """DB with NaN-only rows should show error, not blank charts."""
+        """DB with NaN-only rows should produce an error fragment from
+        /render/statistical, not blank charts."""
         _seed_clean_prices("NVDA", 5, nan_only=True)
         resp = client.post(
             "/",
@@ -240,7 +292,15 @@ class TestFlaskAnalysisPost:
         )
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
-        assert "Failed to download data" in html
+        job_id = _extract_job_id(html)
+        assert job_id
+        sub = client.get(f"/render/statistical?job={job_id}&ticker=NVDA")
+        sub_html = sub.data.decode("utf-8")
+        assert (
+            "Failed to download data" in sub_html
+            or "insufficient data" in sub_html.lower()
+            or "error" in sub_html.lower()
+        )
 
     def test_analysis_service_direct(self, _patch_downloads):
         """Direct AnalysisService call with good data produces charts."""

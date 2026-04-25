@@ -9,21 +9,20 @@ function escapeHtml(text) {
 }
 
 let currentPrice = null;
-window._chainCache = {};  // Module 1: option chain cache per ticker
-const _CHAIN_CACHE_TTL = 5 * 60 * 1000;  // 5 minutes in ms
 
+// Option chain cache moved to static/state/chainCacheState.js (appState.chainCache).
+// These thin shims preserve legacy callers; new code should call
+// `appState.chainCache.get(ticker)` / `.set(ticker, data)` directly.
 function _chainCacheGet(ticker) {
-    const entry = window._chainCache[ticker];
-    if (!entry) return null;
-    if (Date.now() - entry._ts > _CHAIN_CACHE_TTL) {
-        delete window._chainCache[ticker];
-        return null;
-    }
-    return entry;
+    return window.appState && window.appState.chainCache
+        ? window.appState.chainCache.get(ticker)
+        : null;
 }
 
 function _chainCacheSet(ticker, data) {
-    window._chainCache[ticker] = { ...data, _ts: Date.now() };
+    if (window.appState && window.appState.chainCache) {
+        window.appState.chainCache.set(ticker, data);
+    }
 }
 
 function parseTickers(rawInput) {
@@ -52,4 +51,22 @@ function initializeOptionsTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
     addPositionRow();
+}
+
+// Explicit `window` exports.
+//
+// When this file is loaded as a classic `<script>` (production), top-level
+// function declarations already attach to `window` via the script's global
+// scope, so these assignments are no-ops. When loaded as an ES module (e.g.
+// in vitest unit tests), top-level decls live in module scope, so we need
+// to publish them explicitly for callers that look on `window`.
+if (typeof window !== 'undefined') {
+    window.escapeHtml = escapeHtml;
+    window.parseTickers = parseTickers;
+    window.getValidTickers = getValidTickers;
+    window.toggleOptionsSection = toggleOptionsSection;
+    window.toggleSizingSection = toggleSizingSection;
+    window.initializeOptionsTable = initializeOptionsTable;
+    window._chainCacheGet = _chainCacheGet;
+    window._chainCacheSet = _chainCacheSet;
 }

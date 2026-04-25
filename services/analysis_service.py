@@ -7,9 +7,42 @@ from core.correlation_validator import CorrelationValidator
 from core.market_analyzer import MarketAnalyzer
 from utils.utils import DEFAULT_RISK_THRESHOLD, DEFAULT_ROLLING_WINDOW, exclusive_month_end
 
+from .chart_service import ChartService
 from .market_service import MarketService
 
 logger = logging.getLogger(__name__)
+
+
+def _chart_cache_key(form_data: dict, chart_name: str, *extra) -> tuple:
+    """Build a stable LRU cache key for a deep matplotlib chart.
+
+    ``ticker + features_hash`` per the project plan: features include the
+    horizon (start/end), frequency, and any chart-specific knobs (rolling
+    window, risk threshold, target bias …) passed via ``extra``.
+    """
+    features = {
+        "start": str(form_data.get("parsed_start_time")),
+        "end": str(form_data.get("parsed_end_time")),
+        "frequency": form_data.get("frequency"),
+        "extra": extra,
+    }
+    return (form_data.get("ticker"), chart_name, ChartService.features_hash(features))
+
+
+def _cached_or_build(key: tuple, builder):
+    """Return a cached base64 chart for ``key`` or build → cache → return.
+
+    ``builder`` is invoked only on cache miss. Unlike ``ChartService.generate_cached``
+    this expects ``builder`` to already return a base64 string (the existing
+    analyzer methods do the matplotlib→base64 step internally).
+    """
+    cached = ChartService.cache_get(key)
+    if cached is not None:
+        return cached
+    result = builder()
+    if isinstance(result, str) and result:
+        ChartService.cache_put(key, result)
+    return result
 
 
 class AnalysisService:
@@ -55,6 +88,74 @@ class AnalysisService:
             logger.error(f"Error generating complete analysis: {e}", exc_info=True)
             return {"error": f"analysis_failed: {str(e)}"}
 
+    # ── Streaming-mode slice methods ──────────────────────────────────────────
+    # Each slice is independent: it constructs its own MarketAnalyzer when one
+    # is needed. This is what enables the HTMX `/render/<kind>` endpoints to
+    # run in true wall-clock parallel — matplotlib pyplot state is process-
+    # global and not safe to share across threads, so we accept rebuilding the
+    # analyzer ~2× per ticker (statistical + assessment) in exchange for
+    # genuinely concurrent chart generation.
+
+    @staticmethod
+    def _build_analyzer_or_error(form_data):
+        """Helper: build a MarketAnalyzer or return ({"error": …}, None)."""
+        end_exclusive = exclusive_month_end(form_data.get("parsed_end_time"))
+        analyzer = MarketAnalyzer(
+            ticker=form_data["ticker"],
+            start_date=form_data["parsed_start_time"],
+            frequency=form_data["frequency"],
+            end_date=end_exclusive,
+        )
+        if not analyzer.is_data_valid():
+            return (
+                {"error": f"Failed to download data for {form_data['ticker']}. Please check the ticker symbol."},
+                None,
+            )
+        return None, analyzer
+
+    @staticmethod
+    def generate_market_review_slice(form_data: dict) -> dict:
+        """Slice for /render/market_review. Cheapest of the three.
+
+        MarketService.generate_market_review does not depend on the analyzer,
+        so this slice never builds one.
+        """
+        try:
+            return MarketService.generate_market_review(form_data) or {}
+        except Exception as e:
+            logger.error("market_review slice failed for %s: %s", form_data.get("ticker"), e, exc_info=True)
+            return {"error": f"market_review_failed: {e}"}
+
+    @staticmethod
+    def generate_statistical_slice(form_data: dict) -> dict:
+        """Slice for /render/statistical. Builds its own MarketAnalyzer."""
+        try:
+            err, analyzer = AnalysisService._build_analyzer_or_error(form_data)
+            if err is not None:
+                return err
+            try:
+                return AnalysisService._generate_statistical_analysis(analyzer, form_data)
+            finally:
+                gc.collect()
+        except Exception as e:
+            logger.error("statistical slice failed for %s: %s", form_data.get("ticker"), e, exc_info=True)
+            return {"statistical_error": str(e)}
+
+    @staticmethod
+    def generate_assessment_slice(form_data: dict) -> dict:
+        """Slice for /render/assessment. Builds its own MarketAnalyzer."""
+        try:
+            err, analyzer = AnalysisService._build_analyzer_or_error(form_data)
+            if err is not None:
+                return err
+            try:
+                return AnalysisService._generate_assessment(analyzer, form_data)
+            finally:
+                gc.collect()
+        except Exception as e:
+            logger.error("assessment slice failed for %s: %s", form_data.get("ticker"), e, exc_info=True)
+            return {"assessment_error": str(e)}
+
     @staticmethod
     def _generate_statistical_analysis(analyzer, form_data):
         """Generate statistical analysis results"""
@@ -74,7 +175,10 @@ class AnalysisService:
             chart_warnings = []
 
             # Generate scatter plot with marginal histograms
-            top_plot = analyzer.generate_scatter_plots("Oscillation", rolling_window, risk_threshold)
+            top_plot = _cached_or_build(
+                _chart_cache_key(form_data, "scatter_oscillation", rolling_window, risk_threshold),
+                lambda: analyzer.generate_scatter_plots("Oscillation", rolling_window, risk_threshold),
+            )
             if top_plot:
                 results["feat_ret_scatter_top_url"] = top_plot
             else:
@@ -82,7 +186,10 @@ class AnalysisService:
                 logger.warning("Scatter plot generation returned None for %s", ticker)
 
             # Generate High-Low scatter plot
-            high_low_scatter = analyzer.generate_high_low_scatter()
+            high_low_scatter = _cached_or_build(
+                _chart_cache_key(form_data, "high_low_scatter"),
+                lambda: analyzer.generate_high_low_scatter(),
+            )
             if high_low_scatter:
                 results["high_low_scatter_url"] = high_low_scatter
             else:
@@ -90,14 +197,20 @@ class AnalysisService:
                 logger.warning("High-Low scatter plot returned None for %s", ticker)
 
             # Generate Return-Osc_high/low line chart with rolling projections
-            return_osc_plot = analyzer.generate_return_osc_high_low_chart(rolling_window, risk_threshold)
+            return_osc_plot = _cached_or_build(
+                _chart_cache_key(form_data, "return_osc_high_low", rolling_window, risk_threshold),
+                lambda: analyzer.generate_return_osc_high_low_chart(rolling_window, risk_threshold),
+            )
             if return_osc_plot:
                 results["return_osc_high_low_url"] = return_osc_plot
             else:
                 chart_warnings.append("Return-Oscillation dynamics")
                 logger.warning("Return-Osc plot returned None for %s", ticker)
 
-            volatility_plot = analyzer.generate_volatility_dynamics()
+            volatility_plot = _cached_or_build(
+                _chart_cache_key(form_data, "volatility_dynamics"),
+                lambda: analyzer.generate_volatility_dynamics(),
+            )
             if volatility_plot:
                 results["volatility_dynamic_url"] = volatility_plot
             else:

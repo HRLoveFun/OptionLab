@@ -1,0 +1,20 @@
+<div class="tab-content" id="tab-statistical-analysis">
+    <div class="panel-header">
+        <h2><i class="fas fa-chart-bar"></i> Statistical Analysis</h2>
+        {% if ticker %}
+        <p class="panel-desc">Scatter plots and dynamic correlations for <strong>{{ ticker }}</strong>.</p>
+        {% endif %}
+    </div>
+
+    {% if streaming_mode and job_id and ticker %}
+    <div id="tab-statistical-analysis-content"
+         class="loading-skeleton"
+         hx-get="/render/statistical?job={{ job_id }}&ticker={{ ticker }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+        <div class="empty-state"><i class="fas fa-spinner fa-spin empty-icon"></i><p>Loading statistical analysis…</p></div>
+    </div>
+    {% else %}
+    {% include 'partials/fragments/statistical.html' %}
+    {% endif %}
+</div>

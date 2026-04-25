@@ -203,7 +203,7 @@ function getPositionsData() {
    Portfolio Analysis
    ============================================================ */
 
-let _portfolioAbort = null;
+// AbortController stored in window.appState.aborts under key 'portfolio'.
 async function runPortfolioAnalysis() {
     const positions = getPositionsData();
     if (positions.length === 0) {
@@ -215,12 +215,11 @@ async function runPortfolioAnalysis() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析中...';
     btn.disabled = true;
 
-    if (_portfolioAbort) _portfolioAbort.abort();
-    _portfolioAbort = new AbortController();
+    const signal = window.appState.aborts.begin('portfolio');
 
     try {
         const resp = await fetch('/api/portfolio_analysis', {
-            signal: _portfolioAbort.signal,
+            signal,
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -300,9 +299,9 @@ function renderPortfolioResults(data) {
    ============================================================ */
 
 async function preloadOptionChains(validTickers) {
-    window._chainCache = window._chainCache || {};
+    const cache = window.appState && window.appState.chainCache;
     for (const ticker of validTickers) {
-        if (_chainCacheGet(ticker)) continue;
+        if (cache && cache.has(ticker)) continue;
         fetch('/api/preload_option_chain', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -311,7 +310,7 @@ async function preloadOptionChains(validTickers) {
             .then(r => r.json())
             .then(data => {
                 if (data.status === 'ok') {
-                    _chainCacheSet(ticker, data);
+                    if (cache) cache.set(ticker, data);
                     document.dispatchEvent(new CustomEvent('chainLoaded', { detail: { ticker } }));
                 }
             })

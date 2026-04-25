@@ -1,0 +1,116 @@
+<div class="tab-content" id="tab-game" x-data="panelState('game')">
+    <div class="panel-header">
+        <h2><i class="fas fa-crosshairs"></i> Put Option Selector</h2>
+        <p class="panel-desc">Quantitative decision process for selecting put options based on directional &amp; volatility convictions.</p>
+    </div>
+
+    <!-- Input controls -->
+    <div class="toolbar">
+        <div class="oc-ticker-row" style="flex-wrap:wrap;gap:0.5rem;">
+            <div class="form-group" style="margin:0;min-width:100px;">
+                <label style="font-size:0.75rem;">Budget ($)</label>
+                <input type="number" id="game-budget" class="oc-target-input" value="5000" min="100" step="100" style="width:100px;" />
+            </div>
+            <div class="form-group" style="margin:0;min-width:100px;">
+                <label style="font-size:0.75rem;">Target Move (%)</label>
+                <input type="number" id="game-target-move" class="oc-target-input" value="-8" min="-50" max="-0.1" step="0.5" style="width:80px;" />
+            </div>
+            <div class="form-group" style="margin:0;min-width:100px;">
+                <label style="font-size:0.75rem;">Horizon (days)</label>
+                <input type="number" id="game-horizon" class="oc-target-input" value="21" min="1" max="365" step="1" style="width:70px;" />
+            </div>
+            <div class="form-group" style="margin:0;min-width:120px;">
+                <label style="font-size:0.75rem;">Directional Conviction</label>
+                <input type="range" id="game-dir-conv" min="0" max="100" value="70" style="width:110px;" />
+                <span id="game-dir-conv-val" style="font-size:0.75rem;">0.70</span>
+            </div>
+            <div class="form-group" style="margin:0;min-width:120px;">
+                <label style="font-size:0.75rem;">Vol Conviction</label>
+                <input type="range" id="game-vol-conv" min="0" max="100" value="65" style="width:110px;" />
+                <span id="game-vol-conv-val" style="font-size:0.75rem;">0.65</span>
+            </div>
+            <div class="form-group" style="margin:0;min-width:100px;">
+                <label style="font-size:0.75rem;">Vol Timing</label>
+                <select id="game-vol-timing" style="padding:0.3rem 0.5rem;border-radius:6px;border:1px solid var(--border-color,#ddd);font-size:0.85rem;">
+                    <option value="FAST">Fast (&lt;2 wks)</option>
+                    <option value="MEDIUM" selected>Medium (2-6 wks)</option>
+                    <option value="SLOW">Slow (&gt;6 wks)</option>
+                </select>
+            </div>
+        </div>
+        <div class="toolbar-actions">
+            <button id="game-run-btn" type="button" class="btn-primary" data-action="game-run"
+                    :disabled="phase === 'loading'">
+                <template x-if="phase !== 'loading'"><span><i class="fas fa-play"></i> Run</span></template>
+                <template x-if="phase === 'loading'"><span><i class="fas fa-spinner fa-spin"></i> Running…</span></template>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="panel-banner panel-banner--loading" x-show="phase === 'loading'" x-cloak>
+        <i class="fas fa-spinner fa-spin"></i>
+        <span x-text="message || 'Running put-selector analysis…'"></span>
+    </div>
+
+    <!-- Error -->
+    <div class="panel-banner panel-banner--error" x-show="phase === 'error'" x-cloak>
+        <i class="fas fa-exclamation-circle"></i>
+        <span x-text="message"></span>
+    </div>
+
+    <!-- Loaded content -->
+    <div x-show="phase === 'loaded'" x-cloak>
+        <div id="game-market-ctx">
+            <div class="content-card" style="margin-bottom:1rem;">
+                <div class="content-card-title">Market Context</div>
+                <div class="table-wrapper">
+                    <table class="table table-striped" style="max-width:500px;">
+                        <tbody id="game-market-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-heuristics">
+            <div class="content-card" style="margin-bottom:1rem;">
+                <div class="content-card-title">Decision Heuristics</div>
+                <ul id="game-heuristics-list" style="padding-left:1.2rem;"></ul>
+            </div>
+        </div>
+
+        <div id="game-results">
+            <div class="content-card">
+                <div class="content-card-title">Ranked Candidates <span id="game-filter-info" style="font-weight:normal;font-size:0.8rem;color:var(--text-muted,#888);"></span></div>
+                <div class="table-wrapper" style="overflow-x:auto;">
+                    <table class="table table-striped" id="game-results-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Strike</th>
+                                <th>DTE</th>
+                                <th>Delta</th>
+                                <th>IV %</th>
+                                <th>Mid $</th>
+                                <th>Contracts</th>
+                                <th>Vega/Theta</th>
+                                <th>Odds Ratio</th>
+                                <th>Win Rate</th>
+                                <th>EV $</th>
+                                <th>EV/Dollar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="game-results-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty / idle -->
+    <div class="empty-state" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
+        <i class="fas fa-crosshairs empty-icon"></i>
+        <p x-show="phase === 'idle'">Configure parameters above and click <strong>Run</strong> to find optimal put options.</p>
+        <p x-show="phase === 'empty'" x-text="message || 'No candidates matched the current filters.'"></p>
+    </div>
+</div>
