@@ -1,10 +1,11 @@
 """Tests for data_pipeline/db.py — init, get_conn, upsert, fetch."""
 
 import sqlite3
+import threading
 
 import pytest
 
-from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
+from data_pipeline.db import close_thread_conn, fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:
@@ -30,15 +31,48 @@ class TestGetConn:
         with get_conn(db) as conn:
             mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
             assert mode.lower() == "wal"
+        close_thread_conn(db)
 
-    def test_conn_closes(self, tmp_path):
+    def test_conn_persists_across_with_blocks(self, tmp_path):
+        """get_conn now returns a thread-local persistent connection.
+
+        The same connection object must be reused across multiple `with` blocks
+        on the same thread (avoids the cost of reconnecting + re-applying
+        PRAGMAs on every query). Closing is explicit via close_thread_conn().
+        """
         db = str(tmp_path / "test.sqlite")
         init_db(db)
-        with get_conn(db) as conn:
-            conn.execute("SELECT 1")
-        # After exiting context, connection should be closed
+        with get_conn(db) as conn1:
+            id1 = id(conn1)
+        with get_conn(db) as conn2:
+            id2 = id(conn2)
+            # Same Python object — cached connection reused.
+            assert id1 == id2
+            # And it's still open and usable.
+            assert conn2.execute("SELECT 1").fetchone()[0] == 1
+        close_thread_conn(db)
+        # After explicit close the cached entry is gone.
         with pytest.raises(sqlite3.ProgrammingError):
-            conn.execute("SELECT 1")
+            conn2.execute("SELECT 1")
+
+    def test_per_thread_isolation(self, tmp_path):
+        """Different threads must get different connection objects."""
+        db = str(tmp_path / "test.sqlite")
+        init_db(db)
+        with get_conn(db) as main_conn:
+            main_id = id(main_conn)
+        worker_id: list[int] = []
+
+        def _worker():
+            with get_conn(db) as c:
+                worker_id.append(id(c))
+            close_thread_conn(db)
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join()
+        assert worker_id and worker_id[0] != main_id
+        close_thread_conn(db)
 
 
 class TestUpsertMany:

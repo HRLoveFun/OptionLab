@@ -1,0 +1,114 @@
+{# Fragment for /render/options_chain. Volatility Analysis tab body. #}
+<div id="tab-options-chain-content">
+    {% if oc_snapshot %}
+    <div class="meta-bar">
+        <span class="meta-chip"><i class="fas fa-dollar-sign"></i> Spot: {{ oc_snapshot.spot | round(2) }}</span>
+        <span class="meta-chip"><i class="fas fa-calendar"></i> Expiries: {{ oc_snapshot.expiries | length }}</span>
+        <span class="meta-chip"><i class="fas fa-crosshairs"></i> ATM: {{ oc_snapshot.atm_strike }}</span>
+        <span class="meta-chip"><i class="fas fa-clock"></i> {{ oc_snapshot.timestamp }}</span>
+    </div>
+
+    {% if oc_key_metrics %}
+    <div class="content-card">
+        <div class="content-card-title">Key Metrics Snapshot</div>
+        <div class="table-wrapper">{{ oc_key_metrics | safe }}</div>
+    </div>
+    {% endif %}
+
+    {% if oc_vol_premium %}
+    <div class="content-card">
+        <div class="content-card-title">Volatility Premium (IV vs HV)</div>
+        <div class="table-wrapper">
+            <table class="table table-striped" style="border:0;">
+                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                <tbody>
+                    <tr><td>ATM IV</td><td>{{ oc_vol_premium.atm_iv }}%</td></tr>
+                    <tr><td>HV 10d</td><td>{{ oc_vol_premium.hv_10d }}%</td></tr>
+                    <tr><td>HV 20d</td><td>{{ oc_vol_premium.hv_20d or 'N/A' }}{% if oc_vol_premium.hv_20d %}%{% endif %}</td></tr>
+                    <tr><td>HV 60d</td><td>{{ oc_vol_premium.hv_60d }}%</td></tr>
+                    <tr><td>Vol Premium (IV/HV20)</td><td>{{ oc_vol_premium.vol_premium or 'N/A' }}</td></tr>
+                    <tr><td>HV Rank (252d)</td><td>{{ oc_vol_premium.hv_rank_252d }}{% if oc_vol_premium.hv_rank_252d is number %}%{% endif %}</td></tr>
+                    <tr><td>HV Term Slope (10d−60d)</td><td>{{ oc_vol_premium.hv_term_slope }}</td></tr>
+                    <tr><td><strong>Signal</strong></td><td><strong>{{ oc_vol_premium.signal }}</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if oc_expected_move %}
+    <div class="content-card">
+        <div class="content-card-title">Expected Move by Expiry</div>
+        <div class="table-wrapper">{{ oc_expected_move | safe }}</div>
+    </div>
+    {% endif %}
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        {% if oc_iv_smile %}
+        <div class="content-card">
+            <div class="content-card-title">IV Smile (Nearest Expiry)</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ oc_iv_smile }}" alt="IV Smile" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+        {% if oc_iv_term_structure %}
+        <div class="content-card">
+            <div class="content-card-title">IV Term Structure</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ oc_iv_term_structure }}" alt="IV Term Structure" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if oc_iv_surface %}
+    <div class="content-card">
+        <div class="content-card-title">IV Surface</div>
+        <div class="chart-wrapper">
+            <img src="data:image/png;base64,{{ oc_iv_surface }}" alt="IV Surface" class="analysis-chart">
+        </div>
+    </div>
+    {% endif %}
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        {% if oc_skew_analysis %}
+        <div class="content-card">
+            <div class="content-card-title">Skew Analysis (Nearest Expiry)</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ oc_skew_analysis }}" alt="Skew Analysis" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+        {% if oc_oi_volume %}
+        <div class="content-card">
+            <div class="content-card-title">OI / Volume Profile</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ oc_oi_volume }}" alt="OI Volume Profile" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if oc_pcr_summary %}
+    <div class="content-card">
+        <div class="content-card-title">Put/Call Ratio by Expiry</div>
+        <div class="chart-wrapper">
+            <img src="data:image/png;base64,{{ oc_pcr_summary }}" alt="PCR Summary" class="analysis-chart">
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-link empty-icon"></i>
+        {% if oc_error is defined and oc_error %}
+        <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Volatility analysis error: {{ oc_error }}</p>
+        {% elif ticker is defined and ticker %}
+        <p>Volatility analysis data was not available for <strong>{{ ticker }}</strong>.</p>
+        {% else %}
+        <p>Run an analysis first &mdash; go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

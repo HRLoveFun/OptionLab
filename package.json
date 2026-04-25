@@ -1,0 +1,17 @@
+{
+  "name": "optionlab-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Frontend unit tests for OptionLab static JS modules.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.8",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  }
+}

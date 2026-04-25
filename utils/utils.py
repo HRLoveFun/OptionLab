@@ -92,28 +92,54 @@ def init_yf_proxy() -> None:
 
 
 # ── yfinance global rate throttle ──────────────────────────────────
-# Prevents self-inflicted 429 errors by serialising yf.download /
-# yf.Ticker calls with a minimum gap between them.
+# Token-bucket limiter: refills at YF_RATE_PER_SEC tokens/second up to a
+# burst capacity of YF_BUCKET_SIZE. Each `yf_throttle()` consumes one token,
+# blocking only when the bucket is empty. This replaces the older fixed
+# 1.5s gap so a small burst (e.g. 5 parallel requests) completes quickly
+# while sustained traffic still respects Yahoo's per-IP limits.
 
 _yf_throttle_lock = _threading.Lock()
-_yf_last_call: float = 0.0
-_YF_MIN_INTERVAL = 1.5  # seconds between Yahoo network calls
+_YF_RATE_PER_SEC = float(os.environ.get("YF_RATE_PER_SEC", "5.0"))
+_YF_BUCKET_SIZE = float(os.environ.get("YF_BUCKET_SIZE", "5.0"))
+_yf_tokens: float = _YF_BUCKET_SIZE
+_yf_last_refill: float = 0.0
 
 
 def yf_throttle() -> None:
-    """Block until at least ``_YF_MIN_INTERVAL`` seconds since the last call.
+    """Block until a token is available, then consume one.
 
-    Call this before every ``yf.download()`` / ``yf.Ticker()`` invocation.
+    Tokens regenerate at ``YF_RATE_PER_SEC`` (default 5/s) up to a burst
+    capacity of ``YF_BUCKET_SIZE`` (default 5). Call this immediately
+    before every ``yf.download()`` / ``yf.Ticker()`` invocation.
     """
     import time as _time
 
-    global _yf_last_call
+    global _yf_tokens, _yf_last_refill
+    while True:
+        with _yf_throttle_lock:
+            now = _time.monotonic()
+            if _yf_last_refill == 0.0:
+                _yf_last_refill = now
+            elapsed = now - _yf_last_refill
+            if elapsed > 0:
+                _yf_tokens = min(_YF_BUCKET_SIZE, _yf_tokens + elapsed * _YF_RATE_PER_SEC)
+                _yf_last_refill = now
+            if _yf_tokens >= 1.0:
+                _yf_tokens -= 1.0
+                return
+            # Compute exact wait outside the lock so other waiters can also
+            # observe the refilled bucket once their slot frees up.
+            deficit = 1.0 - _yf_tokens
+            wait = deficit / _YF_RATE_PER_SEC if _YF_RATE_PER_SEC > 0 else 0.2
+        _time.sleep(max(0.001, wait))
+
+
+def _yf_throttle_reset() -> None:
+    """Test helper: reset the bucket to full. Not part of the public API."""
+    global _yf_tokens, _yf_last_refill
     with _yf_throttle_lock:
-        now = _time.monotonic()
-        wait = _YF_MIN_INTERVAL - (now - _yf_last_call)
-        if wait > 0:
-            _time.sleep(wait)
-        _yf_last_call = _time.monotonic()
+        _yf_tokens = _YF_BUCKET_SIZE
+        _yf_last_refill = 0.0
 
 
 class DataFormatter:

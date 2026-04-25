@@ -32,7 +32,8 @@ def test_index_loads_without_js_errors(page: Page, live_server: str, mock_apis, 
     expect(page.locator("#analysis-form")).to_be_visible()
     expect(page.locator("#ticker")).to_have_count(1)
 
-    for tab_id in TAB_IDS:
+    # tab-summary only renders for multi-ticker; skip in single-ticker default GET.
+    for tab_id in [tid for tid in TAB_IDS if tid != "tab-summary"]:
         button = page.locator(f'.tab-btn[data-tab="{tab_id}"]')
         expect(button).to_have_count(1)
 

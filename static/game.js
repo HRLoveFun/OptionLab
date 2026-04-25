@@ -1,6 +1,12 @@
 // ── Put Option Decision Game ─────────────────────────────────────
+//
+// Async lifecycle is driven by the panel state machine
+// (`appState.panels.set('game', ...)`). The Alpine `panelState('game')`
+// scope on the partial subscribes via the bus and shows exactly one of
+// idle | loading | loaded | error | empty at any time. Do NOT toggle
+// .style.display on game-* elements directly.
 
-let _gameAbort = null;
+const _gamePanel = (phase, opts) => window.appState.panels.set('game', phase, opts);
 
 (function initGameSliders() {
     const dirSlider = document.getElementById('game-dir-conv');
@@ -23,7 +29,7 @@ async function runGameAnalysis() {
     const tickerInput = document.getElementById('ticker');
     const ticker = (tickerInput ? tickerInput.value : '').trim().toUpperCase();
     if (!ticker) {
-        _gameShowError('Please enter a ticker in the Parameter tab first.');
+        _gamePanel('error', { message: 'Please enter a ticker in the Parameter tab first.' });
         return;
     }
 
@@ -34,26 +40,12 @@ async function runGameAnalysis() {
     const volConv = parseInt(document.getElementById('game-vol-conv').value) / 100;
     const volTiming = document.getElementById('game-vol-timing').value;
 
-    const btn = document.getElementById('game-run-btn');
-    const statusEl = document.getElementById('game-status');
-    const emptyEl = document.getElementById('game-empty');
-    const resultsEl = document.getElementById('game-results');
-    const marketEl = document.getElementById('game-market-ctx');
-    const heuristicsEl = document.getElementById('game-heuristics');
-
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...'; }
-    if (statusEl) { statusEl.style.display = 'none'; }
-    if (emptyEl) { emptyEl.style.display = 'none'; }
-    if (resultsEl) { resultsEl.style.display = 'none'; }
-    if (marketEl) { marketEl.style.display = 'none'; }
-    if (heuristicsEl) { heuristicsEl.style.display = 'none'; }
-
-    if (_gameAbort) _gameAbort.abort();
-    _gameAbort = new AbortController();
+    _gamePanel('loading', { message: 'Running put-selector analysis…' });
+    const signal = window.appState.aborts.begin('game');
 
     try {
         const resp = await fetch('/api/game', {
-            signal: _gameAbort.signal,
+            signal,
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -69,36 +61,29 @@ async function runGameAnalysis() {
         const data = await resp.json();
 
         if (data.status !== 'ok') {
-            _gameShowError(data.message || 'Unknown error');
+            _gamePanel('error', { message: data.message || 'Unknown error' });
             return;
         }
 
+        const ranked = data.ranked || [];
         _gameRenderMarketCtx(data);
         _gameRenderHeuristics(data.heuristics || []);
+        if (ranked.length === 0) {
+            _gamePanel('empty', { message: 'No candidates passed all filters. Consider relaxing parameters.' });
+            return;
+        }
         _gameRenderResults(data);
+        _gamePanel('loaded', { data });
 
     } catch (e) {
         if (e.name === 'AbortError') return;
-        _gameShowError('Network error: ' + e.message);
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Run'; }
+        _gamePanel('error', { message: 'Network error: ' + e.message });
     }
-}
-
-function _gameShowError(msg) {
-    const statusEl = document.getElementById('game-status');
-    const emptyEl = document.getElementById('game-empty');
-    if (statusEl) {
-        statusEl.style.display = 'block';
-        statusEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + escapeHtml(msg);
-    }
-    if (emptyEl) { emptyEl.style.display = 'none'; }
 }
 
 function _gameRenderMarketCtx(data) {
-    const el = document.getElementById('game-market-ctx');
     const tbody = document.getElementById('game-market-tbody');
-    if (!el || !tbody) return;
+    if (!tbody) return;
 
     const rows = [
         ['Spot Price', '$' + (data.spot_price || 'N/A')],
@@ -113,42 +98,25 @@ function _gameRenderMarketCtx(data) {
     tbody.innerHTML = rows.map(function (r) {
         return '<tr><td style="font-weight:600;">' + r[0] + '</td><td>' + r[1] + '</td></tr>';
     }).join('');
-    el.style.display = 'block';
 }
 
 function _gameRenderHeuristics(notes) {
-    const el = document.getElementById('game-heuristics');
     const list = document.getElementById('game-heuristics-list');
-    if (!el || !list) return;
-    if (!notes.length) { el.style.display = 'none'; return; }
-
-    list.innerHTML = notes.map(function (n) {
+    if (!list) return;
+    list.innerHTML = (notes || []).map(function (n) {
         return '<li style="margin-bottom:0.4rem;">' + escapeHtml(n) + '</li>';
     }).join('');
-    el.style.display = 'block';
 }
 
 function _gameRenderResults(data) {
-    const el = document.getElementById('game-results');
     const tbody = document.getElementById('game-results-tbody');
     const info = document.getElementById('game-filter-info');
-    const emptyEl = document.getElementById('game-empty');
-    if (!el || !tbody) return;
+    if (!tbody) return;
 
     const ranked = data.ranked || [];
     if (info) {
         info.textContent = '(' + data.candidates_passed + ' of '
             + data.candidates_total + ' passed filters)';
-    }
-
-    if (ranked.length === 0) {
-        el.style.display = 'none';
-        if (emptyEl) {
-            emptyEl.style.display = 'block';
-            emptyEl.innerHTML = '<i class="fas fa-crosshairs empty-icon"></i>'
-                + '<p>No candidates passed all filters. Consider relaxing parameters.</p>';
-        }
-        return;
     }
 
     tbody.innerHTML = ranked.map(function (c, i) {
@@ -169,6 +137,4 @@ function _gameRenderResults(data) {
             + '<td style="' + evClass + '">' + c.ev_ratio + '</td>'
             + '</tr>';
     }).join('');
-
-    el.style.display = 'block';
 }

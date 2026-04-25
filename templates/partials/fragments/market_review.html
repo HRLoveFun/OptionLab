@@ -1,0 +1,59 @@
+{# Fragment for /render/market_review.
+   Returned to HTMX as the inner body of #tab-market-review. The interactive
+   chart is handled by JS (market_review_chart.js); this fragment contributes
+   the meta-bar, the chart toolbar/canvas wrapper, and (when present) the
+   collapsible data table.
+
+   Required vars: ticker, frequency_display | frequency, start_time, end_time,
+                  risk_threshold, side_bias, market_review_table.
+   Used by: tab_market_review.html (synchronous mode) AND
+            /render/market_review (streaming mode).
+#}
+<div id="tab-market-review-content">
+    {% if ticker %}
+    <div class="meta-bar">
+        <span class="meta-chip"><i class="fas fa-tag"></i> {{ ticker }}</span>
+        <span class="meta-chip"><i class="fas fa-clock"></i> {{ frequency_display or frequency }}</span>
+        <span class="meta-chip"><i class="fas fa-calendar"></i> {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}</span>
+        <span class="meta-chip"><i class="fas fa-shield-alt"></i> Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%</span>
+        <span class="meta-chip"><i class="fas fa-compass"></i> {{ side_bias or 'Natural' }}</span>
+    </div>
+
+    <div class="content-card">
+        <div class="mr-toolbar">
+            <div class="btn-group" id="mr-mode-btns">
+                <button class="btn-toggle active" onclick="setMrMode('return')">Return</button>
+                <button class="btn-toggle" onclick="setMrMode('vol')">Volatility</button>
+                <button class="btn-toggle" onclick="setMrMode('corr')">Correlation</button>
+            </div>
+            <div class="btn-group" id="mr-period-btns">
+                <button class="btn-toggle" onclick="setMrPeriod('1M')">1M</button>
+                <button class="btn-toggle" onclick="setMrPeriod('1Q')">1Q</button>
+                <button class="btn-toggle" onclick="setMrPeriod('YTD')">YTD</button>
+                <button class="btn-toggle active" onclick="setMrPeriod('ETD')">ETD</button>
+            </div>
+            <div id="asset-toggle-container" class="asset-toggles"></div>
+            <button class="btn-ghost btn-sm" onclick="toggleSummaryTable()">
+                <i class="fas fa-table"></i> Data Table
+            </button>
+        </div>
+        <div id="market-review-chart-container" style="height:420px; position:relative;">
+            <canvas id="market-review-chart"></canvas>
+        </div>
+    </div>
+
+    <div id="market-review-table-wrapper" style="display:none;">
+        {% if market_review_table %}
+        <div class="content-card">
+            <div class="content-card-title">Return, Volatility &amp; Correlation</div>
+            <div class="table-wrapper">{{ market_review_table|safe }}</div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-table empty-icon"></i>
+        <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+    </div>
+    {% endif %}
+</div>

@@ -991,6 +991,54 @@ body {
    Option Chain – T-format table
    ============================================================ */
 
+/* Generic panel toolbar — primary actions go on the right. See
+   docs/frontend_architecture.md for the button-placement contract. */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.toolbar .toolbar-spacer {
+    flex: 1 1 auto;
+}
+
+.toolbar .toolbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+/* Status / loading / error / empty banners (panel state machine).
+   Exactly one is visible at any time — see static/state/panelState.js. */
+.panel-banner {
+    padding: .6rem .9rem;
+    border-radius: 6px;
+    font-size: .85rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .75rem;
+}
+
+.panel-banner--loading {
+    background: var(--bg-info, #eef4fb);
+    color: var(--text-info, #1f4f8b);
+}
+
+.panel-banner--error {
+    background: var(--bg-error, #fdecea);
+    color: var(--text-error, #a3231b);
+}
+
+.panel-banner--empty {
+    background: var(--bg-muted, #f6f7f9);
+    color: var(--text-muted, #6b7280);
+}
+
 /* Toolbar row (ticker input + button + spot) */
 .oc-toolbar {
     display: flex;
@@ -1283,17 +1331,33 @@ body {
     font-weight: 500;
 }
 
-/* Strike column */
+/* Strike column — emphasized per Design Principle P1 (primary identifier
+   inside the chain row). Bumped +2px and weight 700 vs surrounding cells. */
 .oc-t-strike {
     display: flex;
     align-items: center;
     justify-content: center;
     padding: .35rem .25rem;
-    font-weight: 600;
-    font-size: .82rem;
+    font-weight: 700;
+    font-size: 1rem;
+    /* +2px vs the .82rem default of calls/puts cells */
     color: var(--slate-900);
     background: var(--slate-50);
     border-right: 1px solid var(--slate-200);
+    letter-spacing: .01em;
+}
+
+/* OI / Volume cells de-emphasized so liquidity context doesn't compete
+   with price columns. Calls grid order: IV%, OI, Vol, Bid, Ask, Last, Prem
+   — so OI = nth-child(2), Vol = nth-child(3).
+   Puts grid mirrors: Prem, Last, Bid, Ask, Vol, OI, IV%
+   — so Vol = nth-child(5), OI = nth-child(6). */
+.oc-t-calls>span:nth-child(2),
+.oc-t-calls>span:nth-child(3),
+.oc-t-puts>span:nth-child(5),
+.oc-t-puts>span:nth-child(6) {
+    color: var(--slate-500);
+    font-variant-numeric: tabular-nums;
 }
 
 /* Spot-price divider row */
@@ -1721,4 +1785,314 @@ body {
     font-size: .82rem;
     font-weight: 600;
     color: var(--slate-700);
+}
+
+/* ============================================================
+   Design System — UI Principles (see docs/frontend_architecture.md)
+   ------------------------------------------------------------
+   P1: Information hierarchy   →  .kpi-strip / .kpi-card / .metric-hero
+   P2: Four-state machine      →  panel-banner / .empty-state (above)
+   P3: Semantic color lock     →  .semantic-pos / -neg / -info / -warn
+   P4: Button spec             →  .btn-* (above) — focus rings below
+   P5: Accessibility baseline  →  :focus-visible + sr-only helpers
+   ============================================================ */
+
+/* P1 — Hero metric. Use for the single primary number per panel.
+   Render in the 24–32px range with a tight label.
+   Example markup:
+       <div class="metric-hero">
+         <div class="metric-hero__label">Total Return (ETD)</div>
+         <div class="metric-hero__value semantic-pos">+12.4%</div>
+       </div>                                                       */
+.metric-hero {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    padding: .75rem 1rem;
+    background: var(--blue-light);
+    border: 1px solid var(--blue-muted);
+    border-radius: var(--radius-md);
+    min-width: 180px;
+}
+
+.metric-hero__label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.metric-hero__value {
+    font-size: 1.9rem;
+    /* ≈ 28px @ 15px root  → within the 24–32px hero range */
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--slate-900);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+
+.metric-hero__sub {
+    font-size: .78rem;
+    color: var(--slate-500);
+    margin-top: .15rem;
+}
+
+/* P1 — KPI strip: secondary metrics row.
+   Use immediately below the hero metric. */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .75rem;
+    margin: 1rem 0;
+}
+
+.kpi-card {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    padding: .75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    box-shadow: var(--shadow);
+}
+
+.kpi-card--primary {
+    background: var(--blue-light);
+    border-color: var(--blue-muted);
+}
+
+.kpi-card__label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.kpi-card__value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-card--primary .kpi-card__value {
+    /* hero variant inside KPI strip — sized into the 24–32px range */
+    font-size: 1.9rem;
+    line-height: 1.1;
+}
+
+.kpi-card__sub {
+    font-size: .75rem;
+    color: var(--slate-500);
+}
+
+/* P3 — Semantic color helpers. The ONLY four colors approved for
+   conveying meaning. Decorative use is forbidden — see PR checklist.
+       .semantic-pos  → gain / up-trend / completed   (green)
+       .semantic-neg  → loss / down-trend / failure   (red)
+       .semantic-info → neutral accent / informational (blue)
+       .semantic-warn → caution / incomplete / chop    (orange)         */
+.semantic-pos {
+    color: var(--success);
+}
+
+.semantic-neg {
+    color: var(--error);
+}
+
+.semantic-info {
+    color: var(--blue);
+}
+
+.semantic-warn {
+    color: var(--warning);
+}
+
+.semantic-pos-bg {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.semantic-neg-bg {
+    background: var(--error-bg);
+    color: #991b1b;
+}
+
+.semantic-info-bg {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+}
+
+.semantic-warn-bg {
+    background: #fffbeb;
+    color: #92400e;
+}
+
+/* P5 — Visible focus ring on all interactive elements. Tabs, buttons,
+   inputs, links. Never override without supplying an alternative. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.btn-toggle:focus-visible,
+.tab-btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* P5 — Visually hidden helper for screen-reader-only labels. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================================
+   Market Review — column hierarchy (P1)
+   The pandas-rendered table has columns:
+       1 = index (asset name)
+       2 = Last Close
+       3-6 = Return (1M, 1Q, YTD, ETD)
+       7-10 = Volatility (...)
+       11-14 = Correlation (...)
+   We highlight columns 1-6 (asset / close / return) as the
+   left-side priority block per the design brief.
+   ============================================================ */
+.mr-priority-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.mr-priority-table tbody td:nth-child(-n+6),
+.mr-priority-table tbody th:first-child {
+    background: var(--blue-light);
+    font-weight: 600;
+}
+
+.mr-priority-table tbody td:nth-child(2),
+.mr-priority-table tbody td:nth-child(3),
+.mr-priority-table tbody td:nth-child(4),
+.mr-priority-table tbody td:nth-child(5),
+.mr-priority-table tbody td:nth-child(6) {
+    color: var(--slate-900);
+}
+
+.mr-priority-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--slate-50);
+    z-index: 1;
+}
+
+/* ============================================================
+   Regime hero — P1 + P3
+   Large composite label for the current market regime.
+   ============================================================ */
+.regime-hero {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.2fr) 2fr;
+    gap: 1.25rem;
+    align-items: stretch;
+    padding: 1rem 0;
+}
+
+@media (max-width: 720px) {
+    .regime-hero {
+        grid-template-columns: 1fr;
+    }
+}
+
+.regime-hero__primary {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, var(--slate-50), #fff);
+    border: 1px solid var(--slate-200);
+    box-shadow: var(--shadow);
+}
+
+.regime-hero__date {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--slate-500);
+}
+
+.regime-hero__label {
+    font-size: 1.85rem;
+    /* ≈ 28px — primary regime composite label */
+    font-weight: 700;
+    line-height: 1.15;
+    margin: .35rem 0 .5rem;
+    color: var(--slate-900);
+    letter-spacing: -.01em;
+}
+
+.regime-hero__badges {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+}
+
+.regime-badge {
+    display: inline-block;
+    padding: .25rem .7rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: .82rem;
+    color: #fff;
+    background: var(--regime-badge-fallback);
+    letter-spacing: .02em;
+}
+
+.regime-hero__metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: .6rem;
+}
+
+.regime-hero__metric {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    padding: .6rem .8rem;
+}
+
+.regime-hero__metric-label {
+    font-size: .7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--slate-500);
+}
+
+.regime-hero__metric-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--slate-900);
+    margin-top: .2rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Hero placeholder while loading / empty (state machine P2) */
+.regime-hero--placeholder {
+    color: var(--slate-500);
+    font-style: italic;
+    padding: 1.5rem 1rem;
 }

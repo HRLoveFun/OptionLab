@@ -1,0 +1,69 @@
+{# Fragment for /render/assessment.
+   Required vars: ticker, feat_projection_url, feat_projection_table, plot_url,
+                  position_sizing, assessment_error.
+#}
+<div id="tab-market-assessment-content">
+    {% if feat_projection_url is defined or plot_url is defined %}
+    <div class="charts-stack">
+        {% if feat_projection_url %}
+        <div class="content-card">
+            <div class="content-card-title">Oscillation Projection</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ feat_projection_url }}" alt="Market Projection" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if feat_projection_table is defined and feat_projection_table and not feat_projection_table.empty %}
+        <div class="content-card">
+            <div class="content-card-title">Projection Values</div>
+            <div class="table-wrapper">{{ feat_projection_table|safe }}</div>
+        </div>
+        {% endif %}
+
+        {% if plot_url %}
+        <div class="content-card">
+            <div class="content-card-title">Options Portfolio P&amp;L Analysis</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ plot_url }}" alt="Options P&L Chart" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if position_sizing %}
+        <div class="content-card">
+            <div class="content-card-title"><i class="fas fa-calculator"></i> Position Sizing</div>
+            <div class="table-wrapper">
+                <table class="table table-striped" style="border:0;">
+                    <tbody>
+                        {% if position_sizing.max_contracts is not none %}
+                        <tr><td>Max Contracts</td><td><strong>{{ position_sizing.max_contracts }}</strong></td></tr>
+                        <tr><td>Actual Risk</td><td>${{ position_sizing.actual_risk }}</td></tr>
+                        <tr><td>Risk %</td><td>{{ position_sizing.risk_pct }}%</td></tr>
+                        <tr><td>Basis</td><td>{{ position_sizing.basis }}</td></tr>
+                        {% endif %}
+                        {% if position_sizing.warning %}
+                        <tr><td colspan="2" style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> {{ position_sizing.warning }}</td></tr>
+                        {% endif %}
+                        {% if position_sizing.margin_note %}
+                        <tr><td colspan="2" style="color:#6b7280;"><i class="fas fa-info-circle"></i> {{ position_sizing.margin_note }}</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-binoculars empty-icon"></i>
+        {% if assessment_error is defined and assessment_error %}
+        <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Assessment error: {{ assessment_error }}</p>
+        {% elif ticker is defined and ticker %}
+        <p style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> Projection analysis ran but no charts were generated. The selected time horizon may have insufficient data.</p>
+        {% else %}
+        <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

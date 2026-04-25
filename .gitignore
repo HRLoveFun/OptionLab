@@ -37,3 +37,13 @@ venv/
 .coverage
 htmlcov/
 .ruff_cache/
+coverage/
+
+# Node / JS
+node_modules/
+npm-debug.log*
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/

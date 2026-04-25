@@ -1,0 +1,21 @@
+<div class="tab-content {% if ticker %}active{% endif %}" id="tab-market-review">
+    <div class="panel-header">
+        <h2><i class="fas fa-table"></i> Market Review</h2>
+        {% if ticker %}
+        <p class="panel-desc">Return, volatility, and correlation summary for <strong>{{ ticker }}</strong>.</p>
+        {% endif %}
+    </div>
+
+    {% if streaming_mode and job_id and ticker %}
+    {# HTMX streaming: skeleton fires on load and is replaced by /render/market_review. #}
+    <div id="tab-market-review-content"
+         class="loading-skeleton"
+         hx-get="/render/market_review?job={{ job_id }}&ticker={{ ticker }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+        <div class="empty-state"><i class="fas fa-spinner fa-spin empty-icon"></i><p>Loading market review…</p></div>
+    </div>
+    {% else %}
+    {% include 'partials/fragments/market_review.html' %}
+    {% endif %}
+</div>

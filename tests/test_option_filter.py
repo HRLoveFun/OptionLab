@@ -89,12 +89,16 @@ def test_filter_compress_moneyness():
 
 
 def test_filter_no_spot():
-    """No spot price → return data unmodified."""
+    """No spot price → return data unmodified (apart from DTE filter)."""
     from app import _filter_option_chain
+    import datetime as _dt
 
+    # Use a date that's always in the near future relative to "today" so the
+    # DTE filter passes; the expiration must remain after filtering.
+    future = (_dt.date.today() + _dt.timedelta(days=15)).isoformat()
     data = {
-        "expirations": ["2026-04-15"],
-        "chain": {"2026-04-15": {"calls": [{"strike": 100}], "puts": []}},
+        "expirations": [future],
+        "chain": {future: {"calls": [{"strike": 100}], "puts": []}},
         "spot": None,
     }
     result = _filter_option_chain(data)

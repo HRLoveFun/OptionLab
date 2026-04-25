@@ -1,0 +1,20 @@
+<div class="tab-content" id="tab-market-assessment">
+    <div class="panel-header">
+        <h2><i class="fas fa-binoculars"></i> Assessment &amp; Projections</h2>
+        {% if ticker %}
+        <p class="panel-desc">Forward-looking projections and P&amp;L for <strong>{{ ticker }}</strong>.</p>
+        {% endif %}
+    </div>
+
+    {% if streaming_mode and job_id and ticker %}
+    <div id="tab-market-assessment-content"
+         class="loading-skeleton"
+         hx-get="/render/assessment?job={{ job_id }}&ticker={{ ticker }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+        <div class="empty-state"><i class="fas fa-spinner fa-spin empty-icon"></i><p>Loading projections…</p></div>
+    </div>
+    {% else %}
+    {% include 'partials/fragments/assessment.html' %}
+    {% endif %}
+</div>

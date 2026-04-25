@@ -1,25 +1,37 @@
 """Pytest fixtures for Playwright e2e tests.
 
-These tests exercise the real Flask app rendered in a real browser
-(Chromium via Playwright). All network-bound side effects (yfinance,
-the `/api/*` endpoints) are intercepted at the browser level via
-`page.route`, so the backend never actually calls Yahoo and the DB
-is only used for index.html rendering.
+Two interception strategies are supported:
+
+  1. **Browser-level mocks** (default for legacy tests) — `mock_apis` uses
+     `page.route` to fulfill `/api/*` calls with canned JSON. The Flask
+     backend is bypassed entirely. Fast, deterministic, no yfinance risk.
+
+  2. **Real backend + yfinance stub** (`yf_stub` fixture, session-scoped) —
+     The Flask process runs every route normally, but `yfinance.Ticker`,
+     `yf.download`, and `fast_info` are monkey-patched in the backend
+     process to return synthetic data. Combined with the existing
+     `TEST_*` ticker fixture mechanism in `data_pipeline.downloader`, this
+     lets e2e tests exercise real form submission, real DataService
+     pipeline, real chart rendering — without network.
+
+Tests pick whichever fixture they need: `mock_apis` for tab-routing /
+JS-only flows, `yf_stub` (+ no `mock_apis`) for end-to-end form submit.
 
 Scopes:
   * `live_server` is session-scoped — one Flask server per test session.
-  * The DB is isolated to a session-scoped temp dir so the parent
-    `tests/conftest.py::_isolate_db` (function-scoped) is overridden
-    here to avoid breaking the running server mid-session.
+  * `yf_stub` is session-scoped — backend patches outlive any single test.
+  * The DB is isolated to a session-scoped temp dir.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import socket
 import threading
 from collections.abc import Iterator
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -70,6 +82,154 @@ def _e2e_db(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     except ImportError:
         pass
     yield db_file
+
+
+# ---------------------------------------------------------------------------
+# Backend yfinance stub — installs *once* for the whole session.
+#
+# Tests that want to exercise real Flask routes (form POST → render endpoints
+# → /api/option_chain → /api/validate_tickers) opt in by using the `yf_stub`
+# fixture *instead of* `mock_apis`. The patch covers:
+#
+#   * `yfinance.download`              — used by data_pipeline.downloader and
+#                                        core.market_review
+#   * `yfinance.Ticker(...).fast_info` — used for spot price lookups
+#   * `yfinance.Ticker(...).options`   — option expirations list
+#   * `yfinance.Ticker(...).option_chain(exp)` — calls/puts DataFrames
+#
+# Combined with the existing `TEST_*` ticker bypass in
+# `data_pipeline.downloader._download_yf`, real `TEST_AAPL` form submissions
+# never hit the network.
+# ---------------------------------------------------------------------------
+def _synthetic_ohlcv(ticker: str, start: dt.date, end: dt.date):
+    """Build a deterministic OHLCV DataFrame mirroring yfinance's shape."""
+    import pandas as pd
+
+    idx = pd.bdate_range(start, end)
+    if len(idx) == 0:
+        # Provide at least one row so downstream slices don't crash.
+        idx = pd.bdate_range(end - dt.timedelta(days=7), end)
+    base = 100.0 + (sum(ord(c) for c in ticker) % 50)
+    closes = [base + i * 0.1 for i in range(len(idx))]
+    df = pd.DataFrame(
+        {
+            "Open": closes,
+            "High": [c + 0.5 for c in closes],
+            "Low": [c - 0.5 for c in closes],
+            "Close": closes,
+            "Adj Close": closes,
+            "Volume": [1_000_000] * len(idx),
+        },
+        index=idx,
+    )
+    return df
+
+
+def _make_fake_ticker(symbol: str):
+    """Construct a Mock that mimics `yfinance.Ticker(symbol)` enough for tests."""
+    import pandas as pd
+
+    today = dt.date.today()
+    near = today + dt.timedelta(days=21)
+    far = today + dt.timedelta(days=49)
+    expirations = [near.isoformat(), far.isoformat()]
+
+    spot = 100.0 + (sum(ord(c) for c in symbol) % 50)
+
+    def _make_chain(expiry: str):
+        strikes = [round(spot * m, 2) for m in (0.9, 0.95, 1.0, 1.05, 1.1)]
+        rows = []
+        for s in strikes:
+            rows.append(
+                {
+                    "strike": s,
+                    "lastPrice": max(spot - s, 0.5) + 1.0,
+                    "bid": max(spot - s, 0.4) + 0.9,
+                    "ask": max(spot - s, 0.4) + 1.1,
+                    "volume": 100,
+                    "openInterest": 500,
+                    "impliedVolatility": 0.25,
+                    "inTheMoney": s < spot,
+                }
+            )
+        df = pd.DataFrame(rows)
+        result = MagicMock()
+        result.calls = df.copy()
+        result.puts = df.copy()
+        return result
+
+    fast_info = MagicMock()
+    fast_info.last_price = spot
+    fast_info.regularMarketPrice = spot
+    fast_info.get = lambda key, default=None: {
+        "lastPrice": spot,
+        "regularMarketPrice": spot,
+    }.get(key, default)
+
+    tk = MagicMock()
+    tk.options = expirations
+    tk.fast_info = fast_info
+    tk.option_chain = _make_chain
+    return tk
+
+
+@pytest.fixture(scope="session")
+def yf_stub() -> Iterator[None]:
+    """Patch yfinance in the *backend process* for the whole test session.
+
+    Activated by including `yf_stub` in a test signature. Existing tests
+    that use `mock_apis` continue to work unchanged because browser-level
+    interception fulfills before any backend code runs.
+    """
+    import yfinance as yf
+
+    original_download = yf.download
+    original_ticker = yf.Ticker
+
+    def fake_download(tickers, start=None, end=None, **kwargs):  # noqa: ARG001
+        if isinstance(tickers, str):
+            return _synthetic_ohlcv(tickers, start or dt.date.today() - dt.timedelta(days=30),
+                                    end or dt.date.today())
+        # multi-ticker: return concatenated MultiIndex frame
+        import pandas as pd
+        frames = {}
+        for t in tickers:
+            frames[t] = _synthetic_ohlcv(t, start or dt.date.today() - dt.timedelta(days=30),
+                                         end or dt.date.today())
+        return pd.concat(frames, axis=1)
+
+    fake_ticker = MagicMock(side_effect=lambda sym: _make_fake_ticker(sym))
+
+    p1 = patch.object(yf, "download", fake_download)
+    p2 = patch.object(yf, "Ticker", fake_ticker)
+    p1.start()
+    p2.start()
+    try:
+        yield
+    finally:
+        p1.stop()
+        p2.stop()
+        # Restore is idempotent; assigning back guards against import order.
+        yf.download = original_download
+        yf.Ticker = original_ticker
+
+
+@pytest.fixture(scope="session")
+def seed_test_data(_e2e_db: str, yf_stub: None) -> Iterator[None]:
+    """Pre-populate the DB with `TEST_AAPL` data so render endpoints have
+    something to slice without hitting any download path on first request.
+
+    Uses the production downloader's `TEST_*` fixture branch — no network.
+    """
+    try:
+        from data_pipeline.data_service import DataService
+        # `manual_update` will route to the synthetic fixture for TEST_*
+        DataService.manual_update("TEST_AAPL", days=120)
+    except Exception:
+        # Don't fail collection on seeding errors — individual tests can
+        # decide whether the missing data is fatal.
+        pass
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +293,7 @@ FAKE_OPTION_CHAIN: dict[str, Any] = {
     "ticker": "^SPX",
     "spot": 5000.0,
     "expirations": ["2026-05-15", "2026-06-19"],
-    "chains": {
+    "chain": {
         "2026-05-15": {
             "calls": [
                 {"strike": 5000, "bid": 50.0, "ask": 52.0, "last": 51.0, "iv": 0.18, "volume": 100, "open_interest": 500},
@@ -207,8 +367,21 @@ def mock_apis(page):
             route.fulfill(status=200, content_type="application/json", json={"ok": True})
         elif "/api/preload_option_chain" in url:
             route.fulfill(status=200, content_type="application/json", json={"ok": True})
-        elif "/api/validate_ticker" in url or "/api/validate_tickers" in url:
-            route.fulfill(status=200, content_type="application/json", json={"ok": True, "valid": True})
+        elif "/api/validate_tickers" in url:
+            # Echo back the posted tickers as all valid with synthetic prices.
+            try:
+                payload = request.post_data_json or {}
+            except Exception:
+                payload = {}
+            tickers = payload.get("tickers", []) if isinstance(payload, dict) else []
+            results = {t: {"valid": True, "price": 100.0, "message": "valid_ticker"} for t in tickers}
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                json={"status": "ok", "results": results},
+            )
+        elif "/api/validate_ticker" in url:
+            route.fulfill(status=200, content_type="application/json", json={"valid": True, "message": "valid_ticker"})
         else:
             route.fallback()
 

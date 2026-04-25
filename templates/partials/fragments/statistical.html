@@ -1,0 +1,72 @@
+{# Fragment for /render/statistical.
+   Required vars: ticker, feat_ret_scatter_top_url, feat_ret_scatter_hist_url,
+                  high_low_scatter_url, return_osc_high_low_url,
+                  volatility_dynamic_url, correlation_dynamics_chart,
+                  return_autocorr_chart, statistical_warning, statistical_error.
+#}
+<div id="tab-statistical-analysis-content">
+    {% if feat_ret_scatter_top_url is defined and (feat_ret_scatter_top_url or feat_ret_scatter_hist_url or high_low_scatter_url or return_osc_high_low_url or volatility_dynamic_url or correlation_dynamics_chart or return_autocorr_chart) %}
+    {% if statistical_warning is defined and statistical_warning %}
+    <div class="alert alert-warning" style="margin-bottom:1rem;padding:0.75rem 1rem;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;color:#92400e;font-size:0.9rem;">
+        <i class="fas fa-exclamation-triangle"></i> {{ statistical_warning }}
+    </div>
+    {% endif %}
+    <div class="charts-stack">
+        {% if feat_ret_scatter_top_url or feat_ret_scatter_hist_url %}
+        <div class="content-card">
+            <div class="content-card-title">Oscillation vs Returns Correlation</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ feat_ret_scatter_top_url or feat_ret_scatter_hist_url }}" alt="Oscillation vs Returns" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if high_low_scatter_url %}
+        <div class="content-card">
+            <div class="content-card-title">High-Low Correlation</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ high_low_scatter_url }}" alt="High-Low Correlation" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if return_osc_high_low_url %}
+        <div class="content-card">
+            <div class="content-card-title">Return-Oscillation Dynamics</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ return_osc_high_low_url }}" alt="Return-Oscillation Dynamics" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if volatility_dynamic_url %}
+        <div class="content-card">
+            <div class="content-card-title">Volatility Dynamics</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ volatility_dynamic_url }}" alt="Volatility Dynamics" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if correlation_dynamics_chart or return_autocorr_chart %}
+        <div class="content-card">
+            <div class="content-card-title">Correlation Dynamics</div>
+            <div class="chart-wrapper">
+                <img src="data:image/png;base64,{{ correlation_dynamics_chart or return_autocorr_chart }}" alt="Correlation Dynamics" class="analysis-chart">
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-chart-bar empty-icon"></i>
+        {% if statistical_error is defined and statistical_error %}
+        <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Statistical analysis error: {{ statistical_error }}</p>
+        {% elif ticker is defined and ticker %}
+        <p style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> Analysis ran but no charts were generated. The selected time horizon may have insufficient data for statistical analysis.</p>
+        {% else %}
+        <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

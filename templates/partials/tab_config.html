@@ -1,0 +1,65 @@
+<div class="tab-content" id="tab-config">
+    <div class="panel-header">
+        <h2><i class="fas fa-cog"></i> Config</h2>
+        <p class="panel-desc">Analysis parameters that persist across sessions.</p>
+    </div>
+    <div class="form-card">
+        <div class="form-card-title">Analysis Config</div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="cfg-frequency">Frequency</label>
+                <select id="cfg-frequency">
+                    <option value="D">Daily</option>
+                    <option value="W">Weekly</option>
+                    <option value="ME" selected>Monthly</option>
+                    <option value="QE">Quarterly</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="cfg-side-bias">Side Bias</label>
+                <select id="cfg-side-bias">
+                    <option value="Natural">Natural</option>
+                    <option value="Neutral">Neutral</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="cfg-risk-threshold">Risk Threshold <span class="label-unit">%</span></label>
+                <input type="number" id="cfg-risk-threshold" min="0" max="100" step="1" value="90">
+            </div>
+            <div class="form-group">
+                <label for="cfg-rolling-window">Rolling Window <span class="label-unit">periods</span></label>
+                <input type="number" id="cfg-rolling-window" min="1" step="1" value="120">
+            </div>
+            <div class="form-group">
+                <label for="cfg-refresh-interval">Refresh Interval <span class="label-unit">sec</span></label>
+                <input type="number" id="cfg-refresh-interval" min="10" max="300" step="10" value="60">
+            </div>
+        </div>
+    </div>
+
+    <div class="form-card">
+        <div class="form-card-title">Option Chain Filter</div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="cfg-max-dte">Max DTE <span class="label-unit">days</span></label>
+                <input type="number" id="cfg-max-dte" min="1" max="730" step="1" value="45">
+                <div class="field-hint">Maximum days to expiration (default 45).</div>
+            </div>
+            <div class="form-group">
+                <label for="cfg-moneyness-low">Moneyness Low <span class="label-unit">×Spot</span></label>
+                <input type="number" id="cfg-moneyness-low" min="0.01" max="1.0" step="0.01" value="0.70">
+                <div class="field-hint">Lower strike bound as fraction of spot (default 0.70).</div>
+            </div>
+            <div class="form-group">
+                <label for="cfg-moneyness-high">Moneyness High <span class="label-unit">×Spot</span></label>
+                <input type="number" id="cfg-moneyness-high" min="1.0" max="5.0" step="0.01" value="1.30">
+                <div class="field-hint">Upper strike bound as fraction of spot (default 1.30).</div>
+            </div>
+            <div class="form-group">
+                <label for="cfg-max-contracts">Max Contracts</label>
+                <input type="number" id="cfg-max-contracts" min="10" max="5000" step="10" value="1000">
+                <div class="field-hint">Maximum total contracts per query.</div>
+            </div>
+        </div>
+    </div>
+</div>

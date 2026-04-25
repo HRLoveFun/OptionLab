@@ -9,8 +9,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+    <!-- HTMX (eager) + Alpine.js (deferred per docs) -->
+    <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    <!-- App-level helpers: must load before feature scripts so they can use api/bus -->
+    <script src="{{ url_for('static', filename='eventBus.js') }}"></script>
+    <script src="{{ url_for('static', filename='api.js') }}"></script>
 </head>
 <body>
+
+    <script>
+        // Job id for HTMX streaming render endpoints. Empty on plain GET '/'.
+        window.STREAMING_JOB_ID = {{ (job_id or '') | tojson }};
+        window.STREAMING_MODE = {{ (streaming_mode or false) | tojson }};
+    </script>
 
     <header class="site-header">
         <div class="header-inner">
@@ -34,11 +46,11 @@
         <!-- Sidebar Tab Nav -->
         <aside class="sidebar">
             <nav class="tab-nav">
-                <button class="tab-btn {% if not ticker %}active{% endif %}" data-tab="tab-parameter">
+                <button class="tab-btn {% if not streaming_mode %}active{% endif %}" data-tab="tab-parameter">
                     <i class="fas fa-sliders-h"></i>
                     <span>Parameter</span>
                 </button>
-                {% if tickers is defined and tickers|length > 1 %}
+                {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
                 <button class="tab-btn" data-tab="tab-summary">
                     <i class="fas fa-layer-group"></i>
                     <span>综合</span>
@@ -94,858 +106,60 @@
         <main class="main-panel">
 
             <!-- Tab 1: Parameter -->
-            <div class="tab-content {% if not ticker %}active{% endif %}" id="tab-parameter">
-                <div class="panel-header">
-                    <h2><i class="fas fa-sliders-h"></i> Parameters</h2>
-                    <p class="panel-desc">Configure analysis inputs and optional option positions.</p>
-                </div>
-
-                <form method="post" id="analysis-form">
-                    {% if error %}
-                    <div class="alert alert-error">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>{{ error }}</span>
-                    </div>
-                    {% endif %}
-
-                    <div class="form-card">
-                        <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                            <span>Analysis Settings</span>
-                            <button type="submit" class="btn-primary">
-                                <i class="fas fa-play"></i> Run
-                            </button>
-                        </div>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="ticker">Ticker Symbols（多个用逗号分隔）</label>
-                                <input type="text" id="ticker" name="ticker" value=""
-                                       placeholder="e.g. AAPL, SPY, ^SPX" required>
-                                <div class="ticker-validation" id="ticker-validation"></div>
-                                <div id="ticker-validation-container" class="ticker-badges"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Time Horizon</label>
-                                <div class="compact-range-input">
-                                    <input type="month" id="start_time" name="start_time"
-                                           value="{{ (start_time[:4] + '-' + start_time[4:6]) if start_time and start_time|length == 6 else start_time or '' }}"
-                                           required>
-                                    <span class="range-separator">→</span>
-                                    <input type="month" id="end_time" name="end_time"
-                                           value="{{ (end_time[:4] + '-' + end_time[4:6]) if end_time and end_time|length == 6 else end_time or '' }}"
-                                           placeholder="latest">
-                                </div>
-                                <div class="validation-warning" id="horizon-warning" style="display:none;"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="account_size">Account Size <span class="label-unit">$</span></label>
-                                <input type="number" id="account_size" name="account_size"
-                                       min="0" step="1000" placeholder="e.g. 100000"
-                                       value="{{ account_size if account_size is defined and account_size else '' }}">
-                            </div>
-                            <div class="form-group">
-                                <label for="max_risk_pct">Max Risk <span class="label-unit">%</span></label>
-                                <input type="number" id="max_risk_pct" name="max_risk_pct"
-                                       min="0.1" max="20" step="0.1" placeholder="e.g. 2"
-                                       value="{{ max_risk_pct if max_risk_pct is defined and max_risk_pct else '' }}">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Hidden fields for Config tab values (injected by JS from localStorage) -->
-                    <input type="hidden" id="frequency" name="frequency" value="{{ frequency or 'ME' }}">
-                    <input type="hidden" id="side_bias" name="side_bias" value="{{ side_bias or 'Natural' }}">
-                    <input type="hidden" id="risk_threshold" name="risk_threshold" value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}">
-                    <input type="hidden" id="rolling_window" name="rolling_window" value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}">
-                    <input type="hidden" id="option_position" name="option_position">
-
-                    <!-- Positions (always visible) -->
-                    <div class="form-card" id="positions-card">
-                        <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                            <span><i class="fas fa-layer-group"></i> Positions</span>
-                            <button type="button" class="btn-primary" id="portfolio-analysis-btn" onclick="runPortfolioAnalysis()">
-                                <i class="fas fa-chart-pie"></i> 组合分析
-                            </button>
-                        </div>
-                        <div class="options-table-container">
-                            <table id="positions-table" class="options-table">
-                                <thead>
-                                    <tr>
-                                        <th>Ticker</th>
-                                        <th>Type</th>
-                                        <th>Expiry</th>
-                                        <th>Strike</th>
-                                        <th>Side</th>
-                                        <th>Price</th>
-                                        <th>Qty</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="positions-tbody"></tbody>
-                            </table>
-                            <div class="add-row-container">
-                                <button type="button" class="btn-ghost" onclick="addPositionRow()">
-                                    <i class="fas fa-plus"></i> Add Position
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Portfolio analysis results panel -->
-                        <div id="portfolio-results-panel" style="display:none;">
-                            <div class="content-card" style="margin-top:1rem;">
-                                <div class="content-card-title">Greeks Summary</div>
-                                <div id="greeks-summary-card"></div>
-                            </div>
-                            <div class="content-card" style="margin-top:1rem;">
-                                <div class="content-card-title">P&L at Expiration</div>
-                                <div class="chart-wrapper"><img id="pnl-chart-img" class="analysis-chart" style="display:none;"></div>
-                            </div>
-                            <div class="content-card" style="margin-top:1rem;">
-                                <div class="content-card-title">Theta Decay Path</div>
-                                <div class="chart-wrapper"><img id="theta-decay-chart-img" class="analysis-chart" style="display:none;"></div>
-                            </div>
-                            <div id="breakeven-card" class="content-card" style="margin-top:1rem;display:none;">
-                                <div class="content-card-title">Breakeven Points</div>
-                                <div id="breakeven-values"></div>
-                            </div>
-                            <div id="var-card" class="content-card" style="margin-top:1rem;display:none;">
-                                <div class="content-card-title">Risk Metrics</div>
-                                <div id="var-values"></div>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
+            {% include 'partials/tab_parameter.html' %}
 
             <!-- Tab 2: Market Review -->
-            <div class="tab-content {% if ticker %}active{% endif %}" id="tab-market-review">
-                <div class="panel-header">
-                    <h2><i class="fas fa-table"></i> Market Review</h2>
-                    {% if ticker %}
-                    <p class="panel-desc">Return, volatility, and correlation summary for <strong>{{ ticker }}</strong>.</p>
-                    {% endif %}
-                </div>
-
-                {% if ticker %}
-                <div class="meta-bar">
-                    <span class="meta-chip"><i class="fas fa-tag"></i> {{ ticker }}</span>
-                    <span class="meta-chip"><i class="fas fa-clock"></i> {{ frequency_display or frequency }}</span>
-                    <span class="meta-chip"><i class="fas fa-calendar"></i> {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}</span>
-                    <span class="meta-chip"><i class="fas fa-shield-alt"></i> Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%</span>
-                    <span class="meta-chip"><i class="fas fa-compass"></i> {{ side_bias or 'Natural' }}</span>
-                </div>
-
-                <!-- Interactive time-series chart (Module 4A) -->
-                <div class="content-card">
-                    <div class="mr-toolbar">
-                        <div class="btn-group" id="mr-mode-btns">
-                            <button class="btn-toggle active" onclick="setMrMode('return')">Return</button>
-                            <button class="btn-toggle" onclick="setMrMode('vol')">Volatility</button>
-                            <button class="btn-toggle" onclick="setMrMode('corr')">Correlation</button>
-                        </div>
-                        <div class="btn-group" id="mr-period-btns">
-                            <button class="btn-toggle" onclick="setMrPeriod('1M')">1M</button>
-                            <button class="btn-toggle" onclick="setMrPeriod('1Q')">1Q</button>
-                            <button class="btn-toggle" onclick="setMrPeriod('YTD')">YTD</button>
-                            <button class="btn-toggle active" onclick="setMrPeriod('ETD')">ETD</button>
-                        </div>
-                        <div id="asset-toggle-container" class="asset-toggles"></div>
-                        <button class="btn-ghost btn-sm" onclick="toggleSummaryTable()">
-                            <i class="fas fa-table"></i> Data Table
-                        </button>
-                    </div>
-                    <div id="market-review-chart-container" style="height:420px; position:relative;">
-                        <canvas id="market-review-chart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Collapsible original table -->
-                <div id="market-review-table-wrapper" style="display:none;">
-                    {% if market_review_table %}
-                    <div class="content-card">
-                        <div class="content-card-title">Return, Volatility &amp; Correlation</div>
-                        <div class="table-wrapper">{{ market_review_table|safe }}</div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                {% else %}
-                <div class="empty-state">
-                    <i class="fas fa-table empty-icon"></i>
-                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
-                </div>
-                {% endif %}
-            </div>
+            {% include 'partials/tab_market_review.html' %}
 
             <!-- Tab 3: Statistical Analysis -->
-            <div class="tab-content" id="tab-statistical-analysis">
-                <div class="panel-header">
-                    <h2><i class="fas fa-chart-bar"></i> Statistical Analysis</h2>
-                    {% if ticker %}
-                    <p class="panel-desc">Scatter plots and dynamic correlations for <strong>{{ ticker }}</strong>.</p>
-                    {% endif %}
-                </div>
-
-                {% if feat_ret_scatter_top_url is defined and (feat_ret_scatter_top_url or feat_ret_scatter_hist_url or high_low_scatter_url or return_osc_high_low_url or volatility_dynamic_url or correlation_dynamics_chart or return_autocorr_chart) %}
-                {% if statistical_warning is defined and statistical_warning %}
-                <div class="alert alert-warning" style="margin-bottom:1rem;padding:0.75rem 1rem;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px;color:#92400e;font-size:0.9rem;">
-                    <i class="fas fa-exclamation-triangle"></i> {{ statistical_warning }}
-                </div>
-                {% endif %}
-                <div class="charts-stack">
-                    {% if feat_ret_scatter_top_url or feat_ret_scatter_hist_url %}
-                    <div class="content-card">
-                        <div class="content-card-title">Oscillation vs Returns Correlation</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_ret_scatter_top_url or feat_ret_scatter_hist_url }}" alt="Oscillation vs Returns" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if high_low_scatter_url %}
-                    <div class="content-card">
-                        <div class="content-card-title">High-Low Correlation</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ high_low_scatter_url }}" alt="High-Low Correlation" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if return_osc_high_low_url %}
-                    <div class="content-card">
-                        <div class="content-card-title">Return-Oscillation Dynamics</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ return_osc_high_low_url }}" alt="Return-Oscillation Dynamics" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if volatility_dynamic_url %}
-                    <div class="content-card">
-                        <div class="content-card-title">Volatility Dynamics</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ volatility_dynamic_url }}" alt="Volatility Dynamics" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if correlation_dynamics_chart or return_autocorr_chart %}
-                    <div class="content-card">
-                        <div class="content-card-title">Correlation Dynamics</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ correlation_dynamics_chart or return_autocorr_chart }}" alt="Correlation Dynamics" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-                {% else %}
-                <div class="empty-state">
-                    <i class="fas fa-chart-bar empty-icon"></i>
-                    {% if statistical_error is defined and statistical_error %}
-                    <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Statistical analysis error: {{ statistical_error }}</p>
-                    {% elif ticker is defined and ticker %}
-                    <p style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> Analysis ran but no charts were generated. The selected time horizon may have insufficient data for statistical analysis.</p>
-                    {% else %}
-                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
+            {% include 'partials/tab_statistical_analysis.html' %}
 
             <!-- Tab 4: Market Assessment & Projections -->
-            <div class="tab-content" id="tab-market-assessment">
-                <div class="panel-header">
-                    <h2><i class="fas fa-binoculars"></i> Assessment &amp; Projections</h2>
-                    {% if ticker %}
-                    <p class="panel-desc">Forward-looking projections and P&amp;L for <strong>{{ ticker }}</strong>.</p>
-                    {% endif %}
-                </div>
-
-                {% if feat_projection_url is defined or plot_url is defined %}
-                <div class="charts-stack">
-                    {% if feat_projection_url %}
-                    <div class="content-card">
-                        <div class="content-card-title">Oscillation Projection</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ feat_projection_url }}" alt="Market Projection" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if feat_projection_table is defined and feat_projection_table and not feat_projection_table.empty %}
-                    <div class="content-card">
-                        <div class="content-card-title">Projection Values</div>
-                        <div class="table-wrapper">{{ feat_projection_table|safe }}</div>
-                    </div>
-                    {% endif %}
-
-                    {% if plot_url %}
-                    <div class="content-card">
-                        <div class="content-card-title">Options Portfolio P&amp;L Analysis</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ plot_url }}" alt="Options P&L Chart" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if position_sizing %}
-                    <div class="content-card">
-                        <div class="content-card-title"><i class="fas fa-calculator"></i> Position Sizing</div>
-                        <div class="table-wrapper">
-                            <table class="table table-striped" style="border:0;">
-                                <tbody>
-                                    {% if position_sizing.max_contracts is not none %}
-                                    <tr><td>Max Contracts</td><td><strong>{{ position_sizing.max_contracts }}</strong></td></tr>
-                                    <tr><td>Actual Risk</td><td>${{ position_sizing.actual_risk }}</td></tr>
-                                    <tr><td>Risk %</td><td>{{ position_sizing.risk_pct }}%</td></tr>
-                                    <tr><td>Basis</td><td>{{ position_sizing.basis }}</td></tr>
-                                    {% endif %}
-                                    {% if position_sizing.warning %}
-                                    <tr><td colspan="2" style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> {{ position_sizing.warning }}</td></tr>
-                                    {% endif %}
-                                    {% if position_sizing.margin_note %}
-                                    <tr><td colspan="2" style="color:#6b7280;"><i class="fas fa-info-circle"></i> {{ position_sizing.margin_note }}</td></tr>
-                                    {% endif %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-                {% else %}
-                <div class="empty-state">
-                    <i class="fas fa-binoculars empty-icon"></i>
-                    {% if assessment_error is defined and assessment_error %}
-                    <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Assessment error: {{ assessment_error }}</p>
-                    {% elif ticker is defined and ticker %}
-                    <p style="color:#b45309;"><i class="fas fa-exclamation-triangle"></i> Projection analysis ran but no charts were generated. The selected time horizon may have insufficient data.</p>
-                    {% else %}
-                    <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
+            {% include 'partials/tab_market_assessment.html' %}
 
             <!-- Tab 5: Option Chain -->
-            <div class="tab-content" id="tab-option-chain">
-                <div class="panel-header">
-                    <h2><i class="fas fa-th"></i> Option Chain</h2>
-                    <p class="panel-desc">Live option chain from Yahoo Finance. Select a ticker and load chain data.</p>
-                </div>
-
-                <!-- Ticker selector row -->
-                <div class="oc-toolbar">
-                    <div class="oc-ticker-row">
-                    </div>
-                </div>
-
-                <!-- Status / error messages -->
-                <div id="oc-status" class="oc-status" style="display:none;"></div>
-
-                <!-- Expiration subtabs -->
-                <div id="oc-exp-tabs" class="oc-exp-tabs" style="display:none;">
-                    <div id="oc-exp-tab-list" class="oc-exp-tab-list"></div>
-                </div>
-
-                <!-- T-format chain table -->
-                <div id="oc-chain-wrapper" class="oc-chain-wrapper" style="display:none;">
-                    <!-- T-format header -->
-                    <div class="oc-t-header">
-                        <div class="oc-t-calls-header">Calls</div>
-                        <div class="oc-t-strike-header">Strike</div>
-                        <div class="oc-t-puts-header">Puts</div>
-                    </div>
-                    <!-- Sub-column headers -->
-                    <div class="oc-t-subheader">
-                        <div class="oc-t-calls-sub">
-                            <span>IV%</span><span>OI</span><span>Vol</span><span>Bid</span><span>Ask</span><span>Last</span><span>Prem</span>
-                        </div>
-                        <div class="oc-t-strike-sub"><span>&nbsp;</span></div>
-                        <div class="oc-t-puts-sub">
-                            <span>Prem</span><span>Last</span><span>Bid</span><span>Ask</span><span>Vol</span><span>OI</span><span>IV%</span>
-                        </div>
-                    </div>
-                    <div id="oc-chain-body" class="oc-chain-body"></div>
-                </div>
-
-                <!-- Empty state -->
-                <div id="oc-empty" class="empty-state">
-                    <i class="fas fa-th empty-icon"></i>
-                    <p>Set a ticker in <strong>Parameter</strong> tab — option chain data loads automatically when you switch to this tab.</p>
-                </div>
-            </div>
+            {% include 'partials/tab_option_chain.html' %}
 
             <!-- Tab 6: Options Chain Analysis -->
-            <div class="tab-content" id="tab-options-chain">
-                <div class="panel-header">
-                    <h2><i class="fas fa-link"></i> Volatility Analysis</h2>
-                    {% if ticker %}
-                    <p class="panel-desc">Real-time IV surface, skew, OI profile, and expected move for <strong>{{ ticker }}</strong>.</p>
-                    {% endif %}
-                </div>
-
-                {% if oc_snapshot %}
-                <!-- Key Metrics Bar -->
-                <div class="meta-bar">
-                    <span class="meta-chip"><i class="fas fa-dollar-sign"></i> Spot: {{ oc_snapshot.spot | round(2) }}</span>
-                    <span class="meta-chip"><i class="fas fa-calendar"></i> Expiries: {{ oc_snapshot.expiries | length }}</span>
-                    <span class="meta-chip"><i class="fas fa-crosshairs"></i> ATM: {{ oc_snapshot.atm_strike }}</span>
-                    <span class="meta-chip"><i class="fas fa-clock"></i> {{ oc_snapshot.timestamp }}</span>
-                </div>
-
-                <!-- Key Metrics Table -->
-                {% if oc_key_metrics %}
-                <div class="content-card">
-                    <div class="content-card-title">Key Metrics Snapshot</div>
-                    <div class="table-wrapper">{{ oc_key_metrics | safe }}</div>
-                </div>
-                {% endif %}
-
-                <!-- Vol Premium (HV vs IV) -->
-                {% if oc_vol_premium %}
-                <div class="content-card">
-                    <div class="content-card-title">Volatility Premium (IV vs HV)</div>
-                    <div class="table-wrapper">
-                        <table class="table table-striped" style="border:0;">
-                            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
-                            <tbody>
-                                <tr><td>ATM IV</td><td>{{ oc_vol_premium.atm_iv }}%</td></tr>
-                                <tr><td>HV 10d</td><td>{{ oc_vol_premium.hv_10d }}%</td></tr>
-                                <tr><td>HV 20d</td><td>{{ oc_vol_premium.hv_20d or 'N/A' }}{% if oc_vol_premium.hv_20d %}%{% endif %}</td></tr>
-                                <tr><td>HV 60d</td><td>{{ oc_vol_premium.hv_60d }}%</td></tr>
-                                <tr><td>Vol Premium (IV/HV20)</td><td>{{ oc_vol_premium.vol_premium or 'N/A' }}</td></tr>
-                                <tr><td>HV Rank (252d)</td><td>{{ oc_vol_premium.hv_rank_252d }}{% if oc_vol_premium.hv_rank_252d is number %}%{% endif %}</td></tr>
-                                <tr><td>HV Term Slope (10d−60d)</td><td>{{ oc_vol_premium.hv_term_slope }}</td></tr>
-                                <tr><td><strong>Signal</strong></td><td><strong>{{ oc_vol_premium.signal }}</strong></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Expected Move Table -->
-                {% if oc_expected_move %}
-                <div class="content-card">
-                    <div class="content-card-title">Expected Move by Expiry</div>
-                    <div class="table-wrapper">{{ oc_expected_move | safe }}</div>
-                </div>
-                {% endif %}
-
-                <!-- Charts Row 1: IV Smile + IV Term Structure -->
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
-                    {% if oc_iv_smile %}
-                    <div class="content-card">
-                        <div class="content-card-title">IV Smile (Nearest Expiry)</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ oc_iv_smile }}" alt="IV Smile" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-                    {% if oc_iv_term_structure %}
-                    <div class="content-card">
-                        <div class="content-card-title">IV Term Structure</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ oc_iv_term_structure }}" alt="IV Term Structure" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                <!-- IV Surface (full width) -->
-                {% if oc_iv_surface %}
-                <div class="content-card">
-                    <div class="content-card-title">IV Surface</div>
-                    <div class="chart-wrapper">
-                        <img src="data:image/png;base64,{{ oc_iv_surface }}" alt="IV Surface" class="analysis-chart">
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Charts Row 2: Skew + OI Profile -->
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
-                    {% if oc_skew_analysis %}
-                    <div class="content-card">
-                        <div class="content-card-title">Skew Analysis (Nearest Expiry)</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ oc_skew_analysis }}" alt="Skew Analysis" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-                    {% if oc_oi_volume %}
-                    <div class="content-card">
-                        <div class="content-card-title">OI / Volume Profile</div>
-                        <div class="chart-wrapper">
-                            <img src="data:image/png;base64,{{ oc_oi_volume }}" alt="OI Volume Profile" class="analysis-chart">
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                <!-- PCR Summary (full width) -->
-                {% if oc_pcr_summary %}
-                <div class="content-card">
-                    <div class="content-card-title">Put/Call Ratio by Expiry</div>
-                    <div class="chart-wrapper">
-                        <img src="data:image/png;base64,{{ oc_pcr_summary }}" alt="PCR Summary" class="analysis-chart">
-                    </div>
-                </div>
-                {% endif %}
-
-                {% else %}
-                <div class="empty-state">
-                    <i class="fas fa-link empty-icon"></i>
-                    {% if ticker is defined and ticker %}
-                    <p>Volatility analysis data was not available for <strong>{{ ticker }}</strong>.</p>
-                    {% else %}
-                    <p>Run an analysis first &mdash; go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
+            {% include 'partials/tab_options_chain.html' %}
 
             <!-- Tab 7: Expiry Odds -->
-            <div class="tab-content" id="tab-odds">
-                <div class="panel-header">
-                    <h2><i class="fas fa-dice"></i> Expiry Odds</h2>
-                    <p class="panel-desc">Profit odds per strike with implied volatility context.</p>
-                </div>
-
-                <!-- Toolbar -->
-                <div class="oc-toolbar">
-                    <div class="oc-ticker-row">
-                    </div>
-                    <div class="oc-target-row">
-                        <span class="oc-target-label">est. move</span>
-                        <input type="number" id="odds-target-pct" class="oc-target-input" value="10" min="0" step="1" />
-                        <span class="oc-target-unit">% &times; Spot</span>
-                        <span id="odds-target-value" class="oc-target-value"></span>
-                    </div>
-                </div>
-
-                <!-- Status -->
-                <div id="odds-status" class="oc-status" style="display:none;"></div>
-
-                <!-- Vol context table (Module 4B) -->
-                <div id="vol-context-wrapper" style="display:none;">
-                    <div class="content-card" style="margin-bottom:1rem;">
-                        <div class="content-card-title">Volatility Context by Expiry</div>
-                        <div class="table-wrapper">
-                            <table id="vol-context-table" class="table table-striped">
-                                <thead><tr>
-                                    <th>Expiry</th><th>DTE</th><th>Target</th>
-                                    <th>Implied RV</th><th>ATM IV</th><th>Ratio</th><th>Signal</th>
-                                </tr></thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts -->
-                <div id="odds-charts-wrapper" style="display:none;">
-                    <div class="odds-charts-grid">
-                        <div class="content-card">
-                            <div class="content-card-title">Long Call Odds</div>
-                            <div class="chart-wrapper"><canvas id="odds-call-chart"></canvas></div>
-                        </div>
-                        <div class="content-card">
-                            <div class="content-card-title">Long Put Odds</div>
-                            <div class="chart-wrapper"><canvas id="odds-put-chart"></canvas></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Empty state -->
-                <div id="odds-empty" class="empty-state">
-                    <i class="fas fa-dice empty-icon"></i>
-                    <p>Set a ticker in <strong>Parameter</strong> tab — odds data loads automatically when you switch to this tab.</p>
-                </div>
-            </div>
+            {% include 'partials/tab_odds.html' %}
 
             <!-- Tab 8: Put Option Decision Game -->
-            <div class="tab-content" id="tab-game">
-                <div class="panel-header">
-                    <h2><i class="fas fa-crosshairs"></i> Put Option Selector</h2>
-                    <p class="panel-desc">Quantitative decision process for selecting put options based on directional & volatility convictions.</p>
-                </div>
-
-                <!-- Input controls -->
-                <div class="oc-toolbar">
-                    <div class="oc-ticker-row" style="flex-wrap:wrap;gap:0.5rem;">
-                        <div class="form-group" style="margin:0;min-width:100px;">
-                            <label style="font-size:0.75rem;">Budget ($)</label>
-                            <input type="number" id="game-budget" class="oc-target-input" value="5000" min="100" step="100" style="width:100px;" />
-                        </div>
-                        <div class="form-group" style="margin:0;min-width:100px;">
-                            <label style="font-size:0.75rem;">Target Move (%)</label>
-                            <input type="number" id="game-target-move" class="oc-target-input" value="-8" min="-50" max="-0.1" step="0.5" style="width:80px;" />
-                        </div>
-                        <div class="form-group" style="margin:0;min-width:100px;">
-                            <label style="font-size:0.75rem;">Horizon (days)</label>
-                            <input type="number" id="game-horizon" class="oc-target-input" value="21" min="1" max="365" step="1" style="width:70px;" />
-                        </div>
-                        <div class="form-group" style="margin:0;min-width:120px;">
-                            <label style="font-size:0.75rem;">Directional Conviction</label>
-                            <input type="range" id="game-dir-conv" min="0" max="100" value="70" style="width:110px;" />
-                            <span id="game-dir-conv-val" style="font-size:0.75rem;">0.70</span>
-                        </div>
-                        <div class="form-group" style="margin:0;min-width:120px;">
-                            <label style="font-size:0.75rem;">Vol Conviction</label>
-                            <input type="range" id="game-vol-conv" min="0" max="100" value="65" style="width:110px;" />
-                            <span id="game-vol-conv-val" style="font-size:0.75rem;">0.65</span>
-                        </div>
-                        <div class="form-group" style="margin:0;min-width:100px;">
-                            <label style="font-size:0.75rem;">Vol Timing</label>
-                            <select id="game-vol-timing" style="padding:0.3rem 0.5rem;border-radius:6px;border:1px solid var(--border-color,#ddd);font-size:0.85rem;">
-                                <option value="FAST">Fast (&lt;2 wks)</option>
-                                <option value="MEDIUM" selected>Medium (2-6 wks)</option>
-                                <option value="SLOW">Slow (&gt;6 wks)</option>
-                            </select>
-                        </div>
-                        <button id="game-run-btn" class="btn-primary" onclick="runGameAnalysis()">
-                            <i class="fas fa-play"></i> Run
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Status -->
-                <div id="game-status" class="oc-status" style="display:none;"></div>
-
-                <!-- Market context -->
-                <div id="game-market-ctx" style="display:none;">
-                    <div class="content-card" style="margin-bottom:1rem;">
-                        <div class="content-card-title">Market Context</div>
-                        <div class="table-wrapper">
-                            <table class="table table-striped" style="max-width:500px;">
-                                <tbody id="game-market-tbody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Heuristic notes -->
-                <div id="game-heuristics" style="display:none;">
-                    <div class="content-card" style="margin-bottom:1rem;">
-                        <div class="content-card-title">Decision Heuristics</div>
-                        <ul id="game-heuristics-list" style="padding-left:1.2rem;"></ul>
-                    </div>
-                </div>
-
-                <!-- Ranked results table -->
-                <div id="game-results" style="display:none;">
-                    <div class="content-card">
-                        <div class="content-card-title">Ranked Candidates <span id="game-filter-info" style="font-weight:normal;font-size:0.8rem;color:var(--text-muted,#888);"></span></div>
-                        <div class="table-wrapper" style="overflow-x:auto;">
-                            <table class="table table-striped" id="game-results-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Strike</th>
-                                        <th>DTE</th>
-                                        <th>Delta</th>
-                                        <th>IV %</th>
-                                        <th>Mid $</th>
-                                        <th>Contracts</th>
-                                        <th>Vega/Theta</th>
-                                        <th>Odds Ratio</th>
-                                        <th>Win Rate</th>
-                                        <th>EV $</th>
-                                        <th>EV/Dollar</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="game-results-tbody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Empty state -->
-                <div id="game-empty" class="empty-state">
-                    <i class="fas fa-crosshairs empty-icon"></i>
-                    <p>Configure parameters above and click <strong>Run</strong> to find optimal put options.</p>
-                </div>
-            </div>
+            {% include 'partials/tab_game.html' %}
 
             <!-- Tab: Market Regime -->
-            <div class="tab-content" id="tab-regime">
-                <div class="panel-header">
-                    <h2><i class="fas fa-chart-line"></i> Market Regime</h2>
-                    <p class="panel-desc">
-                        Composite regime label derived from <strong>^VIX</strong> (volatility)
-                        &amp; <strong>SPY</strong> vs its 20-day SMA (direction).
-                        Pure labeling — no signals, no predictions.
-                    </p>
-                </div>
-
-                <div id="regime-current-card" class="content-card">
-                    <div class="content-card-title">Current Regime</div>
-                    <div id="regime-current-body" style="padding:1rem 0;">
-                        <span class="muted">Loading…</span>
-                    </div>
-                </div>
-
-                <div class="content-card" style="margin-top:1rem;">
-                    <div class="mr-toolbar">
-                        <div class="btn-group" id="regime-range-btns">
-                            <button class="btn-toggle" data-days="30">30D</button>
-                            <button class="btn-toggle active" data-days="180">180D</button>
-                            <button class="btn-toggle" data-days="365">1Y</button>
-                            <button class="btn-toggle" data-days="1095">3Y</button>
-                        </div>
-                        <button class="btn-ghost btn-sm" id="regime-refresh-btn">
-                            <i class="fas fa-sync"></i> Refresh
-                        </button>
-                        <button class="btn-ghost btn-sm" id="regime-backfill-btn">
-                            <i class="fas fa-database"></i> Backfill &amp; Persist
-                        </button>
-                        <span id="regime-source-tag" class="meta-chip" style="margin-left:auto;"></span>
-                    </div>
-                    <div id="regime-strip-container" style="margin-top:.75rem;height:320px;position:relative;">
-                        <canvas id="regime-strip-chart"></canvas>
-                    </div>
-                </div>
-
-                <div class="content-card" style="margin-top:1rem;">
-                    <div class="content-card-title">Coverage Summary</div>
-                    <div id="regime-coverage-body" style="padding:.5rem 0;">
-                        <span class="muted">—</span>
-                    </div>
-                </div>
-
-                <div class="content-card" style="margin-top:1rem;">
-                    <div class="content-card-title">Recent Transitions</div>
-                    <div id="regime-transitions-body" class="table-wrapper">
-                        <span class="muted">—</span>
-                    </div>
-                </div>
-            </div>
+            {% include 'partials/tab_regime.html' %}
 
             <!-- Tab: Config -->
-            <div class="tab-content" id="tab-config">
-                <div class="panel-header">
-                    <h2><i class="fas fa-cog"></i> Config</h2>
-                    <p class="panel-desc">Analysis parameters that persist across sessions.</p>
-                </div>
-                <div class="form-card">
-                    <div class="form-card-title">Analysis Config</div>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="cfg-frequency">Frequency</label>
-                            <select id="cfg-frequency">
-                                <option value="D">Daily</option>
-                                <option value="W">Weekly</option>
-                                <option value="ME" selected>Monthly</option>
-                                <option value="QE">Quarterly</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-side-bias">Side Bias</label>
-                            <select id="cfg-side-bias">
-                                <option value="Natural">Natural</option>
-                                <option value="Neutral">Neutral</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-risk-threshold">Risk Threshold <span class="label-unit">%</span></label>
-                            <input type="number" id="cfg-risk-threshold" min="0" max="100" step="1" value="90">
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-rolling-window">Rolling Window <span class="label-unit">periods</span></label>
-                            <input type="number" id="cfg-rolling-window" min="1" step="1" value="120">
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-refresh-interval">Refresh Interval <span class="label-unit">sec</span></label>
-                            <input type="number" id="cfg-refresh-interval" min="10" max="300" step="10" value="60">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-card">
-                    <div class="form-card-title">Option Chain Filter</div>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="cfg-max-dte">Max DTE <span class="label-unit">days</span></label>
-                            <input type="number" id="cfg-max-dte" min="1" max="730" step="1" value="45">
-                            <div class="field-hint">Maximum days to expiration (default 45).</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-moneyness-low">Moneyness Low <span class="label-unit">×Spot</span></label>
-                            <input type="number" id="cfg-moneyness-low" min="0.01" max="1.0" step="0.01" value="0.70">
-                            <div class="field-hint">Lower strike bound as fraction of spot (default 0.70).</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-moneyness-high">Moneyness High <span class="label-unit">×Spot</span></label>
-                            <input type="number" id="cfg-moneyness-high" min="1.0" max="5.0" step="0.01" value="1.30">
-                            <div class="field-hint">Upper strike bound as fraction of spot (default 1.30).</div>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-max-contracts">Max Contracts</label>
-                            <input type="number" id="cfg-max-contracts" min="10" max="5000" step="10" value="1000">
-                            <div class="field-hint">Maximum total contracts per query.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {% include 'partials/tab_config.html' %}
 
         </main>
 
         <!-- Summary Tab (only rendered for multi-ticker) -->
         {% if summary_data is defined and summary_data %}
-        <div class="tab-content" id="tab-summary" style="display:none;">
-            <div class="panel-header">
-                <h2><i class="fas fa-layer-group"></i> 综合分析</h2>
-                <p class="panel-desc">Cross-ticker comparison: {{ tickers | join(', ') }}</p>
-            </div>
-
-            <!-- Info cards -->
-            <div class="summary-cards-grid">
-                {% for t, info in summary_data.summaries.items() %}
-                <div class="content-card">
-                    <div class="content-card-title">{{ t }}</div>
-                    <div class="summary-info">
-                        <div>Price: <strong>{{ info.price or 'N/A' }}</strong></div>
-                        <div>ATM IV: {{ info.atm_iv or 'N/A' }}{% if info.atm_iv %}%{% endif %}</div>
-                        <div>HV 20d: {{ info.hv_20d or 'N/A' }}{% if info.hv_20d %}%{% endif %}</div>
-                        <div>Signal: <strong>{{ info.signal or 'N/A' }}</strong></div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Correlation heatmap -->
-            {% if summary_data.correlation_matrix %}
-            <div class="content-card" style="margin-top:1rem;">
-                <div class="content-card-title">Correlation Matrix (90d)</div>
-                <div id="correlation-heatmap-container"></div>
-            </div>
-            {% endif %}
-
-            <!-- Vol comparison -->
-            {% if summary_data.vol_comparison %}
-            <div class="content-card" style="margin-top:1rem;">
-                <div class="content-card-title">Volatility Comparison</div>
-                <div class="table-wrapper">
-                    <table class="table table-striped">
-                        <thead><tr><th>Ticker</th><th>ATM IV</th><th>HV 20d</th><th>Vol Premium</th><th>Signal</th></tr></thead>
-                        <tbody>
-                        {% for v in summary_data.vol_comparison %}
-                        <tr>
-                            <td><strong>{{ v.ticker }}</strong></td>
-                            <td>{{ v.atm_iv or 'N/A' }}{% if v.atm_iv %}%{% endif %}</td>
-                            <td>{{ v.hv_20d or 'N/A' }}{% if v.hv_20d %}%{% endif %}</td>
-                            <td>{{ v.vol_premium or 'N/A' }}</td>
-                            <td>{{ v.signal or 'N/A' }}</td>
-                        </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-        </div>
+        {% include 'partials/tab_summary.html' %}
         {% endif %}
     </div>
 
+    <!-- Probe: Alpine mounts x-data; HTMX fires hx-get on load. Both write to #scaffold-probe. -->
+    <div id="scaffold-probe"
+         style="position:fixed;bottom:8px;right:8px;z-index:9999;font-size:11px;opacity:0.6;pointer-events:none;"
+         x-data="{ alpine: 'alpine-ok' }"
+         x-init="document.getElementById('scaffold-probe').dataset.alpine = alpine"
+         hx-get="/api/ping" hx-trigger="load" hx-swap="none"
+         hx-on::after-request="this.dataset.htmx = (event.detail.successful ? 'htmx-ok' : 'htmx-fail')">
+    </div>
+
+    <!-- App state modules (must load after eventBus.js / api.js, before feature scripts) -->
+    <script src="{{ url_for('static', filename='state/store.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/chainCacheState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/optionChainState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/oddsChainState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/abortRegistry.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/tabFlagsState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/panelState.js') }}"></script>
     <script src="{{ url_for('static', filename='utils.js') }}"></script>
     <script src="{{ url_for('static', filename='position.js') }}"></script>
     <script src="{{ url_for('static', filename='option-chain.js') }}"></script>
@@ -964,23 +178,23 @@
                 var el = document.getElementById(target);
                 if (el) { el.classList.add('active'); el.style.display = ''; }
                 // Trigger Market Review chart load on first visit
-                if (target === 'tab-market-review' && !window._mrLoaded) {
+                if (target === 'tab-market-review' && !window.appState.tabFlags.isLoaded('market_review')) {
                     var ticker = '{{ ticker or "" }}';
-                    if (ticker) { loadMarketReviewChart(ticker); window._mrLoaded = true; }
+                    if (ticker) { loadMarketReviewChart(ticker); window.appState.tabFlags.markLoaded('market_review'); }
                 }
                 // Auto-load Option Chain on tab switch
-                if (target === 'tab-option-chain' && !window._ocAutoLoaded) {
+                if (target === 'tab-option-chain' && !window.appState.tabFlags.isLoaded('option_chain')) {
                     var ticker = (document.getElementById('ticker') || {}).value || '';
-                    if (ticker.trim()) { loadOptionChain(); window._ocAutoLoaded = true; }
+                    if (ticker.trim()) { loadOptionChain(); window.appState.tabFlags.markLoaded('option_chain'); }
                 }
                 // Auto-load Expiry Odds on tab switch
-                if (target === 'tab-odds' && !window._oddsAutoLoaded) {
+                if (target === 'tab-odds' && !window.appState.tabFlags.isLoaded('odds')) {
                     var ticker = (document.getElementById('ticker') || {}).value || '';
-                    if (ticker.trim()) { loadOddsData(); window._oddsAutoLoaded = true; }
+                    if (ticker.trim()) { loadOddsData(); window.appState.tabFlags.markLoaded('odds'); }
                 }
                 // Auto-load Market Regime on tab switch
-                if (target === 'tab-regime' && !window._regimeLoaded) {
-                    if (typeof loadRegimeTab === 'function') { loadRegimeTab(); window._regimeLoaded = true; }
+                if (target === 'tab-regime' && !window.appState.tabFlags.isLoaded('regime')) {
+                    if (typeof loadRegimeTab === 'function') { loadRegimeTab(); window.appState.tabFlags.markLoaded('regime'); }
                 }
             });
         });
@@ -989,8 +203,8 @@
         var tickerInput = document.getElementById('ticker');
         if (tickerInput) {
             tickerInput.addEventListener('change', function() {
-                window._ocAutoLoaded = false;
-                window._oddsAutoLoaded = false;
+                window.appState.tabFlags.reset('option_chain');
+                window.appState.tabFlags.reset('odds');
             });
         }
 

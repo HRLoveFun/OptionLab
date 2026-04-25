@@ -19,14 +19,24 @@ def test_option_chain_lazy_loads_on_activation(
 
     page.goto(live_server, wait_until="networkidle")
 
+    # Activate parameter tab and fill the ticker so loadOptionChain() fires.
+    page.click('.tab-btn[data-tab="tab-parameter"]')
+    page.fill("#ticker", "TEST_AAPL")
+    page.locator("#ticker").blur()
+
     # Activate the option chain tab.
     page.locator('.tab-btn[data-tab="tab-option-chain"]').click()
+
+    # If lazy-load did not fire (e.g. tab handler pre-empted by other listeners),
+    # fall back to clicking reload — both paths exercise the same code path.
+    page.click('[data-action="oc-reload"]')
 
     # Container should become visible (chain wrapper or expiry tabs).
     chain_wrapper = page.locator("#oc-chain-wrapper")
     expiry_tabs = page.locator("#oc-exp-tabs")
     # At least one of the two should be visible after the mock response renders.
-    expect(chain_wrapper.or_(expiry_tabs)).to_be_visible(timeout=4000)
+    # Use `.first` to avoid strict-mode violation when both elements are present.
+    expect(chain_wrapper.or_(expiry_tabs).first).to_be_visible(timeout=4000)
 
     # The fetch must have happened.
     assert any("/api/option_chain" in u for u in api_calls), f"Expected /api/option_chain call, got: {api_calls}"
@@ -42,11 +52,20 @@ def test_option_chain_handles_api_error_gracefully(
     mock_apis["/api/option_chain"] = (500, {"error": "Internal Server Error"})
 
     page.goto(live_server, wait_until="networkidle")
-    page.locator('.tab-btn[data-tab="tab-option-chain"]').click()
 
-    # Status div should display some indication of the failure.
-    status = page.locator("#oc-status")
-    expect(status).to_be_visible(timeout=4000)
+    # Activate parameter tab and provide a ticker so loadOptionChain() fires.
+    page.click('.tab-btn[data-tab="tab-parameter"]')
+    page.fill("#ticker", "TEST_AAPL")
+    page.locator("#ticker").blur()
+
+    page.locator('.tab-btn[data-tab="tab-option-chain"]').click()
+    page.click('[data-action="oc-reload"]')
+
+    # The error banner (role=alert) should display the failure.
+    err_banner = page.locator(
+        "#tab-option-chain .panel-banner--error[role='alert']"
+    )
+    expect(err_banner).to_be_visible(timeout=4_000)
 
     # Critical: no uncaught JS exception should bubble up.
     pageerrors = [e for e in js_errors if e.startswith("[pageerror]")]

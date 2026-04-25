@@ -270,4 +270,23 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 500);
     }
     enhanceMarketReviewTable();
+
+    // ── Global data-action delegation ──────────────────────────────
+    // Buttons opt out of inline onclick by setting data-action="<id>".
+    // Register handlers here; the click listener routes to the right fn.
+    const actionHandlers = {
+        'game-run': () => runGameAnalysis(),
+        'oc-reload': () => loadOptionChain(),
+        'odds-reload': () => loadOddsData(),
+    };
+    document.addEventListener('click', function (ev) {
+        const target = ev.target.closest('[data-action]');
+        if (!target) return;
+        const action = target.getAttribute('data-action');
+        const handler = actionHandlers[action];
+        if (handler) {
+            ev.preventDefault();
+            handler(ev, target);
+        }
+    });
 });
