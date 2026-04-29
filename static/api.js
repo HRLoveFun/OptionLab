@@ -5,12 +5,12 @@
  *     a normalized error shape: { ok:false, status, code, message, detail }
  *   - per-key AbortController registry so callers can cancel previous
  *     in-flight requests (e.g. typing into ticker input) without leaking
- *     globals like window._gameAbort / _ocAbort.
+ *     globals like window._ocAbort.
  *
  * Usage:
  *   const data = await api.get('/api/regime/current?ticker=AAPL');
- *   const data = await api.post('/api/game', { body: payload, key: 'game' });
- *   api.abort('game');           // cancel the previous 'game' request
+ *   const data = await api.post('/api/odds_with_vol', { body: payload, key: 'odds' });
+ *   api.abort('odds');           // cancel the previous 'odds' request
  *
  * All thrown errors are ApiError instances (extending Error) with the
  * normalized fields above. AbortError is preserved (err.name === 'AbortError')

@@ -1,13 +1,11 @@
+"""Price dynamic analysis: volatility and momentum calculations."""
 import datetime as dt
 import logging
-import time
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
 from data_pipeline.data_service import DataService
-from utils.utils import yf_throttle
 
 logger = logging.getLogger(__name__)
 
@@ -101,45 +99,26 @@ class PriceDynamic:
         raise KeyError(f"No data available for key: {item}")
 
     def _download_data(self):
-        for attempt in range(_YF_MAX_RETRIES):
-            try:
-                yf_end = dt.date.today() + dt.timedelta(days=1)
-                yf_throttle()
-                df = yf.download(
-                    self.ticker,
-                    start=self._download_start,
-                    end=yf_end,
-                    interval="1d",
-                    progress=False,
-                    auto_adjust=False,
-                )
-                if df.empty:
-                    logger.warning(f"No data downloaded for {self.ticker} (attempt {attempt + 1})")
-                    if attempt < _YF_MAX_RETRIES - 1:
-                        time.sleep(_YF_RETRY_BASE_DELAY * (attempt + 1))
-                        continue
-                    return None
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.droplevel(1)
-                df.index = pd.DatetimeIndex(df.index)
-                required_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
-                missing_columns = [col for col in required_columns if col not in df.columns]
-                if missing_columns:
-                    logger.error(f"Missing columns: {missing_columns}")
-                    return None
-                return df[required_columns]
-            except Exception as e:
-                is_rate_limit = "rate" in str(e).lower() or "too many" in str(e).lower()
-                if is_rate_limit and attempt < _YF_MAX_RETRIES - 1:
-                    delay = _YF_RETRY_BASE_DELAY * (attempt + 1)
-                    logger.warning(
-                        f"yfinance rate limited for {self.ticker}, retrying in {delay}s (attempt {attempt + 1})"
-                    )
-                    time.sleep(delay)
-                    continue
-                logger.error(f"Error downloading data for {self.ticker}: {e}")
-                return None
-        return None
+        from data_pipeline.yf_client import fetch_daily_ohlcv
+
+        yf_end = dt.date.today() + dt.timedelta(days=1)
+        df = fetch_daily_ohlcv(
+            self.ticker,
+            self._download_start,
+            yf_end,
+            auto_adjust=False,
+            max_retries=_YF_MAX_RETRIES,
+            retry_base_delay=_YF_RETRY_BASE_DELAY,
+        )
+        if df.empty:
+            logger.warning(f"No data downloaded for {self.ticker}")
+            return None
+        required_columns = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f"Missing columns for {self.ticker}: {missing_columns}")
+            return None
+        return df[required_columns]
 
     def _fetch_daily_from_db(self):
         try:
@@ -461,6 +440,11 @@ class PriceDynamic:
             adj = pd.to_numeric(daily["Adj Close"], errors="coerce")
             log_ret = np.log(adj / adj.shift(1)).dropna()
 
+            # DOMAIN: standard HV horizons \u2014 10d (very short), 20d (1 month),
+            # 60d (3 months), 252d (1 year). These window lengths are what
+            # every options textbook / chartist uses; do NOT renormalise.
+            # ANN_FACTOR = sqrt(trading-days-per-year) * 100 to express HV
+            # as an annualised percentage. 252 is the US trading-day count.
             WINDOWS = [10, 20, 60, 252]
             ANN_FACTOR = np.sqrt(252) * 100
 
@@ -471,6 +455,9 @@ class PriceDynamic:
 
             hv_20_series = log_ret.rolling(20, min_periods=10).std().dropna() * ANN_FACTOR
             if len(hv_20_series) >= 60:
+                # CONSTRAINT: HV PERCENTILE \u2014 not IV rank. yfinance does not
+                # expose IV history; HV percentile is our deliberate
+                # substitute for "is vol cheap/rich?". See ADR 0004.
                 recent_252 = hv_20_series.iloc[-252:]
                 current_hv20 = hv_dict["hv_20d"]
                 hv_dict["hv_rank"] = float((recent_252 <= current_hv20).sum() / len(recent_252))

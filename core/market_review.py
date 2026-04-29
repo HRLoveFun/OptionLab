@@ -1,3 +1,4 @@
+"""Market review utilities: fetch and cache broad-market summary data."""
 import datetime as dt
 import logging
 import threading
@@ -57,6 +58,16 @@ def _yf_download_with_retry(tickers, **kwargs) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def _canonicalize_instrument(instrument: str) -> str:
+    """If *instrument* is a yfinance symbol that matches a BENCHMARKS value,
+    return the corresponding display name (e.g. "^SPX" → "SPX"). Otherwise
+    return *instrument* unchanged. Public callers should funnel through this
+    so downstream column lookups always see a consistent identifier.
+    """
+    inverse = {v: k for k, v in BENCHMARKS.items()}
+    return inverse.get(instrument, instrument)
+
+
 def _fetch_market_data(instrument: str, start_date=None, end_date=None):
     """Download and clean benchmark data with DB persistence + in-memory caching.
 
@@ -79,8 +90,22 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
             else:
                 del _mr_cache[cache_key]
 
-    all_tickers = [instrument] + list(BENCHMARKS.values())
-    display_names = [instrument] + list(BENCHMARKS.keys())
+    # WHY: When the user-supplied instrument is itself a benchmark (e.g. "^SPX"
+    # which is also BENCHMARKS["SPX"]), naive concatenation produces duplicate
+    # tickers and a display-name collision: ticker_to_display["^SPX"] would be
+    # overwritten with the benchmark display name, then later code does
+    # data[instrument] / returns[instrument] and raises KeyError.
+    # Resolution: dedupe so the instrument appears in all_tickers exactly once,
+    # but keep `instrument` as the yfinance symbol throughout this function so
+    # the "instrument in valid_tickers" check still works against the data
+    # columns (which are the yfinance tickers prior to the display-name swap).
+    _benchmark_inverse = {v: k for k, v in BENCHMARKS.items()}
+    if instrument in _benchmark_inverse:
+        all_tickers = list(BENCHMARKS.values())
+        display_names = list(BENCHMARKS.keys())
+    else:
+        all_tickers = [instrument] + list(BENCHMARKS.values())
+        display_names = [instrument] + list(BENCHMARKS.keys())
     ticker_to_display = dict(zip(all_tickers, display_names, strict=False))
 
     # ── L2/L3: DB-first with incremental yfinance download ──
@@ -201,6 +226,11 @@ def market_review(instrument, start_date: dt.date | None = None, end_date: dt.da
     pd.DataFrame: formatted results table
     """
     data, returns, display_names = _fetch_market_data(instrument, start_date, end_date)
+    # WHY: data/returns columns were renamed to display names inside
+    # _fetch_market_data; map the user-supplied yfinance symbol (e.g. "^SPX")
+    # to the matching display name ("SPX") so downstream column lookups
+    # don't KeyError when the instrument is also a benchmark.
+    instrument = _canonicalize_instrument(instrument)
     today = data.index[-1]
     periods = {
         "1M": today - dt.timedelta(days=30),
@@ -283,6 +313,7 @@ def market_review_timeseries(instrument: str, start_date=None, end_date=None) ->
     period markers, and the original summary table HTML as fallback.
     """
     data, returns, valid_display = _fetch_market_data(instrument, start_date, end_date)
+    instrument = _canonicalize_instrument(instrument)
 
     dates = data.index.strftime("%Y-%m-%d").tolist()
 

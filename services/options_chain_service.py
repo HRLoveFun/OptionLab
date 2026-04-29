@@ -4,15 +4,103 @@ all charts / tables as a single result dictionary for the Flask route.
 """
 
 import logging
+import math
 
-from core.options_chain_analyzer import OptionsChainAnalyzer
+from core.options_chain_analyzer import OptionsChainAnalyzer, liquidity_score
+from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_num(v) -> float | None:
+    """Coerce a value to a JSON-safe rounded float, or None."""
+    try:
+        if v is None:
+            return None
+        fv = float(v)
+        if math.isnan(fv) or math.isinf(fv):
+            return None
+        return round(fv, 4)
+    except (TypeError, ValueError):
+        return None
 
 
 class OptionsChainService:
     """Thin orchestration layer around OptionsChainAnalyzer."""
 
+    # ------------------------------------------------------------------
+    # Lightweight records endpoint (used by /api/option_chain)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def fetch_records(ticker: str) -> dict:
+        """Return a JSON-friendly option chain payload.
+
+        Shape::
+
+            {
+                "expirations": [...],
+                "chain": {expiry: {"calls": [row, ...], "puts": [row, ...]}},
+                "spot": float | None,
+            }
+
+        Each row carries strike/bid/ask/last/iv/oi/volume + a liquidity score.
+        Heavy DataFrame work and yfinance access stay out of the route.
+        """
+        snap = fetch_option_chain(ticker)
+        spot = _clean_num(snap.get("spot"))
+        chain_dfs = snap.get("chain", {}) or {}
+        expirations = list(chain_dfs.keys())
+
+        chain_records: dict = {}
+        for exp, frames in chain_dfs.items():
+            calls_df = frames.get("calls")
+            puts_df = frames.get("puts")
+            chain_records[exp] = {
+                "calls": OptionsChainService._df_to_records(calls_df, spot),
+                "puts": OptionsChainService._df_to_records(puts_df, spot),
+            }
+
+        return {"expirations": expirations, "chain": chain_records, "spot": spot}
+
+    @staticmethod
+    def _df_to_records(df, spot):
+        if df is None or df.empty:
+            return []
+        # Sort by strike for stable output across expiries
+        try:
+            df = df.sort_values("strike")
+        except Exception:
+            pass
+        rows = []
+        for _, r in df.iterrows():
+            strike = _clean_num(r.get("strike"))
+            bid_ = _clean_num(r.get("bid"))
+            ask_ = _clean_num(r.get("ask"))
+            last_ = _clean_num(r.get("lastPrice"))
+            oi_ = _clean_num(r.get("openInterest"))
+            vol_ = _clean_num(r.get("volume"))
+            iv_raw = r.get("impliedVolatility")
+            iv_pct = _clean_num((iv_raw or 0) * 100)
+            score, reason = liquidity_score(strike or 0, bid_, ask_, last_, oi_, vol_, spot)
+            rows.append(
+                {
+                    "strike": strike,
+                    "lastPrice": last_,
+                    "bid": bid_,
+                    "ask": ask_,
+                    "volume": vol_,
+                    "openInterest": oi_,
+                    "iv": iv_pct,
+                    "itm": bool(r.get("inTheMoney", False)),
+                    "liq_score": score,
+                    "liq_reason": reason,
+                }
+            )
+        return rows
+
+    # ------------------------------------------------------------------
+    # Full analysis (used by /render/options_chain)
+    # ------------------------------------------------------------------
     @staticmethod
     def generate_options_chain_analysis(ticker: str) -> dict:
         """

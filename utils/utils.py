@@ -48,9 +48,12 @@ class DateHelper:
 
 
 # ── yfinance proxy ────────────────────────────────────────────────
-# yfinance uses curl_cffi internally, which respects standard
-# HTTP_PROXY / HTTPS_PROXY env vars.  We map the simpler YF_PROXY
-# variable into both so the user only has to set one value.
+# CONSTRAINT: yfinance >= 0.2.50 uses curl_cffi internally, NOT requests.
+# It does honour standard HTTP_PROXY / HTTPS_PROXY env vars, but it does
+# NOT honour `session=requests.Session(...)` kwargs — passing one silently
+# breaks every download. See docs/constraints.md §2 and docs/decisions/0002.
+# WHY: We map the simpler YF_PROXY variable into both env vars so the user
+# only has to set one value.
 
 
 def _probe_proxy(proxy_url: str, timeout: float = 2.0) -> bool:
@@ -89,14 +92,26 @@ def init_yf_proxy() -> None:
             logging.getLogger(__name__).warning(
                 "YF_PROXY=%s is not reachable — falling back to direct connection", proxy
             )
+    else:
+        # WHY: many regions cannot reach Yahoo Finance directly. Loudly
+        # warn so the operator notices missing .env / VPN setup instead
+        # of silently getting empty DataFrames or 429s.
+        logging.getLogger(__name__).warning(
+            "YF_PROXY is unset — yfinance will use a direct connection. "
+            "If you are behind a VPN (e.g. mainland China), set YF_PROXY "
+            "in .env (typical: http://127.0.0.1:1087)."
+        )
 
 
 # ── yfinance global rate throttle ──────────────────────────────────
-# Token-bucket limiter: refills at YF_RATE_PER_SEC tokens/second up to a
-# burst capacity of YF_BUCKET_SIZE. Each `yf_throttle()` consumes one token,
-# blocking only when the bucket is empty. This replaces the older fixed
-# 1.5s gap so a small burst (e.g. 5 parallel requests) completes quickly
-# while sustained traffic still respects Yahoo's per-IP limits.
+# CONSTRAINT: Yahoo Finance aggressively rate-limits per-IP. Without
+# throttling, a multi-panel dashboard refresh trips 429s within minutes.
+# TRADEOFF: Replaces the older fixed 1.5s gap (which serialised legitimate
+# small bursts) with a token bucket — small bursts (≤ bucket size) are
+# fast, sustained traffic still respects the limit. See ADR 0005.
+# INVARIANT: every direct yfinance call (yf.download / yf.Ticker /
+# option_chain / fast_info) must call yf_throttle() first. Skipping it
+# once is enough to poison the IP for ~1 hour.
 
 _yf_throttle_lock = _threading.Lock()
 _YF_RATE_PER_SEC = float(os.environ.get("YF_RATE_PER_SEC", "5.0"))

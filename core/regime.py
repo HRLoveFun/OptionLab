@@ -42,10 +42,20 @@ class DirRegime(str, Enum):
 
 
 # ── Thresholds (centralized) ──────────────────────────────────────
+# DOMAIN: VIX bands derive from observed CBOE behaviour:
+#   <15  : complacent / low-vol regime
+#   15-20: normal range
+#   20-30: elevated, options expensive
+#   >30  : stress (post-crash, COVID, GFC).
+# These are NOT configuration knobs \u2014 dashboards and decision rules in
+# services/regime_service.py rely on these specific bucket meanings.
 VIX_LOW_MID = 15.0
 VIX_MID_HIGH = 20.0
 VIX_HIGH_STRESS = 30.0
 
+# DOMAIN: 20-day SMA + 5-day slope is the de-facto short-term trend filter
+# used across the project. Changing the window changes the meaning of every
+# downstream chart and signal.
 SMA_WINDOW = 20
 SLOPE_LOOKBACK = 5
 SLOPE_THRESHOLD = 0.005  # 0.5% 5-day rate of change

@@ -1,4 +1,4 @@
-"""Smoke tests: page loads, no JS errors, all 11 tabs render and switch."""
+"""Smoke tests: page loads, no JS errors, all 10 tabs render and switch."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ TAB_IDS = [
     "tab-option-chain",
     "tab-options-chain",
     "tab-odds",
-    "tab-game",
     "tab-regime",
     "tab-config",
 ]

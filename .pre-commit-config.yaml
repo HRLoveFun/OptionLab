@@ -1,0 +1,29 @@
+repos:
+  - repo: local
+    hooks:
+      - id: doc-guard
+        name: doc-guard (tag/architecture/link checks)
+        entry: python3 scripts/doc_guard.py --files
+        language: system
+        pass_filenames: true
+        types_or: [python, markdown]
+
+      - id: regen-adr-index
+        name: regen-adr-index
+        entry: python3 scripts/regen_adr_index.py
+        language: system
+        pass_filenames: false
+        files: '^docs/decisions/.*\.md$'
+
+      - id: audit-tags
+        name: audit-tags (regression check)
+        entry: python3 scripts/audit_tags.py
+        language: system
+        pass_filenames: false
+        files: '^(core|data_pipeline|services|utils)/.*\.py$'
+
+      - id: commit-msg-format
+        name: commit-msg-format
+        stages: [commit-msg]
+        entry: python3 scripts/commit_msg_check.py
+        language: system

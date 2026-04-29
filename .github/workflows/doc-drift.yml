@@ -1,0 +1,68 @@
+name: doc-drift (AI-drafted updates)
+
+# This workflow drafts documentation updates as PRs. A human still merges,
+# but the *writing* is automated. Triggers:
+#   - Weekly on Monday 06:00 UTC
+#   - Manual via "workflow_dispatch"
+#
+# Requires repo secret: ANTHROPIC_API_KEY (or OPENAI_API_KEY) to actually
+# call an LLM. If neither is set the workflow runs the deterministic
+# candidate-finder and opens an issue listing what *would* be drafted, so
+# humans can wire it up later without losing visibility.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    env:
+      MAX_DRAFT_CHANGES: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Find drift candidates
+        id: cand
+        run: |
+          python scripts/audit_tags.py --json > /tmp/audit.json
+          python scripts/find_drift_candidates.py > /tmp/candidates.json
+          echo "count=$(jq 'length' /tmp/candidates.json)" >> "$GITHUB_OUTPUT"
+          cat /tmp/candidates.json
+
+      - name: Draft updates with LLM (if keys present)
+        if: env.ANTHROPIC_API_KEY != '' || env.OPENAI_API_KEY != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python scripts/draft_doc_updates.py /tmp/candidates.json
+
+      - name: Open / update PR
+        if: steps.cand.outputs.count != '0'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: doc-drift/auto
+          title: 'docs: auto-drafted documentation updates'
+          body-path: /tmp/candidates.json
+          labels: doc-drift,automated
+          delete-branch: true
+
+      - name: Fallback issue (no LLM keys configured)
+        if: env.ANTHROPIC_API_KEY == '' && env.OPENAI_API_KEY == '' && steps.cand.outputs.count != '0'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: 'doc-drift: candidates needing manual review'
+          content-filepath: /tmp/candidates.json
+          labels: doc-drift

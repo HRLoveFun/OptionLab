@@ -30,7 +30,6 @@ static/
 ├── market-review.js        Market review tab logic
 ├── market_review_chart.js  Chart.js time-series renderer
 ├── regime.js               Regime panel
-├── game.js                 Put-selector ("game") tab
 ├── styles.css              Component styles + design tokens
 ├── state/                  Reactive store + per-feature state machines
 │   ├── store.js               Tiny observable store
@@ -117,7 +116,6 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │  • Chain      │  Tab 5: Option Chain T-View             │
 │  • Volatility │  Tab 6: Volatility Analysis             │
 │  • Odds       │  Tab 7: Expiry Odds                     │
-│  • Put Sel.   │  Tab 8: Put Option Selector             │
 │               │                                         │
 └───────────────┴─────────────────────────────────────────┘
 ```
@@ -134,7 +132,6 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 | `tab-option-chain`         | Option Chain                | `oc_chain`, `oc_*` analysis      |
 | `tab-options-chain`        | Volatility Analysis         | `oc_*` metrics and charts        |
 | `tab-odds`                 | Expiry Odds                 | `odds_chart`                     |
-| `tab-game`                 | Put Selector                | Game service output              |
 
 ---
 

@@ -1,3 +1,4 @@
+"""Market data downloader: fetches raw price data from external sources."""
 import datetime as dt
 import logging
 import os
@@ -13,14 +14,15 @@ from .db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 
-# Maximum window the gap-aware downloader will auto-expand to. Larger ranges
-# require explicit `DataService.seed_history` to avoid runaway yfinance load
-# after a long outage.
+# DOMAIN / CONSTRAINT: cap on how far back the gap-aware downloader will
+# auto-expand. Larger ranges require explicit ``DataService.seed_history``
+# to avoid runaway yfinance load (and 429s) after a long outage.
+# See docs/constraints.md §2 / ADR 0005.
 MAX_AUTO_BACKFILL_DAYS = int(os.environ.get("MAX_AUTO_BACKFILL_DAYS", "90"))
 
-# Local fixture directory for `TEST_*` tickers — see `_load_test_fixture`.
-# Tests should never hit the network; routing TEST_* through this fixture
-# also keeps the global yfinance throttle uncontended for real tickers.
+# WHY: Local fixture directory for ``TEST_*`` tickers. Tests should never
+# hit the network — routing TEST_* through this fixture also keeps the
+# global yfinance throttle uncontended for real tickers during test runs.
 _FIXTURE_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "yf"
 
 

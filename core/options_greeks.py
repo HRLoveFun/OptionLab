@@ -1,8 +1,20 @@
 """
 Vectorized Black-Scholes Greeks calculation.
 
+Context:
+- Inputs come from yfinance option-chain snapshots, which contain illiquid
+  strikes with bid=0 and IV=999.x. Callers should pre-filter, but we also
+  defend at the function boundary via ``_safe_inputs``.
+- We assume EUROPEAN exercise. American early-exercise premium is ignored.
+  Acceptable for index options and short-dated US equity options in a
+  research context. See docs/glossary.md “Greeks”.
+- TRADEOFF: vectorised numpy beats per-contract scipy.optimize by ~30x on
+  5000-contract chains. We pay for that with a single-pass dataflow: any
+  invalid input becomes ``np.nan`` rather than raising, so callers see one
+  homogeneous output array.
+
 All functions accept scalar or NumPy array inputs (broadcast-compatible).
-Invalid inputs produce np.nan in the output rather than raising exceptions.
+Invalid inputs produce ``np.nan`` in the output rather than raising.
 """
 
 import logging
@@ -13,7 +25,12 @@ from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
 
-# Numerical stability constants
+# DOMAIN: Numerical stability bounds, NOT configuration knobs.
+# _T_MIN: 1 day in years — avoids divide-by-zero on expiry day.
+# _SIGMA_MIN: 0.1% — below this Black-Scholes is numerically degenerate.
+# _SIGMA_MAX: 2000% — yfinance occasionally returns IV ≈ 999 for illiquid
+#   strikes; we treat anything above this as garbage and emit nan.
+# Do NOT widen without a corresponding test; do NOT “extract to config”.
 _T_MIN = 1 / 365  # minimum valid time (1 day)
 _SIGMA_MIN = 0.001  # minimum valid IV (0.1%)
 _SIGMA_MAX = 20.0  # maximum valid IV (2000%), filters yfinance anomalies
