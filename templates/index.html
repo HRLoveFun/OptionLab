@@ -24,6 +24,54 @@
         window.STREAMING_MODE = {{ (streaming_mode or false) | tojson }};
     </script>
 
+    <!-- Data quality degradation banner (hidden until /health/status reports degraded) -->
+    <div id="health-banner" role="status" aria-live="polite"
+         style="display:none; padding:8px 16px; background:#fffbeb; color:#92400e;
+                border-bottom:1px solid #fcd34d; font-size:13px; text-align:center; position:relative;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span id="health-banner-msg">Data quality degraded.</span>
+        <a href="/health/data" target="_blank" style="color:#92400e; text-decoration:underline; margin-left:8px;">details</a>
+        <button type="button" id="health-banner-dismiss"
+                aria-label="Dismiss"
+                style="position:absolute; right:12px; top:50%; transform:translateY(-50%);
+                       background:transparent; border:none; color:#92400e; cursor:pointer;
+                       font-size:16px; padding:0 6px; line-height:1;">&times;</button>
+    </div>
+    <script>
+        (function pollHealth(){
+            // WHY: user can dismiss the banner per-session so it doesn't nag
+            // when DB is intentionally sparse (e.g. secondary tickers behind
+            // yfinance rate-limit). The banner reappears in a new tab/session.
+            try {
+                if (sessionStorage.getItem('healthBannerDismissed') === '1') return;
+            } catch (e) { /* sessionStorage unavailable */ }
+            fetch('/health/status').then(r=>r.json()).then(j=>{
+                if (j && j.status === 'degraded') {
+                    var el=document.getElementById('health-banner');
+                    var msg=document.getElementById('health-banner-msg');
+                    var btn=document.getElementById('health-banner-dismiss');
+                    if (el) {
+                        el.style.display='block';
+                        var parts=[];
+                        if (j.stale_count) parts.push(j.stale_count+' stale tickers');
+                        if (j.nan_count) parts.push(j.nan_count+' tickers with NaN close');
+                        if (j.failures_24h_total) parts.push(j.failures_24h_total+' pipeline failures (24h)');
+                        if (msg && parts.length) {
+                            msg.textContent='Data quality degraded: '+parts.join(', ')
+                                +'. (Often caused by Yahoo Finance rate-limit; auto-recovers.)';
+                        }
+                        if (btn) {
+                            btn.addEventListener('click', function(){
+                                el.style.display='none';
+                                try { sessionStorage.setItem('healthBannerDismissed','1'); } catch(e){}
+                            });
+                        }
+                    }
+                }
+            }).catch(function(){});
+        })();
+    </script>
+
     <header class="site-header">
         <div class="header-inner">
             <div class="header-brand">
@@ -80,10 +128,6 @@
                     <i class="fas fa-dice"></i>
                     <span>Expiry Odds</span>
                 </button>
-                <button class="tab-btn" data-tab="tab-game">
-                    <i class="fas fa-crosshairs"></i>
-                    <span>Put Selector</span>
-                </button>
                 <button class="tab-btn" data-tab="tab-regime">
                     <i class="fas fa-chart-line"></i>
                     <span>Market Regime</span>
@@ -126,9 +170,6 @@
             <!-- Tab 7: Expiry Odds -->
             {% include 'partials/tab_odds.html' %}
 
-            <!-- Tab 8: Put Option Decision Game -->
-            {% include 'partials/tab_game.html' %}
-
             <!-- Tab: Market Regime -->
             {% include 'partials/tab_regime.html' %}
 
@@ -164,7 +205,6 @@
     <script src="{{ url_for('static', filename='position.js') }}"></script>
     <script src="{{ url_for('static', filename='option-chain.js') }}"></script>
     <script src="{{ url_for('static', filename='market-review.js') }}"></script>
-    <script src="{{ url_for('static', filename='game.js') }}"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script src="{{ url_for('static', filename='market_review_chart.js') }}"></script>
     <script src="{{ url_for('static', filename='regime.js') }}"></script>

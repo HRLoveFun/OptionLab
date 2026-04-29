@@ -17,12 +17,59 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
-import yfinance as yf
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (needed for 3D projection)
 
-from utils.utils import yf_throttle
+from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Liquidity scoring (extracted from app.py route — reusable across services)
+# ---------------------------------------------------------------------------
+def liquidity_score(
+    strike: float | None,
+    bid: float | None,
+    ask: float | None,
+    last: float | None,
+    oi: float | None,
+    volume: float | None,
+    spot: float | None,
+) -> tuple[str, str]:
+    """Classify a single option contract's liquidity as GOOD / FAIR / AVOID.
+
+    Returns ``(label, reason)`` — ``reason`` is empty for GOOD.
+    Heuristics: bid-ask spread %, open interest, volume, moneyness.
+    """
+    issues: list[str] = []
+    bid_ = bid if (bid and bid > 0) else None
+    ask_ = ask if (ask and ask > 0) else None
+    if bid_ is not None and ask_ is not None:
+        mid = (bid_ + ask_) / 2
+        spread_pct = (ask_ - bid_) / mid if mid > 0 else 1.0
+        if spread_pct > 0.20:
+            issues.append(f"spread {spread_pct:.0%}")
+    else:
+        issues.append("spread N/A")
+    oi_ = int(oi) if oi else 0
+    if oi_ < 100:
+        issues.append(f"OI={oi_}")
+    vol_ = int(volume) if volume else 0
+    if vol_ < 10:
+        issues.append(f"Vol={vol_}")
+    if spot and spot > 0 and strike:
+        m = strike / spot
+        if m < 0.75 or m > 1.35:
+            # WHY: This flag is direction-agnostic — it only says the strike is
+            # far from spot. Whether that's deep ITM or deep OTM depends on
+            # call/put, which liquidity_score() doesn't know. Avoid the
+            # misleading "deep OTM" wording that confused users in QA.
+            issues.append("strike far from spot")
+    if not issues:
+        return "GOOD", ""
+    if len(issues) == 1:
+        return "FAIR", issues[0]
+    return "AVOID", " | ".join(issues[:2])
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,9 +134,14 @@ def calc_implied_realized_vol(move_pct: float, dte: int) -> float:
 
 
 def get_odds_with_vol_context(spot: float, target_pct: float, chain: dict, expiries: list) -> dict:
-    """Enhanced odds with implied-RV / ATM-IV context per expiry."""
-    target_price = spot * (target_pct / 100.0)
-    move_pct = abs(target_price - spot) / spot
+    """Enhanced odds with implied-RV / ATM-IV context per expiry.
+
+    target_pct is interpreted as a *delta* in percent: 5 ⇒ +5% from spot,
+    -3 ⇒ -3% from spot. The frontend input default of 10 means "odds of a
+    +10% move" — which used to be silently misread as target_price = 0.1*spot.
+    """
+    target_price = spot * (1.0 + target_pct / 100.0)
+    move_pct = abs(target_price - spot) / spot if spot else 0.0
 
     results = []
     for exp in expiries:
@@ -164,41 +216,16 @@ class OptionsChainAnalyzer:
         self._init_from_yfinance(ticker)
 
     def _init_from_yfinance(self, ticker: str):
-        """Initialize chain data from yfinance."""
-        yf_throttle()
-        tk = yf.Ticker(ticker)
-
-        # Spot price
-        fi = tk.fast_info
-        self.spot: float = float(
-            getattr(fi, "last_price", None)
-            or getattr(fi, "regularMarketPrice", None)
-            or tk.history(period="1d")["Close"].iloc[-1]
-        )
-
-        # Expiries
-        self.expiries: list = list(tk.options)
-
-        # Chain: {expiry_str: {"calls": DataFrame, "puts": DataFrame}}
-        self.chain: dict = {}
-        for exp in self.expiries:
-            try:
-                opt = tk.option_chain(exp)
-                calls = opt.calls.copy()
-                puts = opt.puts.copy()
-                # Ensure numeric columns
-                for col in ["strike", "bid", "ask", "impliedVolatility", "openInterest", "volume", "lastPrice"]:
-                    if col in calls.columns:
-                        calls[col] = pd.to_numeric(calls[col], errors="coerce")
-                    if col in puts.columns:
-                        puts[col] = pd.to_numeric(puts[col], errors="coerce")
-                # Fill NaN openInterest / volume with 0
-                for col in ["openInterest", "volume"]:
-                    calls[col] = calls[col].fillna(0)
-                    puts[col] = puts[col].fillna(0)
-                self.chain[exp] = {"calls": calls, "puts": puts}
-            except Exception as e:
-                logger.warning(f"Could not load chain for {exp}: {e}")
+        """Initialize chain data via the unified yfinance client."""
+        snap = fetch_option_chain(ticker)
+        spot = snap.get("spot")
+        if spot is None:
+            raise RuntimeError(f"Unable to fetch spot price for {ticker}")
+        self.spot: float = float(spot)
+        self.expiries: list = list(snap.get("expiries", []))
+        self.chain: dict = dict(snap.get("chain", {}))
+        # Per-expiry failures are already logged inside yf_client; nothing
+        # else to do here.
 
     # ------------------------------------------------------------------
     # 1.1  Snapshot summary

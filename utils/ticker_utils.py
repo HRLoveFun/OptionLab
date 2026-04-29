@@ -26,6 +26,35 @@ _RE_YAHOO_US_INDEX = re.compile(r"^\^[A-Z]+$")
 _RE_YAHOO_HK_STOCK = re.compile(r"^\d{4,5}\.HK$")
 _RE_YAHOO_FUTURES = re.compile(r"^[A-Z]+=F$")
 
+# Syntactic whitelist for any ticker we are willing to forward to yfinance / DB.
+# WHY: Without this, validate_ticker() accepts arbitrary strings (including XSS
+# payloads and SQL fragments) and persists rows for them in clean_prices —
+# turning the DB into an attacker-writable surface and a yfinance request
+# amplifier. The pattern intentionally permits the formats that yfinance/our
+# code actually use:
+#   - Equities / ETFs:  AAPL, BRK-B, BRK.A
+#   - US indices:       ^VIX, ^GSPC, ^N225
+#   - Futures:          GC=F, CL=F
+#   - HK / international:  0700.HK, 000300.SS, ^HSI
+#   - Currency / Yahoo composites: DX-Y.NYB, JPY=X
+# Length ≤ 16 to block obvious junk like long XSS payloads.
+_RE_VALID_TICKER = re.compile(r"^\^?[A-Z0-9][A-Z0-9._\-=]{0,15}$")
+
+
+def is_valid_ticker_format(ticker: str) -> bool:
+    """Cheap syntactic check — does *ticker* look like something yfinance might know?
+
+    Use this before any DB write or yfinance call. Returns False for empty
+    strings, lowercase, whitespace, HTML / SQL fragments, or anything > 16 chars.
+    Does NOT verify that the ticker actually exists on Yahoo Finance.
+    """
+    if not isinstance(ticker, str):
+        return False
+    t = ticker.strip()
+    if not t:
+        return False
+    return bool(_RE_VALID_TICKER.match(t.upper()))
+
 
 def is_futu_format(ticker: str) -> bool:
     """Detect whether a ticker string is in futu format (MARKET.SYMBOL)."""

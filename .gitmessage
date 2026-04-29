@@ -1,0 +1,16 @@
+# <type>: <subject — imperative, no period, ≤ 72 chars>
+#
+# Allowed types: feat, fix, refactor, docs, test, chore, revert, perf, ci, style, build
+#
+# Body (optional, wrap at 72 chars):
+# - WHY this change is needed (the motivation, not the diff)
+# - WHAT user-visible behaviour changes
+# - REFERENCES: ADR / issue / docs/constraints.md anchor if applicable
+#
+# Footer (optional):
+#   Refs: #123
+#   Supersedes-ADR: 0004
+#   BREAKING CHANGE: <describe>
+#
+# Tip: enable this template once with
+#   git config commit.template .gitmessage

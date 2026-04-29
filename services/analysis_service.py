@@ -1,3 +1,4 @@
+"""High-level analysis service that orchestrates market data analysis and charting."""
 import gc
 import logging
 
@@ -243,7 +244,33 @@ class AnalysisService:
             all_none = all(v is None for k, v in results.items() if k != "statistical_error")
             if all_none and analyzer.is_data_valid():
                 fdf = analyzer.features_df
-                msg = f"All charts returned None. features_df shape: {fdf.shape if fdf is not None else 'None'}"
+                # WHY: features_df shape (0, 5) almost always means the
+                # user-requested horizon falls outside the actual DB
+                # coverage. Surface that explicitly so the UI can guide
+                # the user instead of showing a cryptic shape tuple.
+                pdyn = getattr(analyzer, "price_dynamic", None)
+                actual_min = actual_max = None
+                if pdyn is not None and getattr(pdyn, "_data", None) is not None and not pdyn._data.empty:
+                    try:
+                        actual_min = pdyn._data.index.min().date().isoformat()
+                        actual_max = pdyn._data.index.max().date().isoformat()
+                    except Exception:
+                        pass
+                req_start = form_data.get("parsed_start_time")
+                req_end = form_data.get("parsed_end_time")
+                if fdf is not None and fdf.shape[0] == 0 and actual_min and actual_max:
+                    msg = (
+                        f"No data points within the requested horizon "
+                        f"({req_start} → {req_end}). DB only has {ticker} data "
+                        f"from {actual_min} to {actual_max}. Either narrow the "
+                        f"horizon to that window, or seed history via "
+                        f"POST /api/data/seed with body "
+                        f'{{"ticker":"{ticker}","years":5}} '
+                        f"(note: /api/regime/backfill only repopulates VIX/SPY "
+                        f"regime tags, NOT per-ticker price history)."
+                    )
+                else:
+                    msg = f"All charts returned None. features_df shape: {fdf.shape if fdf is not None else 'None'}"
                 logger.warning("Statistical analysis empty for %s: %s", ticker, msg)
                 results["statistical_error"] = msg
             elif chart_warnings and not all_none:
@@ -402,15 +429,11 @@ class AnalysisService:
 
         # Correlation matrix
         try:
-            import pandas as pd
-            import yfinance as yf
+            from data_pipeline.yf_client import fetch_close_panel
 
-            from utils.utils import yf_throttle
-
-            yf_throttle()
-            data = yf.download(tickers, period="90d", auto_adjust=False, progress=False)["Close"]
-            if isinstance(data.columns, pd.MultiIndex):
-                data.columns = data.columns.droplevel(1)
+            data = fetch_close_panel(tickers, period="90d")
+            if data is None or data.empty:
+                raise RuntimeError("empty close panel")
             data = data.ffill().dropna()
             corr = data.pct_change(fill_method=None).dropna().corr().round(3)
             summary["correlation_matrix"] = {

@@ -361,8 +361,6 @@ def mock_apis(page):
             route.fulfill(status=200, content_type="application/json", json=FAKE_REGIME_HISTORY)
         elif "/api/odds_with_vol" in url:
             route.fulfill(status=200, content_type="application/json", json={"ok": True, "rows": []})
-        elif "/api/game" in url:
-            route.fulfill(status=200, content_type="application/json", json={"ok": True, "candidates": []})
         elif "/api/portfolio_analysis" in url:
             route.fulfill(status=200, content_type="application/json", json={"ok": True})
         elif "/api/preload_option_chain" in url:

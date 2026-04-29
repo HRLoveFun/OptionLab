@@ -1,3 +1,19 @@
+"""SQLite access layer.
+
+Context:
+- Single-machine deployment, SQLite + WAL mode chosen deliberately. See
+  docs/decisions/0003-sqlite-wal-single-machine.md.
+- WAL allows the scheduler to write while UI threads read concurrently.
+- ``synchronous=NORMAL`` accepts a tiny risk of losing the last commit on
+  power loss; market data we can re-download. Do NOT switch to FULL.
+- Connections are thread-local: SQLite forbids sharing a connection across
+  threads, but per-query reconnect re-applies PRAGMAs and is wasteful.
+
+Do NOT add: a migration framework, an ORM, connection pooling beyond the
+thread-local cache. Each was considered and rejected as overkill for this
+project's scale.
+"""
+
 import logging
 import os
 import sqlite3
@@ -10,11 +26,13 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "market_data.sqlite"))
 
-# ── Thread-local connection cache ────────────────────────────────
-# SQLite connections are not safe to share across threads, but creating a new
-# one per query is wasteful. We keep one persistent connection per (thread, path)
-# and reuse it for the lifetime of the thread. PRAGMAs are applied once on first
-# acquisition. Worker threads in a ThreadPoolExecutor get distinct connections.
+# ── Thread-local connection cache ───────────────────────────────────
+# CONSTRAINT: SQLite connections are not safe to share across threads.
+# WHY (cache, not reconnect): per-query reconnect re-applies PRAGMAs and
+# costs a few ms each — noticeable when the UI fires 20+ queries per render.
+# INVARIANT: PRAGMAs (journal_mode, synchronous, busy_timeout) MUST be
+# applied on first acquisition per thread — they are connection-scoped, not
+# database-scoped, and must be re-set on every new connection.
 _thread_local = threading.local()
 # Track all opened connections so background tasks (tests, scheduler shutdown)
 # can close them explicitly. Indexed by (thread_id, path).
@@ -36,6 +54,8 @@ def _get_or_create_conn(path: str) -> sqlite3.Connection:
         return conn
 
     conn = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES, timeout=10)
+    # CONSTRAINT: WAL + synchronous=NORMAL is a deliberate pair. See ADR 0003.
+    # Do NOT change to FULL (latency) or remove WAL (writers block readers).
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=5000")
@@ -189,6 +209,54 @@ def init_db(db_path: str | None = None):
             notes TEXT
         )
         """
+    )
+    # Data-quality / fetch failure log. Every yfinance error, scheduler
+    # failure, or anomaly worth surfacing in /health/data lands here.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS data_quality_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            ticker TEXT,
+            source TEXT NOT NULL,
+            error_class TEXT NOT NULL,
+            message TEXT,
+            details TEXT
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dq_ts ON data_quality_log(ts)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dq_ticker ON data_quality_log(ticker)"
+    )
+    # Tracked strategies — user-saved multi-leg positions for P&L tracking.
+    # ``legs_json`` stores the full Leg list at entry; ``entry_meta_json``
+    # captures snapshots needed for P&L attribution (spot, IV per leg, total
+    # net premium). ``status`` is open|closed.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tracked_strategies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            template TEXT NOT NULL,
+            expiry TEXT NOT NULL,
+            entry_date TEXT NOT NULL,
+            entry_spot REAL,
+            entry_net_premium REAL,
+            qty INTEGER DEFAULT 1,
+            legs_json TEXT NOT NULL,
+            entry_meta_json TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            notes TEXT,
+            closed_date TEXT,
+            closed_value REAL
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracked_status ON tracked_strategies(status)"
     )
     conn.commit()
 

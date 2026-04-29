@@ -1,0 +1,53 @@
+name: doc-guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  doc-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Determine changed files
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          # On a fresh push BASE may be all-zeros — fall back to last commit.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE=HEAD~1
+          fi
+          CHANGED=$(git diff --name-only "$BASE" HEAD -- '*.py' '*.md' || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Run doc_guard on changed files
+        if: steps.changes.outputs.files != ''
+        run: |
+          # shellcheck disable=SC2086
+          python scripts/doc_guard.py --files ${{ steps.changes.outputs.files }}
+
+      - name: Verify ADR index is fresh
+        run: |
+          python scripts/regen_adr_index.py
+          if ! git diff --quiet docs/decisions/README.md; then
+            echo "::error::docs/decisions/README.md is stale — run scripts/regen_adr_index.py and commit."
+            git --no-pager diff docs/decisions/README.md
+            exit 1
+          fi
+
+      - name: Tag-coverage regression check
+        run: python scripts/audit_tags.py

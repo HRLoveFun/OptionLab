@@ -24,7 +24,6 @@ def test_rapid_tab_switching_no_js_errors(
         "tab-option-chain",
         "tab-regime",
         "tab-odds",
-        "tab-game",
         "tab-market-review",
     ]
     # Rapid clicks (no waits between).

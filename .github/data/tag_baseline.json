@@ -1,0 +1,31 @@
+{
+  "files_scanned": 42,
+  "tags_by_type": {
+    "WHY": 19,
+    "CONSTRAINT": 7,
+    "TRADEOFF": 1,
+    "INVARIANT": 3,
+    "DOMAIN": 6,
+    "HACK": 0,
+    "WORKAROUND": 0
+  },
+  "uncovered_constants_count": 16,
+  "uncovered_constants": [
+    "core/market_review.py:15: _YF_MAX_RETRIES=2",
+    "core/market_review.py:16: _YF_RETRY_BASE_DELAY=3",
+    "core/market_review.py:23: _MR_CACHE_TTL=300",
+    "core/options_greeks.py:35: _SIGMA_MIN=0.001",
+    "core/options_greeks.py:36: _SIGMA_MAX=20.0",
+    "core/price_dynamic.py:11: _YF_MAX_RETRIES=2",
+    "core/price_dynamic.py:12: _YF_RETRY_BASE_DELAY=3",
+    "core/regime.py:52: VIX_LOW_MID=15.0",
+    "core/regime.py:53: VIX_MID_HIGH=20.0",
+    "core/regime.py:54: VIX_HIGH_STRESS=30.0",
+    "core/signals.py:33: TRADING_DAYS_PER_YEAR=252",
+    "services/chart_service.py:29: _CACHE_MAX_ENTRIES=64",
+    "services/regime_service.py:39: MIN_LOOKBACK_DAYS=90",
+    "services/regime_service.py:40: BOOTSTRAP_DAYS=400",
+    "utils/utils.py:10: DEFAULT_RISK_THRESHOLD=90",
+    "utils/utils.py:11: DEFAULT_ROLLING_WINDOW=120"
+  ]
+}

@@ -1,7 +1,6 @@
 import atexit
 import datetime as dt
 import logging
-import math
 import os
 import re
 
@@ -11,7 +10,7 @@ from flask import Flask, jsonify, render_template, request
 from data_pipeline.data_service import DataService
 from data_pipeline.db import close_thread_conn
 from data_pipeline.job_cache import compute_or_get, create_job, get_job
-from data_pipeline.scheduler import UpdateScheduler
+from data_pipeline.scheduler import UpdateScheduler, acquire_scheduler_lock
 from services.analysis_service import AnalysisService
 from services.form_service import FormService
 from services.market_service import MarketService
@@ -25,7 +24,6 @@ from utils.utils import (
     DEFAULT_SIDE_BIAS,
     DEFAULT_TICKER,
     init_yf_proxy,
-    yf_throttle,
 )
 
 load_dotenv()
@@ -37,15 +35,127 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Install unified error envelope (ApiError → JSON, /api/* 404 → JSON, etc.)
+from utils.api_errors import install as _install_error_handlers  # noqa: E402
+
+_install_error_handlers(app)
+
+
+# `/api/v1/...` is an alias for legacy `/api/...`. Routes are still defined
+# without the v1 prefix so existing tests / frontend keep working; this WSGI
+# middleware rewrites the path before Flask's router matches it. When
+# breaking changes are needed, define a new route at the explicit
+# `/api/v2/...` path.
+class _ApiV1AliasMiddleware:
+    def __init__(self, wsgi):
+        self.wsgi = wsgi
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        if path.startswith("/api/v1/"):
+            environ["PATH_INFO"] = "/api/" + path[len("/api/v1/") :]
+        return self.wsgi(environ, start_response)
+
+
+app.wsgi_app = _ApiV1AliasMiddleware(app.wsgi_app)
+
+
+# ── In-memory rate limiter (token bucket) ────────────────────────
+# WHY: yfinance-quota-burning routes (regime/backfill, manual update)
+# can be triggered by an unauthenticated POST. Without a limiter, a
+# scripted attacker can drain the daily Yahoo quota in seconds. This
+# is a simple per-IP counter — adequate for a single-machine personal
+# project; for multi-process production use a proper limiter (Redis
+# or flask-limiter).
+import threading as _rl_threading
+import time as _rl_time
+
+_rate_buckets: dict = {}
+_rate_lock = _rl_threading.Lock()
+
+
+def _rate_limit(key: str, max_calls: int, window_sec: int) -> tuple[bool, int]:
+    """Allow up to ``max_calls`` per ``window_sec`` per key.
+
+    Returns ``(allowed, retry_after_seconds)``. When throttled, retry_after
+    is the number of seconds until the oldest call in the window expires.
+    """
+    now = _rl_time.monotonic()
+    with _rate_lock:
+        bucket = _rate_buckets.get(key, [])
+        # Drop expired entries
+        bucket = [t for t in bucket if (now - t) < window_sec]
+        if len(bucket) >= max_calls:
+            retry = int(window_sec - (now - bucket[0])) + 1
+            _rate_buckets[key] = bucket
+            return False, max(1, retry)
+        bucket.append(now)
+        _rate_buckets[key] = bucket
+    return True, 0
+
+
+def _client_ip() -> str:
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+@app.route("/api/_meta", methods=["GET"])
+def api_v1_meta():
+    """Lightweight discovery endpoint listing v1-stable routes.
+
+    Reachable at both ``/api/_meta`` and ``/api/v1/_meta``.
+    """
+    return jsonify(
+        {
+            "status": "ok",
+            "version": "v1",
+            "routes": sorted(
+                {
+                    r.rule
+                    for r in app.url_map.iter_rules()
+                    if r.rule.startswith("/api/")
+                }
+            ),
+        }
+    )
+
+# Rate limiting — defends Yahoo upstream and the local box from abusive
+# clients. Disabled by setting RATE_LIMIT_DISABLED=1 (e.g. in tests).
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+
+    if os.environ.get("RATE_LIMIT_DISABLED", "").strip() not in ("1", "true", "yes"):
+        _default = os.environ.get("RATE_LIMIT_DEFAULT", "120 per minute")
+        limiter = Limiter(
+            key_func=get_remote_address,
+            app=app,
+            default_limits=[_default],
+            storage_uri=os.environ.get("RATE_LIMIT_STORAGE", "memory://"),
+        )
+        logger.info("Rate limiter enabled: default=%s", _default)
+    else:
+        limiter = None
+        logger.info("Rate limiter disabled via RATE_LIMIT_DISABLED")
+except ImportError:
+    limiter = None
+    logger.warning("flask-limiter not installed; running without rate limiting")
+
 # Propagate YF_PROXY → HTTP_PROXY/HTTPS_PROXY for curl_cffi (used by yfinance)
 init_yf_proxy()
 
 # Initialize DB
 DataService.initialize()
 _scheduler = None
+# Hold the scheduler leader lock for the lifetime of this process. Under
+# gunicorn --workers N this ensures only one worker actually runs the
+# APScheduler triggers; the others quietly skip scheduler init.
+_scheduler_lock_handle = acquire_scheduler_lock() if os.environ.get("AUTO_UPDATE_TICKERS", "").strip() else None
 try:
     auto_update = os.environ.get("AUTO_UPDATE_TICKERS", "").strip()
-    if auto_update:
+    if auto_update and _scheduler_lock_handle is not None:
         tickers = [t.strip().upper() for t in auto_update.split(",") if t.strip()]
         if tickers:
             _scheduler = UpdateScheduler()
@@ -53,6 +163,8 @@ try:
             _scheduler.start_monthly_correlation_update(tickers)
             logger.info(f"Auto-update scheduler started for: {tickers}")
             logger.info(f"Monthly correlation update scheduler started for: {tickers}")
+    elif auto_update and _scheduler_lock_handle is None:
+        logger.info("Skipping scheduler init — leader lock held by another worker.")
 except Exception as e:
     logger.warning(f"Scheduler init failed: {e}")
 
@@ -250,16 +362,27 @@ _RENDER_KIND_SLICES = {
 }
 
 
-def _render_error_fragment(kind: str, message: str, status: int = 500) -> tuple[str, int]:
+def _render_error_fragment(kind: str, message: str, status: int = 500, recovery: bool = True) -> tuple[str, int]:
     """Uniform error fragment for any /render/* endpoint failure.
 
     The shape mirrors the empty-state block so styling matches the partials.
+    When ``recovery`` is True, append a button that re-targets the user
+    back to the home form so they can re-submit instead of being stuck.
     """
+    recovery_html = (
+        '<p style="margin-top:8px;">'
+        '<a href="/" class="btn-link" style="color:#3b82f6;text-decoration:underline;">'
+        '<i class="fas fa-arrow-left"></i> Return to form and re-submit'
+        "</a></p>"
+        if recovery
+        else ""
+    )
     html = (
         f'<div id="tab-{kind.replace("_", "-")}-content">'
         f'<div class="empty-state" style="color:#ef4444;">'
         f'<i class="fas fa-exclamation-circle empty-icon"></i>'
         f'<p>Failed to render {kind.replace("_", " ")}: {message}</p>'
+        f"{recovery_html}"
         f"</div></div>"
     )
     return html, status
@@ -270,20 +393,52 @@ def _render_streaming_slice(kind: str):
 
     Looks up the job, dispatches to the slice fn, memoises the result in the
     JobCache, and renders the matching fragment template.
+
+    WHY: When a user opens a /render/* URL directly (refresh, bookmark, copy
+    link), there is no job in cache. Rather than show a dead-end error, we
+    auto-create a job using DEFAULT_TICKER + default form params so the
+    page is at least populated; users can then re-submit the form for a
+    custom analysis.
     """
     job_id = request.args.get("job", "")
     ticker = (request.args.get("ticker", "") or "").upper()
-    if not job_id or not ticker:
+
+    # WHY: missing job_id ⇒ direct access (refresh / bookmark / shared link).
+    # Auto-bootstrap with default form params so the user lands on a
+    # populated page instead of an error fragment. Fallback uses a synthetic
+    # job entry held only for the duration of this request.
+    fallback_form: dict | None = None
+    if not job_id:
+        from utils.utils import DEFAULT_TICKER as _DEF_T
+
+        if not ticker:
+            ticker = _DEF_T
+        fallback_form = {
+            "ticker": ticker,
+            "frequency": DEFAULT_FREQUENCY,
+            "start_time": "",
+            "end_time": "",
+            "parsed_start_time": dt.date.today() - dt.timedelta(days=365 * 2),
+            "parsed_end_time": dt.date.today(),
+            "rolling_window": DEFAULT_ROLLING_WINDOW,
+            "risk_threshold": DEFAULT_RISK_THRESHOLD,
+            "side_bias": DEFAULT_SIDE_BIAS,
+            "target_bias": 0,
+        }
+
+    if not ticker:
         return _render_error_fragment(kind, "missing job or ticker", 400)
 
-    job = get_job(job_id)
-    if job is None:
-        # Treat as a soft 200 so HTMX swaps a useful message instead of a
-        # browser-default error toast — but include the job-expired hint so
-        # the user knows to re-submit the form.
-        return _render_error_fragment(
-            kind, "session expired (job no longer cached); please re-submit the form", 200
-        )
+    job = None
+    if fallback_form is None:
+        job = get_job(job_id)
+        if job is None:
+            # Treat as a soft 200 so HTMX swaps a useful message instead of a
+            # browser-default error toast — but include the job-expired hint so
+            # the user knows to re-submit the form.
+            return _render_error_fragment(
+                kind, "session expired (job no longer cached); please re-submit the form", 200
+            )
 
     slice_fn_name, template = _RENDER_KIND_SLICES[kind]
 
@@ -308,7 +463,11 @@ def _render_streaming_slice(kind: str):
             close_thread_conn()
 
     try:
-        result = compute_or_get(job_id, ticker, kind, _compute)
+        if fallback_form is not None:
+            # No job in cache — compute directly with the synthetic form.
+            result = _compute(fallback_form)
+        else:
+            result = compute_or_get(job_id, ticker, kind, _compute)
     except KeyError:
         return _render_error_fragment(kind, "session expired", 200)
     except Exception as e:
@@ -318,7 +477,8 @@ def _render_streaming_slice(kind: str):
     # Build the template context. The fragment templates expect form-style
     # variables (frequency, start_time, etc.) so we merge job form_data with
     # the slice result.
-    context = {**(job.form_data or {}), "ticker": ticker, **(result or {})}
+    base_form = fallback_form if fallback_form is not None else (job.form_data or {})
+    context = {**base_form, "ticker": ticker, **(result or {})}
     return render_template(template, **context)
 
 
@@ -349,128 +509,42 @@ def option_chain():
     Query params: ticker (required), max_dte (default 45),
                   moneyness_low (default 0.7), moneyness_high (default 1.3), max_contracts (default 1000)
     Response: { expirations: [...], chain: { date: { calls: [...], puts: [...] } }, spot: float }
-    """
-    import yfinance as yf
 
+    The route is intentionally thin: all heavy lifting (yfinance fetch,
+    liquidity scoring, DataFrame -> records) is delegated to the
+    `OptionsChainService.fetch_records` helper.
+    """
     ticker_sym = request.args.get("ticker", "").strip().upper()
     if not ticker_sym:
-        return jsonify({"error": "ticker is required"}), 400
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}), 400
 
-    # Normalize ticker: accept futu-format (US.NVDA) or yahoo-format (NVDA)
     try:
         ticker_sym, _ = normalize_ticker(ticker_sym)
     except ValueError:
         pass  # keep as-is
 
-    # Option filtering parameters
     max_dte = int(request.args.get("max_dte", 45))
     moneyness_low = float(request.args.get("moneyness_low", 0.7))
     moneyness_high = float(request.args.get("moneyness_high", 1.3))
     max_contracts = int(request.args.get("max_contracts", 1000))
 
-    def clean(v):
-        """Convert NaN / inf to None for JSON serialisation."""
-        try:
-            if v is None:
-                return None
-            fv = float(v)
-            return None if (math.isnan(fv) or math.isinf(fv)) else round(fv, 4)
-        except Exception:
-            return str(v) if v is not None else None
-
     try:
-        yf_throttle()
-        tkr = yf.Ticker(ticker_sym)
-        expirations = list(tkr.options)
-        if not expirations:
-            return jsonify({"error": f"No options available for {ticker_sym}"}), 404
-
-        CALL_COLS = ["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility", "inTheMoney"]
-        PUT_COLS = ["strike", "lastPrice", "bid", "ask", "volume", "openInterest", "impliedVolatility", "inTheMoney"]
-
-        # Current price for ATM highlighting and liquidity scoring
-        try:
-            fi = tkr.fast_info
-            price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
-            spot = clean(price)
-        except Exception:
-            spot = None
-
-        def _liquidity_score(strike, bid, ask, last, oi, volume, spot_val):
-            """Liquidity score: GOOD / FAIR / AVOID."""
-            issues = []
-            bid_ = bid if (bid and bid > 0) else None
-            ask_ = ask if (ask and ask > 0) else None
-            if bid_ is not None and ask_ is not None:
-                mid = (bid_ + ask_) / 2
-                spread_pct = (ask_ - bid_) / mid if mid > 0 else 1.0
-                if spread_pct > 0.20:
-                    issues.append(f"spread {spread_pct:.0%}")
-            else:
-                issues.append("spread N/A")
-            oi_ = int(oi) if oi else 0
-            if oi_ < 100:
-                issues.append(f"OI={oi_}")
-            vol_ = int(volume) if volume else 0
-            if vol_ < 10:
-                issues.append(f"Vol={vol_}")
-            if spot_val and spot_val > 0 and strike:
-                m = strike / spot_val
-                if m < 0.75 or m > 1.35:
-                    issues.append("deep OTM")
-            if len(issues) == 0:
-                return "GOOD", ""
-            elif len(issues) == 1:
-                return "FAIR", issues[0]
-            else:
-                return "AVOID", " | ".join(issues[:2])
-
-        chain_data = {}
-        for exp in expirations:
-            opt = tkr.option_chain(exp)
-            calls_df = opt.calls[CALL_COLS].sort_values("strike") if hasattr(opt, "calls") else None
-            puts_df = opt.puts[PUT_COLS].sort_values("strike") if hasattr(opt, "puts") else None
-
-            def df_to_records(df):
-                if df is None or df.empty:
-                    return []
-                rows = []
-                for _, r in df.iterrows():
-                    strike = clean(r.get("strike"))
-                    bid_ = clean(r.get("bid"))
-                    ask_ = clean(r.get("ask"))
-                    last_ = clean(r.get("lastPrice"))
-                    oi_ = clean(r.get("openInterest"))
-                    vol_ = clean(r.get("volume"))
-                    score, reason = _liquidity_score(strike or 0, bid_, ask_, last_, oi_, vol_, spot)
-                    rows.append(
-                        {
-                            "strike": strike,
-                            "lastPrice": last_,
-                            "bid": bid_,
-                            "ask": ask_,
-                            "volume": vol_,
-                            "openInterest": oi_,
-                            "iv": clean((r.get("impliedVolatility") or 0) * 100),
-                            "itm": bool(r.get("inTheMoney", False)),
-                            "liq_score": score,
-                            "liq_reason": reason,
-                        }
-                    )
-                return rows
-
-            chain_data[exp] = {
-                "calls": df_to_records(calls_df),
-                "puts": df_to_records(puts_df),
-            }
-
-        result = {"expirations": expirations, "chain": chain_data, "spot": spot}
+        result = OptionsChainService.fetch_records(ticker_sym)
+        if not result.get("expirations"):
+            return jsonify({
+                "status": "error",
+                "code": "no_options",
+                "message": f"No options available for {ticker_sym}",
+            }), 404
         result = _filter_option_chain(result, max_dte, moneyness_low, moneyness_high, max_contracts)
         return jsonify(result)
-
     except Exception as e:
         logger.error(f"Error fetching option chain for {ticker_sym}: {e}", exc_info=True)
-        return jsonify({"error": f"获取期权链失败: {str(e)}"}), 500
+        return jsonify({
+            "status": "error",
+            "code": "option_chain_failed",
+            "message": f"获取期权链失败: {str(e)}",
+        }), 500
 
 
 @app.route("/api/validate_ticker", methods=["POST"])
@@ -515,11 +589,9 @@ def validate_tickers_bulk():
             price = None
             if is_valid:
                 try:
-                    import yfinance as yf
+                    from data_pipeline.yf_client import fetch_spot
 
-                    yf_throttle()
-                    info = yf.Ticker(yahoo_ticker).fast_info
-                    price = float(info.get("lastPrice", 0) or info.get("regularMarketPrice", 0))
+                    price = fetch_spot(yahoo_ticker)
                 except Exception:
                     pass
             results[raw_ticker] = {"valid": is_valid, "price": price, "message": message}
@@ -539,7 +611,7 @@ def preload_option_chain():
     data = request.get_json(silent=True) or {}
     raw_ticker = data.get("ticker", "").strip().upper()
     if not raw_ticker:
-        return jsonify({"status": "error", "message": "No ticker provided"})
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "No ticker provided"}), 400
 
     # Normalize ticker to yahoo format
     try:
@@ -602,7 +674,7 @@ def preload_option_chain():
 
     except Exception as e:
         logger.error(f"preload_option_chain failed for {ticker}: {e}")
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "code": "option_chain_failed", "message": str(e)}), 500
 
 
 # ── Module 3: Portfolio analysis  ─────────────────────────────────
@@ -615,7 +687,7 @@ def portfolio_analysis():
     max_risk_pct = data.get("max_risk_pct", 2.0)
 
     if not positions:
-        return jsonify({"status": "error", "message": "No positions provided"})
+        return jsonify({"status": "error", "code": "no_positions", "message": "No positions provided"}), 400
 
     try:
         from services.portfolio_analysis_service import PortfolioAnalysisService
@@ -624,7 +696,281 @@ def portfolio_analysis():
         return jsonify(result)
     except Exception as e:
         logger.error(f"portfolio_analysis error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "code": "portfolio_failed", "message": str(e)}), 500
+
+
+# ── Multi-leg strategy analytics ──────────────────────────────────
+@app.route("/api/strategies", methods=["GET"])
+def list_strategies():
+    """Return the catalog of supported multi-leg strategies."""
+    from services.strategy_service import list_strategies as _list
+
+    return jsonify({"status": "ok", "strategies": _list()})
+
+
+@app.route("/api/strategy/analyze", methods=["POST"])
+def analyze_strategy_route():
+    """Analyse a multi-leg strategy: payoff, breakevens, Greeks, PoP.
+
+    Body: ``{strategy: <name>, spot: float, params: {...}}``
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        from services.strategy_service import analyze
+
+        return jsonify(analyze(data))
+    except Exception as e:
+        logger.error(f"analyze_strategy_route error: {e}", exc_info=True)
+        return jsonify({"status": "error", "code": "strategy_failed", "message": str(e)}), 500
+
+
+@app.route("/api/strategy/build_from_chain", methods=["POST"])
+def build_strategy_from_chain():
+    """Auto-fill a strategy template from the live option chain.
+
+    Body: ``{ticker, template, expiry, strikes: {...}, qty?: int}``.
+    Returns populated legs (with mid/bid/ask/IV/liquidity), full analytics,
+    HV-based vol context, and slippage estimate.
+    """
+    from services.strategy_builder import build_from_chain
+
+    data = request.get_json(silent=True) or {}
+    raw_ticker = (data.get("ticker") or "").strip().upper()
+    if not raw_ticker:
+        from utils.api_errors import ApiError
+
+        raise ApiError("ticker is required", code="ticker_required")
+    try:
+        ticker, _ = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
+    return jsonify(
+        build_from_chain(
+            ticker=ticker,
+            # WHY: Frontend code in static/ uses both `template` and `strategy`
+            # interchangeably. Accept either rather than emitting a confusing
+            # "unknown strategy template: " (empty string) error.
+            template=(data.get("template") or data.get("strategy") or "").strip(),
+            expiry=data.get("expiry", ""),
+            strikes=data.get("strikes", {}) or {},
+            qty=int(data.get("qty", 1) or 1),
+        )
+    )
+
+
+# ── Portfolio: tracked positions, Greeks, P&L attribution ────────
+@app.route("/api/portfolio/positions", methods=["GET", "POST"])
+def portfolio_positions():
+    """List open positions (GET) or create a new one (POST)."""
+    from services.portfolio_service import create_position, list_positions
+
+    if request.method == "POST":
+        return jsonify(create_position(request.get_json(silent=True) or {}))
+    status = request.args.get("status", "open") or None
+    return jsonify({"status": "ok", "positions": list_positions(status=status)})
+
+
+@app.route("/api/portfolio/positions/<int:position_id>/close", methods=["POST"])
+def portfolio_close(position_id: int):
+    from services.portfolio_service import close_position
+
+    body = request.get_json(silent=True) or {}
+    return jsonify(close_position(position_id, float(body.get("closed_value", 0.0))))
+
+
+@app.route("/api/portfolio/snapshot", methods=["GET"])
+def portfolio_snapshot_route():
+    """Aggregate Greeks + per-position P&L attribution across all open positions."""
+    from services.portfolio_service import portfolio_snapshot
+
+    return jsonify(portfolio_snapshot())
+
+
+# ── OHLCV-derived signals (HV, RSI, Bollinger, vol premium) ──────
+@app.route("/api/signals", methods=["GET"])
+def signals_route():
+    raw_ticker = (request.args.get("ticker", "") or "").strip().upper()
+    if not raw_ticker:
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}), 400
+    try:
+        ticker, _ = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
+    iv_pct = request.args.get("iv_pct")
+    iv_pct_val = float(iv_pct) if iv_pct not in (None, "") else None
+    try:
+        from services.signals_service import get_signals
+
+        return jsonify(get_signals(ticker, current_iv_pct=iv_pct_val))
+    except Exception as e:
+        logger.error(f"signals_route error: {e}", exc_info=True)
+        return jsonify({"status": "error", "code": "signals_failed", "message": str(e)}), 500
+
+
+# ── Data-quality health endpoint ──────────────────────────────────
+@app.route("/health/data", methods=["GET"])
+def health_data():
+    """Return data-quality snapshot of the local SQLite cache.
+
+    WHY: The full payload includes ticker names which can echo back
+    historically-polluted strings. When ``HEALTH_TOKEN`` env var is set,
+    require it as ``?token=`` or ``X-Health-Token`` header for the full
+    payload; otherwise return only the public summary (status, counts,
+    timestamps — no ticker names).
+    """
+    try:
+        from services.health_service import overall_summary
+
+        full = overall_summary()
+        expected = os.environ.get("HEALTH_TOKEN", "").strip()
+        provided = (request.args.get("token") or request.headers.get("X-Health-Token") or "").strip()
+        if expected and provided != expected:
+            # Public/redacted summary: keep counts and status, drop names.
+            return jsonify({
+                "status": full.get("status"),
+                "generated_at": full.get("generated_at"),
+                "ticker_count": full.get("ticker_count"),
+                "total_rows": full.get("total_rows"),
+                "stale_count": len(full.get("stale_tickers", [])),
+                "nan_count": len(full.get("tickers_with_nan_close", [])),
+                "failures_24h_total": sum(full.get("failures_24h_by_class", {}).values()),
+                "freshness_threshold_days": full.get("freshness_threshold_days"),
+                "redacted": True,
+            })
+        return jsonify(full)
+    except Exception as e:
+        logger.error(f"health_data error: {e}", exc_info=True)
+        return jsonify({"status": "error", "code": "health_failed", "message": str(e)}), 500
+
+
+@app.route("/health/status", methods=["GET"])
+def health_status():
+    """Public lightweight status endpoint for frontend degradation banner."""
+    try:
+        from services.health_service import overall_summary
+
+        full = overall_summary()
+        return jsonify({
+            "status": full.get("status"),
+            "stale_count": len(full.get("stale_tickers", [])),
+            "nan_count": len(full.get("tickers_with_nan_close", [])),
+            "failures_24h_total": sum(full.get("failures_24h_by_class", {}).values()),
+            "generated_at": full.get("generated_at"),
+        })
+    except Exception as e:
+        logger.error(f"health_status error: {e}", exc_info=True)
+        return jsonify({"status": "error", "code": "health_failed", "message": str(e)}), 500
+
+
+# ── JSON endpoints for client-side charts (IV smile, OI profile) ──
+@app.route("/api/options_chart/iv_smile", methods=["GET"])
+def iv_smile_json():
+    """Return IV smile data points for client-side Chart.js rendering.
+
+    Query: ``ticker`` (required), ``expiry`` (optional, default = nearest).
+    """
+    raw_ticker = (request.args.get("ticker", "") or "").strip().upper()
+    if not raw_ticker:
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}), 400
+    try:
+        ticker, _ = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
+    expiry = request.args.get("expiry")
+    try:
+        from core.options_chain_analyzer import OptionsChainAnalyzer
+
+        analyzer = OptionsChainAnalyzer(ticker)
+        if not analyzer.expiries:
+            return jsonify({"status": "error", "code": "no_expiries", "message": "no expiries"}), 404
+        exp = expiry if expiry in analyzer.chain else analyzer.expiries[0]
+        calls = analyzer.chain[exp]["calls"].dropna(subset=["impliedVolatility"])
+        puts = analyzer.chain[exp]["puts"].dropna(subset=["impliedVolatility"])
+        # WHY: Yahoo's reported IV for deep-ITM / deep-OTM contracts is
+        # frequently nonsensical (e.g. 8.0 ⇒ 800%, or 0.000005 ⇒ 0.0005%).
+        # Filter to a sane window so the chart isn't dominated by tail noise.
+        # Range corresponds to 1%–500% annualised IV.
+        _IV_LO, _IV_HI = 0.01, 5.0
+
+        def _iv_ok(v):
+            try:
+                return _IV_LO <= float(v) <= _IV_HI
+            except (TypeError, ValueError):
+                return False
+
+        calls = calls[calls["impliedVolatility"].apply(_iv_ok)]
+        puts = puts[puts["impliedVolatility"].apply(_iv_ok)]
+        return jsonify(
+            {
+                "status": "ok",
+                "ticker": ticker,
+                "expiry": exp,
+                "spot": round(analyzer.spot, 2),
+                "calls": [
+                    {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
+                    for r in calls.itertuples()
+                ],
+                "puts": [
+                    {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
+                    for r in puts.itertuples()
+                ],
+            }
+        )
+    except Exception as e:
+        logger.error(f"iv_smile_json error: {e}", exc_info=True)
+        return jsonify({"status": "error", "code": "iv_smile_failed", "message": str(e)}), 500
+
+
+@app.route("/api/options_chart/oi_profile", methods=["GET"])
+def oi_profile_json():
+    """Return OI / Volume profile data for client-side rendering.
+
+    Query: ``ticker`` (required), ``expiry`` (optional, default = nearest).
+    """
+    raw_ticker = (request.args.get("ticker", "") or "").strip().upper()
+    if not raw_ticker:
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}), 400
+    try:
+        ticker, _ = normalize_ticker(raw_ticker)
+    except ValueError:
+        ticker = raw_ticker
+    expiry = request.args.get("expiry")
+    try:
+        from core.options_chain_analyzer import OptionsChainAnalyzer
+
+        analyzer = OptionsChainAnalyzer(ticker)
+        if not analyzer.expiries:
+            return jsonify({"status": "error", "code": "no_expiries", "message": "no expiries"}), 404
+        exp = expiry if expiry in analyzer.chain else analyzer.expiries[0]
+        calls = analyzer.chain[exp]["calls"]
+        puts = analyzer.chain[exp]["puts"]
+        return jsonify(
+            {
+                "status": "ok",
+                "ticker": ticker,
+                "expiry": exp,
+                "spot": round(analyzer.spot, 2),
+                "calls": [
+                    {
+                        "strike": float(r.strike),
+                        "oi": float(r.openInterest or 0),
+                        "volume": float(r.volume or 0),
+                    }
+                    for r in calls.itertuples()
+                ],
+                "puts": [
+                    {
+                        "strike": float(r.strike),
+                        "oi": float(r.openInterest or 0),
+                        "volume": float(r.volume or 0),
+                    }
+                    for r in puts.itertuples()
+                ],
+            }
+        )
+    except Exception as e:
+        logger.error(f"oi_profile_json error: {e}", exc_info=True)
+        return jsonify({"status": "error", "code": "oi_profile_failed", "message": str(e)}), 500
 
 
 # ── Module 4A: Market Review time-series ──────────────────────────
@@ -635,7 +981,7 @@ def market_review_ts():
     raw_ticker = data.get("ticker", "").strip().upper()
     start_date = data.get("start_date")
     if not raw_ticker:
-        return jsonify({"status": "error", "message": "No ticker provided"})
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "No ticker provided"}), 400
     try:
         ticker, _futu = normalize_ticker(raw_ticker)
     except ValueError:
@@ -647,7 +993,7 @@ def market_review_ts():
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error(f"market_review_ts error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "code": "market_review_failed", "message": str(e)}), 500
 
 
 # ── Module 4B: Odds with vol context ─────────────────────────────
@@ -656,9 +1002,11 @@ def odds_with_vol():
     """Return odds data enriched with implied realized vol vs ATM IV."""
     data = request.get_json(silent=True) or {}
     raw_ticker = data.get("ticker", "").strip().upper()
-    target_pct = float(data.get("target_pct", 105))
+    # WHY: target_pct is a DELTA in %, e.g. 5 ⇒ +5%. Default of 10 matches
+    # the frontend input default in templates/partials/tab_odds.html.
+    target_pct = float(data.get("target_pct", 10))
     if not raw_ticker:
-        return jsonify({"status": "error", "message": "No ticker provided"})
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "No ticker provided"}), 400
     try:
         ticker, _futu = normalize_ticker(raw_ticker)
     except ValueError:
@@ -676,22 +1024,7 @@ def odds_with_vol():
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error(f"odds_with_vol error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)})
-
-
-# ── Module 5: Put Option Decision Game ────────────────────────────
-@app.route("/api/game", methods=["POST"])
-def game():
-    """Run the put-option selection decision process."""
-    data = request.get_json(silent=True) or {}
-    try:
-        from services.game_service import GameService
-
-        result = GameService.run(data)
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"game error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "code": "odds_failed", "message": str(e)}), 500
 
 
 # ── Market Regime (Volatility × Direction labeling) ───────────────
@@ -708,7 +1041,7 @@ def regime_current():
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error(f"regime_current error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "code": "regime_failed", "message": str(e)}), 500
 
 
 @app.route("/api/regime/history", methods=["GET"])
@@ -720,12 +1053,16 @@ def regime_history():
         days = int(request.args.get("days", 180))
     except (TypeError, ValueError):
         days = 180
+    # WHY: Without bounds an attacker can request days=-5 (returns empty
+    # window with confusing ordering) or days=99999 (silently scans the
+    # entire log table). Clamp to a sensible product range.
+    days = max(1, min(days, 3650))
     try:
         result = RegimeService.history(days=days)
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error(f"regime_history error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "code": "regime_history_failed", "message": str(e)}), 500
 
 
 @app.route("/api/regime/backfill", methods=["POST"])
@@ -733,17 +1070,88 @@ def regime_backfill():
     """Backfill regime log for the last N trading days."""
     from services.regime_service import RegimeService
 
+    # WHY: yfinance-burning route — limit to 5 calls per IP per hour.
+    allowed, retry = _rate_limit(f"backfill:{_client_ip()}", max_calls=5, window_sec=3600)
+    if not allowed:
+        return jsonify({
+            "status": "error",
+            "code": "rate_limited",
+            "message": f"Too many backfill requests. Retry after {retry}s.",
+            "retry_after": retry,
+        }), 429
+
     data = request.get_json(silent=True) or {}
     try:
         days = int(data.get("days", 30))
     except (TypeError, ValueError):
         days = 30
+    # Cap backfill window to keep yfinance traffic bounded.
+    days = max(1, min(days, 365))
     try:
         result = RegimeService.backfill(days=days)
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error(f"regime_backfill error: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "code": "regime_backfill_failed", "message": str(e)}), 500
+
+
+@app.route("/api/data/seed", methods=["POST"])
+def data_seed():
+    """Seed multi-year per-ticker price history.
+
+    WHY: ensure_range's auto-backfill is capped at MAX_AUTO_BACKFILL_DAYS
+    (~90d) per call and chunks longer ranges, which is fragile under
+    yfinance rate-limit. This endpoint exposes DataService.seed_history
+    so the user can populate years of history for a specific ticker in
+    one bulk download — the correct remediation when the statistical
+    analysis reports "DB only has {ticker} from X to Y".
+
+    Body: {"ticker": "NVDA", "years": 5}
+    """
+    # WHY: yfinance-burning route — same 5/hour budget as regime/backfill.
+    allowed, retry = _rate_limit(f"seed:{_client_ip()}", max_calls=5, window_sec=3600)
+    if not allowed:
+        return jsonify({
+            "status": "error",
+            "code": "rate_limited",
+            "message": f"Too many seed requests. Retry after {retry}s.",
+            "retry_after": retry,
+        }), 429
+
+    data = request.get_json(silent=True) or {}
+    raw_ticker = (data.get("ticker") or "").strip()
+    if not raw_ticker:
+        return jsonify({
+            "status": "error",
+            "code": "invalid_ticker",
+            "message": "Body must include non-empty 'ticker'.",
+        }), 400
+    try:
+        # Normalise futu-format (US.NVDA → NVDA) to match clean_prices schema.
+        yahoo_ticker, _ = normalize_ticker(raw_ticker)
+        ticker = (yahoo_ticker or raw_ticker).upper()
+    except (ValueError, ImportError):
+        ticker = raw_ticker.upper()
+    try:
+        years = int(data.get("years", 5))
+    except (TypeError, ValueError):
+        years = 5
+    # Cap years to keep yfinance traffic bounded; 1990 is the practical floor.
+    years = max(1, min(years, 35))
+    try:
+        # WHY: clear any cached failure memo for this ticker so a previously
+        # rate-limited backfill doesn't suppress the seed run.
+        with DataService._ensure_range_lock:
+            DataService._ensure_range_memo.pop(ticker, None)
+        DataService.seed_history(ticker, years=years)
+        return jsonify({"status": "ok", "ticker": ticker, "years": years})
+    except Exception as e:
+        logger.error(f"data_seed error for {ticker}: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "code": "seed_failed",
+            "message": str(e),
+        }), 500
 
 
 if __name__ == "__main__":

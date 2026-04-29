@@ -55,6 +55,69 @@ gunicorn app:app -b 0.0.0.0:5000  # production
 - Options Greeks use vectorized Black-Scholes in `core/options_greeks.py`
 - Data freshness: 60-second cooldown per ticker in `DataService`
 
+## Project Documentation Map
+
+Before suggesting non-trivial changes, consult these:
+
+- **[docs/constraints.md](../docs/constraints.md)** — external/historical constraints (yfinance limits, SQLite choice, single-machine assumption, intentional "magic numbers"). Read this before flagging anything as tech debt.
+- **[docs/glossary.md](../docs/glossary.md)** — domain terms (IV vs HV, Greeks, regime, anomaly flags). Read this before assuming a term means what you think it means.
+- **[docs/decisions/](../docs/decisions/)** — Architecture Decision Records. Each ADR explains the context, options considered, and accepted trade-offs for a major design choice.
+
+## Comment Tag Convention
+
+We mark intentional design choices with a fixed vocabulary so AI reviewers and future contributors recognise them. **When you see one of these tags, treat the code as already-justified — do not suggest refactors unless the user explicitly asks to revisit the decision.**
+
+| Tag | Meaning |
+|-----|---------|
+| `WHY:` | Explains the motivation behind a non-obvious line/block. |
+| `CONSTRAINT:` | External or historical constraint that forbids changing this. Often references `docs/constraints.md` or an ADR. |
+| `TRADEOFF:` | Acknowledged trade-off; states what was given up and why. |
+| `INVARIANT:` | A property that must hold; breaking it causes silent bugs elsewhere. |
+| `DOMAIN:` | A "magic number" that encodes financial domain knowledge — not a config value. |
+| `HACK:` / `WORKAROUND:` | Temporary fix; should include the trigger condition and cleanup criterion. |
+
+When **adding** new code that has implicit reasoning, use these tags. Example:
+
+```python
+# CONSTRAINT: yfinance >= 0.2.50 uses curl_cffi internally; passing a
+# requests.Session here silently fails. See docs/constraints.md §2.
+yf_throttle()
+df = yf.download(ticker, start=start, end=end)
+```
+
+## AI Code Review Guidelines
+
+When reviewing or modifying this codebase:
+
+1. **Tagged code is justified code.** If a line has `WHY:` / `CONSTRAINT:` / `TRADEOFF:` / `DOMAIN:` / `INVARIANT:` above it, do not suggest "improving" it without explicit user request.
+2. **Magic numbers in `core/`** are usually domain constants (MA windows, IV bounds, sigma thresholds). Search `docs/glossary.md` and `docs/constraints.md` before suggesting extraction to config.
+3. **Before suggesting a new dependency**, check whether the constraint section explicitly forbids it (e.g. no React, no Postgres, no requests.Session for yfinance).
+4. **Before suggesting a refactor that crosses layers**, re-read the Architecture Rules and ADR 0001.
+5. **When uncertain whether something is intentional**, ask the user — do not silently change it.
+6. **For bug fixes**, follow the [fix-review skill](skills/fix-review/SKILL.md): architecture compliance, test coverage, NaN safety.
+
+## AI Doc-Maintenance Duty
+
+Whenever you (the AI) make a code change, you MUST also update the relevant
+documentation artefacts **in the same response** — do not defer this:
+
+| If your change… | Then also update… |
+|---|---|
+| introduces a new non-obvious constant or branch | add a `WHY:` / `CONSTRAINT:` / `TRADEOFF:` / `INVARIANT:` / `DOMAIN:` comment at the call site |
+| introduces a new external constraint (lib quirk, rate limit, version pin) | add a section to [`docs/constraints.md`](../docs/constraints.md) |
+| introduces a new architectural decision (new module boundary, new tech) | add an ADR via [`docs/decisions/TEMPLATE.md`](../docs/decisions/TEMPLATE.md) |
+| introduces a new domain term to user-visible UI / docs / API | add an entry to [`docs/glossary.md`](../docs/glossary.md) |
+| modifies code that an existing ADR references in its "Related code" section | update that ADR's "Consequences" or set its status to "needs review" |
+| adds a new module under `core/` / `data_pipeline/` / `services/` | include a top-level `Context:` docstring |
+| adds a new test | use a behavioural name (`test_<subject>_<expected_behaviour>`), not just the symbol under test |
+
+Before claiming a task complete, run (or simulate) `python scripts/doc_guard.py`
+mentally: would your change pass tag-syntax, yfinance-throttle, sqlite-bypass,
+import-direction, module-docstring, adr-link-integrity, adr-index-fresh? If
+not, fix it before handing back.
+
+The full automation contract is documented in [`docs/automation.md`](../docs/automation.md).
+
 ## Custom Skills & Agents
 
 Use these when relevant — type `/` in chat to invoke skills/prompts, or select agents from the agent picker.

@@ -95,13 +95,13 @@ end-to-end fan-out time for `/render/<kind>` × tickers.
 
 See [`.env.example`](.env.example) for the full list. The most relevant ones:
 
-| Variable              | Purpose                                    | Default                |
-| --------------------- | ------------------------------------------ | ---------------------- |
-| `MARKET_DB_PATH`      | SQLite path                                | `./market_data.sqlite` |
-| `YF_PROXY`            | HTTP/SOCKS proxy for yfinance (curl_cffi)  | unset (direct)         |
-| `AUTO_UPDATE_TICKERS` | Comma-separated tickers for daily backfill | unset                  |
-| `SCHED_TZ`            | Timezone for scheduler cron                | `UTC`                  |
-| `JOB_CACHE_TTL`       | Per-job render cache lifetime (seconds)    | `90`                   |
+| Variable              | Purpose                                    | Default                                                    |
+| --------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| `MARKET_DB_PATH`      | SQLite path                                | `./market_data.sqlite`                                     |
+| `YF_PROXY`            | HTTP/SOCKS proxy for yfinance (curl_cffi)  | `http://127.0.0.1:1087` (recommended; required behind VPN) |
+| `AUTO_UPDATE_TICKERS` | Comma-separated tickers for daily backfill | unset                                                      |
+| `SCHED_TZ`            | Timezone for scheduler cron                | `UTC`                                                      |
+| `JOB_CACHE_TTL`       | Per-job render cache lifetime (seconds)    | `90`                                                       |
 
 ---
 
@@ -137,13 +137,22 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
 
 ## Documentation
 
-| File                                                                                     | Audience                      |
-| ---------------------------------------------------------------------------------------- | ----------------------------- |
-| [`docs/frontend_architecture.md`](docs/frontend_architecture.md)                         | Frontend contributors         |
-| [`docs/guides/USER_GUIDE.md`](docs/guides/USER_GUIDE.md)                                 | End users                     |
-| [`docs/reference/optimization_manual.md`](docs/reference/optimization_manual.md)         | Quant model reference         |
-| [`docs/reference/option_decision_process.md`](docs/reference/option_decision_process.md) | Decision-flow reference       |
-| [`docs/nav/system_nav.md`](docs/nav/system_nav.md)                                       | Sitemap of all dashboard tabs |
+| File                                                                                     | Audience                                     |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------- |
+| [`docs/constraints.md`](docs/constraints.md)                                             | **AI reviewers + contributors — read first** |
+| [`docs/glossary.md`](docs/glossary.md)                                                   | Domain terms (IV, HV, regime, …)             |
+| [`docs/decisions/`](docs/decisions/)                                                     | Architecture Decision Records                |
+| [`docs/frontend_architecture.md`](docs/frontend_architecture.md)                         | Frontend contributors                        |
+| [`docs/guides/USER_GUIDE.md`](docs/guides/USER_GUIDE.md)                                 | End users                                    |
+| [`docs/reference/optimization_manual.md`](docs/reference/optimization_manual.md)         | Quant model reference                        |
+| [`docs/reference/option_decision_process.md`](docs/reference/option_decision_process.md) | Decision-flow reference                      |
+| [`docs/nav/system_nav.md`](docs/nav/system_nav.md)                                       | Sitemap of all dashboard tabs                |
+
+> **Heads-up for AI / new contributors**: many "magic numbers" and "weird workarounds"
+> in this codebase are deliberate. Code annotated with `WHY:` / `CONSTRAINT:` /
+> `TRADEOFF:` / `INVARIANT:` / `DOMAIN:` is justified — see
+> [`.github/copilot-instructions.md`](.github/copilot-instructions.md) for the
+> tag convention and review rules.
 
 ---
 
