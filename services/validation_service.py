@@ -1,3 +1,12 @@
+"""Form-input validation service.
+
+Context:
+- Centralises the input-validation rules used by Flask routes before they
+  touch ``core/`` or ``data_pipeline/``. Returns a human-readable error
+  string (for now) so routes can short-circuit with a 400 response.
+"""
+
+
 class ValidationService:
     """
     Service for validating input data from dashboard form.

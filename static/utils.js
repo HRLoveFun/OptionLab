@@ -10,21 +10,6 @@ function escapeHtml(text) {
 
 let currentPrice = null;
 
-// Option chain cache moved to static/state/chainCacheState.js (appState.chainCache).
-// These thin shims preserve legacy callers; new code should call
-// `appState.chainCache.get(ticker)` / `.set(ticker, data)` directly.
-function _chainCacheGet(ticker) {
-    return window.appState && window.appState.chainCache
-        ? window.appState.chainCache.get(ticker)
-        : null;
-}
-
-function _chainCacheSet(ticker, data) {
-    if (window.appState && window.appState.chainCache) {
-        window.appState.chainCache.set(ticker, data);
-    }
-}
-
 function parseTickers(rawInput) {
     return rawInput
         .split(/[,\n]+/)
@@ -67,6 +52,4 @@ if (typeof window !== 'undefined') {
     window.toggleOptionsSection = toggleOptionsSection;
     window.toggleSizingSection = toggleSizingSection;
     window.initializeOptionsTable = initializeOptionsTable;
-    window._chainCacheGet = _chainCacheGet;
-    window._chainCacheSet = _chainCacheSet;
 }

@@ -56,7 +56,7 @@ class TestMarketReviewCache:
 
         from core.market_review import _fetch_market_data
 
-        with patch("core.market_review._yf_download_with_retry"):
+        with patch("core.market_review.fetch_close_panel"):
             # First call — should use DB (not yfinance since we seeded)
             data1, ret1, disp1 = _fetch_market_data("AAPL")
             # Second call — should hit L1 cache
@@ -74,7 +74,7 @@ class TestMarketReviewCache:
         with _mr_cache_lock:
             _mr_cache.clear()
 
-        with patch("core.market_review._yf_download_with_retry"):
+        with patch("core.market_review.fetch_close_panel"):
             data1, _, _ = _fetch_market_data("MSFT")
             original_shape = data1.shape
             data1.drop(data1.index[:10], inplace=True)
@@ -96,7 +96,7 @@ class TestMarketReviewOutput:
         with _mr_cache_lock:
             _mr_cache.clear()
 
-        with patch("core.market_review._yf_download_with_retry"):
+        with patch("core.market_review.fetch_close_panel"):
             result = market_review("GOOGL")
             assert isinstance(result, pd.DataFrame)
             assert isinstance(result.columns, pd.MultiIndex)
@@ -112,7 +112,7 @@ class TestMarketReviewOutput:
         with _mr_cache_lock:
             _mr_cache.clear()
 
-        with patch("core.market_review._yf_download_with_retry"):
+        with patch("core.market_review.fetch_close_panel"):
             result = market_review("TSLA")
             assert "TSLA" in result.index
 
@@ -131,7 +131,7 @@ class TestMarketReviewTimeseries:
         with _mr_cache_lock:
             _mr_cache.clear()
 
-        with patch("core.market_review._yf_download_with_retry"):
+        with patch("core.market_review.fetch_close_panel"):
             result = market_review_timeseries("AMZN")
             assert "dates" in result
             assert "assets" in result
@@ -148,7 +148,7 @@ class TestMarketReviewTimeseries:
         with _mr_cache_lock:
             _mr_cache.clear()
 
-        with patch("core.market_review._yf_download_with_retry"):
+        with patch("core.market_review.fetch_close_panel"):
             result = market_review_timeseries("META")
             for _asset_name, asset_data in result["assets"].items():
                 assert "prices" in asset_data

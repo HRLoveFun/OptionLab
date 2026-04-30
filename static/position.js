@@ -79,7 +79,7 @@ function onPositionTickerChange(selectEl) {
 
     if (!ticker) return;
 
-    const cache = _chainCacheGet(ticker);
+    const cache = appState.chainCache.get(ticker);
     if (!cache) {
         expirySelect.innerHTML = '<option value="">Loading...</option>';
         // Trigger preload and wait
@@ -89,7 +89,7 @@ function onPositionTickerChange(selectEl) {
             body: JSON.stringify({ ticker })
         }).then(r => r.json()).then(data => {
             if (data.status === 'ok') {
-                _chainCacheSet(ticker, data);
+                appState.chainCache.set(ticker, data);
                 document.dispatchEvent(new CustomEvent('chainLoaded', { detail: { ticker } }));
                 populateExpiryDropdown(expirySelect, ticker);
             } else {
@@ -111,7 +111,7 @@ function onPositionTypeChange(selectEl) {
 }
 
 function populateExpiryDropdown(expirySelect, ticker) {
-    const cache = _chainCacheGet(ticker);
+    const cache = appState.chainCache.get(ticker);
     if (!cache) return;
     expirySelect.innerHTML = '<option value="">-- expiry --</option>';
     (cache.expiries || []).forEach(exp => {
@@ -133,7 +133,7 @@ function onPositionExpiryChange(selectEl) {
     row.querySelector('[name="pos_price"]').value = '';
 
     if (!ticker || !expiry) return;
-    const cacheEntry = _chainCacheGet(ticker);
+    const cacheEntry = appState.chainCache.get(ticker);
     const chain = cacheEntry?.chain?.[expiry];
     if (!chain) return;
 

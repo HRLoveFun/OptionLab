@@ -1,4 +1,10 @@
-"""Market review utilities: fetch and cache broad-market summary data."""
+"""Market review utilities: fetch and cache broad-market summary data.
+
+Context:
+- All yfinance calls funnel through ``data_pipeline.yf_client`` so the global
+  1.5s token-bucket throttle (ADR 0005) is enforced uniformly. Do NOT call
+  ``yf.download`` / ``yf.Ticker`` directly from this module.
+"""
 import datetime as dt
 import logging
 import threading
@@ -6,15 +12,11 @@ import time
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
+from data_pipeline.yf_client import fetch_close_panel
 from utils.data_utils import calculate_recent_extreme_change
-from utils.utils import yf_throttle
 
 logger = logging.getLogger(__name__)
-
-_YF_MAX_RETRIES = 2
-_YF_RETRY_BASE_DELAY = 3  # seconds
 
 # ---------------------------------------------------------------------------
 # In-memory cache for market review data (5-min TTL)
@@ -33,29 +35,6 @@ BENCHMARKS = {
     "NKY": "^N225",
     "STOXX": "^STOXX",
 }
-
-
-def _yf_download_with_retry(tickers, **kwargs) -> pd.DataFrame:
-    """Wrapper around yf.download with retry on rate limit errors."""
-    for attempt in range(_YF_MAX_RETRIES):
-        try:
-            yf_throttle()
-            data = yf.download(tickers, **kwargs)
-            if data is not None and not data.empty:
-                return data
-            if attempt < _YF_MAX_RETRIES - 1:
-                delay = _YF_RETRY_BASE_DELAY * (attempt + 1)
-                logger.warning(f"yfinance returned empty data, retrying in {delay}s (attempt {attempt + 1})")
-                time.sleep(delay)
-        except Exception as e:
-            is_rate_limit = "rate" in str(e).lower() or "too many" in str(e).lower()
-            if is_rate_limit and attempt < _YF_MAX_RETRIES - 1:
-                delay = _YF_RETRY_BASE_DELAY * (attempt + 1)
-                logger.warning(f"yfinance rate limited, retrying in {delay}s (attempt {attempt + 1})")
-                time.sleep(delay)
-            else:
-                raise
-    return pd.DataFrame()
 
 
 def _canonicalize_instrument(instrument: str) -> str:
@@ -145,15 +124,10 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
                     elif latest < download_start:
                         download_start = latest
 
-            kw = dict(auto_adjust=False, progress=False)
-            yf_data = _yf_download_with_retry(tickers_needing_download, start=download_start, end=today_str, **kw)
-            if yf_data is not None and not yf_data.empty:
-                close_data = yf_data["Close"]
-                if isinstance(close_data, pd.Series):
-                    close_data = close_data.to_frame(name=tickers_needing_download[0])
-                if isinstance(close_data.columns, pd.MultiIndex):
-                    close_data.columns = close_data.columns.droplevel(1)
-
+            close_data = fetch_close_panel(
+                tickers_needing_download, start=download_start, end=today_str
+            )
+            if not close_data.empty:
                 # Upsert to DB
                 rows = []
                 for t in tickers_needing_download:
@@ -187,14 +161,15 @@ def _fetch_market_data(instrument: str, start_date=None, end_date=None):
     if df.empty:
         # Fallback: direct yfinance download (no DB)
         logger.warning("No market review data in DB, falling back to yfinance")
-        kw = dict(auto_adjust=False, progress=False)
         if start_date is not None or end_date is not None:
-            raw = _yf_download_with_retry(all_tickers, start=start_date, end=end_date, **kw)["Close"]
+            raw = fetch_close_panel(
+                all_tickers,
+                start=str(start_date) if start_date is not None else None,
+                end=str(end_date) if end_date is not None else None,
+            )
         else:
-            raw = _yf_download_with_retry(all_tickers, period="400d", **kw)["Close"]
-        data = raw.ffill()
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.droplevel(1)
+            raw = fetch_close_panel(all_tickers, period="400d")
+        data = raw.ffill() if raw is not None and not raw.empty else pd.DataFrame()
     else:
         # Pivot from long-format to wide-format
         data = df.pivot(index="date", columns="ticker", values="close").sort_index().ffill()

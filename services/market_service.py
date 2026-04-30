@@ -1,4 +1,10 @@
-"""Market data service layer for ticker validation and market review."""
+"""Market data service layer for ticker validation and market review.
+
+Context:
+- Thin facade over ``core.market_review`` and ``core.market_analyzer``. WHY:
+  routes must not import ``core/`` directly (ADR 0001); this module is the
+  designated orchestration point even when the wrapping is shallow.
+"""
 import datetime as dt
 import logging
 

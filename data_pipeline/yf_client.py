@@ -23,7 +23,10 @@ Design rules:
 from __future__ import annotations
 
 import logging
+import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import pandas as pd
@@ -147,23 +150,91 @@ def fetch_option_chain(ticker: str) -> dict[str, Any]:
     # empty-body behaviour applies to the WHOLE option-chain endpoint
     # uniformly — once one expiry returns None, the rest will too. Bail
     # after a few empties to avoid burning the throttle on guaranteed misses.
-    consecutive_empty = 0
     EMPTY_FAIL_FAST = 3
+    # WHY (concurrency): option_chain HTTP latency (~2s) typically exceeds the
+    # 1.5s throttle gap, so overlapping HTTP across a small worker pool
+    # reduces total wall time even though throttle still serialises call
+    # *starts*. Cap at 2 by default — higher counts give diminishing returns
+    # and risk tripping Yahoo's burst detection. CONSTRAINT: every worker
+    # MUST call yf_throttle() before each yfinance call (ADR 0005).
+    max_workers = max(1, int(os.environ.get("YF_OPTION_CHAIN_WORKERS", "2")))
+    if max_workers == 1 or len(expiries) <= 1:
+        return _fetch_option_chain_serial(ticker, spot, expiries, EMPTY_FAIL_FAST)
 
+    consecutive_empty_lock = threading.Lock()
+    consecutive_empty = {"n": 0, "abort": False}
+
+    def _fetch_one(exp: str):
+        if consecutive_empty["abort"]:
+            return exp, None
+        try:
+            yf_throttle()
+            # WHY (per-thread Ticker): yfinance.Ticker is not documented as
+            # thread-safe; create a fresh instance per worker to avoid
+            # hidden shared state in tk._options_data.
+            opt = yf.Ticker(ticker).option_chain(exp)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("fetch_option_chain: %s exp=%s failed: %s", ticker, exp, exc)
+            return exp, "error"
+        if opt is None or opt.calls is None or opt.puts is None:
+            with consecutive_empty_lock:
+                consecutive_empty["n"] += 1
+                if consecutive_empty["n"] == 1:
+                    logger.warning(
+                        "fetch_option_chain: %s exp=%s returned no data (rate-limited?)", ticker, exp
+                    )
+                if consecutive_empty["n"] >= EMPTY_FAIL_FAST:
+                    consecutive_empty["abort"] = True
+            return exp, None
+        with consecutive_empty_lock:
+            consecutive_empty["n"] = 0
+        calls = opt.calls.copy()
+        puts = opt.puts.copy()
+        for col in _OPT_NUMERIC_COLS:
+            if col in calls.columns:
+                calls[col] = pd.to_numeric(calls[col], errors="coerce")
+            if col in puts.columns:
+                puts[col] = pd.to_numeric(puts[col], errors="coerce")
+        for col in ("openInterest", "volume"):
+            if col in calls.columns:
+                calls[col] = calls[col].fillna(0)
+            if col in puts.columns:
+                puts[col] = puts[col].fillna(0)
+        return exp, {"calls": calls, "puts": puts}
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_fetch_one, exp): exp for exp in expiries}
+        for future in as_completed(futures):
+            exp, payload = future.result()
+            if isinstance(payload, dict):
+                chain[exp] = payload
+
+    # WHY: preserve the user-meaningful order (front-month first) from the
+    # original ``expiries`` list — as_completed yields in completion order.
+    ordered_chain = {exp: chain[exp] for exp in expiries if exp in chain}
+    return {"ticker": ticker, "spot": spot, "expiries": list(ordered_chain.keys()), "chain": ordered_chain}
+
+
+def _fetch_option_chain_serial(
+    ticker: str, spot: float | None, expiries: list[str], empty_fail_fast: int
+) -> dict[str, Any]:
+    """Sequential fallback path used when YF_OPTION_CHAIN_WORKERS=1 or only
+    one expiry exists. Behaviourally identical to the pre-concurrency loop.
+    """
+    chain: dict[str, dict[str, pd.DataFrame]] = {}
+    consecutive_empty = 0
+    tk = yf.Ticker(ticker)
     for exp in expiries:
         try:
             yf_throttle()
             opt = tk.option_chain(exp)
-            # WHY: yfinance returns the namedtuple but with .calls/.puts == None
-            # when rate-limited or when the upstream HTTP body is empty. Treat
-            # this as a soft-skip rather than a hard error.
             if opt is None or opt.calls is None or opt.puts is None:
                 consecutive_empty += 1
                 if consecutive_empty == 1:
                     logger.warning(
                         "fetch_option_chain: %s exp=%s returned no data (rate-limited?)", ticker, exp
                     )
-                if consecutive_empty >= EMPTY_FAIL_FAST:
+                if consecutive_empty >= empty_fail_fast:
                     logger.warning(
                         "fetch_option_chain: %s aborting after %d empty expiries (likely rate-limited)",
                         ticker, consecutive_empty,
@@ -192,32 +263,76 @@ def fetch_option_chain(ticker: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Close-only panel (used by correlation matrix)
+# Close-only panel (used by correlation matrix and market review)
 # ---------------------------------------------------------------------------
-def fetch_close_panel(tickers: list[str], period: str = "90d") -> pd.DataFrame:
-    """Return a wide DataFrame of Close prices for ``tickers`` over ``period``.
+def fetch_close_panel(
+    tickers: list[str],
+    period: str | None = "90d",
+    *,
+    start: str | None = None,
+    end: str | None = None,
+    max_retries: int = 2,
+    retry_base_delay: float = 3.0,
+) -> pd.DataFrame:
+    """Return a wide DataFrame of Close prices for ``tickers``.
 
-    On failure returns an empty DataFrame. One yfinance call total (yfinance
-    natively supports multi-ticker download).
+    Either pass ``period`` (e.g. ``"90d"``, ``"400d"``) OR ``start``/``end``
+    date strings — when ``start`` is provided it takes precedence. On failure
+    returns an empty DataFrame. One yfinance call total (yfinance natively
+    supports multi-ticker download).
+
+    WHY (retry loop): Yahoo occasionally returns an empty payload on the first
+    call after a wake-from-sleep; one retry resolves it without escalating.
     """
     if not tickers:
         return pd.DataFrame()
-    try:
-        yf_throttle()
-        data = yf.download(tickers, period=period, auto_adjust=False, progress=False)
-        if data is None or data.empty:
-            return pd.DataFrame()
-        if "Close" in data.columns.get_level_values(0) if isinstance(data.columns, pd.MultiIndex) else data.columns:
-            close = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]]
-        else:
-            return pd.DataFrame()
-        if isinstance(close.columns, pd.MultiIndex):
-            close.columns = close.columns.droplevel(1)
-        return close
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("fetch_close_panel failed for %s: %s", tickers, exc)
-        _log_dq("yf_client.fetch_close_panel", "download_error", str(exc), ticker=",".join(tickers))
-        return pd.DataFrame()
+    if start is not None:
+        kwargs = {"start": start, "end": end}
+    else:
+        kwargs = {"period": period or "90d"}
+    last_err: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            yf_throttle()
+            data = yf.download(tickers, auto_adjust=False, progress=False, **kwargs)
+            if data is None or data.empty:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        "fetch_close_panel empty payload, retrying in %.1fs (attempt %d)",
+                        retry_base_delay * (attempt + 1),
+                        attempt + 1,
+                    )
+                    time.sleep(retry_base_delay * (attempt + 1))
+                    continue
+                return pd.DataFrame()
+            if isinstance(data.columns, pd.MultiIndex):
+                if "Close" not in data.columns.get_level_values(0):
+                    return pd.DataFrame()
+                close = data["Close"]
+                if isinstance(close.columns, pd.MultiIndex):
+                    close.columns = close.columns.droplevel(1)
+            else:
+                if "Close" not in data.columns:
+                    return pd.DataFrame()
+                close = data[["Close"]]
+            return close
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            is_rate_limit = "rate" in str(exc).lower() or "too many" in str(exc).lower()
+            if is_rate_limit and attempt < max_retries - 1:
+                time.sleep(retry_base_delay * (attempt + 1))
+                continue
+            break
+    if last_err is not None:
+        logger.warning("fetch_close_panel failed for %s: %s", tickers, last_err)
+        is_rate_limit = "rate" in str(last_err).lower() or "too many" in str(last_err).lower()
+        _log_dq(
+            "yf_client.fetch_close_panel",
+            "rate_limited" if is_rate_limit else "download_error",
+            str(last_err),
+            ticker=",".join(tickers),
+        )
+    return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------

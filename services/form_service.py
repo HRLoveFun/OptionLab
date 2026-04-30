@@ -1,3 +1,10 @@
+"""Form parsing + default-injection service.
+
+Context:
+- Centralises the rules that translate raw HTML form payloads into typed
+  parameters with project defaults applied. Keeps Flask routes free of
+  ad-hoc parsing logic.
+"""
 import json
 import logging
 
