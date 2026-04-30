@@ -364,7 +364,7 @@ body {
     font-size: .875rem;
     font-family: var(--font);
     background: #fff;
-    color: var(--slate-900);
+    color: #000;
     transition: border-color .15s, box-shadow .15s;
     outline: none;
     width: 100%;
@@ -413,7 +413,7 @@ body {
     font-size: .875rem;
     font-family: var(--font);
     background: transparent;
-    color: var(--slate-900);
+    color: #000;
     outline: none;
     min-width: 0;
 }
@@ -531,6 +531,7 @@ body {
     font-size: .8rem;
     font-family: var(--font);
     background: #fff;
+    color: #000;
     outline: none;
 }
 
@@ -1062,7 +1063,7 @@ body {
     font-family: var(--font);
     width: 160px;
     background: #fff;
-    color: var(--slate-900);
+    color: #000;
     transition: border-color .2s;
 }
 
@@ -1095,7 +1096,7 @@ body {
     font-family: var(--font);
     text-align: right;
     background: #fff;
-    color: var(--slate-900);
+    color: #000;
     transition: border-color .2s;
 }
 
@@ -1524,7 +1525,7 @@ body {
     font-size: .75rem;
     font-family: var(--font);
     background: #fff;
-    color: var(--slate-900);
+    color: #000;
     outline: none;
     transition: border-color .15s;
 }
@@ -1543,7 +1544,7 @@ body {
     font-size: .75rem;
     font-family: var(--font);
     background: #fff;
-    color: var(--slate-900);
+    color: #000;
     outline: none;
     text-align: right;
 }
@@ -2095,4 +2096,194 @@ textarea:focus-visible,
     color: var(--slate-500);
     font-style: italic;
     padding: 1.5rem 1rem;
+}
+
+
+/* ============================================================
+   Onyx Theme — minimalist black with gold + purple accents.
+   Append-only override layer. Reassigns design tokens from the
+   :root block at the top of this file; nothing above is edited.
+   ============================================================ */
+:root {
+    color-scheme: dark;
+
+    /* Brand → Gold (primary accent) */
+    --blue: #d4af37;
+    --blue-dark: #f5c842;
+    --blue-light: rgba(212, 175, 55, .10);
+    --blue-muted: rgba(212, 175, 55, .35);
+
+    /* Neutrals → Onyx scale (dark surfaces, light text) */
+    --slate-50: #1a1a1a;
+    --slate-100: #0a0a0a;
+    --slate-200: #262626;
+    --slate-300: #525252;
+    --slate-500: #a3a3a3;
+    --slate-700: #d4d4d4;
+    --slate-900: #fafafa;
+
+    /* Semantic — recalibrated for dark backgrounds */
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --error-bg: #2a1212;
+
+    /* Purple — secondary accent (also retargets regime mid-vol) */
+    --purple: #a855f7;
+    --purple-deep: #7c3aed;
+    --regime-mid-vol: #a855f7;
+
+    /* Notice fallbacks consumed by var(--bg-info, …) etc. */
+    --bg-info: rgba(168, 85, 247, .12);
+    --text-info: #c084fc;
+    --bg-error: #2a1212;
+    --text-error: #f87171;
+    --bg-muted: #141414;
+    --text-muted: #a3a3a3;
+
+    /* Elevation: borders > shadows in minimalism */
+    --shadow: 0 0 0 1px rgb(255 255 255 / .06);
+    --shadow-md: 0 12px 32px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .06);
+}
+
+/* Header — onyx with a single gold hairline */
+.site-header {
+    background: #050505;
+    box-shadow: 0 1px 0 rgba(212, 175, 55, .22);
+}
+
+.brand-icon {
+    background: transparent;
+    color: var(--blue);
+    border: 1px solid var(--blue-muted);
+}
+
+.badge-ticker {
+    background: var(--blue);
+    color: #0a0a0a;
+}
+
+/* All surfaces that were hardcoded #fff → onyx surface-1 */
+.tab-nav,
+.form-card,
+.meta-chip,
+.content-card,
+.empty-state,
+.oc-target-value,
+.oc-exp-btn,
+.oc-chain-wrapper,
+.oc-spot-row,
+.ticker-tab-btn,
+.btn-toggle,
+.summary-info,
+.kpi-card,
+.regime-hero__metric {
+    background: #141414;
+}
+
+.form-card,
+.tab-nav,
+.content-card,
+.kpi-card {
+    border: 1px solid var(--slate-200);
+}
+
+/* Sidebar tabs — page bg is now near-black, so default hover on slate-100 disappears */
+.tab-btn:hover {
+    background: rgba(255, 255, 255, .04);
+    color: var(--slate-700);
+}
+
+.tab-btn.active {
+    background: var(--blue-light);
+    color: var(--blue);
+    box-shadow: inset 2px 0 0 var(--blue);
+}
+
+/* New: section labels added to sidebar HTML for grouping */
+.tab-section-label {
+    font-size: .62rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--slate-300);
+    padding: .85rem .85rem .3rem;
+    font-weight: 600;
+}
+
+.tab-section-label:first-child {
+    padding-top: .25rem;
+}
+
+/* Ticker chips → purple secondary accent */
+.ticker-tab-nav .ticker-tab-btn {
+    background: transparent;
+    color: var(--slate-500);
+    border: 1px solid var(--slate-200);
+}
+
+.ticker-tab-nav .ticker-tab-btn:hover {
+    color: var(--purple);
+    border-color: var(--purple);
+}
+
+.ticker-tab-nav .ticker-tab-btn.active {
+    background: rgba(168, 85, 247, .14);
+    color: var(--purple);
+    border-color: var(--purple);
+}
+
+/* Form controls — only focus styles need an override; default border/color flow from tokens */
+.form-group input:focus,
+.form-group select:focus,
+.options-table input:focus,
+.options-table select:focus,
+.oc-ticker-input:focus,
+.oc-target-input:focus,
+.pos-qty-input:focus,
+.pos-select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, .18);
+}
+
+.compact-range-input input:focus {
+    background: var(--blue-light);
+}
+
+/* Primary CTA — gold needs dark text for AA contrast */
+.btn-primary {
+    background: var(--blue);
+    color: #0a0a0a;
+}
+
+.btn-primary:hover {
+    background: var(--blue-dark);
+    box-shadow: 0 6px 18px rgba(212, 175, 55, .28);
+}
+
+.btn-primary:active {
+    background: var(--blue-dark);
+}
+
+/* Health banner — inline-styled in HTML, !important required to override */
+#health-banner {
+    background: #2a1f08 !important;
+    color: var(--warning) !important;
+    border-bottom-color: rgba(251, 191, 36, .4) !important;
+}
+
+#health-banner a,
+#health-banner button {
+    color: var(--warning) !important;
+}
+
+/* Validation pastel block was amber-on-cream; rebalance for dark */
+.validation-warning {
+    background: #2a1f08;
+    border-color: rgba(251, 191, 36, .4);
+    color: var(--warning);
+}
+
+/* Hero gradient at line 2024 used a literal #fff; restate in onyx */
+.regime-hero__primary {
+    background: linear-gradient(135deg, #1a1a1a, #141414);
 }
