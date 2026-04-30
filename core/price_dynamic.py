@@ -63,7 +63,20 @@ class PriceDynamic:
         # If DB has any data at all, accept it as fallback to avoid
         # hammering Yahoo when rate-limited.
         db_data = raw_data  # keep reference to DB data as safety net
-        needs_yfinance = raw_data is None or raw_data.empty
+        # WHY: empty-only check let stale/sparse DB rows mask missing history —
+        # e.g. a ticker with only the last month of prices would silently
+        # return that month no matter what start_date the user picked.
+        # Trigger yfinance whenever DB coverage starts after the user's
+        # requested horizon.
+        try:
+            db_min = raw_data.index.min().date() if raw_data is not None and not raw_data.empty else None
+        except Exception:
+            db_min = None
+        needs_yfinance = (
+            raw_data is None
+            or raw_data.empty
+            or (db_min is not None and db_min > self.user_start_date)
+        )
 
         if needs_yfinance:
             yf_data = self._download_data()
@@ -333,12 +346,16 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
+            # WHY: High/Low are raw prices, so the reference must also be raw
+            # (LastClose). Using LastAdjClose mixes scales and inflates osc by
+            # the cumulative dividend/split factor — causing wildly wide
+            # projection bands and bogus scatter plots for tickers like SPY.
             if on_effect:
-                high_adj = np.maximum(self._data["High"], self._data["LastAdjClose"])
-                low_adj = np.minimum(self._data["Low"], self._data["LastAdjClose"])
-                osc_data = (high_adj - low_adj) / self._data["LastAdjClose"] * 100
+                high_adj = np.maximum(self._data["High"], self._data["LastClose"])
+                low_adj = np.minimum(self._data["Low"], self._data["LastClose"])
+                osc_data = (high_adj - low_adj) / self._data["LastClose"] * 100
             else:
-                osc_data = (self._data["High"] - self._data["Low"]) / self._data["LastAdjClose"] * 100
+                osc_data = (self._data["High"] - self._data["Low"]) / self._data["LastClose"] * 100
             osc_data.name = "Oscillation"
             if apply_horizon:
                 return self._apply_horizon(osc_data.dropna())
@@ -358,7 +375,7 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
-            osc_high_data = (self._data["High"] / self._data["LastAdjClose"] - 1) * 100
+            osc_high_data = (self._data["High"] / self._data["LastClose"] - 1) * 100
             osc_high_data.name = "Osc_high"
             if apply_horizon:
                 return self._apply_horizon(osc_high_data.dropna())
@@ -378,7 +395,7 @@ class PriceDynamic:
         if self._data is None or self._data.empty:
             return None
         try:
-            osc_low_data = (self._data["Low"] / self._data["LastAdjClose"] - 1) * 100
+            osc_low_data = (self._data["Low"] / self._data["LastClose"] - 1) * 100
             osc_low_data.name = "Osc_low"
             if apply_horizon:
                 return self._apply_horizon(osc_low_data.dropna())
