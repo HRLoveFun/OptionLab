@@ -15,8 +15,6 @@ beforeEach(() => {
     delete window.escapeHtml;
     delete window.parseTickers;
     delete window.getValidTickers;
-    delete window._chainCacheGet;
-    delete window._chainCacheSet;
     delete window.initializeOptionsTable;
     delete window.toggleOptionsSection;
     delete window.toggleSizingSection;

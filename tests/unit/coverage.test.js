@@ -41,8 +41,6 @@ const _snapshot = {
     initializeOptionsTable: window.initializeOptionsTable,
     toggleOptionsSection: window.toggleOptionsSection,
     toggleSizingSection: window.toggleSizingSection,
-    _chainCacheGet: window._chainCacheGet,
-    _chainCacheSet: window._chainCacheSet,
 };
 
 beforeEach(() => {
@@ -160,10 +158,10 @@ describe('coverage drill — exercise instrumented sources', () => {
         window.initializeOptionsTable();
         window.toggleOptionsSection();
         window.toggleSizingSection();
-        window._chainCacheGet('AAPL');
+        window.appState.chainCache.get('AAPL');
         window.appState.chainCache.set('AAPL', { spot: 1 });
-        window._chainCacheGet('AAPL');
-        window._chainCacheSet('AAPL', { spot: 2 });
+        window.appState.chainCache.get('AAPL');
+        window.appState.chainCache.set('AAPL', { spot: 2 });
     });
 
     it('state modules exercised', () => {

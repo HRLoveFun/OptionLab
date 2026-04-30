@@ -72,14 +72,14 @@ describe('getValidTickers', () => {
     });
 });
 
-describe('chainCache shims', () => {
-    it('return null when state not initialized for that ticker', () => {
-        expect(window._chainCacheGet('AAPL')).toBeNull();
+describe('chainCache backend', () => {
+    it('returns null when state not initialized for that ticker', () => {
+        expect(window.appState.chainCache.get('AAPL')).toBeNull();
     });
 
-    it('roundtrip through the appState.chainCache backend', () => {
-        window._chainCacheSet('AAPL', { spot: 100, expiries: ['2026-05-15'] });
-        const got = window._chainCacheGet('AAPL');
+    it('roundtrip through appState.chainCache', () => {
+        window.appState.chainCache.set('AAPL', { spot: 100, expiries: ['2026-05-15'] });
+        const got = window.appState.chainCache.get('AAPL');
         expect(got).not.toBeNull();
         expect(got.spot).toBe(100);
     });

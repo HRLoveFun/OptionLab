@@ -1,3 +1,10 @@
+"""Feature engineering for cleaned daily price series.
+
+Context:
+- Reads from ``clean_prices`` and emits resampled bars + indicator columns to
+  ``processed_prices``. Pure pandas; no I/O outside the DB helpers in
+  ``data_pipeline.db``.
+"""
 import datetime as dt
 import logging
 

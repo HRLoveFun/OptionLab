@@ -1,4 +1,10 @@
-"""Signals service — wraps core/signals over DB-cached daily data."""
+"""Signals service — wraps core/signals over DB-cached daily data.
+
+Context:
+- Thin facade by design. WHY: keeps the layering rule honest — routes call
+  the service, which formats results and decides freshness; ``core/signals``
+  stays pure-computation. Do not inline ``core/signals`` calls into routes.
+"""
 
 from __future__ import annotations
 
