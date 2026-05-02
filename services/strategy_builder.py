@@ -26,7 +26,7 @@ import pandas as pd
 
 from core import signals as signals_mod
 from core import strategies as strategies_mod
-from core.options_chain_analyzer import liquidity_score
+from core.options.chain.liquidity import liquidity_score
 from data_pipeline.data_service import DataService
 from data_pipeline.yf_client import fetch_option_chain
 from utils.api_errors import ApiError

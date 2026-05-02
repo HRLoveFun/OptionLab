@@ -8,7 +8,7 @@ Context:
 import datetime as dt
 import logging
 
-from core.market_analyzer import MarketAnalyzer
+from core.market.data_context import build_data_context
 from core.market_review import market_review
 from utils.ticker_utils import is_valid_ticker_format
 from utils.utils import exclusive_month_end
@@ -30,14 +30,14 @@ class MarketService:
         Returns (is_valid: bool, message: str)
         """
         # WHY: Reject obvious junk (XSS payloads, SQL fragments, lowercase, etc.)
-        # before instantiating MarketAnalyzer. Otherwise a single call would
+        # before hitting the data layer. Otherwise a single call would
         # trigger DataService.manual_update() which writes one NaN row per
         # business day to clean_prices for the bogus ticker.
         if not is_valid_ticker_format(ticker):
             return False, "invalid_ticker_or_no_data_available"
         try:
-            analyzer = MarketAnalyzer(ticker, dt.date.today() - dt.timedelta(days=30), "D", end_date=None)
-            is_valid = analyzer.is_data_valid()
+            ctx = build_data_context(ticker, dt.date.today() - dt.timedelta(days=30), "D")
+            is_valid = ctx.is_valid()
             message = "valid_ticker" if is_valid else "invalid_ticker_or_no_data_available"
             return is_valid, message
         except Exception as e:

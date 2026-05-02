@@ -67,11 +67,10 @@ def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False)
 @pytest.fixture()
 def _patch_downloads(monkeypatch):
     """Disable real yfinance downloads and DataService.manual_update."""
-    from core.price_dynamic import PriceDynamic
     from data_pipeline.data_service import DataService
 
     monkeypatch.setattr(DataService, "manual_update", staticmethod(lambda *a, **kw: None))
-    monkeypatch.setattr(PriceDynamic, "_download_data", lambda self: None)
+    monkeypatch.setattr("core.market.data_context._download_data", lambda *a, **kw: None)
 
 
 # ---------------------------------------------------------------------------

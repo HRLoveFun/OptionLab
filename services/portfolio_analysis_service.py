@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
-from core.options_greeks import portfolio_greeks_table, theta_decay_path
+from core.options.greeks.portfolio import portfolio_greeks_table, theta_decay_path
 
 logger = logging.getLogger(__name__)
 

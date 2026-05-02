@@ -132,9 +132,10 @@ class OptionsChainService:
             "oc_vol_premium": None,
         }
 
-        # --- Initialise analyzer (fetches chain on construction) ----------
+        # --- Fetch snapshot upstream and inject into analyzer -------------
         try:
-            analyzer = OptionsChainAnalyzer(ticker)
+            snap = fetch_option_chain(ticker)
+            analyzer = OptionsChainAnalyzer(ticker, snapshot=snap)
         except Exception as e:
             logger.warning(f"OptionsChainAnalyzer init failed for {ticker}: {e}")
             return result
@@ -202,10 +203,11 @@ class OptionsChainService:
         try:
             import datetime as dt
 
-            from core.price_dynamic import PriceDynamic
+            from core.market.data_context import build_data_context
+            from core.signals.hv import vol_premium_context
 
-            pd_obj = PriceDynamic(ticker, start_date=dt.date.today() - dt.timedelta(days=365))
-            if pd_obj.is_valid():
+            ctx = build_data_context(ticker, dt.date.today() - dt.timedelta(days=365), "D")
+            if ctx.is_valid() and ctx.daily_bars is not None:
                 # Get nearest-expiry ATM IV
                 atm_iv = None
                 nearest_exp = analyzer.expiries[0] if analyzer.expiries else None
@@ -215,7 +217,7 @@ class OptionsChainService:
                         idx = (puts["strike"] - analyzer.spot).abs().idxmin()
                         atm_iv = float(puts.loc[idx, "impliedVolatility"]) * 100
 
-                vol_ctx = pd_obj.build_vol_premium_context(atm_iv)
+                vol_ctx = vol_premium_context(ctx.daily_bars.get("Adj Close"), atm_iv)
                 if vol_ctx:
                     result["oc_vol_premium"] = vol_ctx
         except Exception as e:

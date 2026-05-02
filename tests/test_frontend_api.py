@@ -202,29 +202,32 @@ class TestFeaturesDF:
         )
 
     def test_features_df_nonempty_with_synthetic_data(self, monkeypatch):
-        """features_df should have rows when PriceDynamic has adequate data."""
+        """features_df should have rows when data context has adequate data."""
+        from core.market.data_context import DataContext, Horizon
         from core.market_analyzer import MarketAnalyzer
-        from core.price_dynamic import PriceDynamic
 
         fake_df = self._make_price_df(60)
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
-        # Patch PriceDynamic to use synthetic data
-
-        def mock_init(self, ticker, start_date=None, frequency="D", end_date=None):
-            self.ticker = ticker
-            self.user_start_date = start_date or start
-            self.frequency = frequency
-            self._user_provided_end = end_date is not None
-            self.user_end_date = end_date or end
+        def _mock_build(ticker, start_date, frequency="D", end_date=None):
             df = fake_df.copy()
             df["LastClose"] = df["Close"].shift(1)
             df["LastAdjClose"] = df["Adj Close"].shift(1)
-            self._data = df
-            self._daily_data = fake_df.copy()
+            return DataContext(
+                ticker=ticker,
+                frequency=frequency,
+                horizon=Horizon(
+                    start=start_date,
+                    end=end_date or end,
+                    user_provided_end=end_date is not None,
+                    frequency=frequency,
+                ),
+                bars=df,
+                daily_bars=fake_df.copy(),
+            )
 
-        monkeypatch.setattr(PriceDynamic, "__init__", mock_init)
+        monkeypatch.setattr("core.market_analyzer.build_data_context", _mock_build)
 
         analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
         assert not analyzer.features_df.empty, f"features_df should not be empty, shape={analyzer.features_df.shape}"
@@ -233,8 +236,8 @@ class TestFeaturesDF:
 
     def test_features_df_tolerates_partial_nan(self, monkeypatch):
         """features_df should retain rows even when one column has NaN at a few spots."""
+        from core.market.data_context import DataContext, Horizon
         from core.market_analyzer import MarketAnalyzer
-        from core.price_dynamic import PriceDynamic
 
         fake_df = self._make_price_df(60)
         # Introduce NaN in High for a few rows (osc_high will be NaN there)
@@ -243,19 +246,24 @@ class TestFeaturesDF:
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
-        def mock_init(self, ticker, start_date=None, frequency="D", end_date=None):
-            self.ticker = ticker
-            self.user_start_date = start_date or start
-            self.frequency = frequency
-            self._user_provided_end = end_date is not None
-            self.user_end_date = end_date or end
+        def _mock_build(ticker, start_date, frequency="D", end_date=None):
             df = fake_df.copy()
             df["LastClose"] = df["Close"].shift(1)
             df["LastAdjClose"] = df["Adj Close"].shift(1)
-            self._data = df
-            self._daily_data = fake_df.copy()
+            return DataContext(
+                ticker=ticker,
+                frequency=frequency,
+                horizon=Horizon(
+                    start=start_date,
+                    end=end_date or end,
+                    user_provided_end=end_date is not None,
+                    frequency=frequency,
+                ),
+                bars=df,
+                daily_bars=fake_df.copy(),
+            )
 
-        monkeypatch.setattr(PriceDynamic, "__init__", mock_init)
+        monkeypatch.setattr("core.market_analyzer.build_data_context", _mock_build)
 
         analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
         # With dropna(how='all'), rows with partial NaN are kept
@@ -265,8 +273,8 @@ class TestFeaturesDF:
 
     def test_features_df_empty_when_all_nan(self, monkeypatch):
         """features_df should have 0 rows when all data is NaN."""
+        from core.market.data_context import DataContext, Horizon
         from core.market_analyzer import MarketAnalyzer
-        from core.price_dynamic import PriceDynamic
 
         fake_df = self._make_price_df(10)
         fake_df["Adj Close"] = np.nan
@@ -276,19 +284,24 @@ class TestFeaturesDF:
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
-        def mock_init(self, ticker, start_date=None, frequency="D", end_date=None):
-            self.ticker = ticker
-            self.user_start_date = start_date or start
-            self.frequency = frequency
-            self._user_provided_end = end_date is not None
-            self.user_end_date = end_date or end
+        def _mock_build(ticker, start_date, frequency="D", end_date=None):
             df = fake_df.copy()
             df["LastClose"] = df["Close"].shift(1)
             df["LastAdjClose"] = df["Adj Close"].shift(1)
-            self._data = df
-            self._daily_data = fake_df.copy()
+            return DataContext(
+                ticker=ticker,
+                frequency=frequency,
+                horizon=Horizon(
+                    start=start_date,
+                    end=end_date or end,
+                    user_provided_end=end_date is not None,
+                    frequency=frequency,
+                ),
+                bars=df,
+                daily_bars=fake_df.copy(),
+            )
 
-        monkeypatch.setattr(PriceDynamic, "__init__", mock_init)
+        monkeypatch.setattr("core.market_analyzer.build_data_context", _mock_build)
 
         analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
         assert analyzer.features_df.empty
@@ -302,31 +315,27 @@ class TestFeaturesDF:
 class TestPriceDynamicTickerNorm:
     def test_futu_format_normalized(self, monkeypatch):
         """PriceDynamic('US.NVDA', ...) should normalize to 'NVDA'."""
-        from core.price_dynamic import PriceDynamic
+        monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        # Prevent actual data download
-        monkeypatch.setattr(PriceDynamic, "_fetch_daily_from_db", lambda self: None)
-        monkeypatch.setattr(PriceDynamic, "_download_data", lambda self: None)
+        from core.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("US.NVDA", start_date=dt.date(2024, 1, 1))
         assert pd_obj.ticker == "NVDA"
 
     def test_yahoo_format_unchanged(self, monkeypatch):
         """PriceDynamic('NVDA', ...) should keep ticker as 'NVDA'."""
-        from core.price_dynamic import PriceDynamic
+        monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        monkeypatch.setattr(PriceDynamic, "_fetch_daily_from_db", lambda self: None)
-        monkeypatch.setattr(PriceDynamic, "_download_data", lambda self: None)
+        from core.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("NVDA", start_date=dt.date(2024, 1, 1))
         assert pd_obj.ticker == "NVDA"
 
     def test_hk_format_normalized(self, monkeypatch):
         """PriceDynamic('HK.00700', ...) should normalize to '0700.HK'."""
-        from core.price_dynamic import PriceDynamic
+        monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        monkeypatch.setattr(PriceDynamic, "_fetch_daily_from_db", lambda self: None)
-        monkeypatch.setattr(PriceDynamic, "_download_data", lambda self: None)
+        from core.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("HK.00700", start_date=dt.date(2024, 1, 1))
         assert pd_obj.ticker == "0700.HK"
