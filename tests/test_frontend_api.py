@@ -14,22 +14,6 @@ import json
 
 import numpy as np
 import pandas as pd
-import pytest
-
-# ---------------------------------------------------------------------------
-# Flask test client
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def client():
-    """Create a Flask test client with isolated DB."""
-    from app import app
-
-    app.config["TESTING"] = True
-    with app.test_client() as c:
-        yield c
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. Index page (Parameter tab → form submission)
@@ -128,7 +112,7 @@ class TestOptionChainAPI:
     def test_default_dte_is_45(self, client):
         """Default max_dte should be 45 (not 60)."""
         # Verify by inspecting the route's docstring or actual defaults
-        from app import option_chain
+        from routes.options import option_chain
 
         assert "45" in (option_chain.__doc__ or "")
 
@@ -157,19 +141,19 @@ class TestOptionChainFilter:
 
     def test_dte_45_default(self):
         """With max_dte=45, expirations at 50d should be excluded."""
-        from app import _filter_option_chain
+        from core.options.chain.filters import filter_option_chain
 
         data = self._make_chain([10, 44, 50, 90], [90, 100, 110])
-        result = _filter_option_chain(data, max_dte=45)
+        result = filter_option_chain(data, max_dte=45)
         # 10d and 44d are within, 50d and 90d are outside
         assert len(result["expirations"]) == 2
 
     def test_moneyness_30pct(self):
         """With moneyness [0.7, 1.3], strikes outside should be excluded."""
-        from app import _filter_option_chain
+        from core.options.chain.filters import filter_option_chain
 
         data = self._make_chain([10], [50, 70, 100, 130, 200], spot=100.0)
-        result = _filter_option_chain(data, max_dte=45, moneyness_low=0.7, moneyness_high=1.3)
+        result = filter_option_chain(data, max_dte=45, moneyness_low=0.7, moneyness_high=1.3)
         exp = list(result["chain"].keys())[0]
         # strike 50 (0.5) and 200 (2.0) should be out; 70, 100, 130 should be in
         assert len(result["chain"][exp]["calls"]) == 3

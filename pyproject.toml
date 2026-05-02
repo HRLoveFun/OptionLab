@@ -12,6 +12,14 @@ addopts = "-x --tb=short -q"
 markers = [
     "network: tests that hit live yfinance (may be rate-limited)",
 ]
+filterwarnings = [
+    # Matplotlib / pyparsing deprecation noise — not our code
+    "ignore::DeprecationWarning:matplotlib.*",
+    "ignore::DeprecationWarning:pyparsing.*",
+    # Pandas divide-by-zero in log returns during synthetic data tests
+    "ignore::RuntimeWarning:pandas.*",
+    "ignore::RuntimeWarning:numpy.*",
+]
 
 [tool.ruff]
 target-version = "py312"

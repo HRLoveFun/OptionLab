@@ -43,18 +43,13 @@ def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
 
 
 class TestMarketReviewCache:
-    def test_cache_hit_avoids_refetch(self):
+    def test_cache_hit_avoids_refetch(self, clear_mr_cache):
         """After first fetch, second call should use L1 cache."""
-        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock
+        from core.market_review import BENCHMARKS, _fetch_market_data
 
         all_tickers = ["AAPL"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=60)
-
-        # Clear L1 cache
-        with _mr_cache_lock:
-            _mr_cache.clear()
-
-        from core.market_review import _fetch_market_data
+        clear_mr_cache()
 
         with patch("core.market_review.fetch_close_panel"):
             # First call — should use DB (not yfinance since we seeded)
@@ -64,15 +59,13 @@ class TestMarketReviewCache:
             assert data1.shape == data2.shape
             assert disp1 == disp2
 
-    def test_cache_returns_copy(self):
+    def test_cache_returns_copy(self, clear_mr_cache):
         """Cached data should be a copy — mutations don't affect cache."""
-        from core.market_review import BENCHMARKS, _fetch_market_data, _mr_cache, _mr_cache_lock
+        from core.market_review import BENCHMARKS, _fetch_market_data
 
         all_tickers = ["MSFT"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=60)
-
-        with _mr_cache_lock:
-            _mr_cache.clear()
+        clear_mr_cache()
 
         with patch("core.market_review.fetch_close_panel"):
             data1, _, _ = _fetch_market_data("MSFT")
@@ -86,15 +79,13 @@ class TestMarketReviewCache:
 
 
 class TestMarketReviewOutput:
-    def test_returns_dataframe(self):
+    def test_returns_dataframe(self, clear_mr_cache):
         """market_review() returns a DataFrame with MultiIndex columns."""
-        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review
+        from core.market_review import BENCHMARKS, market_review
 
         all_tickers = ["GOOGL"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
-
-        with _mr_cache_lock:
-            _mr_cache.clear()
+        clear_mr_cache()
 
         with patch("core.market_review.fetch_close_panel"):
             result = market_review("GOOGL")
@@ -102,15 +93,13 @@ class TestMarketReviewOutput:
             assert isinstance(result.columns, pd.MultiIndex)
             assert len(result) > 0
 
-    def test_result_contains_expected_assets(self):
+    def test_result_contains_expected_assets(self, clear_mr_cache):
         """Result index should contain the primary ticker and benchmark names."""
-        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review
+        from core.market_review import BENCHMARKS, market_review
 
         all_tickers = ["TSLA"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
-
-        with _mr_cache_lock:
-            _mr_cache.clear()
+        clear_mr_cache()
 
         with patch("core.market_review.fetch_close_panel"):
             result = market_review("TSLA")
@@ -121,15 +110,13 @@ class TestMarketReviewOutput:
 
 
 class TestMarketReviewTimeseries:
-    def test_returns_dict_structure(self):
+    def test_returns_dict_structure(self, clear_mr_cache):
         """market_review_timeseries() returns dict with expected keys."""
-        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review_timeseries
+        from core.market_review import BENCHMARKS, market_review_timeseries
 
         all_tickers = ["AMZN"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
-
-        with _mr_cache_lock:
-            _mr_cache.clear()
+        clear_mr_cache()
 
         with patch("core.market_review.fetch_close_panel"):
             result = market_review_timeseries("AMZN")
@@ -138,15 +125,13 @@ class TestMarketReviewTimeseries:
             assert "instrument" in result
             assert len(result["dates"]) > 0
 
-    def test_assets_have_expected_fields(self):
+    def test_assets_have_expected_fields(self, clear_mr_cache):
         """Each asset entry should have prices, cum_return, rolling_vol."""
-        from core.market_review import BENCHMARKS, _mr_cache, _mr_cache_lock, market_review_timeseries
+        from core.market_review import BENCHMARKS, market_review_timeseries
 
         all_tickers = ["META"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
-
-        with _mr_cache_lock:
-            _mr_cache.clear()
+        clear_mr_cache()
 
         with patch("core.market_review.fetch_close_panel"):
             result = market_review_timeseries("META")

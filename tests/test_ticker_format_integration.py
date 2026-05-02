@@ -311,37 +311,37 @@ class TestParseTickers:
     """parse_tickers must handle mixed-format comma-separated input."""
 
     def test_futu_format_normalised(self):
-        from app import parse_tickers
+        from utils.ticker_utils import parse_tickers
 
         result = parse_tickers("US.NVDA, US.TLT")
         assert result == ["NVDA", "TLT"]
 
     def test_yahoo_format_passthrough(self):
-        from app import parse_tickers
+        from utils.ticker_utils import parse_tickers
 
         result = parse_tickers("NVDA, TLT")
         assert result == ["NVDA", "TLT"]
 
     def test_mixed_format(self):
-        from app import parse_tickers
+        from utils.ticker_utils import parse_tickers
 
         result = parse_tickers("us.nvda, TLT")
         assert result == ["NVDA", "TLT"]
 
     def test_dedup(self):
-        from app import parse_tickers
+        from utils.ticker_utils import parse_tickers
 
         result = parse_tickers("NVDA,US.NVDA, nvda")
         assert result == ["NVDA"]
 
     def test_hk_ticker(self):
-        from app import parse_tickers
+        from utils.ticker_utils import parse_tickers
 
         result = parse_tickers("0700.HK")
         assert result == ["0700.HK"]
 
     def test_max_six(self):
-        from app import parse_tickers
+        from utils.ticker_utils import parse_tickers
 
         result = parse_tickers("A,B,C,D,E,F,G,H")
         assert len(result) <= 6

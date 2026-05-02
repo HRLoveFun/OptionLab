@@ -1,12 +1,13 @@
-"""Tests for option chain filtering in app.py."""
+"""Tests for option chain filtering in core.options.chain.filters."""
 
+import datetime as _dt
 from datetime import datetime, timedelta
+
+from core.options.chain.filters import filter_option_chain
 
 
 def test_filter_dte():
     """Verify expirations beyond max_dte are excluded."""
-    from app import _filter_option_chain
-
     today = datetime.now().date()
     exp_near = (today + timedelta(days=10)).strftime("%Y-%m-%d")
     exp_far = (today + timedelta(days=60)).strftime("%Y-%m-%d")
@@ -26,15 +27,13 @@ def test_filter_dte():
         "spot": 100.0,
     }
 
-    result = _filter_option_chain(data, max_dte=30)
+    result = filter_option_chain(data, max_dte=30)
     assert exp_near in result["expirations"]
     assert exp_far not in result["expirations"]
 
 
 def test_filter_moneyness():
     """Verify strikes outside moneyness range are excluded."""
-    from app import _filter_option_chain
-
     today = datetime.now().date()
     exp = (today + timedelta(days=10)).strftime("%Y-%m-%d")
 
@@ -54,7 +53,7 @@ def test_filter_moneyness():
         "spot": 100.0,
     }
 
-    result = _filter_option_chain(data, max_dte=30, moneyness_low=0.7, moneyness_high=1.3)
+    result = filter_option_chain(data, max_dte=30, moneyness_low=0.7, moneyness_high=1.3)
     calls = result["chain"][exp]["calls"]
     strikes = [c["strike"] for c in calls]
     assert 90 in strikes
@@ -65,8 +64,6 @@ def test_filter_moneyness():
 
 def test_filter_compress_moneyness():
     """When total contracts exceed max_contracts, moneyness should narrow."""
-    from app import _filter_option_chain
-
     today = datetime.now().date()
     exp = (today + timedelta(days=5)).strftime("%Y-%m-%d")
 
@@ -83,16 +80,13 @@ def test_filter_compress_moneyness():
     }
 
     # With max_contracts=20, should narrow moneyness
-    result = _filter_option_chain(data, max_dte=30, moneyness_low=0.7, moneyness_high=1.3, max_contracts=20)
+    result = filter_option_chain(data, max_dte=30, moneyness_low=0.7, moneyness_high=1.3, max_contracts=20)
     total = sum(len(d["calls"]) + len(d["puts"]) for d in result["chain"].values())
     assert total <= 20
 
 
 def test_filter_no_spot():
     """No spot price → return data unmodified (apart from DTE filter)."""
-    from app import _filter_option_chain
-    import datetime as _dt
-
     # Use a date that's always in the near future relative to "today" so the
     # DTE filter passes; the expiration must remain after filtering.
     future = (_dt.date.today() + _dt.timedelta(days=15)).isoformat()
@@ -101,5 +95,5 @@ def test_filter_no_spot():
         "chain": {future: {"calls": [{"strike": 100}], "puts": []}},
         "spot": None,
     }
-    result = _filter_option_chain(data)
+    result = filter_option_chain(data)
     assert result == data

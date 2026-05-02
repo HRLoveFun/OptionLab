@@ -7,6 +7,7 @@ from utils.ticker_utils import (
     futu_to_yahoo,
     is_futu_format,
     normalize_ticker,
+    parse_tickers,
     to_futu_ticker,
     yahoo_to_futu,
 )
@@ -273,3 +274,45 @@ class TestNormalizeTicker:
         yahoo, futu = normalize_ticker("us.tlt")
         assert yahoo == "TLT"
         assert futu == "US.TLT"
+
+
+# ── parse_tickers ────────────────────────────────────────────────
+
+
+class TestParseTickers:
+    """Tests for parse_tickers() — comma/newline separated ticker parsing."""
+
+    def test_single_ticker(self):
+        assert parse_tickers("AAPL") == ["AAPL"]
+
+    def test_comma_separated(self):
+        assert parse_tickers("AAPL, NVDA, TSLA") == ["AAPL", "NVDA", "TSLA"]
+
+    def test_newline_separated(self):
+        assert parse_tickers("AAPL\nNVDA\nTSLA") == ["AAPL", "NVDA", "TSLA"]
+
+    def test_mixed_separators(self):
+        assert parse_tickers("AAPL, NVDA\nTSLA, MSFT") == ["AAPL", "NVDA", "TSLA", "MSFT"]
+
+    def test_deduplicates(self):
+        assert parse_tickers("AAPL, AAPL, NVDA") == ["AAPL", "NVDA"]
+
+    def test_max_six_tickers(self):
+        assert len(parse_tickers("A, B, C, D, E, F, G, H")) == 6
+
+    def test_futu_format_normalized(self):
+        assert parse_tickers("US.NVDA, US.AAPL") == ["NVDA", "AAPL"]
+
+    def test_whitespace_trimmed(self):
+        assert parse_tickers("  AAPL  ,   NVDA  ") == ["AAPL", "NVDA"]
+
+    def test_empty_string_returns_empty(self):
+        assert parse_tickers("") == []
+
+    def test_invalid_tickers_skipped(self):
+        """Invalid tickers should be silently skipped."""
+        result = parse_tickers("AAPL, , NVDA")
+        assert "AAPL" in result
+        assert "NVDA" in result
+        # Empty token should be skipped
+        assert len(result) == 2

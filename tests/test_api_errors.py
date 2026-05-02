@@ -7,16 +7,15 @@ import os
 os.environ.setdefault("RATE_LIMIT_DISABLED", "1")
 
 import pytest
+from app import app as _flask_app
 
 from utils.api_errors import ApiError
 
 
 @pytest.fixture
 def client():
-    import app as app_module
-
-    app_module.app.config["TESTING"] = True
-    return app_module.app.test_client()
+    _flask_app.config["TESTING"] = True
+    return _flask_app.test_client()
 
 
 def test_api_error_payload_shape():
