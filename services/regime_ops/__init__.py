@@ -1,8 +1,4 @@
-"""Regime operations sub-package.
-
-Extracted persistence and data-access helpers used by
-``services.regime_service``.
-"""
+"""Regime operations — persistence helpers for market-regime labels."""
 
 from ._persistence import _load_log_df, _previous_log_row, _upsert_log_rows
 

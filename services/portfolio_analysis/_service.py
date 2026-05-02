@@ -8,8 +8,7 @@ import logging
 
 from core.options.greeks.portfolio import portfolio_greeks_table
 
-from ._charts import _plot_pnl, _plot_theta_decay
-from ._fig import _fig_to_base64
+from ._charts import _fig_to_base64, _plot_pnl, _plot_theta_decay
 from ._normalize import _normalize_position
 from ._risk import _calc_var, _find_breakevens, _position_sizing, _risk_breakdown
 
@@ -69,7 +68,7 @@ class PortfolioAnalysisService:
             pnl_fig = _plot_pnl(positions, spots)
             result["pnl_chart"] = _fig_to_base64(pnl_fig)
         except Exception as e:
-            logger.warning(f"PnL chart failed: {e}")
+            logger.warning("PnL chart failed: %s", e)
             result["pnl_chart"] = None
 
         # Theta decay
@@ -77,7 +76,7 @@ class PortfolioAnalysisService:
             theta_fig = _plot_theta_decay(greeks_positions, spot)
             result["theta_decay_chart"] = _fig_to_base64(theta_fig)
         except Exception as e:
-            logger.warning(f"Theta decay chart failed: {e}")
+            logger.warning("Theta decay chart failed: %s", e)
             result["theta_decay_chart"] = None
 
         # Risk breakdown

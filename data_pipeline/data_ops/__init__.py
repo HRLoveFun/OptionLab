@@ -1,7 +1,8 @@
-"""Data operations sub-package.
+"""Data operations — DataService facade and shared cache/lock globals.
 
-New code should import directly from here; the legacy module
-``data_pipeline.data_service`` is a thin backward-compat adapter.
+All heavy-lifting state (cooldown locks, query cache, TTL constants) is
+co-located in ``_globals`` so that DataService and tests operate on the
+same underlying objects.
 """
 
 from ._globals import (

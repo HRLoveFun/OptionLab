@@ -30,7 +30,7 @@ import pandas as pd
 import pytest
 
 from data_pipeline import PipelineResult
-from data_pipeline.data_service import (
+from data_pipeline.data_ops import (
     DataService,
     _query_cache,
     _query_cache_lock,

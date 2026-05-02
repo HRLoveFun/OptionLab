@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from data_pipeline import PipelineResult
-from data_pipeline.data_service import (
+from data_pipeline.data_ops import (
     _QUERY_CACHE_TTL,
     DataService,
     _cache_get,

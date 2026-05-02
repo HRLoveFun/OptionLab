@@ -29,7 +29,7 @@ def _isolate_db(monkeypatch, tmp_path):
     # test (which used a different DB file) would otherwise mask freshly
     # seeded data within the 60-second TTL.
     try:
-        import data_pipeline.data_service as ds_mod
+        import data_pipeline.data_ops as ds_mod
 
         with ds_mod._query_cache_lock:
             ds_mod._query_cache.clear()

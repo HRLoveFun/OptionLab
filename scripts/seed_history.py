@@ -7,7 +7,7 @@ Usage: python scripts/seed_history.py AAPL 5
 import logging
 import sys
 
-from data_pipeline.data_service import DataService
+from data_pipeline.data_ops import DataService
 
 logging.basicConfig(level=logging.INFO)
 

@@ -1,8 +1,4 @@
-"""Market analysis sub-package.
-
-New code should import directly from here; the legacy module
-``services.analysis_service`` is a thin backward-compat adapter.
-"""
+"""Market analysis — orchestrates market data analysis, charting, and cross-ticker summaries."""
 
 from ._service import AnalysisService
 

@@ -85,9 +85,9 @@ class TestRenderRoutes:
         #
         # Patch all slice fns to a fast no-op so this never touches yfinance.
         slice_targets = [
-            "services.analysis_service.AnalysisService.generate_market_review_slice",
-            "services.analysis_service.AnalysisService.generate_statistical_slice",
-            "services.analysis_service.AnalysisService.generate_assessment_slice",
+            "services.market_analysis.AnalysisService.generate_market_review_slice",
+            "services.market_analysis.AnalysisService.generate_statistical_slice",
+            "services.market_analysis.AnalysisService.generate_assessment_slice",
             "services.options_chain_service.OptionsChainService.generate_options_chain_analysis",
         ]
         with patch(slice_targets[0], return_value={}), patch(
@@ -101,9 +101,9 @@ class TestRenderRoutes:
 
     def test_missing_job_and_missing_ticker_uses_default_ticker(self, client):
         slice_targets = [
-            "services.analysis_service.AnalysisService.generate_market_review_slice",
-            "services.analysis_service.AnalysisService.generate_statistical_slice",
-            "services.analysis_service.AnalysisService.generate_assessment_slice",
+            "services.market_analysis.AnalysisService.generate_market_review_slice",
+            "services.market_analysis.AnalysisService.generate_statistical_slice",
+            "services.market_analysis.AnalysisService.generate_assessment_slice",
             "services.options_chain_service.OptionsChainService.generate_options_chain_analysis",
         ]
         with patch(slice_targets[0], return_value={}), patch(
@@ -134,7 +134,7 @@ class TestRenderRoutes:
             raise RuntimeError("synthetic failure")
 
         with patch(
-            "services.analysis_service.AnalysisService.generate_market_review_slice",
+            "services.market_analysis.AnalysisService.generate_market_review_slice",
             side_effect=_boom,
         ):
             resp = client.get(f"/render/market_review?job={job_id}&ticker=AAPL")
@@ -152,7 +152,7 @@ class TestRenderRoutes:
             return {"market_review_chart": None}
 
         with patch(
-            "services.analysis_service.AnalysisService.generate_market_review_slice",
+            "services.market_analysis.AnalysisService.generate_market_review_slice",
             side_effect=_ok,
         ):
             r1 = client.get(f"/render/market_review?job={job_id}&ticker=AAPL")

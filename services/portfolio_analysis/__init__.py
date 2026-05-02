@@ -1,8 +1,4 @@
-"""Portfolio analysis sub-package.
-
-New code should import directly from here; the legacy module
-``services.portfolio_analysis_service`` is a thin backward-compat adapter.
-"""
+"""Portfolio analysis — Greeks, PnL, theta decay, risk breakdown, and VaR for multi-leg option portfolios."""
 
 from ._service import PortfolioAnalysisService
 

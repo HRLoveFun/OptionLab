@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 
 from core import signals as signals_mod
-from data_pipeline.data_service import DataService
+from data_pipeline.data_ops import DataService
 
 logger = logging.getLogger(__name__)
 

@@ -222,7 +222,7 @@ def seed_test_data(_e2e_db: str, yf_stub: None) -> Iterator[None]:
     Uses the production downloader's `TEST_*` fixture branch — no network.
     """
     try:
-        from data_pipeline.data_service import DataService
+        from data_pipeline.data_ops import DataService
         # `manual_update` will route to the synthetic fixture for TEST_*
         DataService.manual_update("TEST_AAPL", days=120)
     except Exception:

@@ -1,9 +1,8 @@
 """Shared globals for data operations (locks, caches, TTLs).
 
-These variables live here so that both ``data_pipeline.data_service``
-(the legacy adapter) and ``data_pipeline.data_ops`` access the **same**
-objects.  Tests that mutate ``_update_locks`` or ``_query_cache`` continue
-to work because the adapter simply re-exports these names.
+All heavy-lifting state (cooldown locks, query cache, TTL constants) is
+co-located here so that ``data_ops._service.DataService`` and tests operate
+on the **same** underlying objects.
 """
 
 import os

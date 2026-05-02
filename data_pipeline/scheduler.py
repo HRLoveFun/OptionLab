@@ -6,7 +6,7 @@ from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from .data_service import DataService
+from .data_ops import DataService
 
 logger = logging.getLogger(__name__)
 
