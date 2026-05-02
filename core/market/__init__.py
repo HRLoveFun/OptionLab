@@ -16,3 +16,7 @@ Dependency graph (flows downward):
     ├── projection.py
     └── correlation.py
 """
+
+from core.market.analyzer import MarketAnalyzer
+
+__all__ = ["MarketAnalyzer"]

@@ -187,8 +187,8 @@ class TestFeaturesDF:
 
     def test_features_df_nonempty_with_synthetic_data(self, monkeypatch):
         """features_df should have rows when data context has adequate data."""
+        from core.market.analyzer import MarketAnalyzer
         from core.market.data_context import DataContext, Horizon
-        from core.market_analyzer import MarketAnalyzer
 
         fake_df = self._make_price_df(60)
         start = fake_df.index[0].date()
@@ -211,7 +211,7 @@ class TestFeaturesDF:
                 daily_bars=fake_df.copy(),
             )
 
-        monkeypatch.setattr("core.market_analyzer.build_data_context", _mock_build)
+        monkeypatch.setattr("core.market.analyzer.build_data_context", _mock_build)
 
         analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
         assert not analyzer.features_df.empty, f"features_df should not be empty, shape={analyzer.features_df.shape}"
@@ -220,8 +220,8 @@ class TestFeaturesDF:
 
     def test_features_df_tolerates_partial_nan(self, monkeypatch):
         """features_df should retain rows even when one column has NaN at a few spots."""
+        from core.market.analyzer import MarketAnalyzer
         from core.market.data_context import DataContext, Horizon
-        from core.market_analyzer import MarketAnalyzer
 
         fake_df = self._make_price_df(60)
         # Introduce NaN in High for a few rows (osc_high will be NaN there)
@@ -247,7 +247,7 @@ class TestFeaturesDF:
                 daily_bars=fake_df.copy(),
             )
 
-        monkeypatch.setattr("core.market_analyzer.build_data_context", _mock_build)
+        monkeypatch.setattr("core.market.analyzer.build_data_context", _mock_build)
 
         analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
         # With dropna(how='all'), rows with partial NaN are kept
@@ -257,8 +257,8 @@ class TestFeaturesDF:
 
     def test_features_df_empty_when_all_nan(self, monkeypatch):
         """features_df should have 0 rows when all data is NaN."""
+        from core.market.analyzer import MarketAnalyzer
         from core.market.data_context import DataContext, Horizon
-        from core.market_analyzer import MarketAnalyzer
 
         fake_df = self._make_price_df(10)
         fake_df["Adj Close"] = np.nan
@@ -285,7 +285,7 @@ class TestFeaturesDF:
                 daily_bars=fake_df.copy(),
             )
 
-        monkeypatch.setattr("core.market_analyzer.build_data_context", _mock_build)
+        monkeypatch.setattr("core.market.analyzer.build_data_context", _mock_build)
 
         analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
         assert analyzer.features_df.empty

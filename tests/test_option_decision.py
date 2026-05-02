@@ -2,7 +2,7 @@
 
 import pytest
 
-from core.option_decision import (
+from core.decision import (
     calculate_iv_percentile,
     calculate_iv_rank,
     compute_ev,

@@ -130,7 +130,6 @@ def test_coverage_report_empty():
 # ── Idempotent log persistence ────────────────────────────────────
 def test_regime_log_idempotent(monkeypatch):
     """Re-running append_today on the same date should update, not duplicate."""
-    import pandas as pd_mod
 
     from services import regime_service as svc
 

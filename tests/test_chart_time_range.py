@@ -11,8 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 
-from core.market_analyzer import MarketAnalyzer
-
+from core.market.analyzer import MarketAnalyzer
 
 # WHY: these tests hit live yfinance and are therefore subject to rate-limiting.
 # They provide valuable end-to-end validation but should not block CI.

@@ -14,8 +14,8 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from core.options.chain.analyzer import OptionsChainAnalyzer
 from core.options.chain.filters import filter_option_chain
-from core.options_chain_analyzer import OptionsChainAnalyzer
 from services.options_chain_preload import (
     build_preload_payload,
 )
@@ -281,7 +281,7 @@ def odds_with_vol():
     except ValueError:
         ticker = raw_ticker
     try:
-        from core.options_chain_analyzer import get_odds_with_vol_context
+        from core.options.chain.analyzer import get_odds_with_vol_context
 
         analyzer = OptionsChainAnalyzer(ticker)
         result = get_odds_with_vol_context(

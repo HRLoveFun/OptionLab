@@ -3,12 +3,12 @@
 import datetime as dt
 import logging
 
+from core.regime import SLOPE_LOOKBACK, SMA_WINDOW
 from data_pipeline.cleaning import clean_range
 from data_pipeline.data_ops import _cache_invalidate
 from data_pipeline.db import fetch_df, init_db
 from data_pipeline.downloader import upsert_raw_prices
 from data_pipeline.processing import process_frequencies
-from core.regime import SMA_WINDOW, SLOPE_LOOKBACK
 
 logger = logging.getLogger(__name__)
 

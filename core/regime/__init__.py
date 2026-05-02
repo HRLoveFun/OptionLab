@@ -9,8 +9,8 @@ Dependency graph:
 from core.regime.classify import classify_direction, classify_vol
 from core.regime.models import DirRegime, RegimeLabel, VolRegime
 from core.regime.series import (
-    SMA_WINDOW,
     SLOPE_LOOKBACK,
+    SMA_WINDOW,
     coverage_report,
     label_regime,
     label_series,

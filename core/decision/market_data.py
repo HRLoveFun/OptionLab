@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 
+from core.options.chain.analyzer import OptionsChainAnalyzer
 from core.options.chain.term_structure import atm_iv_for_expiry, iv_percentile, iv_rank
-from core.options_chain_analyzer import OptionsChainAnalyzer
 
 logger = logging.getLogger(__name__)
 

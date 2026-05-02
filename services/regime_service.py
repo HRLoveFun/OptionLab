@@ -28,7 +28,6 @@ from core.regime import (
 )
 from data_pipeline.data_ops import DataService
 from data_pipeline.db import fetch_df, init_db
-
 from services.regime_ops._bootstrap import (
     BOOTSTRAP_DAYS,
     MIN_TRADING_ROWS,

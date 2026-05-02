@@ -16,7 +16,6 @@ import pytest
 
 from data_pipeline.db import get_conn, init_db
 
-
 _JOB_ID_RE = re.compile(r'STREAMING_JOB_ID\s*=\s*"([^"]+)"')
 
 
@@ -88,7 +87,7 @@ class TestFeaturesDF:
     def test_good_data_produces_nonempty_features(self, _patch_downloads):
         """With 30 rows of price data, features_df should have ~29 rows."""
         _seed_clean_prices("NVDA", 30)
-        from core.market_analyzer import MarketAnalyzer
+        from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
         assert analyzer.is_data_valid()
@@ -98,7 +97,7 @@ class TestFeaturesDF:
     def test_nan_only_filler_rows_produce_empty_features(self, _patch_downloads):
         """NaN-only filler rows from clean_range should not fool is_valid."""
         _seed_clean_prices("NVDA", 5, nan_only=True)
-        from core.market_analyzer import MarketAnalyzer
+        from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
         assert not analyzer.is_data_valid()
@@ -107,7 +106,7 @@ class TestFeaturesDF:
     def test_empty_db_no_download(self, _patch_downloads):
         """Empty DB + failed download → proper error, no crash."""
         init_db()
-        from core.market_analyzer import MarketAnalyzer
+        from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
         assert not analyzer.is_data_valid()
@@ -138,7 +137,7 @@ class TestFeaturesDF:
                     )
             conn.commit()
 
-        from core.market_analyzer import MarketAnalyzer
+        from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
         assert analyzer.is_data_valid()
@@ -148,7 +147,7 @@ class TestFeaturesDF:
     def test_single_row_produces_empty_features(self, _patch_downloads):
         """Only 1 row of data → shift(1) creates NaN → no valid features."""
         _seed_clean_prices("NVDA", 1)
-        from core.market_analyzer import MarketAnalyzer
+        from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
         # 1 row is valid data, but after shift(1) → 0 feature rows
@@ -173,6 +172,7 @@ class TestFeaturesDF:
 def client(_patch_downloads):
     """Create Flask test client with isolated DB."""
     import app as flask_app
+
     from data_pipeline import data_ops as _ds
     from data_pipeline import job_cache as _jc
 
