@@ -14,15 +14,6 @@ import pytest
 from data_pipeline import job_cache as jc
 
 
-@pytest.fixture
-def client():
-    from app import app
-
-    app.config["TESTING"] = True
-    with app.test_client() as c:
-        yield c
-
-
 @pytest.fixture(autouse=True)
 def _reset_cache():
     jc._reset()
@@ -63,7 +54,7 @@ class TestPostSkeleton:
 
     def test_post_with_invalid_form_does_not_create_job(self, client):
         # Empty ticker should fail validation before job creation.
-        resp = client.post("/", data={"ticker": "", "frequency": "D"})
+        client.post("/", data={"ticker": "", "frequency": "D"})
         # Either re-renders form with error or 400 — either way, no job.
         assert jc._size() == 0
 

@@ -8,9 +8,13 @@ Also provides detection and cross-format conversion:
   - futu_to_yahoo(): "US.AAPL" → "AAPL", "HK.00700" → "0700.HK"
   - yahoo_to_futu(): "AAPL" → "US.AAPL", "0700.HK" → "HK.00700"
   - normalize_ticker(): accept either format, return (yahoo, futu) pair
+  - parse_tickers(): parse comma/newline separated tickers, deduplicate, max 6
 """
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 FUTU_MARKETS = {"US", "HK", "SH", "SZ", "SG", "JP", "AU", "MY", "CA", "FX"}
 
@@ -214,3 +218,22 @@ def from_futu_ticker(futu_ticker: str) -> tuple[str, str]:
     if market not in FUTU_MARKETS:
         raise ValueError(f"Unknown market: {market}")
     return symbol.strip(), market
+
+
+def parse_tickers(raw: str) -> list[str]:
+    """Parse comma/newline separated tickers, deduplicate, max 6.
+
+    Accepts both futu-format (US.NVDA) and yahoo-format (NVDA).
+    Normalizes all to yahoo format for data pipeline consumption.
+    """
+    raw_parts = [t.strip().upper() for t in re.split(r"[,\n]+", raw) if t.strip()]
+    tickers: list[str] = []
+    for t in raw_parts:
+        try:
+            yahoo, _futu = normalize_ticker(t)
+            if yahoo and yahoo not in tickers:
+                tickers.append(yahoo)
+        except ValueError:
+            # Skip invalid tickers silently
+            logger.warning("Skipping invalid ticker: %s", t)
+    return tickers[:6]

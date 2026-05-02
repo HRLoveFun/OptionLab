@@ -2,8 +2,49 @@
 
 import pytest
 
+# ── Flask test client ─────────────────────────────────────────────
 
-# Use in-memory or temp DB for tests — avoid touching the real database
+
+@pytest.fixture
+def client():
+    """Create a Flask test client with isolated DB."""
+    from app import app
+
+    app.config["TESTING"] = True
+    with app.test_client() as c:
+        yield c
+
+
+# ── Market-review L1 cache helpers ────────────────────────────────
+
+
+@pytest.fixture
+def clear_mr_cache():
+    """Return a helper that clears the market_review L1 cache.
+
+    Usage::
+
+        def test_something(clear_mr_cache):
+            clear_mr_cache()
+            ...
+    """
+    try:
+        from core.market_review import _mr_cache, _mr_cache_lock
+    except ImportError:
+        yield lambda: None
+        return
+
+    def _clear():
+        with _mr_cache_lock:
+            _mr_cache.clear()
+
+    _clear()
+    yield _clear
+
+
+# ── DB isolation ──────────────────────────────────────────────────
+
+
 @pytest.fixture(autouse=True)
 def _isolate_db(monkeypatch, tmp_path):
     """Redirect DB_PATH to a temporary directory for every test.
