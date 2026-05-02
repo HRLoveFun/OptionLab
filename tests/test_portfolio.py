@@ -11,7 +11,7 @@ from datetime import date, timedelta
 import pytest
 
 from core.portfolio import Position, aggregate_greeks, attribute_pnl
-from core.strategies import Leg, long_call
+from core.strategies import long_call
 
 
 def _pos(spot=100.0, days_ago=5):

@@ -10,7 +10,7 @@ Contracts:
 Dependencies UPWARD:
   - pandas, numpy
 Dependencies DOWNWARD:
-  - core.options_chain_analyzer (backward-compat adapter)
+  - core.options.chain.analyzer
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-import numpy as np
 import pandas as pd
 
 from core.options.chain.metrics import expected_move, max_pain, skew_25d

@@ -49,7 +49,8 @@ def _fake_chain(spot: float = 100.0, expiry: str = "2099-12-31"):
 def patched(monkeypatch):
     monkeypatch.setattr(sb, "fetch_option_chain", lambda t: _fake_chain())
     # Skip DB lookup for vol context — return None
-    monkeypatch.setattr(sb.DataService, "get_cleaned_daily", staticmethod(lambda *a, **kw: pd.DataFrame()))
+    from data_pipeline import data_ops as _dops
+    monkeypatch.setattr(_dops.DataService, "get_cleaned_daily", staticmethod(lambda *a, **kw: pd.DataFrame()))
     return monkeypatch
 
 

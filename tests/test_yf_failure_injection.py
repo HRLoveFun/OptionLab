@@ -40,7 +40,6 @@ from data_pipeline.data_ops import (
 from data_pipeline.db import fetch_df, init_db, upsert_many
 from data_pipeline.downloader import _download_yf, upsert_raw_prices
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

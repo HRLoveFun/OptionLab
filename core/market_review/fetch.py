@@ -23,7 +23,6 @@ import time
 import pandas as pd
 
 from data_pipeline.yf_client import fetch_close_panel
-from utils.data_utils import calculate_recent_extreme_change
 
 logger = logging.getLogger(__name__)
 

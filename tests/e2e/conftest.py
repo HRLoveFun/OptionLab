@@ -245,9 +245,8 @@ def _free_port() -> int:
 def live_server(_e2e_db: str) -> Iterator[str]:
     """Start the Flask app in a background thread, yield its base URL."""
     # Import app *after* MARKET_DB_PATH is set so init_db() targets the temp DB.
-    from werkzeug.serving import make_server
-
     from app import app as flask_app
+    from werkzeug.serving import make_server
 
     flask_app.config["TESTING"] = True
 

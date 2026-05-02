@@ -3,10 +3,10 @@
 import gc
 import logging
 
-from core.market_analyzer import MarketAnalyzer
+from core.market.analyzer import MarketAnalyzer
+from services.market_service import MarketService
 from utils.utils import exclusive_month_end
 
-from services.market_service import MarketService
 from ._assessment import _generate_assessment
 from ._sizing import calculate_position_size
 from ._statistical import _generate_statistical_analysis

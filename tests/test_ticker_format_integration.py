@@ -150,7 +150,7 @@ class TestOptionsChainAnalyzerFutuInit:
 
     def test_yahoo_ticker_converted_in_init(self):
         """Passing 'NVDA' (yahoo-format) must call futu provider with 'US.NVDA'."""
-        from core.options_chain_analyzer import OptionsChainAnalyzer
+        from core.options.chain.analyzer import OptionsChainAnalyzer
 
         fake_result = {
             "expirations": ["2026-04-17"],
@@ -220,7 +220,7 @@ class TestMarketAnalyzerFeaturesNotEmpty:
 
     def _build_analyzer_with_mock_data(self, start_date, end_date=None, frequency="D", data_days=60):
         """Create a MarketAnalyzer with mocked price data."""
-        from core.market_analyzer import MarketAnalyzer
+        from core.market.analyzer import MarketAnalyzer
 
         fake_df = _make_daily_ohlcv(days=data_days, start="2025-12-01")
 

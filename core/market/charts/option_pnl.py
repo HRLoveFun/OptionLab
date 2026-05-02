@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - matplotlib, core._shared.plotting
 Dependencies DOWNWARD:
-  - core.market_analyzer
+  - core.market.analyzer
 """
 
 from __future__ import annotations

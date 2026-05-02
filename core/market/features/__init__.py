@@ -17,7 +17,7 @@ Dependencies DOWNWARD:
 from core.market.features._horizon import apply_horizon, compute_effective_end
 from core.market.features.osc import osc, osc_high, osc_low
 from core.market.features.regime_segments import bull_bear_segments
-from core.market.features.returns import price_returns, price_difference
+from core.market.features.returns import price_difference, price_returns
 from core.market.features.volatility import calculate_volatility, hv_context
 
 __all__ = [

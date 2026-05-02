@@ -12,6 +12,8 @@ from core.market_review.fetch import (
     BENCHMARKS,
     _mr_cache,
     _mr_cache_lock,
+)
+from core.market_review.fetch import (
     fetch_market_data as _fetch_market_data,
 )
 from core.market_review.timeseries import market_review_timeseries

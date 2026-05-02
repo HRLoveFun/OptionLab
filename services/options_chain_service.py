@@ -6,7 +6,7 @@ all charts / tables as a single result dictionary for the Flask route.
 import logging
 import math
 
-from core.options_chain_analyzer import OptionsChainAnalyzer, liquidity_score
+from core.options.chain.analyzer import OptionsChainAnalyzer, liquidity_score
 from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)

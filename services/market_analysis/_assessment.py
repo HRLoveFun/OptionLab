@@ -1,6 +1,5 @@
 """Assessment slice generation (projections, option analysis, position sizing)."""
 
-import gc
 import logging
 
 from ._sizing import calculate_position_size

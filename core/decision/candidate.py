@@ -15,8 +15,8 @@ import logging
 
 import numpy as np
 
+from core.options.chain.analyzer import OptionsChainAnalyzer
 from core.options.greeks.black_scholes import greeks_vectorized
-from core.options_chain_analyzer import OptionsChainAnalyzer
 
 logger = logging.getLogger(__name__)
 

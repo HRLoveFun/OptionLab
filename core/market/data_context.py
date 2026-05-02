@@ -17,7 +17,6 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-import numpy as np
 import pandas as pd
 
 from core._shared.types import Frequency

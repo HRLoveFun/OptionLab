@@ -17,11 +17,9 @@ from typing import Any
 import pandas as pd
 
 from core import strategies as strategies_mod
-from data_pipeline.data_ops import DataService
 from data_pipeline.yf_client import fetch_option_chain
-from utils.api_errors import ApiError
-
 from services.strategy_builder_core import TEMPLATES, _mid, _row_for_strike, _vol_context
+from utils.api_errors import ApiError
 
 logger = logging.getLogger(__name__)
 

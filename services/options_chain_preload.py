@@ -8,7 +8,7 @@ Contracts:
   - build_preload_payload(ticker) -> dict
   - expiry_df_to_records(df, expiry) -> list[dict]
 Dependencies UPWARD:
-  - core.options_chain_analyzer (OptionsChainAnalyzer, _dte)
+  - core.options.chain.analyzer (OptionsChainAnalyzer, _dte)
 Dependencies DOWNWARD:
   - routes/options.py
 """
@@ -21,7 +21,7 @@ from typing import Any
 
 import pandas as pd
 
-from core.options_chain_analyzer import OptionsChainAnalyzer, _dte
+from core.options.chain.analyzer import OptionsChainAnalyzer, _dte
 
 logger = logging.getLogger(__name__)
 

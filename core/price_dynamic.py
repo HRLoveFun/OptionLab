@@ -10,8 +10,6 @@ PriceDynamic.__init__ continue to work during the transition.
 import datetime as dt
 import logging
 
-import pandas as pd
-
 from core.market.data_context import build_data_context
 from core.signals.hv import hv_context, vol_premium_context
 
