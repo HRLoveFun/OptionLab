@@ -62,14 +62,15 @@ def render_dynamics(
                 label = f"High Proj ({risk_threshold}%)"
                 if last is not None and np.isfinite(last):
                     label += f" *{last:.2f}"
-                ax.plot(t_idx, high_proj.to_numpy(), color="darkgreen", linewidth=1.2, linestyle="--", label=label, alpha=0.6)
+                ax.plot(t_idx, high_proj.to_numpy(), color="darkgreen", linewidth=2.0, linestyle="--", label=label, alpha=0.8, zorder=3)
 
             if low_proj is not None and not low_proj.empty:
                 last = low_proj.iloc[-1]
-                label = f"Low Proj ({risk_threshold}%)"
+                low_threshold = 100 - risk_threshold
+                label = f"Low Proj ({low_threshold}%)"
                 if last is not None and np.isfinite(last):
                     label += f" *{last:.2f}"
-                ax.plot(t_idx, low_proj.to_numpy(), color="darkred", linewidth=1.2, linestyle="--", label=label, alpha=0.6)
+                ax.plot(t_idx, low_proj.to_numpy(), color="darkred", linewidth=2.0, linestyle="--", label=label, alpha=0.8, zorder=3)
 
             ax.axhline(y=0, color="gray", linestyle="-", linewidth=1, alpha=0.3)
             ax.set_xlabel("Index", fontsize=11)

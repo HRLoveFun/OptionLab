@@ -47,7 +47,7 @@ function createPositionRow(defaultTicker) {
         </td>
         <td>
             <button type="button" class="btn-delete" onclick="deletePositionRow(this)">
-                <i class="fas fa-trash"></i>
+                Remove
             </button>
         </td>`;
     return row;
@@ -207,12 +207,12 @@ function getPositionsData() {
 async function runPortfolioAnalysis() {
     const positions = getPositionsData();
     if (positions.length === 0) {
-        alert('请至少添加一个有效持仓');
+        alert('Please add at least one valid position');
         return;
     }
 
     const btn = document.getElementById('portfolio-analysis-btn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析中...';
+    btn.innerHTML = 'Analyzing...';
     btn.disabled = true;
 
     const signal = window.appState.aborts.begin('portfolio');
@@ -235,13 +235,13 @@ async function runPortfolioAnalysis() {
             const panel = document.getElementById('portfolio-results-panel');
             if (panel) { panel.style.display = 'block'; panel.scrollIntoView({ behavior: 'smooth' }); }
         } else {
-            alert('分析失败：' + (data.message || 'Unknown error'));
+            alert('Analysis failed: ' + (data.message || 'Unknown error'));
         }
     } catch (e) {
         if (e.name === 'AbortError') return;
         alert('Network error: ' + e.message);
     } finally {
-        btn.innerHTML = '<i class="fas fa-chart-pie"></i> 组合分析';
+        btn.innerHTML = 'Portfolio Analysis';
         btn.disabled = false;
     }
 }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Market Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Font Awesome removed for clean UI -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
@@ -28,14 +28,13 @@
     <div id="health-banner" role="status" aria-live="polite"
          style="display:none; padding:8px 16px; background:#fffbeb; color:#92400e;
                 border-bottom:1px solid #fcd34d; font-size:13px; text-align:center; position:relative;">
-        <i class="fas fa-exclamation-triangle"></i>
         <span id="health-banner-msg">Data quality degraded.</span>
         <a href="/health/data" target="_blank" style="color:#92400e; text-decoration:underline; margin-left:8px;">details</a>
         <button type="button" id="health-banner-dismiss"
                 aria-label="Dismiss"
                 style="position:absolute; right:12px; top:50%; transform:translateY(-50%);
                        background:transparent; border:none; color:#92400e; cursor:pointer;
-                       font-size:16px; padding:0 6px; line-height:1;">&times;</button>
+                       font-size:11px; padding:0 6px; line-height:1;">Close</button>
     </div>
     <script>
         (function pollHealth(){
@@ -75,7 +74,6 @@
     <header class="site-header">
         <div class="header-inner">
             <div class="header-brand">
-                <span class="brand-icon"><i class="fas fa-wave-square"></i></span>
                 <div>
                     <h1>Market Dashboard</h1>
                     <p class="subtitle">Options Strategy &amp; Market Analysis</p>
@@ -84,7 +82,7 @@
             {% if ticker %}
             <div class="header-badge">
                 <span class="badge-ticker">{{ ticker }}</span>
-                <span class="badge-meta">{{ frequency_display or frequency }} &middot; {{ side_bias or 'Natural' }}</span>
+                <span class="badge-meta">{{ frequency_display or frequency }}, {{ side_bias or 'Natural' }}</span>
             </div>
             {% endif %}
         </div>
@@ -96,53 +94,43 @@
             <nav class="tab-nav">
                 <div class="tab-section-label">Setup</div>
                 <button class="tab-btn {% if not streaming_mode %}active{% endif %}" data-tab="tab-parameter">
-                    <i class="fas fa-sliders-h"></i>
                     <span>Parameter</span>
                 </button>
 
                 <div class="tab-section-label">Overview</div>
                 {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
                 <button class="tab-btn" data-tab="tab-summary">
-                    <i class="fas fa-layer-group"></i>
-                    <span>综合</span>
+                    <span>Summary</span>
                 </button>
                 {% endif %}
                 <button class="tab-btn {% if market_review_table is defined and market_review_table %}active{% endif %}" data-tab="tab-market-review">
-                    <i class="fas fa-table"></i>
                     <span>Market Review</span>
                 </button>
                 <button class="tab-btn" data-tab="tab-statistical-analysis">
-                    <i class="fas fa-chart-scatter"></i>
                     <span>Statistical Analysis</span>
                 </button>
 
                 <div class="tab-section-label">Forecast</div>
                 <button class="tab-btn" data-tab="tab-market-assessment">
-                    <i class="fas fa-binoculars"></i>
                     <span>Assessment &amp; Projections</span>
                 </button>
                 <button class="tab-btn" data-tab="tab-regime">
-                    <i class="fas fa-chart-line"></i>
                     <span>Market Regime</span>
                 </button>
                 <button class="tab-btn" data-tab="tab-odds">
-                    <i class="fas fa-dice"></i>
                     <span>Expiry Odds</span>
                 </button>
 
                 <div class="tab-section-label">Options</div>
                 <button class="tab-btn" data-tab="tab-option-chain">
-                    <i class="fas fa-th"></i>
                     <span>Option Chain</span>
                 </button>
                 <button class="tab-btn" data-tab="tab-options-chain">
-                    <i class="fas fa-link"></i>
                     <span>Volatility Analysis</span>
                 </button>
 
                 <div class="tab-section-label">System</div>
                 <button class="tab-btn" data-tab="tab-config">
-                    <i class="fas fa-cog"></i>
                     <span>Config</span>
                 </button>
             </nav>

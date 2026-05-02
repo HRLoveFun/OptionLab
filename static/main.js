@@ -161,10 +161,10 @@ function validateTicker() {
     validationTimeout = setTimeout(() => {
         const tickers = parseTickers(rawInput);
         if (tickers.length === 0) {
-            if (validationDiv) validationDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> No valid symbols';
+            if (validationDiv) validationDiv.innerHTML = 'No valid symbols';
             return;
         }
-        if (validationDiv) validationDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
+        if (validationDiv) validationDiv.innerHTML = 'Validating...';
 
         fetch('/api/validate_tickers', {
             method: 'POST',
@@ -178,9 +178,8 @@ function validateTicker() {
                     if (badgesDiv) {
                         badgesDiv.innerHTML = Object.entries(results).map(([t, info]) => {
                             const cls = info.valid ? 'ticker-badge valid' : 'ticker-badge invalid';
-                            const icon = info.valid ? 'check-circle' : 'exclamation-circle';
                             const priceTxt = info.valid && info.price ? ` $${info.price.toFixed(2)}` : '';
-                            return `<span class="${cls}"><i class="fas fa-${icon}"></i> ${escapeHtml(t)}${priceTxt}</span>`;
+                            return `<span class="${cls}">${escapeHtml(t)}${priceTxt}</span>`;
                         }).join(' ');
                     }
                     const firstValid = Object.entries(results).find(([, info]) => info.valid);
@@ -190,10 +189,10 @@ function validateTicker() {
                     const totalCount = Object.keys(results).length;
                     if (validationDiv) {
                         if (validCount === totalCount) {
-                            validationDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${validCount} ticker(s) valid`;
+                            validationDiv.innerHTML = `${validCount} ticker(s) valid`;
                             validationDiv.className = 'ticker-validation valid';
                         } else {
-                            validationDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${validCount}/${totalCount} valid`;
+                            validationDiv.innerHTML = `${validCount}/${totalCount} valid`;
                             validationDiv.className = 'ticker-validation warning';
                         }
                     }
@@ -206,7 +205,7 @@ function validateTicker() {
             })
             .catch(() => {
                 if (validationDiv) {
-                    validationDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+                    validationDiv.innerHTML = 'Error';
                     validationDiv.className = 'ticker-validation warning';
                 }
                 currentPrice = null;
@@ -225,7 +224,7 @@ document.getElementById('analysis-form')?.addEventListener('submit', function (e
     document.getElementById('option_position').value = JSON.stringify(optionsData);
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+    submitBtn.innerHTML = 'Analyzing...';
     submitBtn.disabled = true;
     this.submit();
     setTimeout(() => {

@@ -116,7 +116,7 @@ function _ocRenderKpiStrip(data, activeExp) {
         ? Number(data.spot) : null;
     setCard('spot',
         spot !== null ? `$${spot.toFixed(2)}` : '—',
-        data.ticker ? `${data.ticker} · live` : 'Live');
+        data.ticker ? `${data.ticker}, live` : 'Live');
 
     const expCount = (data.expirations || []).length;
     setCard('expirations', String(expCount),
@@ -198,7 +198,7 @@ function _ocRenderChain(calls, puts) {
     }
 
     const spotRow = spot !== null && spot !== undefined
-        ? `<div class="oc-spot-row"><span class="oc-spot-label"><i class="fas fa-circle-dot"></i> Spot&nbsp;&nbsp;<strong>${Number(spot).toFixed(2)}</strong></span></div>`
+        ? `<div class="oc-spot-row"><span class="oc-spot-label">Spot&nbsp;&nbsp;<strong>${Number(spot).toFixed(2)}</strong></span></div>`
         : '';
 
     let html = '';

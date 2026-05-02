@@ -49,7 +49,7 @@
     }
 
     /* Compose a human-readable composite regime label, e.g.
-       "Mid-Vol · Up-Trend".  Pure formatting — no inference. */
+       "Mid-Vol - Up-Trend".  Pure formatting — no inference. */
     function composeRegimeTitle(volRegime, dirRegime) {
         const pretty = (v) => {
             if (!v) return '—';
@@ -59,7 +59,7 @@
                 .toLowerCase()
                 .replace(/(^|[\s-])\w/g, c => c.toUpperCase());
         };
-        return `${pretty(volRegime)} · ${pretty(dirRegime)}`;
+        return `${pretty(volRegime)} - ${pretty(dirRegime)}`;
     }
 
     async function fetchJSON(url, opts) {
@@ -82,7 +82,6 @@
         const incomplete = !data.data_complete;
         const incompleteNote = incomplete
             ? '<div class="semantic-warn" style="margin-top:.5rem;font-size:.85rem;">' +
-            '<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' +
             'Data incomplete — regime may be UNKNOWN.</div>'
             : '';
         // Hero layout — Design Principle P1.
@@ -240,8 +239,8 @@
         if (!el) return;
         if (!coverage) { el.innerHTML = '<span class="muted">—</span>'; return; }
         const met = coverage.charter_exit_condition_met
-            ? '<span style="color:#10b981;font-weight:600;"><i class="fas fa-check"></i> Met</span>'
-            : '<span style="color:#ef4444;font-weight:600;"><i class="fas fa-times"></i> Not met</span>';
+            ? '<span style="color:#10b981;font-weight:600;">Met</span>'
+            : '<span style="color:#ef4444;font-weight:600;">Not met</span>';
         el.innerHTML = `
             <div style="display:flex;gap:2rem;flex-wrap:wrap;">
                 <div><div class="muted" style="font-size:.8rem;">Vol regimes observed</div>
@@ -285,7 +284,7 @@
             renderTransitions((data.coverage && data.coverage.regime_transitions) || []);
             const tag = document.getElementById('regime-source-tag');
             if (tag) {
-                tag.innerHTML = `<i class="fas fa-${data.source === 'log' ? 'database' : 'bolt'}"></i> source: ${data.source}`;
+                tag.innerHTML = `source: ${data.source}`;
             }
         } catch (e) {
             console.error('regime history failed', e);
@@ -308,7 +307,7 @@
 
     async function doBackfill() {
         const btn = document.getElementById('regime-backfill-btn');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Backfilling…'; }
+        if (btn) { btn.disabled = true; btn.innerHTML = 'Backfilling…'; }
         try {
             const data = await fetchJSON('/api/regime/backfill', {
                 method: 'POST',
@@ -320,7 +319,7 @@
         } catch (e) {
             alert('Backfill failed: ' + e.message);
         } finally {
-            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-database"></i> Backfill &amp; Persist'; }
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Backfill &amp; Persist'; }
         }
     }
 

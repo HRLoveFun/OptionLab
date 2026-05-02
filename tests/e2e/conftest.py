@@ -320,7 +320,7 @@ FAKE_MARKET_REVIEW_TS: dict[str, Any] = {
             "rolling_vol": [0.15, 0.16, 0.17, 0.18],
         }
     ],
-    "periods": ["1M", "1Q", "YTD", "ETD"],
+    "periods": ["1M", "1Q", "YTD"],
 }
 
 

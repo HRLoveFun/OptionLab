@@ -1,13 +1,12 @@
 <div class="tab-content {% if not streaming_mode %}active{% endif %}" id="tab-parameter">
     <div class="panel-header">
-        <h2><i class="fas fa-sliders-h"></i> Parameters</h2>
+        <h2>Parameters</h2>
         <p class="panel-desc">Configure analysis inputs and optional option positions.</p>
     </div>
 
     <form method="post" id="analysis-form">
         {% if error %}
         <div class="alert alert-error">
-            <i class="fas fa-exclamation-triangle"></i>
             <span>{{ error }}</span>
         </div>
         {% endif %}
@@ -16,12 +15,12 @@
             <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
                 <span>Analysis Settings</span>
                 <button type="submit" class="btn-primary">
-                    <i class="fas fa-play"></i> Run
+                    Run
                 </button>
             </div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label for="ticker">Ticker Symbols（多个用逗号分隔）</label>
+                    <label for="ticker">Ticker Symbols (comma-separated)</label>
                     <input type="text" id="ticker" name="ticker" value=""
                            placeholder="e.g. AAPL, SPY, ^SPX" required>
                     <div class="ticker-validation" id="ticker-validation"></div>
@@ -34,7 +33,7 @@
                         <input type="month" id="start_time" name="start_time"
                                value="{{ (start_time[:4] + '-' + start_time[4:6]) if start_time and start_time|length == 6 else start_time or '' }}"
                                required>
-                        <span class="range-separator">→</span>
+                        <span class="range-separator">to</span>
                         <input type="month" id="end_time" name="end_time"
                                value="{{ (end_time[:4] + '-' + end_time[4:6]) if end_time and end_time|length == 6 else end_time or '' }}"
                                placeholder="latest">
@@ -67,9 +66,9 @@
         <!-- Positions (always visible) -->
         <div class="form-card" id="positions-card">
             <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                <span><i class="fas fa-layer-group"></i> Positions</span>
+                <span>Positions</span>
                 <button type="button" class="btn-primary" id="portfolio-analysis-btn" onclick="runPortfolioAnalysis()">
-                    <i class="fas fa-chart-pie"></i> 组合分析
+                    Portfolio Analysis
                 </button>
             </div>
             <div class="options-table-container">
@@ -90,7 +89,7 @@
                 </table>
                 <div class="add-row-container">
                     <button type="button" class="btn-ghost" onclick="addPositionRow()">
-                        <i class="fas fa-plus"></i> Add Position
+                        Add Position
                     </button>
                 </div>
             </div>

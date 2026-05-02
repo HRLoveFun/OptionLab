@@ -2,10 +2,10 @@
 <div id="tab-options-chain-content">
     {% if oc_snapshot %}
     <div class="meta-bar">
-        <span class="meta-chip"><i class="fas fa-dollar-sign"></i> Spot: {{ oc_snapshot.spot | round(2) }}</span>
-        <span class="meta-chip"><i class="fas fa-calendar"></i> Expiries: {{ oc_snapshot.expiries | length }}</span>
-        <span class="meta-chip"><i class="fas fa-crosshairs"></i> ATM: {{ oc_snapshot.atm_strike }}</span>
-        <span class="meta-chip"><i class="fas fa-clock"></i> {{ oc_snapshot.timestamp }}</span>
+        <span class="meta-chip">Spot: {{ oc_snapshot.spot | round(2) }}</span>
+        <span class="meta-chip">Expiries: {{ oc_snapshot.expiries | length }}</span>
+        <span class="meta-chip">ATM: {{ oc_snapshot.atm_strike }}</span>
+        <span class="meta-chip">{{ oc_snapshot.timestamp }}</span>
     </div>
 
     {% if oc_key_metrics %}
@@ -101,9 +101,9 @@
 
     {% else %}
     <div class="empty-state">
-        <i class="fas fa-link empty-icon"></i>
+
         {% if oc_error is defined and oc_error %}
-        <p style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> Volatility analysis error: {{ oc_error }}</p>
+        <p style="color:#ef4444;">Volatility analysis error: {{ oc_error }}</p>
         {% elif ticker is defined and ticker %}
         <p>Volatility analysis data was not available for <strong>{{ ticker }}</strong>.</p>
         {% else %}

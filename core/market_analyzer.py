@@ -178,10 +178,25 @@ class MarketAnalyzer:
             if daily_bars is None or daily_bars.empty or "Close" not in daily_bars.columns:
                 return None
             daily_close = daily_bars["Close"]
+            logger.debug(
+                "generate_volatility_dynamics ticker=%s: bars=%d, range=%s to %s",
+                self.ticker,
+                len(daily_close),
+                daily_close.index[0].date(),
+                daily_close.index[-1].date(),
+            )
             h = self._ctx.horizon
             volatility = calculate_volatility(daily_close, self.frequency)
+            if volatility is not None and not volatility.empty:
+                logger.debug(
+                    "generate_volatility_dynamics ticker=%s: raw volatility len=%d, last=%.4f%%",
+                    self.ticker,
+                    len(volatility),
+                    volatility.iloc[-1],
+                )
             volatility = apply_horizon(volatility, h.start, h.end, h.user_provided_end, h.frequency)
             if volatility is None or volatility.empty:
+                logger.warning("generate_volatility_dynamics ticker=%s: volatility empty after horizon filter", self.ticker)
                 return None
             daily_close_filtered = apply_horizon(daily_close, h.start, h.end, h.user_provided_end, h.frequency)
             segs = bull_bear_segments(daily_close_filtered)

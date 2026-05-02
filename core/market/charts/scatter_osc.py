@@ -44,6 +44,11 @@ def render_scatter_osc(
             return None
         x = x.loc[common]
         y = y.loc[common]
+
+        if label_indices is None and len(x) > 0:
+            combined = (x.abs() + y.abs()).nlargest(min(5, len(x)))
+            label_indices = combined.index
+
         fig = _create_scatter_fig(x, y, label_indices=label_indices)
         return encode_figure(fig)
     except Exception as e:
@@ -97,11 +102,11 @@ def _add_highlight_labels(ax, x: pd.Series, y: pd.Series, label_indices):
         recent_only = [idx for idx in recent_indices if indices_to_label is None or idx not in indices_to_label]
 
         if top_only:
-            ax.scatter([x.loc[i] for i in top_only], [y.loc[i] for i in top_only], color="red", s=20, zorder=4, alpha=0.7)
+            ax.scatter([x.loc[i] for i in top_only], [y.loc[i] for i in top_only], color="red", s=80, zorder=4, alpha=0.8, edgecolors="darkred", linewidths=0.8)
         if recent_only:
-            ax.scatter([x.loc[i] for i in recent_only], [y.loc[i] for i in recent_only], color="blue", s=20, zorder=4, alpha=0.7)
+            ax.scatter([x.loc[i] for i in recent_only], [y.loc[i] for i in recent_only], color="blue", s=80, zorder=4, alpha=0.8, edgecolors="darkblue", linewidths=0.8)
         if both:
-            ax.scatter([x.loc[i] for i in both], [y.loc[i] for i in both], color="purple", s=20, zorder=5, alpha=0.7)
+            ax.scatter([x.loc[i] for i in both], [y.loc[i] for i in both], color="purple", s=80, zorder=5, alpha=0.8, edgecolors="indigo", linewidths=0.8)
 
         if indices_to_label:
             for idx in indices_to_label:
