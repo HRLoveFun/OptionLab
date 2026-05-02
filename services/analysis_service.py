@@ -225,7 +225,7 @@ class AnalysisService:
                     start_date=form_data["parsed_start_time"],
                     frequency=form_data["frequency"],
                     end_date=form_data.get("parsed_end_time"),
-                    price_dynamic=analyzer.price_dynamic,  # reuse already-loaded data
+                    price_data=analyzer._ctx,  # pass DataContext directly
                 )
 
                 if correlation_validator.is_data_valid():

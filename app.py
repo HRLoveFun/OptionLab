@@ -516,7 +516,7 @@ def option_chain():
     """
     ticker_sym = request.args.get("ticker", "").strip().upper()
     if not ticker_sym:
-        return jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}), 400
+        return jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required", "error": "ticker is required"}), 400
 
     try:
         ticker_sym, _ = normalize_ticker(ticker_sym)
@@ -531,19 +531,23 @@ def option_chain():
     try:
         result = OptionsChainService.fetch_records(ticker_sym)
         if not result.get("expirations"):
+            msg = f"No options available for {ticker_sym}"
             return jsonify({
                 "status": "error",
                 "code": "no_options",
-                "message": f"No options available for {ticker_sym}",
+                "message": msg,
+                "error": msg,
             }), 404
         result = _filter_option_chain(result, max_dte, moneyness_low, moneyness_high, max_contracts)
         return jsonify(result)
     except Exception as e:
         logger.error(f"Error fetching option chain for {ticker_sym}: {e}", exc_info=True)
+        msg = f"获取期权链失败: {str(e)}"
         return jsonify({
             "status": "error",
             "code": "option_chain_failed",
-            "message": f"获取期权链失败: {str(e)}",
+            "message": msg,
+            "error": msg,
         }), 500
 
 
