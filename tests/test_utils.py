@@ -2,7 +2,7 @@
 
 import datetime as dt
 
-from utils.utils import exclusive_month_end, parse_month_str
+from utils.date_helpers import exclusive_month_end, parse_month_str
 
 
 class TestParseMonthStr:

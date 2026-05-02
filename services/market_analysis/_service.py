@@ -5,7 +5,7 @@ import logging
 
 from core.market.analyzer import MarketAnalyzer
 from services.market_service import MarketService
-from utils.utils import exclusive_month_end
+from utils.date_helpers import exclusive_month_end
 
 from ._assessment import _generate_assessment
 from ._sizing import calculate_position_size

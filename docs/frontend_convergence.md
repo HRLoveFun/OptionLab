@@ -4,7 +4,7 @@ The frontend currently mixes three styles inherited from incremental
 refactors:
 
 1. **Vanilla module scripts** (`static/main.js`, `position.js`, `regime.js`,
-   `option-chain.js`, `market-review.js`) — direct DOM
+   `option-chain.js`, `market_review.js`) — direct DOM
    manipulation with `document.querySelector` and ad-hoc fetches.
 2. **Hand-rolled state machines** under `static/state/` — pub/sub via
    `eventBus.js`, panel/tab/cache state encapsulated in modules.

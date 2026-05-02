@@ -117,7 +117,7 @@ service.
   `templates/partials/tab_*.html` is the markup loaded into the matching
   HTMX placeholder by `/render/<kind>`.
 - [`static/main.js`](static/main.js) bootstraps the form and tab manager;
-  per-tab logic lives in `market-review.js`, `option-chain.js`,
+  per-tab logic lives in `market_review.js`, `option-chain.js`,
   `position.js`, `regime.js`.
 - [`static/api.js`](static/api.js) is the only `fetch` wrapper — it owns
   abort handling and error normalisation. Components must not call `fetch`

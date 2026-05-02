@@ -232,7 +232,7 @@ class TestMarketAnalyzerFeaturesNotEmpty:
             analyzer = MarketAnalyzer.__new__(MarketAnalyzer)
 
         # Manually replicate __init__ logic with mocked data
-        from core.price_dynamic import PriceDynamic
+        from core.market.price_dynamic import PriceDynamic
 
         with patch.object(
             PriceDynamic,

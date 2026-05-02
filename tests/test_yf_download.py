@@ -63,7 +63,7 @@ def clean_proxy():
     from dotenv import load_dotenv
 
     load_dotenv()
-    from utils.utils import init_yf_proxy
+    from utils.network import init_yf_proxy
 
     init_yf_proxy()
     _ensure_clean_proxy_env()

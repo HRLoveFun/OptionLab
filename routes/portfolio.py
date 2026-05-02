@@ -35,7 +35,7 @@ def portfolio_analysis():
         )
 
     try:
-        from services.portfolio_analysis import PortfolioAnalysisService
+        from services.portfolio_analysis_service import PortfolioAnalysisService
 
         result = PortfolioAnalysisService.run(positions, account_size, max_risk_pct)
         return jsonify(result)

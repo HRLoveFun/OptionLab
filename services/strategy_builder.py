@@ -2,11 +2,6 @@
 
 Bridges the gap between abstract strategy templates (``core.strategies``) and
 the real bid/ask quotes available in the current option chain.
-
-NOTE: This module now delegates helpers to ``services.strategy_builder_core``.
-The public entry-point ``build_from_chain`` remains here so that test
-monkey-patches on ``sb.fetch_option_chain`` and ``sb.DataService`` continue
-to work during the transition.
 """
 
 from __future__ import annotations
@@ -18,10 +13,130 @@ import pandas as pd
 
 from core import strategies as strategies_mod
 from data_pipeline.yf_client import fetch_option_chain
-from services.strategy_builder_core import TEMPLATES, _mid, _row_for_strike, _vol_context
 from utils.api_errors import ApiError
 
 logger = logging.getLogger(__name__)
+
+
+# ── Templates and helpers (formerly in strategy_builder_core) ───────
+
+TEMPLATES: dict[str, dict[str, Any]] = {
+    "long_call": {
+        "factory": "long_call",
+        "legs": [("call", "long", "k")],
+        "strikes": ["k"],
+    },
+    "long_put": {
+        "factory": "long_put",
+        "legs": [("put", "long", "k")],
+        "strikes": ["k"],
+    },
+    "short_call": {
+        "factory": "short_call",
+        "legs": [("call", "short", "k")],
+        "strikes": ["k"],
+    },
+    "short_put": {
+        "factory": "short_put",
+        "legs": [("put", "short", "k")],
+        "strikes": ["k"],
+    },
+    "bull_call_spread": {
+        "factory": "bull_call_spread",
+        "legs": [("call", "long", "k_long"), ("call", "short", "k_short")],
+        "strikes": ["k_long", "k_short"],
+    },
+    "bear_put_spread": {
+        "factory": "bear_put_spread",
+        "legs": [("put", "long", "k_long"), ("put", "short", "k_short")],
+        "strikes": ["k_long", "k_short"],
+    },
+    "iron_condor": {
+        "factory": "iron_condor",
+        "legs": [
+            ("put", "long", "k_put_long"),
+            ("put", "short", "k_put_short"),
+            ("call", "short", "k_call_short"),
+            ("call", "long", "k_call_long"),
+        ],
+        "strikes": ["k_put_long", "k_put_short", "k_call_short", "k_call_long"],
+    },
+    "long_straddle": {
+        "factory": "long_straddle",
+        "legs": [("call", "long", "k"), ("put", "long", "k")],
+        "strikes": ["k"],
+    },
+}
+
+
+def _row_for_strike(df: pd.DataFrame, strike: float) -> pd.Series | None:
+    """Return the chain row whose strike is closest to ``strike`` (within $1)."""
+    if df is None or df.empty or "strike" not in df.columns:
+        return None
+    diffs = (df["strike"] - strike).abs()
+    idx = diffs.idxmin()
+    if diffs.loc[idx] > 1.0:
+        return None
+    return df.loc[idx]
+
+
+def _mid(bid: float | None, ask: float | None, last: float | None) -> float | None:
+    """Mid of bid/ask; fall back to ``last`` only if both sides missing."""
+    b = float(bid) if bid is not None and not pd.isna(bid) else None
+    a = float(ask) if ask is not None and not pd.isna(ask) else None
+    if b is not None and a is not None and b > 0 and a > 0:
+        return (b + a) / 2.0
+    if last is not None and not pd.isna(last) and float(last) > 0:
+        return float(last)
+    return None
+
+
+def _vol_context(ticker: str, current_iv_pct: float | None) -> dict[str, Any]:
+    """Build the HV-percentile-based vol context.
+
+    Returns a structured block whose ``label`` is ``cheap`` / ``fair`` /
+    ``rich`` based on HV percentile (not IV percentile).
+    """
+    try:
+        from datetime import date, timedelta
+
+        from data_pipeline.data_ops import DataService
+        from core import signals as signals_mod
+
+        start = date.today() - timedelta(days=400)
+        df = DataService.get_cleaned_daily(ticker, start=start)
+    except Exception:  # noqa: BLE001
+        df = None
+    if df is None or df.empty or "close" not in df.columns:
+        return {
+            "available": False,
+            "reason": "no_history",
+            "note": "Need ≥60 daily closes; try after running a daily update.",
+        }
+    close = pd.to_numeric(df["close"], errors="coerce").dropna()
+    hv = signals_mod.hv_pct(close, n=20)
+    hv_pctile = signals_mod.hv_percentile(close, n=20, lookback=252)
+    label = "fair"
+    if hv_pctile is not None:
+        if hv_pctile <= 25:
+            label = "cheap"
+        elif hv_pctile >= 75:
+            label = "rich"
+    return {
+        "available": True,
+        "hv_20_pct": hv,
+        "hv_20_percentile": hv_pctile,
+        "current_atm_iv_pct": current_iv_pct,
+        "label": label,
+        "method": "hv_percentile",
+        "disclaimer": (
+            "Vol cheap/rich is judged from HV percentile (realized), "
+            "not IV percentile — yfinance has no option-chain history."
+        ),
+    }
+
+
+# ── Public entry-point ──────────────────────────────────────────────
 
 
 def build_from_chain(

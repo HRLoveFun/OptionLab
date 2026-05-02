@@ -10,8 +10,9 @@ import logging
 
 from core.market.data_context import build_data_context
 from core.market_review import market_review
+from core.market_review.timeseries import market_review_timeseries
 from utils.ticker_utils import is_valid_ticker_format
-from utils.utils import exclusive_month_end
+from utils.date_helpers import exclusive_month_end
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,14 @@ class MarketService:
             logger.error(f"Error validating ticker {ticker}: {e}")
             return False, f"error_validating_ticker: {str(e)}"
 
+
+    @staticmethod
+    def market_review_timeseries(ticker, start_date=None):
+        """
+        Generate market review time-series data for a ticker.
+        Returns dict with prices, cum_return, rolling_vol per asset.
+        """
+        return market_review_timeseries(ticker, start_date)
 
     @staticmethod
     def generate_market_review(form_data):

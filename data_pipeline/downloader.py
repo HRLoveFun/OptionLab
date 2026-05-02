@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-from utils.utils import yf_throttle
+from utils.network import yf_throttle
 
 from . import PipelineResult
 from .db import fetch_df, upsert_many
