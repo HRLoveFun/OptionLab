@@ -291,7 +291,7 @@ class TestManualUpdateGracefulFailure:
         result = DataService.manual_update("E2E_TKR")
         assert result is False
 
-    @patch("data_pipeline.data_service.upsert_raw_prices")
+    @patch("data_pipeline.downloader.upsert_raw_prices")
     def test_manual_update_returns_false_on_pipeline_error_field(self, mock_upsert):
         """Even if downloader returns ok=False (rather than raising), we degrade gracefully."""
         init_db()

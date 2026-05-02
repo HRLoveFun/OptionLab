@@ -40,18 +40,18 @@ def _reset_state():
 
 
 class TestCooldown:
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     def test_first_call_runs_pipeline(self, mock_dl, mock_cl, mock_pr):
         init_db()
         result = DataService.manual_update("COOL1")
         assert result is True
         mock_dl.assert_called_once()
 
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     def test_second_call_within_cooldown_skips(self, mock_dl, mock_cl, mock_pr):
         init_db()
         DataService.manual_update("COOL2")
@@ -59,9 +59,9 @@ class TestCooldown:
         assert result is False
         assert mock_dl.call_count == 1  # only first call
 
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     def test_different_tickers_not_blocked(self, mock_dl, mock_cl, mock_pr):
         init_db()
         DataService.manual_update("TCKR_A")
@@ -70,7 +70,7 @@ class TestCooldown:
         assert mock_dl.call_count == 2
 
     @patch(
-        "data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(ok=False, error="download_failed")
+        "data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(ok=False, error="download_failed")
     )
     def test_failed_pipeline_clears_cooldown(self, mock_dl):
         """If download fails, cooldown should NOT prevent retry (since we return False, not raise)."""
@@ -86,9 +86,9 @@ class TestCooldown:
 
 
 class TestConcurrentUpdates:
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     def test_concurrent_same_ticker_only_one_runs(self, mock_dl, mock_cl, mock_pr):
         """Two threads updating same ticker: only first should actually run."""
         init_db()
@@ -107,9 +107,9 @@ class TestConcurrentUpdates:
         # One True (ran), one False (cooldown)
         assert sorted(results) == [False, True]
 
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     def test_concurrent_different_tickers_both_run(self, mock_dl, mock_cl, mock_pr):
         """Two threads updating different tickers: both should run."""
         init_db()
@@ -190,10 +190,10 @@ class TestEnsureRangeInflightDedup:
         DataService._ensure_range_memo.clear()
         DataService._ensure_range_inflight.clear()
 
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.fetch_df")
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.db.fetch_df")
     def test_concurrent_calls_run_backfill_only_once(self, mock_fetch_df, mock_dl, mock_cl, mock_pr):
         import datetime as dt
 
@@ -242,8 +242,8 @@ class TestEnsureRangeInflightDedup:
         import datetime as dt
 
         DataService._ensure_range_memo.clear()
-        with patch("data_pipeline.data_service.fetch_df") as mock_fetch_df, patch(
-            "data_pipeline.data_service.upsert_raw_prices"
+        with patch("data_pipeline.db.fetch_df") as mock_fetch_df, patch(
+            "data_pipeline.downloader.upsert_raw_prices"
         ) as mock_dl:
             # DB has 2021-01-01 .. today coverage already.
             mock_fetch_df.return_value = pd.DataFrame(
@@ -259,10 +259,10 @@ class TestEnsureRangeInflightDedup:
             assert ok is True
             assert mock_dl.call_count == 0, "must NOT walk yfinance back to 1990"
 
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.fetch_df")
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.db.fetch_df")
     def test_explicit_multiyear_request_does_backfill(
         self, mock_fetch_df, mock_dl, mock_cl, mock_pr
     ):
@@ -291,10 +291,10 @@ class TestEnsureRangeInflightDedup:
             "sentinel short-circuit must NOT apply here"
         )
 
-    @patch("data_pipeline.data_service.process_frequencies", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.clean_range", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.upsert_raw_prices", return_value=PipelineResult(rows=5))
-    @patch("data_pipeline.data_service.fetch_df")
+    @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
+    @patch("data_pipeline.db.fetch_df")
     def test_sentinel_with_thin_db_still_backfills(
         self, mock_fetch_df, mock_dl, mock_cl, mock_pr
     ):

@@ -1,0 +1,208 @@
+================================================================================
+OptionLab 项目架构与复杂度分析报告
+================================================================================
+
+📦 模块: (root)
+   文件数: 1 | 总行数: 1164 | 代码行: 891 | 函数数: 41 | 类数: 1
+   ----------------------------------------------------------------------
+   📄 app.py                                              行数: 1164 (代码:  891)  |  函数:  41  类:  1
+
+📦 模块: core
+   文件数: 84 | 总行数: 5613 | 代码行: 4602 | 函数数: 180 | 类数: 18
+   ----------------------------------------------------------------------
+   📄 __init__.py                                         行数:    2 (代码:    0)  |  函数:   0  类:  0
+   📄 _shared/__init__.py                                 行数:    8 (代码:    6)  |  函数:   0  类:  0
+   📄 _shared/plotting.py                                 行数:   69 (代码:   53)  |  函数:   3  类:  0
+   📄 _shared/types.py                                    行数:   32 (代码:   26)  |  函数:   0  类:  0
+   📄 _shared/validators.py                               行数:   34 (代码:   27)  |  函数:   2  类:  0
+   📄 correlation_validator.py                            行数:  175 (代码:  152)  |  函数:   8  类:  1
+   📄 decision/__init__.py                                行数:   30 (代码:   26)  |  函数:   0  类:  0
+   📄 decision/candidate.py                               行数:   96 (代码:   83)  |  函数:   2  类:  0
+   📄 decision/enrich.py                                  行数:   51 (代码:   44)  |  函数:   1  类:  0
+   📄 decision/ev.py                                      行数:   30 (代码:   25)  |  函数:   1  类:  0
+   📄 decision/filter_rank.py                             行数:   65 (代码:   55)  |  函数:   3  类:  0
+   📄 decision/market_data.py                             行数:   62 (代码:   46)  |  函数:   5  类:  0
+   📄 decision/models.py                                  行数:   37 (代码:   30)  |  函数:   0  类:  1
+   📄 market/__init__.py                                  行数:   19 (代码:   17)  |  函数:   0  类:  0
+   📄 market/charts/__init__.py                           行数:   19 (代码:   17)  |  函数:   0  类:  0
+   📄 market/charts/_scales.py                            行数:   49 (代码:   41)  |  函数:   2  类:  0
+   📄 market/charts/correlation.py                        行数:   65 (代码:   52)  |  函数:   1  类:  0
+   📄 market/charts/dynamics.py                           行数:  105 (代码:   86)  |  函数:   2  类:  0
+   📄 market/charts/option_pnl.py                         行数:  102 (代码:   89)  |  函数:   1  类:  0
+   📄 market/charts/projection.py                         行数:   95 (代码:   78)  |  函数:   3  类:  0
+   📄 market/charts/scatter_high_low.py                   行数:   46 (代码:   34)  |  函数:   1  类:  0
+   📄 market/charts/scatter_osc.py                        行数:  145 (代码:  117)  |  函数:   6  类:  0
+   📄 market/charts/volatility.py                         行数:   76 (代码:   60)  |  函数:   1  类:  0
+   📄 market/data_context.py                              行数:  305 (代码:  258)  |  函数:  13  类:  1
+   📄 market/features/__init__.py                         行数:   35 (代码:   31)  |  函数:   0  类:  0
+   📄 market/features/_horizon.py                         行数:   71 (代码:   60)  |  函数:   2  类:  0
+   📄 market/features/osc.py                              行数:   74 (代码:   61)  |  函数:   3  类:  0
+   📄 market/features/regime_segments.py                  行数:   65 (代码:   53)  |  函数:   1  类:  0
+   📄 market/features/returns.py                          行数:   48 (代码:   38)  |  函数:   2  类:  0
+   📄 market/features/volatility.py                       行数:   92 (代码:   73)  |  函数:   2  类:  0
+   📄 market/models.py                                    行数:   94 (代码:   74)  |  函数:   2  类:  4
+   📄 market/option_pnl.py                                行数:   93 (代码:   79)  |  函数:   3  类:  0
+   📄 market/projections/__init__.py                      行数:   20 (代码:   16)  |  函数:   0  类:  0
+   📄 market/projections/oscillation.py                   行数:  223 (代码:  192)  |  函数:   6  类:  0
+   📄 market_analyzer.py                                  行数:  251 (代码:  205)  |  函数:  13  类:  2
+   📄 market_review.py                                    行数:   29 (代码:   24)  |  函数:   0  类:  0
+   📄 market_review/__init__.py                           行数:   31 (代码:   25)  |  函数:   0  类:  0
+   📄 market_review/compute.py                            行数:   84 (代码:   76)  |  函数:   1  类:  0
+   📄 market_review/fetch.py                              行数:  132 (代码:  111)  |  函数:   2  类:  0
+   📄 market_review/timeseries.py                         行数:   61 (代码:   51)  |  函数:   2  类:  0
+   📄 option_decision.py                                  行数:   40 (代码:   35)  |  函数:   0  类:  0
+   📄 options/__init__.py                                 行数:   20 (代码:   18)  |  函数:   0  类:  0
+   📄 options/chain/__init__.py                           行数:   31 (代码:   27)  |  函数:   0  类:  0
+   📄 options/chain/html_tables.py                        行数:  137 (代码:  110)  |  函数:   4  类:  0
+   📄 options/chain/liquidity.py                          行数:   53 (代码:   47)  |  函数:   1  类:  0
+   📄 options/chain/metrics.py                            行数:   52 (代码:   40)  |  函数:   3  类:  0
+   📄 options/chain/term_structure.py                     行数:   62 (代码:   48)  |  函数:   4  类:  0
+   📄 options/charts/__init__.py                          行数:   18 (代码:   16)  |  函数:   0  类:  0
+   📄 options/charts/iv_smile.py                          行数:   46 (代码:   36)  |  函数:   1  类:  0
+   📄 options/charts/iv_surface.py                        行数:   41 (代码:   32)  |  函数:   1  类:  0
+   📄 options/charts/iv_term.py                           行数:   49 (代码:   40)  |  函数:   1  类:  0
+   📄 options/charts/oi_volume.py                         行数:   53 (代码:   41)  |  函数:   1  类:  0
+   📄 options/charts/pcr.py                               行数:   46 (代码:   36)  |  函数:   1  类:  0
+   📄 options/charts/skew.py                              行数:   65 (代码:   51)  |  函数:   1  类:  0
+   📄 options/greeks/__init__.py                          行数:   24 (代码:   20)  |  函数:   0  类:  0
+   📄 options/greeks/black_scholes.py                     行数:   92 (代码:   72)  |  函数:   2  类:  0
+   📄 options/greeks/portfolio.py                         行数:  100 (代码:   85)  |  函数:   3  类:  0
+   📄 options/models.py                                   行数:   52 (代码:   40)  |  函数:   1  类:  2
+   📄 options_chain_analyzer.py                           行数:  195 (代码:  160)  |  函数:  13  类:  1
+   📄 options_greeks.py                                   行数:   18 (代码:   13)  |  函数:   0  类:  0
+   📄 portfolio.py                                        行数:   20 (代码:   15)  |  函数:   0  类:  0
+   📄 portfolio/__init__.py                               行数:   19 (代码:   15)  |  函数:   0  类:  0
+   📄 portfolio/attribution.py                            行数:   50 (代码:   43)  |  函数:   1  类:  0
+   📄 portfolio/greeks.py                                 行数:   52 (代码:   43)  |  函数:   2  类:  0
+   📄 portfolio/models.py                                 行数:   30 (代码:   22)  |  函数:   0  类:  1
+   📄 price_dynamic.py                                    行数:   81 (代码:   60)  |  函数:   6  类:  1
+   📄 regime.py                                           行数:   25 (代码:   20)  |  函数:   0  类:  0
+   📄 regime/__init__.py                                  行数:   26 (代码:   22)  |  函数:   0  类:  0
+   📄 regime/classify.py                                  行数:   71 (代码:   51)  |  函数:   3  类:  0
+   📄 regime/models.py                                    行数:   57 (代码:   46)  |  函数:   1  类:  3
+   📄 regime/series.py                                    行数:  156 (代码:  135)  |  函数:   4  类:  0
+   📄 signals.py                                          行数:   25 (代码:   20)  |  函数:   0  类:  0
+   📄 signals/__init__.py                                 行数:   19 (代码:   15)  |  函数:   0  类:  0
+   📄 signals/bollinger.py                                行数:   47 (代码:   41)  |  函数:   1  类:  0
+   📄 signals/bundle.py                                   行数:   72 (代码:   61)  |  函数:   3  类:  0
+   📄 signals/hv.py                                       行数:  141 (代码:  117)  |  函数:   5  类:  0
+   📄 signals/rsi.py                                      行数:   32 (代码:   26)  |  函数:   1  类:  0
+   📄 strategies/__init__.py                              行数:   31 (代码:   27)  |  函数:   0  类:  0
+   📄 strategies/analyze.py                               行数:   83 (代码:   70)  |  函数:   1  类:  0
+   📄 strategies/factories.py                             行数:  111 (代码:   77)  |  函数:  15  类:  0
+   📄 strategies/greeks.py                                行数:   32 (代码:   25)  |  函数:   1  类:  0
+   📄 strategies/models.py                                行数:   36 (代码:   27)  |  函数:   1  类:  1
+   📄 strategies/payoff.py                                行数:   51 (代码:   40)  |  函数:   3  类:  0
+   📄 strategies/prob_profit.py                           行数:   32 (代码:   26)  |  函数:   1  类:  0
+
+📦 模块: data_pipeline
+   文件数: 11 | 总行数: 2317 | 代码行: 1816 | 函数数: 64 | 类数: 7
+   ----------------------------------------------------------------------
+   📄 __init__.py                                         行数:   32 (代码:   25)  |  函数:   0  类:  1
+   📄 cleaning.py                                         行数:  194 (代码:  140)  |  函数:   3  类:  0
+   📄 data_service.py                                     行数:  470 (代码:  336)  |  函数:  13  类:  1
+   📄 db.py                                               行数:  310 (代码:  259)  |  函数:   7  类:  0
+   📄 downloader.py                                       行数:  227 (代码:  173)  |  函数:   5  类:  0
+   📄 job_cache.py                                        行数:  167 (代码:  119)  |  函数:   9  类:  1
+   📄 processing.py                                       行数:  166 (代码:  145)  |  函数:   3  类:  0
+   📄 quality_log.py                                      行数:   96 (代码:   82)  |  函数:   3  类:  0
+   📄 repos.py                                            行数:  150 (代码:  127)  |  函数:   5  类:  3
+   📄 scheduler.py                                        行数:  111 (代码:   85)  |  函数:   8  类:  1
+   📄 yf_client.py                                        行数:  394 (代码:  325)  |  函数:   8  类:  0
+
+📦 模块: scripts
+   文件数: 8 | 总行数: 1031 | 代码行: 810 | 函数数: 35 | 类数: 2
+   ----------------------------------------------------------------------
+   📄 audit_tags.py                                       行数:  116 (代码:   88)  |  函数:   4  类:  0
+   📄 commit_msg_check.py                                 行数:   49 (代码:   39)  |  函数:   1  类:  0
+   📄 doc_guard.py                                        行数:  357 (代码:  282)  |  函数:  15  类:  2
+   📄 draft_doc_updates.py                                行数:  102 (代码:   79)  |  函数:   2  类:  0
+   📄 find_drift_candidates.py                            行数:  143 (代码:  120)  |  函数:   5  类:  0
+   📄 perf_regression.py                                  行数:  167 (代码:  131)  |  函数:   4  类:  0
+   📄 regen_adr_index.py                                  行数:   69 (代码:   53)  |  函数:   3  类:  0
+   📄 seed_history.py                                     行数:   28 (代码:   18)  |  函数:   1  类:  0
+
+📦 模块: services
+   文件数: 14 | 总行数: 2633 | 代码行: 2144 | 函数数: 72 | 类数: 8
+   ----------------------------------------------------------------------
+   📄 __init__.py                                         行数:    2 (代码:    0)  |  函数:   0  类:  0
+   📄 analysis_service.py                                 行数:  468 (代码:  382)  |  函数:  11  类:  1
+   📄 chart_service.py                                    行数:  165 (代码:  131)  |  函数:  10  类:  1
+   📄 form_service.py                                     行数:  135 (代码:  117)  |  函数:   2  类:  1
+   📄 health_service.py                                   行数:   96 (代码:   79)  |  函数:   3  类:  0
+   📄 market_service.py                                   行数:   65 (代码:   52)  |  函数:   2  类:  1
+   📄 options_chain_service.py                            行数:  227 (代码:  175)  |  函数:   4  类:  1
+   📄 portfolio_analysis_service.py                       行数:  324 (代码:  256)  |  函数:  10  类:  1
+   📄 portfolio_service.py                                行数:  196 (代码:  169)  |  函数:   8  类:  0
+   📄 regime_service.py                                   行数:  347 (代码:  280)  |  函数:  12  类:  1
+   📄 signals_service.py                                  行数:   58 (代码:   46)  |  函数:   1  类:  0
+   📄 strategy_builder.py                                 行数:  322 (代码:  275)  |  函数:   4  类:  0
+   📄 strategy_service.py                                 行数:  144 (代码:  118)  |  函数:   3  类:  0
+   📄 validation_service.py                               行数:   84 (代码:   64)  |  函数:   2  类:  1
+
+📦 模块: tests
+   文件数: 44 | 总行数: 5936 | 代码行: 4254 | 函数数: 428 | 类数: 67
+   ----------------------------------------------------------------------
+   📄 conftest.py                                         行数:   38 (代码:   23)  |  函数:   1  类:  0
+   📄 e2e/__init__.py                                     行数:    1 (代码:    0)  |  函数:   0  类:  0
+   📄 e2e/conftest.py                                     行数:  388 (代码:  278)  |  函数:  15  类:  0
+   📄 e2e/test_error_states.py                            行数:   47 (代码:   26)  |  函数:   1  类:  0
+   📄 e2e/test_form_submit_flow.py                        行数:   51 (代码:   34)  |  函数:   2  类:  0
+   📄 e2e/test_lazy_tabs.py                               行数:   73 (代码:   42)  |  函数:   2  类:  0
+   📄 e2e/test_localstorage_restore.py                    行数:   67 (代码:   51)  |  函数:   1  类:  0
+   📄 e2e/test_position_cascade.py                        行数:   53 (代码:   32)  |  函数:   1  类:  0
+   📄 e2e/test_smoke.py                                   行数:   67 (代码:   47)  |  函数:   3  类:  0
+   📄 e2e/test_streaming_load.py                          行数:   79 (代码:   54)  |  函数:   2  类:  0
+   📄 e2e/test_tab_race.py                                行数:   46 (代码:   31)  |  函数:   1  类:  0
+   📄 test_api_errors.py                                  行数:   59 (代码:   39)  |  函数:   6  类:  0
+   📄 test_chart_cache.py                                 行数:  120 (代码:   83)  |  函数:  14  类:  0
+   📄 test_chart_time_range.py                            行数:  147 (代码:  113)  |  函数:   1  类:  0
+   📄 test_cleaning.py                                    行数:   74 (代码:   55)  |  函数:   7  类:  2
+   📄 test_concurrency.py                                 行数:  327 (代码:  255)  |  函数:  21  类:  4
+   📄 test_data_utils.py                                  行数:   32 (代码:   23)  |  函数:   4  类:  1
+   📄 test_db.py                                          行数:  101 (代码:   80)  |  函数:   8  类:  3
+   📄 test_db_errors.py                                   行数:  121 (代码:   96)  |  函数:  11  类:  5
+   📄 test_doc_guard_self.py                              行数:  105 (代码:   73)  |  函数:   9  类:  0
+   📄 test_downloader_gap.py                              行数:  212 (代码:  150)  |  函数:  12  类:  3
+   📄 test_frontend_api.py                                行数:  369 (代码:  261)  |  函数:  25  类:  6
+   📄 test_health_service.py                              行数:   41 (代码:   30)  |  函数:   3  类:  0
+   📄 test_job_cache.py                                   行数:  116 (代码:   84)  |  函数:  14  类:  3
+   📄 test_market_review.py                               行数:  157 (代码:  107)  |  函数:   8  类:  3
+   📄 test_nvda_analysis.py                               行数:  331 (代码:  263)  |  函数:  15  类:  2
+   📄 test_option_decision.py                             行数:  222 (代码:  150)  |  函数:  25  类:  6
+   📄 test_option_filter.py                               行数:  106 (代码:   81)  |  函数:   4  类:  0
+   📄 test_portfolio.py                                   行数:  117 (代码:   89)  |  函数:   8  类:  0
+   📄 test_processing.py                                  行数:  227 (代码:  182)  |  函数:  15  类:  3
+   📄 test_quality_log.py                                 行数:   37 (代码:   26)  |  函数:   4  类:  0
+   📄 test_regime.py                                      行数:  256 (代码:  179)  |  函数:  20  类:  0
+   📄 test_render_streaming.py                            行数:  163 (代码:  113)  |  函数:  11  类:  2
+   📄 test_repos.py                                       行数:   41 (代码:   30)  |  函数:   4  类:  0
+   📄 test_scheduler_lock.py                              行数:   30 (代码:   23)  |  函数:   2  类:  0
+   📄 test_signals.py                                     行数:   84 (代码:   60)  |  函数:  10  类:  0
+   📄 test_strategies.py                                  行数:  139 (代码:   91)  |  函数:  13  类:  0
+   📄 test_strategy_builder.py                            行数:  107 (代码:   81)  |  函数:   9  类:  0
+   📄 test_ticker_format_integration.py                   行数:  348 (代码:  265)  |  函数:  20  类:  5
+   📄 test_ticker_utils.py                                行数:  276 (代码:  182)  |  函数:  53  类:  7
+   📄 test_utils.py                                       行数:   34 (代码:   21)  |  函数:   8  类:  2
+   📄 test_validation.py                                  行数:   77 (代码:   57)  |  函数:  15  类:  2
+   📄 test_yf_download.py                                 行数:  148 (代码:   94)  |  函数:   6  类:  1
+   📄 test_yf_failure_injection.py                        行数:  302 (代码:  200)  |  函数:  14  类:  7
+
+📦 模块: utils
+   文件数: 5 | 总行数: 550 | 代码行: 396 | 函数数: 24 | 类数: 3
+   ----------------------------------------------------------------------
+   📄 __init__.py                                         行数:    2 (代码:    0)  |  函数:   0  类:  0
+   📄 api_errors.py                                       行数:  114 (代码:   92)  |  函数:   6  类:  1
+   📄 data_utils.py                                       行数:   39 (代码:   36)  |  函数:   1  类:  0
+   📄 ticker_utils.py                                     行数:  217 (代码:  145)  |  函数:   7  类:  0
+   📄 utils.py                                            行数:  178 (代码:  123)  |  函数:  10  类:  2
+
+================================================================================
+📊 项目总计
+================================================================================
+   总文件数:   167
+   总行数:     19244
+   代码行数:   14913
+   函数总数:   844
+   类总数:     106
+================================================================================
