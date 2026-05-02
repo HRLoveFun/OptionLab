@@ -1,7 +1,7 @@
 <div class="tab-content" id="tab-odds" x-data="panelState('odds')">
     <div class="toolbar">
         <div class="panel-header" style="margin:0;">
-            <h2><i class="fas fa-dice"></i> Expiry Odds</h2>
+            <h2>Expiry Odds</h2>
             <p class="panel-desc">Profit odds per strike with implied volatility context.</p>
         </div>
         <div class="oc-target-row">
@@ -13,21 +13,19 @@
         <div class="toolbar-actions">
             <button type="button" class="btn-primary" data-action="odds-reload"
                     :disabled="phase === 'loading'">
-                <template x-if="phase !== 'loading'"><span><i class="fas fa-sync"></i> Reload</span></template>
-                <template x-if="phase === 'loading'"><span><i class="fas fa-spinner fa-spin"></i> Loading…</span></template>
+                <template x-if="phase !== 'loading'"><span>Reload</span></template>
+                <template x-if="phase === 'loading'"><span>Loading…</span></template>
             </button>
         </div>
     </div>
 
     <!-- Loading -->
     <div class="panel-banner panel-banner--loading" x-show="phase === 'loading'" x-cloak>
-        <i class="fas fa-spinner fa-spin"></i>
         <span x-text="message || 'Loading odds data...'"></span>
     </div>
 
     <!-- Error -->
     <div class="panel-banner panel-banner--error" x-show="phase === 'error'" x-cloak>
-        <i class="fas fa-exclamation-circle"></i>
         <span x-text="message"></span>
     </div>
 
@@ -49,7 +47,7 @@
 
     <!-- Empty / idle -->
     <div class="empty-state" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
-        <i class="fas fa-dice empty-icon"></i>
+
         <p x-show="phase === 'idle'">Set a ticker in <strong>Parameter</strong> tab — odds data loads automatically when you switch to this tab.</p>
         <p x-show="phase === 'empty'" x-text="message || 'No valid option data to compute odds.'"></p>
     </div>

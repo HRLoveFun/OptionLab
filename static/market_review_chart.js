@@ -19,7 +19,7 @@ const MR_CHART_CONFIG = {
 let mrChart = null;
 let mrData = null;
 let mrMode = 'return';
-let mrPeriod = 'ETD';
+let mrPeriod = 'YTD';
 let mrVisibleAssets = new Set();
 let _mrTickerCache = {};  // per-ticker response cache
 const _MR_CACHE_TTL = 5 * 60 * 1000;  // 5 minutes in ms
@@ -42,7 +42,7 @@ async function loadMarketReviewChart(ticker, startDate) {
         return;
     }
 
-    container.innerHTML = '<div style="text-align:center;padding:4rem;color:#94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading time-series data...</div>';
+    container.innerHTML = '<div style="text-align:center;padding:4rem;color:#94a3b8;">Loading time-series data...</div>';
 
     if (_mrAbort) _mrAbort.abort();
     _mrAbort = new AbortController();
@@ -150,7 +150,7 @@ function renderMrKpiStrip(errored) {
             : 'semantic-info';
     const trSign = totalReturnPct > 0 ? '+' : '';
     setCard('total_return', `${trSign}${totalReturnPct.toFixed(2)}%`,
-        `${prices.length} days · ${mrData.instrument}`, trClass);
+        `${prices.length} days, ${mrData.instrument}`, trClass);
 
     // Volatility — orange when elevated (> 30% annualized).
     if (isFinite(annVolPct)) {
@@ -176,7 +176,7 @@ function renderMrKpiStrip(errored) {
 function renderMarketReviewChart() {
     if (!mrData || !mrData.dates) return;
 
-    const startDate = mrData.periods[mrPeriod] || mrData.periods['ETD'];
+    const startDate = mrData.periods[mrPeriod] || mrData.periods['YTD'];
     const startIdx = mrData.dates.findIndex(d => d >= startDate);
     const filteredDates = mrData.dates.slice(Math.max(0, startIdx));
 
@@ -403,7 +403,7 @@ function switchTickerContext(ticker) {
             skel.setAttribute('hx-get', `/render/${tab.kind}?job=${encodeURIComponent(jobId)}&ticker=${encodeURIComponent(ticker)}`);
             skel.setAttribute('hx-trigger', 'load');
             skel.setAttribute('hx-swap', 'outerHTML');
-            skel.innerHTML = `<div class="empty-state"><i class="fas fa-spinner fa-spin empty-icon"></i><p>Loading ${tab.kind.replace('_', ' ')}…</p></div>`;
+            skel.innerHTML = `<div class="empty-state"><p>Loading ${tab.kind.replace('_', ' ')}…</p></div>`;
             if (old && old.parentNode === parent) {
                 parent.replaceChild(skel, old);
             } else {

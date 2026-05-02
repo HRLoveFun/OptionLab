@@ -45,10 +45,52 @@ def calculate_volatility(
     try:
         if window is None:
             window = VOLATILITY_WINDOWS.get(frequency, 21)
+
+        logger.debug(
+            "calculate_volatility input: len=%d, first=%s, last=%s, min=%.4f, max=%.4f, "
+            "freq=%s, window=%d",
+            len(daily_close),
+            daily_close.index[0],
+            daily_close.index[-1],
+            daily_close.min(),
+            daily_close.max(),
+            frequency,
+            window,
+        )
+
         daily_returns = daily_close.pct_change().dropna()
-        rolling_vol = daily_returns.rolling(window=window).std() * np.sqrt(TRADING_DAYS_PER_YEAR) * 100
+        logger.debug(
+            "daily_returns stats: len=%d, min=%.6f, max=%.6f, mean=%.6f, std=%.6f",
+            len(daily_returns),
+            daily_returns.min(),
+            daily_returns.max(),
+            daily_returns.mean(),
+            daily_returns.std(),
+        )
+
+        # Guard against extreme single-day moves that usually indicate bad data.
+        extreme_mask = daily_returns.abs() > 0.5
+        if extreme_mask.any():
+            extreme_days = daily_returns[extreme_mask]
+            logger.warning(
+                "Extreme daily returns detected (>50%%): %s",
+                ", ".join(f"{idx.date()}: {v:.2%}" for idx, v in extreme_days.items()),
+            )
+
+        rolling_std = daily_returns.rolling(window=window).std()
+        rolling_vol = rolling_std * np.sqrt(TRADING_DAYS_PER_YEAR) * 100
         rolling_vol.name = "Volatility"
-        return rolling_vol.dropna()
+        result = rolling_vol.dropna()
+        if not result.empty:
+            logger.debug(
+                "rolling_vol output: len=%d, first=%.4f%%, last=%.4f%%, min=%.4f%%, max=%.4f%%",
+                len(result),
+                result.iloc[0],
+                result.iloc[-1],
+                result.min(),
+                result.max(),
+            )
+        return result
     except Exception as e:
         logger.error("Error calculating volatility: %s", e)
         return None

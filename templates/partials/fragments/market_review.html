@@ -12,11 +12,11 @@
 <div id="tab-market-review-content">
     {% if ticker %}
     <div class="meta-bar">
-        <span class="meta-chip"><i class="fas fa-tag"></i> {{ ticker }}</span>
-        <span class="meta-chip"><i class="fas fa-clock"></i> {{ frequency_display or frequency }}</span>
-        <span class="meta-chip"><i class="fas fa-calendar"></i> {{ start_time or '' }}{% if end_time %} → {{ end_time }}{% else %} → latest{% endif %}</span>
-        <span class="meta-chip"><i class="fas fa-shield-alt"></i> Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%</span>
-        <span class="meta-chip"><i class="fas fa-compass"></i> {{ side_bias or 'Natural' }}</span>
+        <span class="meta-chip">{{ ticker }}</span>
+        <span class="meta-chip">{{ frequency_display or frequency }}</span>
+        <span class="meta-chip">{{ start_time or '' }}{% if end_time %} to {{ end_time }}{% else %} to latest{% endif %}</span>
+        <span class="meta-chip">Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%</span>
+        <span class="meta-chip">{{ side_bias or 'Natural' }}</span>
     </div>
 
     <div class="content-card">
@@ -29,12 +29,11 @@
             <div class="btn-group" id="mr-period-btns">
                 <button class="btn-toggle" onclick="setMrPeriod('1M')">1M</button>
                 <button class="btn-toggle" onclick="setMrPeriod('1Q')">1Q</button>
-                <button class="btn-toggle" onclick="setMrPeriod('YTD')">YTD</button>
-                <button class="btn-toggle active" onclick="setMrPeriod('ETD')">ETD</button>
+                <button class="btn-toggle active" onclick="setMrPeriod('YTD')">YTD</button>
             </div>
             <div id="asset-toggle-container" class="asset-toggles"></div>
             <button class="btn-ghost btn-sm" onclick="toggleSummaryTable()">
-                <i class="fas fa-table"></i> Data Table
+                Data Table
             </button>
         </div>
         <div id="market-review-chart-container" style="height:420px; position:relative;">
@@ -52,7 +51,7 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <i class="fas fa-table empty-icon"></i>
+
         <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
     </div>
     {% endif %}

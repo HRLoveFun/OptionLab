@@ -43,7 +43,6 @@ def market_review_timeseries(instrument: str, start_date=None, end_date=None) ->
         "1M": (today - pd.Timedelta(days=30)).strftime("%Y-%m-%d"),
         "1Q": (today - pd.Timedelta(days=90)).strftime("%Y-%m-%d"),
         "YTD": f"{today.year}-01-01",
-        "ETD": data.index[0].strftime("%Y-%m-%d"),
     }
     try:
         summary_html = market_review(instrument, start_date, end_date).to_html(
