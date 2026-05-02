@@ -24,7 +24,7 @@ from data_pipeline.db import close_thread_conn
 from data_pipeline.job_cache import compute_or_get, get_job
 from services.market_analysis import AnalysisService
 from services.options_chain_service import OptionsChainService
-from utils.utils import (
+from utils.constants import (
     DEFAULT_FREQUENCY,
     DEFAULT_RISK_THRESHOLD,
     DEFAULT_ROLLING_WINDOW,

@@ -11,6 +11,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from services.market_service import MarketService
 from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
@@ -66,9 +67,7 @@ def market_review_ts():
     except ValueError:
         ticker = raw_ticker
     try:
-        from core.market_review import market_review_timeseries
-
-        result = market_review_timeseries(ticker, start_date=start_date)
+        result = MarketService.market_review_timeseries(ticker, start_date=start_date)
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error("market_review_ts error: %s", e, exc_info=True)

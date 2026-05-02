@@ -15,7 +15,6 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from core.options.chain.analyzer import OptionsChainAnalyzer
-from core.options.chain.filters import filter_option_chain
 from services.options_chain_preload import (
     build_preload_payload,
 )
@@ -75,7 +74,9 @@ def option_chain():
     max_contracts = int(request.args.get("max_contracts", 1000))
 
     try:
-        result = OptionsChainService.fetch_records(ticker_sym)
+        result = OptionsChainService.fetch_records_filtered(
+            ticker_sym, max_dte, moneyness_low, moneyness_high, max_contracts
+        )
         if not result.get("expirations"):
             msg = f"No options available for {ticker_sym}"
             return (
@@ -89,9 +90,6 @@ def option_chain():
                 ),
                 404,
             )
-        result = filter_option_chain(
-            result, max_dte, moneyness_low, moneyness_high, max_contracts
-        )
         return jsonify(result)
     except Exception as e:
         logger.error("Error fetching option chain for %s: %s", ticker_sym, e, exc_info=True)

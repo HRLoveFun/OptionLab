@@ -32,7 +32,7 @@ from typing import Any
 import pandas as pd
 import yfinance as yf
 
-from utils.utils import yf_throttle
+from utils.network import yf_throttle
 
 logger = logging.getLogger(__name__)
 

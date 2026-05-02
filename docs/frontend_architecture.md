@@ -27,7 +27,7 @@ static/
 ├── utils.js                Shared helpers (parseTickers, formatters, …)
 ├── option-chain.js         Option chain T-view rendering + interaction
 ├── position.js             Cascade dropdowns for option positions
-├── market-review.js        Market review tab logic
+├── market_review.js        Market review tab logic
 ├── market_review_chart.js  Chart.js time-series renderer
 ├── regime.js               Regime panel
 ├── styles.css              Component styles + design tokens

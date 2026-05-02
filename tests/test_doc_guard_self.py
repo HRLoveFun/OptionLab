@@ -54,7 +54,7 @@ def test_yfinance_throttle_flags_missing_call(tmp_path: Path) -> None:
 def test_yfinance_throttle_passes_with_call(tmp_path: Path) -> None:
     f = tmp_path / "ok.py"
     f.write_text(
-        "import yfinance as yf\nfrom utils.utils import yf_throttle\n\n"
+        "import yfinance as yf\nfrom utils.network import yf_throttle\n\n"
         "def go():\n    yf_throttle()\n    return yf.download('SPY')\n"
     )
     code, viols = _run([f])

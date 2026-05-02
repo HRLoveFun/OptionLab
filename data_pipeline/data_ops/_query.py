@@ -92,7 +92,7 @@ def get_latest_spot(ticker: str) -> float | None:
 
     try:
         import yfinance as yf
-        from utils.utils import yf_throttle
+        from utils.network import yf_throttle
 
         yf_throttle()
         price = yf.Ticker(ticker).fast_info.last_price

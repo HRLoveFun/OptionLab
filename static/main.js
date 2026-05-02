@@ -1,5 +1,5 @@
 // main.js – Form management, ticker validation, and page initialization.
-// Depends on: utils.js, position.js, option-chain.js, market-review.js
+// Depends on: utils.js, position.js, option-chain.js, market_review.js
 
 const FormManager = {
     saveState() {

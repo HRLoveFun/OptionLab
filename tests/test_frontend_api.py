@@ -301,7 +301,7 @@ class TestPriceDynamicTickerNorm:
         """PriceDynamic('US.NVDA', ...) should normalize to 'NVDA'."""
         monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        from core.price_dynamic import PriceDynamic
+        from core.market.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("US.NVDA", start_date=dt.date(2024, 1, 1))
         assert pd_obj.ticker == "NVDA"
@@ -310,7 +310,7 @@ class TestPriceDynamicTickerNorm:
         """PriceDynamic('NVDA', ...) should keep ticker as 'NVDA'."""
         monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        from core.price_dynamic import PriceDynamic
+        from core.market.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("NVDA", start_date=dt.date(2024, 1, 1))
         assert pd_obj.ticker == "NVDA"
@@ -319,7 +319,7 @@ class TestPriceDynamicTickerNorm:
         """PriceDynamic('HK.00700', ...) should normalize to '0700.HK'."""
         monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        from core.price_dynamic import PriceDynamic
+        from core.market.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("HK.00700", start_date=dt.date(2024, 1, 1))
         assert pd_obj.ticker == "0700.HK"

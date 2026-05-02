@@ -156,7 +156,7 @@ class TestFeaturesDF:
     def test_futu_format_ticker_normalized(self, _patch_downloads):
         """PriceDynamic normalizes US.NVDA → NVDA for DB lookup."""
         _seed_clean_prices("NVDA", 10)
-        from core.price_dynamic import PriceDynamic
+        from core.market.price_dynamic import PriceDynamic
 
         pd_obj = PriceDynamic("US.NVDA", dt.date(2026, 1, 1), "D")
         assert pd_obj.ticker == "NVDA"

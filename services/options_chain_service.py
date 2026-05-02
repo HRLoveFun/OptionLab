@@ -7,6 +7,7 @@ import logging
 import math
 
 from core.options.chain.analyzer import OptionsChainAnalyzer, liquidity_score
+from core.options.chain.filters import filter_option_chain
 from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
@@ -224,3 +225,24 @@ class OptionsChainService:
             logger.warning(f"Vol premium context failed: {e}")
 
         return result
+
+    # ------------------------------------------------------------------
+    # Filtered records endpoint (used by /api/option_chain)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def fetch_records_filtered(
+        ticker: str,
+        max_dte: int = 45,
+        moneyness_low: float = 0.7,
+        moneyness_high: float = 1.3,
+        max_contracts: int = 1000,
+    ) -> dict:
+        """Fetch raw chain records and apply DTE / moneyness / count filters."""
+        result = OptionsChainService.fetch_records(ticker)
+        if not result.get("expirations"):
+            return result
+        return filter_option_chain(
+            result, max_dte, moneyness_low, moneyness_high, max_contracts
+        )
+

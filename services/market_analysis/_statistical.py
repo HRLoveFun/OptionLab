@@ -5,7 +5,7 @@ import logging
 
 from core.correlation_validator import CorrelationValidator
 from services.chart_service import ChartService
-from utils.utils import DEFAULT_RISK_THRESHOLD, DEFAULT_ROLLING_WINDOW
+from utils.constants import DEFAULT_RISK_THRESHOLD, DEFAULT_ROLLING_WINDOW
 
 logger = logging.getLogger(__name__)
 

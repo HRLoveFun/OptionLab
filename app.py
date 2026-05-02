@@ -15,7 +15,7 @@ from flask import Flask
 
 from data_pipeline.data_ops import DataService
 from data_pipeline.scheduler import UpdateScheduler, acquire_scheduler_lock
-from utils.utils import init_yf_proxy
+from utils.network import init_yf_proxy
 
 load_dotenv()
 
