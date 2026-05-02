@@ -8,7 +8,7 @@ from utils.utils import exclusive_month_end
 
 from services.market_service import MarketService
 from ._assessment import _generate_assessment
-from ._cache import _cached_or_build, _chart_cache_key
+from ._sizing import calculate_position_size
 from ._statistical import _generate_statistical_analysis
 from ._summary import generate_summary_analysis
 
@@ -39,12 +39,10 @@ class AnalysisService:
             market_review = MarketService.generate_market_review(form_data)
             results.update(market_review)
 
-            statistical_analysis = AnalysisService._generate_statistical_analysis(analyzer, form_data)
-            results.update(statistical_analysis)
+            results.update(_generate_statistical_analysis(analyzer, form_data))
             gc.collect()
 
-            assessment = AnalysisService._generate_assessment(analyzer, form_data)
-            results.update(assessment)
+            results.update(_generate_assessment(analyzer, form_data))
             gc.collect()
 
             return results
@@ -110,31 +108,11 @@ class AnalysisService:
             return {"assessment_error": str(e)}
 
     @staticmethod
-    def _generate_statistical_analysis(analyzer, form_data):
-        """Backward-compat wrapper over the extracted module."""
-        from ._statistical import _generate_statistical_analysis as _impl
-
-        return _impl(analyzer, form_data)
-
-    @staticmethod
-    def _generate_assessment(analyzer, form_data):
-        """Backward-compat wrapper over the extracted module."""
-        from ._assessment import _generate_assessment as _impl
-
-        return _impl(analyzer, form_data)
-
-    @staticmethod
     def calculate_position_size(
         account_size: float, max_risk_pct: float, max_loss_per_contract: float, strategy_type: str
     ) -> dict | None:
-        """Backward-compat wrapper over the extracted module."""
-        from ._sizing import calculate_position_size as _impl
-
-        return _impl(account_size, max_risk_pct, max_loss_per_contract, strategy_type)
+        return calculate_position_size(account_size, max_risk_pct, max_loss_per_contract, strategy_type)
 
     @staticmethod
     def generate_summary_analysis(tickers: list, results_by_ticker: dict) -> dict:
-        """Backward-compat wrapper over the extracted module."""
-        from ._summary import generate_summary_analysis as _impl
-
-        return _impl(tickers, results_by_ticker)
+        return generate_summary_analysis(tickers, results_by_ticker)

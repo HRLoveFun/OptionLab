@@ -12,7 +12,7 @@ import datetime as dt
 import logging
 
 from core import signals as sig
-from data_pipeline.data_service import DataService
+from data_pipeline.data_ops import DataService
 
 logger = logging.getLogger(__name__)
 

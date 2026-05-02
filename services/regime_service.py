@@ -26,90 +26,23 @@ from core.regime import (
     label_series,
     regime_transitions,
 )
-from data_pipeline.cleaning import clean_range
-from data_pipeline.data_service import DataService, _cache_invalidate
+from data_pipeline.data_ops import DataService
 from data_pipeline.db import fetch_df, init_db
-from data_pipeline.downloader import upsert_raw_prices
-from data_pipeline.processing import process_frequencies
 
-from services.regime_ops._persistence import (
-    _load_log_df,
-    _previous_log_row,
-    _upsert_log_rows,
+from services.regime_ops._bootstrap import (
+    BOOTSTRAP_DAYS,
+    MIN_TRADING_ROWS,
+    _bootstrap_history,
+    _count_clean_rows,
 )
-
-logger = logging.getLogger(__name__)
 
 VIX_TICKER = "^VIX"
 SPY_TICKER = "SPY"
-MIN_LOOKBACK_DAYS = 90  # calendar days; covers 20-day SMA + 5-day slope + weekends
-BOOTSTRAP_DAYS = 400  # ≈ 280 trading days — enough for 3Y charts once accumulated
-MIN_TRADING_ROWS = SMA_WINDOW + SLOPE_LOOKBACK + 5  # need this many rows to label direction
+MIN_LOOKBACK_DAYS = 90
 
 
-def _count_clean_rows(ticker: str) -> int:
-    """Return how many *priced* rows the DB holds for ``ticker``.
-
-    Counts only rows with a non-null ``close`` — ``clean_prices`` is
-    calendar-padded, so row count alone overstates real history when
-    an earlier download was rate-limited and produced NaN prices.
-    """
-    init_db()
-    df = fetch_df(
-        "SELECT COUNT(*) AS n FROM clean_prices WHERE ticker=? AND close IS NOT NULL",
-        (ticker,),
-    )
-    if df.empty:
-        return 0
-    try:
-        return int(df.iloc[0]["n"])
-    except (KeyError, TypeError, ValueError):
-        return 0
-
-
-def _bootstrap_history(ticker: str, days: int = BOOTSTRAP_DAYS) -> None:
-    """Run the full data pipeline over a wide date range for ``ticker``.
-
-    ``DataService.get_cleaned_daily`` only seeds ~7 days per call (and has a
-    60 s cooldown), which is insufficient for 20-day SMA computation. This
-    helper bypasses that limitation by invoking the pipeline directly when the
-    DB is thin. Safe to call repeatedly: all three stages are upserts.
-    """
-    end = dt.date.today()
-    start = end - dt.timedelta(days=days)
-    logger.info("Regime: bootstrapping %d days of history for %s", days, ticker)
-    try:
-        dl = upsert_raw_prices(ticker, start, end)
-        if not dl.ok:
-            logger.warning("Regime bootstrap (download) failed for %s: %s", ticker, dl.error)
-            return
-        cl = clean_range(ticker, start, end)
-        if not cl.ok:
-            logger.warning("Regime bootstrap (clean) failed for %s: %s", ticker, cl.error)
-            return
-        pr = process_frequencies(ticker, start, end)
-        if not pr.ok:
-            logger.warning("Regime bootstrap (process) failed for %s: %s", ticker, pr.error)
-    except Exception as e:  # pragma: no cover - defensive
-        logger.error("Regime bootstrap for %s crashed: %s", ticker, e, exc_info=True)
-    finally:
-        # Invalidate DataService's TTL cache; otherwise a previously cached
-        # empty result would mask the freshly downloaded rows.
-        _cache_invalidate(ticker)
-
-
-def _ensure_history(ticker: str) -> None:
-    """Guarantee enough rows for 20-day SMA + 5-day slope. No-op when already present."""
-    if _count_clean_rows(ticker) < MIN_TRADING_ROWS:
-        _bootstrap_history(ticker)
-
-
-# ── Data access ───────────────────────────────────────────────────
 def _fetch_close_series(ticker: str, start: dt.date, end: dt.date) -> pd.Series:
-    """Return a date-indexed close series, or empty on failure.
-
-    Ensures the DB has enough history for SMA/slope computation on first access.
-    """
+    """Return a date-indexed close series, or empty on failure."""
     try:
         _ensure_history(ticker)
         df = DataService.get_cleaned_daily(ticker, start=start, end=end)
@@ -127,7 +60,39 @@ def _fetch_close_series(ticker: str, start: dt.date, end: dt.date) -> pd.Series:
     return s.sort_index()
 
 
-# ── Public API ────────────────────────────────────────────────────
+from services.regime_ops._persistence import (
+    _load_log_df,
+    _previous_log_row,
+    _upsert_log_rows,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _ensure_history(ticker: str) -> None:
+    """Guarantee enough rows for 20-day SMA + 5-day slope. No-op when already present."""
+    if _count_clean_rows(ticker) < MIN_TRADING_ROWS:
+        _bootstrap_history(ticker)
+
+# Re-export at module level so test monkey-patches targeting
+# ``services.regime_service._xxx`` continue to work during the transition.
+__all__ = [
+    "RegimeService",
+    "VIX_TICKER",
+    "SPY_TICKER",
+    "MIN_LOOKBACK_DAYS",
+    "BOOTSTRAP_DAYS",
+    "MIN_TRADING_ROWS",
+    "_count_clean_rows",
+    "_bootstrap_history",
+    "_ensure_history",
+    "_fetch_close_series",
+    "_load_log_df",
+    "_previous_log_row",
+    "_upsert_log_rows",
+]
+
+
 class RegimeService:
     """Facade for all market-regime operations exposed to Flask routes."""
 
@@ -180,13 +145,9 @@ class RegimeService:
 
     @staticmethod
     def backfill(days: int = 30, end_date: dt.date | None = None) -> dict[str, Any]:
-        """Backfill regime labels for the last ``days`` trading days up to ``end_date``.
-
-        Uses a single historical fetch for efficiency (no per-day yfinance calls).
-        """
+        """Backfill regime labels for the last ``days`` trading days up to ``end_date``."""
         days = max(1, min(int(days), 365 * 3))
         end = end_date or dt.date.today()
-        # Pad lookback so the earliest backfilled date has 20-day SMA + 5-day slope
         start = end - dt.timedelta(days=days + MIN_LOOKBACK_DAYS)
 
         vix = _fetch_close_series(VIX_TICKER, start, end)
@@ -199,9 +160,7 @@ class RegimeService:
         if df.empty or "sma_20" not in df.columns:
             return {"persisted_rows": 0, "reason": "label_series_empty"}
 
-        # Keep only trading days where SMA is defined
         df = df.dropna(subset=["sma_20"])
-        # Restrict to the requested window
         cutoff = pd.Timestamp(end - dt.timedelta(days=days))
         df = df[df.index >= cutoff]
         if df.empty:
@@ -221,9 +180,7 @@ class RegimeService:
                     "dir_regime": r["dir_regime"],
                     "vix_value": None if pd.isna(r["vix_value"]) else float(r["vix_value"]),
                     "sma_20": None if pd.isna(r["sma_20"]) else float(r["sma_20"]),
-                    "sma_slope_5d": None
-                    if pd.isna(r["sma_slope_5d"])
-                    else float(r["sma_slope_5d"]),
+                    "sma_slope_5d": None if pd.isna(r["sma_slope_5d"]) else float(r["sma_slope_5d"]),
                     "close_vs_sma_pct": None
                     if pd.isna(r["close_vs_sma_pct"])
                     else float(r["close_vs_sma_pct"]),
@@ -237,11 +194,7 @@ class RegimeService:
 
     @staticmethod
     def history(days: int = 180) -> dict[str, Any]:
-        """Return the persisted regime log for the last ``days`` days.
-
-        If the log is empty/sparse, computes an on-the-fly series from market
-        data without persisting — so the tab renders useful content on first visit.
-        """
+        """Return the persisted regime log for the last ``days`` days."""
         days = max(5, min(int(days), 365 * 3))
         end = dt.date.today()
         start = end - dt.timedelta(days=days)
@@ -249,14 +202,11 @@ class RegimeService:
         df = _load_log_df()
         used_live = False
         if df.empty or len(df) < 5:
-            # Fallback: compute live for display only.
-            # Fetch a wider lookback so SMA is defined at the start of the window.
             vix = _fetch_close_series(VIX_TICKER, start - dt.timedelta(days=MIN_LOOKBACK_DAYS), end)
             spy = _fetch_close_series(SPY_TICKER, start - dt.timedelta(days=MIN_LOOKBACK_DAYS), end)
             df = label_series(vix, spy)
             if "sma_20" in df.columns:
                 df = df.dropna(subset=["sma_20"])
-            # Crop to the requested visible window (after SMA is computed)
             if not df.empty:
                 df = df[df.index >= pd.Timestamp(start)]
             used_live = True
@@ -307,6 +257,3 @@ class RegimeService:
             "rows": int(len(df)),
             "coverage": coverage_report(df),
         }
-
-
-__all__ = ["RegimeService"]

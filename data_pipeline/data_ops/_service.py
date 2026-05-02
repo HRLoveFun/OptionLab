@@ -69,3 +69,13 @@ class DataService:
     @staticmethod
     def get_latest_spot(ticker: str) -> float | None:
         return _q.get_latest_spot(ticker)
+
+    @staticmethod
+    def clear_ensure_range_memo(ticker: str) -> None:
+        """Clear the cached ensure_range memo for *ticker*.
+
+        Call this before ``seed_history`` when you want to bypass a
+        previously cached failure and force a fresh backfill.
+        """
+        with _r._ensure_range_lock:
+            _r._ensure_range_memo.pop(ticker, None)

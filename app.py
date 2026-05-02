@@ -7,11 +7,11 @@ import re
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
-from data_pipeline.data_service import DataService
+from data_pipeline.data_ops import DataService
 from data_pipeline.db import close_thread_conn
 from data_pipeline.job_cache import compute_or_get, create_job, get_job
 from data_pipeline.scheduler import UpdateScheduler, acquire_scheduler_lock
-from services.analysis_service import AnalysisService
+from services.market_analysis import AnalysisService
 from services.form_service import FormService
 from services.market_service import MarketService
 from services.options_chain_service import OptionsChainService
@@ -694,7 +694,7 @@ def portfolio_analysis():
         return jsonify({"status": "error", "code": "no_positions", "message": "No positions provided"}), 400
 
     try:
-        from services.portfolio_analysis_service import PortfolioAnalysisService
+        from services.portfolio_analysis import PortfolioAnalysisService
 
         result = PortfolioAnalysisService.run(positions, account_size, max_risk_pct)
         return jsonify(result)
@@ -1145,8 +1145,7 @@ def data_seed():
     try:
         # WHY: clear any cached failure memo for this ticker so a previously
         # rate-limited backfill doesn't suppress the seed run.
-        with DataService._ensure_range_lock:
-            DataService._ensure_range_memo.pop(ticker, None)
+        DataService.clear_ensure_range_memo(ticker)
         DataService.seed_history(ticker, years=years)
         return jsonify({"status": "ok", "ticker": ticker, "years": years})
     except Exception as e:

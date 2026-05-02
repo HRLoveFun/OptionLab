@@ -39,7 +39,7 @@ def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False)
     """
     init_db()
     # Drop the cross-test query cache that DataService maintains (TTL 60s).
-    from data_pipeline.data_service import _cache_invalidate
+    from data_pipeline.data_ops import _cache_invalidate
     _cache_invalidate(ticker)
     dates = pd.bdate_range(end=dt.date.today(), periods=n_rows)
     np.random.seed(42)
@@ -66,10 +66,14 @@ def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False)
 
 @pytest.fixture()
 def _patch_downloads(monkeypatch):
-    """Disable real yfinance downloads and DataService.manual_update."""
-    from data_pipeline.data_service import DataService
+    """Disable all real yfinance download paths for unit tests."""
+    from data_pipeline.data_ops import DataService
 
+    # Block the manual_update → pipeline path
     monkeypatch.setattr(DataService, "manual_update", staticmethod(lambda *a, **kw: None))
+    # Block the ensure_range → chunked backfill path
+    monkeypatch.setattr(DataService, "ensure_range", staticmethod(lambda *a, **kw: True))
+    # Block the data_context fallback to yfinance
     monkeypatch.setattr("core.market.data_context._download_data", lambda *a, **kw: None)
 
 
@@ -169,7 +173,7 @@ class TestFeaturesDF:
 def client(_patch_downloads):
     """Create Flask test client with isolated DB."""
     import app as flask_app
-    from data_pipeline import data_service as _ds
+    from data_pipeline import data_ops as _ds
     from data_pipeline import job_cache as _jc
 
     # Reset module-level caches so prior tests don't leak data into this one.
@@ -304,7 +308,7 @@ class TestFlaskAnalysisPost:
     def test_analysis_service_direct(self, _patch_downloads):
         """Direct AnalysisService call with good data produces charts."""
         _seed_clean_prices("NVDA", 60)
-        from services.analysis_service import AnalysisService
+        from services.market_analysis import AnalysisService
 
         form_data = {
             "ticker": "NVDA",

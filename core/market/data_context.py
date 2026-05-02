@@ -60,7 +60,7 @@ def _validate_inputs(ticker, start_date, frequency, end_date=None):
 
 
 def _fetch_daily_from_db(ticker: str, download_start: dt.date):
-    from data_pipeline.data_service import DataService
+    from data_pipeline.data_ops import DataService
 
     try:
         DataService.initialize()
