@@ -335,9 +335,7 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
 | [`docs/decisions/`](docs/decisions/) | Architecture Decision Records |
 | [`docs/frontend_architecture.md`](docs/frontend_architecture.md) | Frontend contributors |
 | [`docs/guides/USER_GUIDE.md`](docs/guides/USER_GUIDE.md) | End users |
-| [`docs/reference/optimization_manual.md`](docs/reference/optimization_manual.md) | Quant model reference |
-| [`docs/reference/option_decision_process.md`](docs/reference/option_decision_process.md) | Decision-flow reference |
-| [`docs/nav/system_nav.md`](docs/nav/system_nav.md) | Sitemap of all dashboard tabs |
+| [`docs/frontend_convergence.md`](docs/frontend_convergence.md) | Frontend convergence notes |
 
 > **Heads-up for AI / new contributors**: many "magic numbers" and "weird workarounds"
 > in this codebase are deliberate. Code annotated with `WHY:` / `CONSTRAINT:` /

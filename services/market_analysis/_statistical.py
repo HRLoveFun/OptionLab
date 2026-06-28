@@ -114,12 +114,13 @@ def _generate_statistical_analysis(analyzer, form_data):
         all_none = all(v is None for k, v in results.items() if k != "statistical_error")
         if all_none and analyzer.is_data_valid():
             fdf = analyzer.features_df
-            pdyn = getattr(analyzer, "price_dynamic", None)
+            ctx = getattr(analyzer, "_ctx", None)
+            bars = getattr(ctx, "bars", None)
             actual_min = actual_max = None
-            if pdyn is not None and getattr(pdyn, "_data", None) is not None and not pdyn._data.empty:
+            if bars is not None and not bars.empty:
                 try:
-                    actual_min = pdyn._data.index.min().date().isoformat()
-                    actual_max = pdyn._data.index.max().date().isoformat()
+                    actual_min = bars.index.min().date().isoformat()
+                    actual_max = bars.index.max().date().isoformat()
                 except Exception:
                     pass
             req_start = form_data.get("parsed_start_time")

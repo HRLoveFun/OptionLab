@@ -13,7 +13,7 @@ Forward-looking volatility implied by an option's market price via Black-Scholes
 Annualised standard deviation of close-to-close log returns.
 - Window: typically 30 trading days (configurable).
 - `HV = std(log(close_t / close_{t-1})) * sqrt(252)`
-- Computed in `core/options_greeks.py` and `core/market_review.py`.
+- Computed in `core/signals/hv.py` (per-ticker rolling) and surfaced cross-ticker via `core/market_review/`.
 
 ### IV Rank
 `(current_IV - 52wk_min_IV) / (52wk_max_IV - 52wk_min_IV)` — in [0, 1].
@@ -33,7 +33,7 @@ HV today ranked against its own 252-day history. **This is what we use** when th
 - **Theta**: ∂Price/∂Time (per day)
 - **Vega**: ∂Price/∂σ (per 1%)
 - **Rho**: ∂Price/∂r (per 1%)
-- All vectorised in `core/options_greeks.py`. Scalars and NumPy arrays both supported.
+- All vectorised in `core/options/greeks/black_scholes.py`. Scalars and NumPy arrays both supported.
 - We assume **European exercise**. American early-exercise premium is ignored — acceptable for index options and short-dated equity options.
 
 ### Option Chain
@@ -46,7 +46,7 @@ The full set of calls + puts at every strike for a given expiry. yfinance return
 
 ### Regime
 A coarse classification of market state — bullish/bearish/sideways and high/low vol.
-Computed in `core/regime.py` from a basket of indicators (trend strength, vol percentile, breadth).
+Computed in the `core/regime/` package (`classify.py`, `series.py`, `models.py`) from a basket of indicators (trend strength, vol percentile, breadth).
 
 ### Side Bias
 User-supplied directional preference (Bull / Bear / Neutral) used to filter strategy suggestions.
@@ -72,13 +72,16 @@ On manual update, scan past `GAP_SCAN_DAYS` (default 30) for missing business da
 ### Service / Core / Pipeline
 Three-layer architecture with strict import direction:
 ```
-app.py → services/ → core/ → data_pipeline/
+app.py → routes/ → services/ → core/ → data_pipeline/
 ```
+- **routes/**: thin HTTP blueprints (no business logic).
 - **services/**: orchestration, formats results for routes.
 - **core/**: pure computation, no Flask.
 - **data_pipeline/**: download, clean, persist, query.
 
-See [.github/copilot-instructions.md](../.github/copilot-instructions.md) for enforcement rules.
+Import direction is one-way; `core/` and `data_pipeline/` must not reach back into
+`services/`, `routes/` or `app.py`. See [ADR 0001](decisions/0001-three-layer-architecture.md)
+and [.github/copilot-instructions.md](../.github/copilot-instructions.md) for enforcement.
 
 ### DataService Cooldown
 60-second per-ticker write lock prevents thundering-herd downloads when multiple UI panels render the same ticker simultaneously.

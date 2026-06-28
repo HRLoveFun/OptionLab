@@ -61,8 +61,3 @@ def encode_figure(fig: Figure, *, fmt: str = "png") -> str:
     fig.savefig(buf, format=fmt, dpi=150, bbox_inches="tight")
     buf.seek(0)
     return base64.b64encode(buf.getvalue()).decode()
-
-
-def fig_to_base64(fig: Figure) -> str:
-    """Backward-compat alias for encode_figure."""
-    return encode_figure(fig)

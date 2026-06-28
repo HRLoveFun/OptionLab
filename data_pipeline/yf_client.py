@@ -336,7 +336,7 @@ def fetch_close_panel(
 
 
 # ---------------------------------------------------------------------------
-# Daily OHLCV (for core/price_dynamic.py)
+# Daily OHLCV (for core/market/data_context.py)
 # ---------------------------------------------------------------------------
 def fetch_daily_ohlcv(
     ticker: str,

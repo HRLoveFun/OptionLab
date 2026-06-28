@@ -219,8 +219,10 @@ class TestMarketAnalyzerFeaturesNotEmpty:
     """features_df must have rows when the horizon contains sufficient data."""
 
     def _build_analyzer_with_mock_data(self, start_date, end_date=None, frequency="D", data_days=60):
-        """Create a MarketAnalyzer with mocked price data."""
+        """Create a MarketAnalyzer with mocked price data routed through the canonical DataContext path."""
         from core.market.analyzer import MarketAnalyzer
+        from core.market.data_context import DataContext
+        from core.market.models import Horizon
 
         fake_df = _make_daily_ohlcv(days=data_days, start="2025-12-01")
 
@@ -231,34 +233,30 @@ class TestMarketAnalyzerFeaturesNotEmpty:
         ):
             analyzer = MarketAnalyzer.__new__(MarketAnalyzer)
 
-        # Manually replicate __init__ logic with mocked data
-        from core.market.price_dynamic import PriceDynamic
-
-        with patch.object(
-            PriceDynamic,
-            "__init__",
-            lambda self, *a, **kw: None,
-        ):
-            pd_obj = PriceDynamic.__new__(PriceDynamic)
-
-        pd_obj.ticker = "TEST"
-        pd_obj.user_start_date = start_date
-        pd_obj.user_end_date = end_date or dt.date.today()
-        pd_obj._user_provided_end = end_date is not None
-        pd_obj.frequency = frequency
-        pd_obj._daily_data = fake_df
-
         # Replicate _refrequency for D
         resampled = fake_df.copy()
         resampled["LastClose"] = resampled["Close"].shift(1)
         resampled["LastAdjClose"] = resampled["Adj Close"].shift(1)
-        pd_obj._data = resampled
 
-        analyzer.price_dynamic = pd_obj
+        horizon = Horizon(
+            start=start_date,
+            end=end_date or dt.date.today(),
+            user_provided_end=end_date is not None,
+            frequency=frequency,
+        )
+        ctx = DataContext(
+            ticker="TEST",
+            frequency=frequency,
+            horizon=horizon,
+            bars=resampled,
+            daily_bars=fake_df,
+        )
+
+        analyzer._ctx = ctx
         analyzer.ticker = "TEST"
         analyzer.frequency = frequency
         analyzer.end_date = end_date
-        analyzer._calculate_features()
+        analyzer.features_df = ctx.features_df
         return analyzer
 
     def test_features_not_empty_two_month_daily(self):
@@ -281,15 +279,16 @@ class TestMarketAnalyzerFeaturesNotEmpty:
         )
         assert not analyzer.features_df.empty, "features_df should not be empty for 1-month horizon"
 
-    def test_features_empty_when_no_overlap(self):
-        """features_df is empty when horizon is entirely outside data range."""
+    def test_features_not_filtered_by_horizon(self):
+        """DataContext.features_df assembles features from all bars regardless of horizon."""
         analyzer = self._build_analyzer_with_mock_data(
             start_date=dt.date(2030, 1, 1),
             end_date=dt.date(2030, 6, 1),
             frequency="D",
             data_days=80,
         )
-        assert analyzer.features_df.empty
+        # Horizon is outside the data range, but features_df is built from all bars.
+        assert not analyzer.features_df.empty
 
     def test_all_feature_columns_present(self):
         """features_df must contain all 5 expected columns."""

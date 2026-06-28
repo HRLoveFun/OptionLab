@@ -18,6 +18,9 @@ This guide explains every tab in the Market Dashboard, covering the concepts, fo
    - [Key Metrics](#61-key-metrics-snapshot)
    - [Volatility Premium Context](#62-volatility-premium-context)
 7. [Odds](#7-odds)
+8. [Market Regime](#8-market-regime)
+9. [Config](#9-config)
+10. [Summary (multi-ticker)](#10-summary-multi-ticker)
 
 ---
 
@@ -555,6 +558,82 @@ where $T$ is the target price.
 - Odd $< 0$: Loss even if the target is reached — the premium exceeds the intrinsic payoff.
 
 Each expiration date is rendered as a separate line on the chart, color-coded. The spot price is marked with a dashed yellow vertical line. The call chart is capped at the target + 1% for readability; the put chart floors at the target − 1%.
+
+---
+
+## 8. Market Regime
+
+The **Market Regime** tab displays a composite, label-only classification of the broad market state — no signals, no predictions. It is read-only by default; run `POST /api/regime/backfill` to recompute the historical series on demand.
+
+### Inputs
+
+The regime is derived from two public Yahoo Finance series:
+
+| Series | Ticker | Role |
+|---|---|---|
+| Volatility | `^VIX` | Daily close — primary axis |
+| Direction | `SPY` | Daily close vs 20-day SMA — secondary axis |
+
+### Regime Labels
+
+**Volatility regime** (primary):
+
+| Label | Condition |
+|---|---|
+| Low vol | VIX < 15 |
+| Mid vol | 15 ≤ VIX < 20 |
+| High vol | VIX ≥ 20 |
+
+**Direction regime** (secondary), using `SPY` daily close vs its 20-day simple moving average (SMA):
+
+| Label | Condition |
+|---|---|
+| Up | SMA slope > 0 AND last 5 closes > SMA |
+| Down | SMA slope < 0 AND last 5 closes < SMA |
+| Sideways | otherwise |
+
+The combined regime is the cartesian product (e.g. *"High vol / Down"*). The hero card surfaces the current combined label; the history view plots the labelled series over the available window.
+
+### API
+
+| Method · Path | Purpose |
+|---|---|
+| `GET /api/regime/current` | Latest computed label |
+| `GET /api/regime/history` | Full labelled time-series |
+| `POST /api/regime/backfill` | Recompute and persist the series |
+
+Computation lives in the `core/regime/` package (`classify.py`, `series.py`, `models.py`); persistence goes through `data_pipeline/repos.py`.
+
+---
+
+## 9. Config
+
+The **Config** tab persists analysis-default parameters across browser sessions. Changes here are written to `localStorage` and re-applied to the **Parameter** tab on the next load; they do not modify server-side state.
+
+| Field | Description | Default |
+|---|---|---|
+| **Frequency** | Default bar aggregation (D / W / ME / QE) | Monthly |
+| **Risk Threshold (%)** | Default percentile for oscillation projections | 90 |
+| **Rolling Window** | Default rolling-projection window length | 120 |
+| **Side Bias** | Natural or Neutral bias for projection weighting | Neutral |
+
+The tab also exposes a **Reset** action that clears the persisted config and restores factory defaults. There is no backed API — everything is client-side via `static/main.js`.
+
+---
+
+## 10. Summary (multi-ticker)
+
+The **Summary** tab is rendered **only** when more than one ticker is submitted in the **Parameter** tab. It provides a side-by-side comparison card grid across the requested tickers.
+
+| Field | Description |
+|---|---|
+| **Price** | Latest spot price |
+| **ATM IV** | At-the-money IV from the nearest expiry (%) |
+| **HV 20d** | 20-day annualised historical volatility (%) |
+| **Regime** | Current composite regime label (see §8) |
+| **1M / 1Q / YTD Return** | Trailing return windows |
+
+The card grid is built server-side from `summary_data` (computed by `services/market_analysis/`) and streamed into `templates/partials/tab_summary.html`. When only one ticker is requested, the tab is omitted entirely.
 
 ---
 

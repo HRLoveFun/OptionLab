@@ -6,7 +6,7 @@ dashboard tab, verifying that:
   - The /api/option_chain endpoint handles valid/invalid inputs
   - Config-driven filter parameters (DTE, moneyness) are respected
   - MarketAnalyzer features_df is non-empty with adequate data
-  - PriceDynamic normalizes futu-format tickers to yahoo format
+  - build_data_context normalizes futu-format tickers to yahoo format
 """
 
 import datetime as dt
@@ -292,37 +292,37 @@ class TestFeaturesDF:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 5. PriceDynamic ticker normalization
+# 5. build_data_context ticker normalization
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestPriceDynamicTickerNorm:
+class TestDataContextTickerNorm:
     def test_futu_format_normalized(self, monkeypatch):
-        """PriceDynamic('US.NVDA', ...) should normalize to 'NVDA'."""
+        """build_data_context('US.NVDA', ...) should normalize to 'NVDA'."""
         monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        from core.market.price_dynamic import PriceDynamic
+        from core.market.data_context import build_data_context
 
-        pd_obj = PriceDynamic("US.NVDA", start_date=dt.date(2024, 1, 1))
-        assert pd_obj.ticker == "NVDA"
+        ctx = build_data_context("US.NVDA", dt.date(2024, 1, 1))
+        assert ctx.ticker == "NVDA"
 
     def test_yahoo_format_unchanged(self, monkeypatch):
-        """PriceDynamic('NVDA', ...) should keep ticker as 'NVDA'."""
+        """build_data_context('NVDA', ...) should keep ticker as 'NVDA'."""
         monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        from core.market.price_dynamic import PriceDynamic
+        from core.market.data_context import build_data_context
 
-        pd_obj = PriceDynamic("NVDA", start_date=dt.date(2024, 1, 1))
-        assert pd_obj.ticker == "NVDA"
+        ctx = build_data_context("NVDA", dt.date(2024, 1, 1))
+        assert ctx.ticker == "NVDA"
 
     def test_hk_format_normalized(self, monkeypatch):
-        """PriceDynamic('HK.00700', ...) should normalize to '0700.HK'."""
+        """build_data_context('HK.00700', ...) should normalize to '0700.HK'."""
         monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
 
-        from core.market.price_dynamic import PriceDynamic
+        from core.market.data_context import build_data_context
 
-        pd_obj = PriceDynamic("HK.00700", start_date=dt.date(2024, 1, 1))
-        assert pd_obj.ticker == "0700.HK"
+        ctx = build_data_context("HK.00700", dt.date(2024, 1, 1))
+        assert ctx.ticker == "0700.HK"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

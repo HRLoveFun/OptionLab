@@ -3,7 +3,6 @@
 Domain:    Market Analysis — Orchestration
 Context:
   - Encapsulates data context, feature computation, and chart rendering.
-  - Backward-compat shim for legacy callers that monkeypatch price_dynamic.
 Dependencies UPWARD:
   - core.market.data_context, core.market.features, core.market.projections
   - core.market.charts, core._shared.plotting
@@ -15,8 +14,6 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-
-import pandas as pd
 
 from core.market.charts._scales import format_projection_value
 from core.market.charts.dynamics import render_dynamics
@@ -34,24 +31,6 @@ from core.market.projections.oscillation import compute_oscillation_projection
 logger = logging.getLogger(__name__)
 
 
-class _PriceDynamicShim:
-    """Minimal shim exposing the PriceDynamic attributes that CorrelationValidator needs."""
-
-    def __init__(self, ctx):
-        self._ctx = ctx
-
-    @property
-    def _data(self):
-        return self._ctx.bars
-
-    @property
-    def _daily_data(self):
-        return self._ctx.daily_bars
-
-    def is_valid(self):
-        return self._ctx.is_valid()
-
-
 class MarketAnalyzer:
     """High-level market analysis — thin orchestrator over core.market submodules."""
 
@@ -60,58 +39,10 @@ class MarketAnalyzer:
         self.ticker = ticker
         self.frequency = frequency
         self.end_date = end_date
-        # backward-compat: some callers (e.g. CorrelationValidator) read .price_dynamic
-        self.price_dynamic = _PriceDynamicShim(self._ctx)
         self.features_df = self._ctx.features_df
 
     def is_data_valid(self):
         return self._ctx.is_valid()
-
-    # ------------------------------------------------------------------
-    # Backward-compat for tests that monkeypatch price_dynamic
-    # ------------------------------------------------------------------
-
-    def _calculate_features(self):
-        """Recompute features_df from self.price_dynamic._data (old tests)."""
-        from core.market.features import osc, osc_high, osc_low, price_difference, price_returns
-        from core.market.features._horizon import compute_effective_end
-
-        price_dyn = getattr(self, "price_dynamic", None)
-        bars = getattr(price_dyn, "_data", None) if price_dyn is not None else None
-        if bars is None or getattr(bars, "empty", True):
-            self.features_df = pd.DataFrame()
-            return
-
-        # Apply horizon filter if the injected price_dynamic carries horizon metadata.
-        start = getattr(price_dyn, "user_start_date", None)
-        end = getattr(price_dyn, "user_end_date", None)
-        user_provided_end = getattr(price_dyn, "_user_provided_end", True)
-        frequency = getattr(price_dyn, "frequency", "W")
-        if start is not None and end is not None:
-            try:
-                start_ts = pd.Timestamp(start)
-                if user_provided_end:
-                    end_ts = pd.Timestamp(end)
-                else:
-                    end_ts = compute_effective_end(frequency)
-                idx = bars.index
-                bars = bars[(idx >= start_ts) & (idx <= end_ts)]
-            except Exception:
-                pass
-
-        try:
-            self.features_df = pd.DataFrame(
-                {
-                    "Oscillation": osc(bars, on_effect=True),
-                    "Osc_high": osc_high(bars),
-                    "Osc_low": osc_low(bars),
-                    "Returns": price_returns(bars),
-                    "Difference": price_difference(bars),
-                }
-            ).dropna(how="all")
-        except Exception as e:
-            logger.warning("_calculate_features failed: %s", e)
-            self.features_df = pd.DataFrame()
 
     # ------------------------------------------------------------------
     # Charts — delegate to core.market.charts

@@ -331,7 +331,7 @@ When multiple tickers are provided:
 
 ### 5. Module Comments in JS
 - **Pattern**: `/* === Module N: Description === */`
-- **Purpose**: Matches `optimization_manual.md` module structure
+- **Purpose**: Numbers JS modules in the same order as their first use in `index.html` partials, so a reader can cross-reference UI tabs against JS module boundaries.
 
 ---
 

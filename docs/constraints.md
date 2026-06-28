@@ -22,9 +22,9 @@ is usually a workaround for one of the items below.
 
 - yfinance >= 0.2.50 uses **`curl_cffi`** internally, NOT `requests`.
 - **Do NOT pass `session=requests.Session()`** to any yfinance call — it silently fails to make the request.
-- Proxy must be set via `HTTP_PROXY` / `HTTPS_PROXY` env vars; we read `YF_PROXY` and propagate to both. See [utils/utils.py](../utils/utils.py) `init_yf_proxy`.
+- Proxy must be set via `HTTP_PROXY` / `HTTPS_PROXY` env vars; we read `YF_PROXY` and propagate to both. See [utils/network.py](../utils/network.py) `init_yf_proxy`.
 - **Dead-proxy poisoning**: an unreachable proxy makes curl_cffi hang. We TCP-probe before activating; falls back to direct connect.
-- **Global throttle**: token-bucket limiter (default 5 req/s, burst 5) in `utils.utils.yf_throttle`. Every yfinance call (`yf.download`, `yf.Ticker`, `option_chain`, `fast_info`) MUST be preceded by `yf_throttle()`.
+- **Global throttle**: token-bucket limiter (default 5 req/s, burst 5) in [utils/network.py](../utils/network.py)::`yf_throttle`. Every yfinance call MUST be routed through `data_pipeline/yf_client.py` (the single chokepoint) rather than calling `yf_throttle()` directly at each call site — see ADR 0005.
 - **DB-first pattern**: never re-download data already in `clean_prices`. The 60-second cooldown in `DataService` exists to prevent thundering herd from concurrent UI requests.
 
 ## 3. SQLite, single-machine deployment
@@ -57,7 +57,7 @@ These are NOT magic numbers — they encode domain knowledge. Do not "DRY" them 
 - Long-running computations either:
   - Run inside a request and respond synchronously (fine for <2s), or
   - Are pre-computed by the scheduler and read from DB.
-- **Vectorised numpy for Greeks** (`core/options_greeks.py`): scipy.optimize per-contract is 30x slower on 5000-contract chains.
+- **Vectorised numpy for Greeks** (`core/options/greeks/black_scholes.py`): scipy.optimize per-contract is 30x slower on 5000-contract chains.
 
 ## 7. Frontend: vanilla JS only
 

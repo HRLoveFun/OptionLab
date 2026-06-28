@@ -254,13 +254,13 @@ class OptionsChainAnalyzer:
             return None
 
     # ------------------------------------------------------------------
-    # HTML tables — pure computation kept here for backward-compat
+    # HTML tables — delegates to core.options.chain.html_tables
     # ------------------------------------------------------------------
 
     def get_expected_move_table(self) -> str | None:
-        """Backward-compat: delegates to core.options.chain.html_tables."""
+        """Render expected-move table via core.options.chain.html_tables."""
         return _expected_move_table(self.chain, self.expiries, self.spot)
 
     def get_key_metrics_table(self) -> str | None:
-        """Backward-compat: delegates to core.options.chain.html_tables."""
+        """Render key-metrics table via core.options.chain.html_tables."""
         return _key_metrics_table(self.chain, self.expiries, self.spot)

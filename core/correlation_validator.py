@@ -1,7 +1,7 @@
-"""Correlation Validation Module — BACKWARD-COMPAT ADAPTER.
+"""Correlation Validation Module.
 
-Rolling correlation computation stays here (domain-specific logic);
-rendering has moved to core.market.charts.correlation.
+Rolling correlation computation lives here (domain-specific logic);
+rendering is delegated to core.market.charts.correlation.
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ class CorrelationValidator:
         self.user_end_date = end_date or dt.date.today()
         self._user_provided_end = end_date is not None
 
-        # Duck-type support: injected object may be _PriceDynamicShim (has _data)
-        # or DataContext (has bars).
+        # Duck-type support: injected object may be DataContext (has bars)
+        # or any object exposing a `_data` attribute that returns a DataFrame.
         if price_data is not None:
             self._raw_data = getattr(price_data, "_data", None) or getattr(price_data, "bars", None)
             is_valid_fn = getattr(price_data, "is_valid", None)

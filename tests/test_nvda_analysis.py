@@ -154,13 +154,13 @@ class TestFeaturesDF:
         assert analyzer.features_df.shape[0] == 0
 
     def test_futu_format_ticker_normalized(self, _patch_downloads):
-        """PriceDynamic normalizes US.NVDA → NVDA for DB lookup."""
+        """build_data_context normalizes US.NVDA → NVDA for DB lookup."""
         _seed_clean_prices("NVDA", 10)
-        from core.market.price_dynamic import PriceDynamic
+        from core.market.data_context import build_data_context
 
-        pd_obj = PriceDynamic("US.NVDA", dt.date(2026, 1, 1), "D")
-        assert pd_obj.ticker == "NVDA"
-        assert pd_obj.is_valid()
+        ctx = build_data_context("US.NVDA", dt.date(2026, 1, 1), "D")
+        assert ctx.ticker == "NVDA"
+        assert ctx.is_valid()
 
 
 # ---------------------------------------------------------------------------
