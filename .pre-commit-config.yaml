@@ -21,9 +21,3 @@ repos:
         language: system
         pass_filenames: false
         files: '^(core|data_pipeline|services|utils)/.*\.py$'
-
-      - id: commit-msg-format
-        name: commit-msg-format
-        stages: [commit-msg]
-        entry: python3 scripts/commit_msg_check.py
-        language: system

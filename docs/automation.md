@@ -1,7 +1,7 @@
 # Automation: Keeping AI-Context Artefacts Fresh
 
-> **Goal**: Keep the comment tags, docstrings, project docs, ADRs, glossary,
-> and commit conventions accurate as the codebase iterates — with the
+> **Goal**: Keep the comment tags, docstrings, project docs, ADRs, glossary
+> accurate as the codebase iterates — with the
 > minimum possible human babysitting.
 
 ## Honest framing
@@ -35,8 +35,7 @@ What it checks (each rule produces a non-zero exit code on violation):
 | `adr-link-integrity`     | Markdown links from `docs/decisions/` / `docs/constraints.md` / `docs/glossary.md` that point at non-existent files or anchors.    | ADRs must stay reachable.                                                     |
 | `adr-index-fresh`        | `docs/decisions/README.md` index does not match the actual ADR files in the folder.                                                | Auto-fixable; CI fails if not regenerated.                                    |
 | `module-docstring`       | Modules in `core/` or `data_pipeline/` missing a top-level docstring.                                                              | Keeps the "Context:" docstring habit alive.                                   |
-| `tagged-code-stale`      | A `# CONSTRAINT: see docs/...` reference points at a file/section that no longer exists.                                           | Prevents tag rot.                                                             |
-| `commit-msg`             | Commit subjects without a `<type>:` prefix or with type outside the allowed set.                                                   | Run as a `commit-msg` git hook locally.                                       |
+| `tagged-code-stale`      | A `# CONSTRAINT: see docs/...` reference points at a file/section that no longer exists.                                           | Prevents tag rot.                                                              |
 
 ### Failure modes
 - Pre-commit blocks the commit. Fix locally, retry.
@@ -95,16 +94,6 @@ which:
 
 ---
 
-## Commit conventions (semi-automated)
-
-A `commit-msg` git hook validates the subject prefix
-(`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, `revert:`).
-The template at [`.gitmessage`](../.gitmessage) is set as
-`commit.template` so `git commit` opens with the structure pre-filled —
-authors fill in two fields rather than writing prose.
-
----
-
 ## Tag audits (regression-tracked)
 
 `scripts/audit_tags.py` produces a JSON report of:
@@ -160,5 +149,5 @@ python scripts/regen_adr_index.py
 python scripts/audit_tags.py --update-baseline
 
 # One-shot install of all hooks:
-pre-commit install --hook-type pre-commit --hook-type commit-msg
+pre-commit install --hook-type pre-commit
 ```

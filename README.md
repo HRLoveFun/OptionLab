@@ -203,8 +203,7 @@ Yahoo.
 Repo-maintenance helpers, all standalone:
 `doc_guard.py` (lint tag/ADR/doc invariants — runs in CI),
 `audit_tags.py`, `regen_adr_index.py`, `draft_doc_updates.py`,
-`find_drift_candidates.py`, `commit_msg_check.py`, `perf_regression.py`,
-`seed_history.py`.
+`find_drift_candidates.py`, `perf_regression.py`, `seed_history.py`.
 
 ---
 
