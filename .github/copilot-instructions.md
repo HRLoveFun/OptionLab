@@ -144,3 +144,10 @@ Use these when relevant — type `/` in chat to invoke skills/prompts, or select
 ### Data (feedback loop)
 - **`.github/data/failure-registry.yaml`** — Central source of truth for failure patterns, escalation levels, and resolution status. Updated by skills after diagnosis/fix.
 - **`.github/data/failure_tracker.json`** — Auto-maintained by the test analyzer hook. Tracks occurrence counts and timestamps per failure category.
+
+<!-- mermaid-ai-skills:start -->
+## Mermaid Diagrams
+
+When the user asks to create, edit, or visualize a diagram, follow the
+instructions in `.github/instructions/mermaid.instructions.md`.
+<!-- mermaid-ai-skills:end -->

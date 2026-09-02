@@ -35,3 +35,5 @@ and fill in every section. Keep ADRs short — 1 page is ideal, 2 pages max.
 | [0004](0004-no-iv-history-from-yfinance.md) | No IV Rank / IV History from yfinance — Use HV Percentile | Accepted |
 | [0005](0005-token-bucket-throttle.md) | Token-Bucket Throttle for yfinance Calls | Accepted |
 | [0006](0006-vanilla-js-frontend.md) | Vanilla JS Frontend, No Build Step | Accepted |
+| [0007](0007-public-github-pages.md) | Publish on GitHub Pages (Public Repo) | Accepted |
+| [0008](0008-server-side-expiry-simulation.md) | Server-Side Options Expiry Simulation | Accepted |
