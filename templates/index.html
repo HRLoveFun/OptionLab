@@ -15,6 +15,8 @@
     <!-- App-level helpers: must load before feature scripts so they can use api/bus -->
     <script src="{{ url_for('static', filename='eventBus.js') }}"></script>
     <script src="{{ url_for('static', filename='api.js') }}"></script>
+    <!-- Simulation engine: pure client-side math (ES module, no backend) -->
+    <script type="module" src="{{ url_for('static', filename='sim/grid.js') }}"></script>
 </head>
 <body>
 
@@ -128,6 +130,9 @@
                 <button class="tab-btn" data-tab="tab-options-chain">
                     <span>Volatility Analysis</span>
                 </button>
+                <button class="tab-btn" data-tab="tab-simulation">
+                    <span>Simulation</span>
+                </button>
 
                 <div class="tab-section-label">System</div>
                 <button class="tab-btn" data-tab="tab-config">
@@ -170,6 +175,9 @@
             <!-- Tab: Market Regime -->
             {% include 'partials/tab_regime.html' %}
 
+            <!-- Tab: Simulation -->
+            {% include 'partials/tab_simulation.html' %}
+
             <!-- Tab: Config -->
             {% include 'partials/tab_config.html' %}
 
@@ -205,6 +213,7 @@
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script src="{{ url_for('static', filename='market_review_chart.js') }}"></script>
     <script src="{{ url_for('static', filename='regime.js') }}"></script>
+    <script src="{{ url_for('static', filename='simulation.js') }}"></script>
     <script>
         document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -233,6 +242,10 @@
                 if (target === 'tab-regime' && !window.appState.tabFlags.isLoaded('regime')) {
                     if (typeof loadRegimeTab === 'function') { loadRegimeTab(); window.appState.tabFlags.markLoaded('regime'); }
                 }
+                // Auto-load Simulation on tab switch
+                if (target === 'tab-simulation' && !window.appState.tabFlags.isLoaded('simulation')) {
+                    if (typeof loadSimulationTab === 'function') { loadSimulationTab(); window.appState.tabFlags.markLoaded('simulation'); }
+                }
             });
         });
 
@@ -242,6 +255,7 @@
             tickerInput.addEventListener('change', function() {
                 window.appState.tabFlags.reset('option_chain');
                 window.appState.tabFlags.reset('odds');
+                window.appState.tabFlags.reset('simulation');
             });
         }
 

@@ -74,6 +74,7 @@ app.py                       Flask entry point — registers blueprints, middlew
     ├── render_helpers.py      Streaming slice renderers for HTMX
     └── rate_limit.py          Rate-limit utilities
 └── static/                  Vanilla JS modules + state machines
+│   └── sim/                 Pure client-side payoff simulation (zero I/O — Pages-safe)
 └── templates/               Jinja2 skeleton + HTMX fragments
 ```
 
@@ -192,6 +193,11 @@ starts the APScheduler daily/monthly jobs.
 - [`static/components/payoff_chart.js`](static/components/payoff_chart.js) is
   the only Chart.js renderer that runs in the browser (everything else is
   server-side PNG).
+- [`static/sim/`](static/sim/) — **pure, dependency-free, zero-I/O** payoff
+  simulator (Black–Scholes pricing, expiry P&L, distribution stats). Shared by the
+  Flask "Simulation" tab and the standalone GitHub Pages site. No `fetch` — portable.
+- [`static/features/simulation.js`](static/features/simulation.js) — DOM wiring for
+  the Simulation tab (leg builder, dual-IV link toggle, K × DTE matrix).
 
 ### `tests/`
 `pytest` suites mirroring the package layout (`test_<module>.py`), plus
@@ -203,7 +209,8 @@ Yahoo.
 Repo-maintenance helpers, all standalone:
 `doc_guard.py` (lint tag/ADR/doc invariants — runs in CI),
 `audit_tags.py`, `regen_adr_index.py`, `draft_doc_updates.py`,
-`find_drift_candidates.py`, `perf_regression.py`, `seed_history.py`.
+`find_drift_candidates.py`, `perf_regression.py`, `seed_history.py`,
+`gen_sim_golden.py` (emit JS/Python parity fixtures for the Simulation tab).
 
 ---
 
@@ -228,6 +235,10 @@ Repo-maintenance helpers, all standalone:
 
 `/api/v1/<path>` is an alias for every `/api/<path>` route (rewriting
 middleware in `app.py`).
+
+> **Simulation tab** is purely client-side (`static/sim/` + `static/features/simulation.js`).
+> It performs Black–Scholes pricing and expiry-payoff math in the browser and needs **no**
+> HTTP endpoint, so it also runs standalone on GitHub Pages.
 
 ---
 
@@ -280,6 +291,10 @@ The Playwright suite uses mocked Flask routes (`tests/e2e/conftest.py`) so it
 runs offline. The perf benchmark spins up a real WSGI server and measures the
 end-to-end fan-out time for `/render/<kind>` × tickers.
 
+JS math parity: `tests/unit/sim/*.test.js` compares the browser implementation
+against fixtures from `scripts/gen_sim_golden.py` (real Python output), within
+1e-6 — no mocked data.
+
 ---
 
 ## Key environment variables
@@ -312,6 +327,21 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
   on the browser.
 
 ---
+
+## Deployment — GitHub Pages
+
+The **Simulation** tab is a fully client-side payoff simulator (Black–Scholes +
+expiry P&L + distribution stats) that needs no backend. It is published as a
+standalone static site on **GitHub Pages** (public repo — see ADR
+[0007](docs/decisions/0007-public-github-pages.md)).
+
+- Source of truth: `static/sim/` (pure ES modules, zero `fetch`).
+- Pages artifact: `site/` (params form + payoff curve + K×DTE matrix), built by
+  `.github/workflows/pages.yml` and pushed to the `gh-pages` branch.
+- The Flask app mounts the same `static/sim/` module as a tab — two hosts, one codebase.
+
+> Requires the repository to be **public** (free GitHub Pages). The local
+> `market_data.sqlite` is excluded from the public tree (see ADR 0007).
 
 ## Project conventions
 
@@ -347,4 +377,11 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
 
 ## License
 
-Internal / unpublished. All rights reserved by the project owner.
+**MIT License** — see [LICENSE](LICENSE). Copyright (c) the project author.
+
+The code is provided "as is", without warranty of any kind. The simulation math
+(Black–Scholes and payoff computations) is research tooling, not financial advice.
+
+> Previously marked "Internal / unpublished"; relicensed open-source when the
+> simulator was published on GitHub Pages — see ADR
+> [0007](docs/decisions/0007-public-github-pages.md).

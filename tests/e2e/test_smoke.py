@@ -18,6 +18,7 @@ TAB_IDS = [
     "tab-options-chain",
     "tab-odds",
     "tab-regime",
+    "tab-simulation",
     "tab-config",
 ]
 

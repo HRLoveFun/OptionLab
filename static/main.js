@@ -277,6 +277,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'game-run': () => runGameAnalysis(),
         'oc-reload': () => loadOptionChain(),
         'odds-reload': () => loadOddsData(),
+        'sim-run': () => runSimulation(),
     };
     document.addEventListener('click', function (ev) {
         const target = ev.target.closest('[data-action]');

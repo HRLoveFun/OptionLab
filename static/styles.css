@@ -2100,6 +2100,206 @@ textarea:focus-visible,
 
 
 /* ============================================================
+   Simulation Tab — expiry payoff grid (strike × maturity × IV)
+   P1: hero P&L metric; P2: four-state panel; P3: semantic
+   green/red reused for gains/losses only.
+   ============================================================ */
+
+/* Hero metric + KPI strip share one row so the primary number is
+   never separated from its supporting context. */
+.sim-hero-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.sim-kpi-strip {
+    margin: 0;
+    flex: 1 1 520px;
+}
+
+/* Chart controls: strike / scenario selectors + terminal-price slider */
+.sim-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    padding: .25rem 0 1rem;
+}
+
+.sim-control {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+}
+
+.sim-control > label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.sim-control--grow {
+    flex: 1 1 320px;
+}
+
+.sim-scenario-number {
+    width: 7.5rem;
+    padding: .35rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .85rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--slate-900);
+    background: #fff;
+}
+
+.sim-chart-wrapper {
+    height: 380px;
+}
+
+/* ── P&L matrix: strikes down the rows, scenarios across the columns ── */
+.sim-matrix-scroll {
+    overflow-x: auto;
+    padding: .25rem 0 .5rem;
+}
+
+.sim-matrix {
+    border-collapse: collapse;
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.sim-matrix th[scope="col"] {
+    padding: .5rem .7rem;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    text-align: right;
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--slate-500);
+    vertical-align: bottom;
+}
+
+.sim-matrix th[scope="col"]:first-child {
+    text-align: left;
+}
+
+.sim-col-main {
+    display: block;
+    color: var(--slate-700);
+}
+
+.sim-col-sub {
+    display: block;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--slate-500);
+}
+
+.sim-matrix th[scope="row"] {
+    padding: 0;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-100);
+    text-align: left;
+}
+
+.sim-strike-btn {
+    width: 100%;
+    padding: .45rem .7rem;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    color: var(--slate-700);
+    text-align: left;
+    cursor: pointer;
+}
+
+.sim-strike-btn:hover {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+}
+
+.sim-strike-btn[aria-pressed="true"] {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+}
+
+.sim-matrix td {
+    padding: .45rem .7rem;
+    border-bottom: 1px solid var(--slate-100);
+    text-align: right;
+    color: var(--slate-700);
+}
+
+.sim-matrix tr.sim-row-active td,
+.sim-matrix tr.sim-row-active th[scope="row"] {
+    box-shadow: inset 0 0 0 1px var(--blue-muted);
+}
+
+.sim-matrix tbody tr:hover td {
+    filter: brightness(.97);
+}
+
+/* ── Scenario detail table ── */
+.sim-detail {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.sim-detail th {
+    padding: .5rem .75rem;
+    background: var(--slate-50);
+    color: var(--slate-500);
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--slate-200);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.sim-detail th:first-child,
+.sim-detail td:first-child {
+    text-align: left;
+}
+
+.sim-detail td {
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--slate-100);
+    text-align: right;
+    color: var(--slate-700);
+    white-space: nowrap;
+}
+
+.sim-detail tr.sim-row-active td {
+    background: var(--blue-light);
+}
+
+@media (max-width: 720px) {
+    .sim-chart-wrapper {
+        height: 300px;
+    }
+
+    .sim-controls {
+        gap: .75rem;
+    }
+}
+
+
+/* ============================================================
    Onyx Theme — minimalist black with gold + purple accents.
    Append-only override layer. Reassigns design tokens from the
    :root block at the top of this file; nothing above is edited.
@@ -2177,7 +2377,11 @@ textarea:focus-visible,
 .btn-toggle,
 .summary-info,
 .kpi-card,
-.regime-hero__metric {
+.regime-hero__metric,
+.sim-scenario-number,
+.sim-matrix th[scope="col"],
+.sim-matrix th[scope="row"],
+.sim-detail th {
     background: #141414;
 }
 

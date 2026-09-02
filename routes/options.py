@@ -6,6 +6,7 @@ Routes:
   GET  /api/options_chart/iv_smile
   GET  /api/options_chart/oi_profile
   POST /api/odds_with_vol
+  POST /api/simulate_expiry
 """
 
 from __future__ import annotations
@@ -297,3 +298,16 @@ def odds_with_vol():
             ),
             500,
         )
+
+
+@bp.route("/api/simulate_expiry", methods=["POST"])
+def simulate_expiry_route():
+    """Simulate expiration P&L across strikes × expiries × implied vols.
+
+    Body: {ticker, spot?, option_type, side, strikes?, expiries?, ivs?,
+           r?, qty?, multiplier?, n_points?, range_pct?}
+    """
+    from services.options_simulation_service import run_simulation
+
+    data = request.get_json(silent=True) or {}
+    return jsonify(run_simulation(data))

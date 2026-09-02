@@ -85,3 +85,10 @@ and [.github/copilot-instructions.md](../.github/copilot-instructions.md) for en
 
 ### DataService Cooldown
 60-second per-ticker write lock prevents thundering-herd downloads when multiple UI panels render the same ticker simultaneously.
+
+## Features
+
+### Simulation Tab (Expiry Payoff Simulator)
+A feature (see `docs/plans/simulation_tab.md`; ADR 0007 for the public GitHub Pages variant, ADR 0008 for the server-side module) that, given spot / strikes / maturities / implied vols, simulates single-option expiration P&L across a strike × maturity × IV grid.
+- **Server path**: `POST /api/simulate_expiry` → `services/options_simulation_service.run_simulation` → `core.options.simulation.expiry.simulate_expiry`. Pure numpy/scipy, no network; entry pricing reuses `core/options/greeks/black_scholes.greeks_vectorized`.
+- **Client-side twin** (`static/sim/`) is the single source of truth for the standalone Pages build and must parity-match the Python math to 1e-6 via golden tests (`scripts/gen_sim_golden.py`). Both assume European exercise, no dividends (consistent with the Greeks note above).

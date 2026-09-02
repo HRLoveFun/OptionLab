@@ -1,0 +1,190 @@
+<div class="tab-content" id="tab-simulation" x-data="panelState('simulation')"
+     role="region" aria-labelledby="sim-heading">
+    <div class="toolbar">
+        <div class="panel-header" style="margin:0;">
+            <h2 id="sim-heading">Simulation</h2>
+            <p class="panel-desc">
+                Expiration P&amp;L for every strike across a grid of maturities and
+                implied volatilities. Priced with Black-Scholes and computed entirely
+                in your browser — no server call, so it runs on the public GitHub
+                Pages build too. Entry IV prices the premium; the forward vol (linked
+                by default, or set separately) drives the P&amp;L distribution.
+            </p>
+        </div>
+        <div class="toolbar-actions">
+            <button type="button" class="btn-primary" data-action="sim-run"
+                    aria-label="Run simulation"
+                    :disabled="phase === 'loading'">
+                <template x-if="phase !== 'loading'"><span>Run</span></template>
+                <template x-if="phase === 'loading'"><span>Running…</span></template>
+            </button>
+        </div>
+    </div>
+
+    <!-- Scenario inputs -->
+    <div class="content-card">
+        <div class="content-card-title">Scenario Inputs</div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="sim-ticker">Ticker</label>
+                <input type="text" id="sim-ticker" placeholder="inherited from Parameter" autocomplete="off">
+                <span class="field-hint">Blank = use the Parameter tab ticker.</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-spot">Spot override</label>
+                <input type="number" id="sim-spot" step="0.01" min="0" placeholder="live quote">
+                <span class="field-hint">Blank = live quote.</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-option-type">Option</label>
+                <select id="sim-option-type">
+                    <option value="call">Call</option>
+                    <option value="put">Put</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sim-side">Side</label>
+                <select id="sim-side">
+                    <option value="long">Long</option>
+                    <option value="short">Short</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sim-strikes">Strikes</label>
+                <input type="text" id="sim-strikes" placeholder="auto ±15% ladder">
+                <span class="field-hint">Comma separated. Blank = auto ladder.</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-expiries">Expiries</label>
+                <input type="text" id="sim-expiries" value="7, 30, 60, 90">
+                <span class="field-hint">DTE days or YYYY-MM-DD dates.</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-ivs">Entry implied vol %</label>
+                <input type="text" id="sim-ivs" value="20, 30, 45">
+                <span class="field-hint">Comma separated — prices the premium.</span>
+            </div>
+            <div class="form-group">
+                <label for="sim-forward-ivs">Forward vol % (optional)</label>
+                <input type="text" id="sim-forward-ivs" placeholder="linked to entry IV">
+                <span class="field-hint">Drives the P&amp;L distribution. Blank = same as entry IV.</span>
+            </div>
+            <div class="form-group form-group--checkbox">
+                <label for="sim-link-iv" class="checkbox-inline">
+                    <input type="checkbox" id="sim-link-iv" checked>
+                    Link forward vol to entry IV
+                </label>
+            </div>
+            <div class="form-group">
+                <label for="sim-rate">Risk-free %</label>
+                <input type="number" id="sim-rate" value="5" step="0.1">
+            </div>
+            <div class="form-group">
+                <label for="sim-qty">Contracts</label>
+                <input type="number" id="sim-qty" value="1" min="1" step="1">
+            </div>
+            <div class="form-group">
+                <label for="sim-multiplier">Multiplier</label>
+                <input type="number" id="sim-multiplier" value="100" min="1" step="1">
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading banner — P2 four-state machine -->
+    <div class="panel-banner panel-banner--loading" role="status" aria-live="polite"
+         x-show="phase === 'loading'" x-cloak>
+        <span x-text="message || 'Simulating expiry payoffs...'"></span>
+    </div>
+
+    <!-- Error banner -->
+    <div class="panel-banner panel-banner--error" role="alert" aria-live="assertive"
+         x-show="phase === 'error'" x-cloak>
+        <span x-text="message"></span>
+    </div>
+
+    <!-- Loaded content -->
+    <div x-show="phase === 'loaded'" x-cloak aria-live="polite">
+        <!-- P1 — primary metric: P&L at expiration for the focused scenario. -->
+        <div class="sim-hero-row">
+            <div class="metric-hero" id="sim-hero">
+                <div class="metric-hero__label">P&amp;L at expiration</div>
+                <div class="metric-hero__value" id="sim-hero-value">—</div>
+                <div class="metric-hero__sub" id="sim-hero-sub">—</div>
+            </div>
+            <section class="kpi-strip sim-kpi-strip" aria-label="Scenario key metrics">
+                <div class="kpi-card">
+                    <span class="kpi-card__label">Entry premium</span>
+                    <span class="kpi-card__value" id="sim-kpi-premium">—</span>
+                    <span class="kpi-card__sub" id="sim-kpi-premium-sub">—</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-card__label">Breakeven</span>
+                    <span class="kpi-card__value" id="sim-kpi-breakeven">—</span>
+                    <span class="kpi-card__sub">terminal price</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-card__label">Max profit / loss</span>
+                    <span class="kpi-card__value" id="sim-kpi-extremes">—</span>
+                    <span class="kpi-card__sub" id="sim-kpi-extremes-sub">per position</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-card__label">Prob. of profit</span>
+                    <span class="kpi-card__value" id="sim-kpi-pop">—</span>
+                    <span class="kpi-card__sub">risk-neutral, at expiry</span>
+                </div>
+            </section>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title">Payoff at expiration</div>
+            <p class="panel-desc">
+                Line colour encodes implied volatility, dash pattern encodes maturity.
+                The highlighted line is the scenario shown in the hero metric.
+            </p>
+            <div class="sim-controls" role="group" aria-label="Payoff chart controls">
+                <div class="sim-control">
+                    <label for="sim-strike-select">Strike</label>
+                    <select id="sim-strike-select" aria-label="Strike to chart"></select>
+                </div>
+                <div class="sim-control">
+                    <label for="sim-combo-select">Scenario</label>
+                    <select id="sim-combo-select" aria-label="Maturity and implied vol scenario"></select>
+                </div>
+                <div class="sim-control sim-control--grow">
+                    <label for="sim-scenario-range">Terminal price</label>
+                    <input type="range" id="sim-scenario-range" min="0" max="100" step="0.01"
+                           aria-label="Terminal price at expiration">
+                    <input type="number" id="sim-scenario-price" class="sim-scenario-number"
+                           step="0.01" aria-label="Terminal price value">
+                </div>
+            </div>
+            <div class="chart-wrapper sim-chart-wrapper">
+                <canvas id="sim-payoff-chart" role="img"
+                        aria-label="Payoff at expiration versus terminal price"></canvas>
+            </div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title">P&amp;L grid — strike × (maturity × implied vol)</div>
+            <p class="panel-desc">
+                Every cell is the position P&amp;L if the underlying settles at the
+                terminal price selected above. Pick a strike to chart its payoff.
+            </p>
+            <div class="sim-matrix-scroll" id="sim-matrix-body"></div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title">Scenario detail — selected strike</div>
+            <div class="table-wrapper" id="sim-detail-body"></div>
+        </div>
+    </div>
+
+    <!-- Empty / idle -->
+    <div class="empty-state" role="status" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
+        <p x-show="phase === 'idle'">
+            Set a ticker in the <strong>Parameter</strong> tab — the simulation runs
+            automatically when you switch to this tab.
+        </p>
+        <p x-show="phase === 'empty'" x-text="message || 'No simulation output for these inputs.'"></p>
+    </div>
+</div>

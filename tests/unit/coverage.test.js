@@ -24,6 +24,7 @@ import '../../static/state/tabFlagsState.js';
 import '../../static/state/panelState.js';
 import '../../static/utils.js';
 import '../../static/cache.js';
+import '../../static/simulation.js';
 
 // Capture the post-import surface BEFORE the setup `beforeEach` runs and
 // wipes globals. We re-attach them in a local `beforeEach` so each `it`
@@ -41,6 +42,8 @@ const _snapshot = {
     initializeOptionsTable: window.initializeOptionsTable,
     toggleOptionsSection: window.toggleOptionsSection,
     toggleSizingSection: window.toggleSizingSection,
+    loadSimulationTab: window.loadSimulationTab,
+    runSimulation: window.runSimulation,
 };
 
 beforeEach(() => {
@@ -76,6 +79,11 @@ describe('coverage smoke — every module publishes its surface', () => {
     it('utils functions are global', () => {
         expect(typeof window.escapeHtml).toBe('function');
         expect(typeof window.parseTickers).toBe('function');
+    });
+
+    it('simulation tab published its window surface', () => {
+        expect(typeof window.loadSimulationTab).toBe('function');
+        expect(typeof window.runSimulation).toBe('function');
     });
 });
 
