@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - core.options.greeks.black_scholes
 Dependencies DOWNWARD:
-  - services.strategy_service, core.portfolio
+  - services.options.strategies, core.portfolio
 """
 
 from __future__ import annotations

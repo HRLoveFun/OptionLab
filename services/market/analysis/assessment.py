@@ -2,7 +2,7 @@
 
 import logging
 
-from ._sizing import calculate_position_size
+from .sizing import calculate_position_size
 
 logger = logging.getLogger(__name__)
 

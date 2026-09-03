@@ -8,7 +8,7 @@ Dependencies UPWARD:
   - core.options.greeks.black_scholes
   - core.strategies.models
 Dependencies DOWNWARD:
-  - services.portfolio_analysis_service
+  - services.portfolio.analysis
 """
 
 from __future__ import annotations

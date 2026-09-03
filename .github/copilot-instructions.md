@@ -51,7 +51,7 @@ gunicorn app:app -b 0.0.0.0:5000  # production
 ## Key Patterns
 
 - Financial domain constants (MA windows, oscillation params) are intentional — don't refactor as "magic numbers"
-- Chart generation returns base64-encoded images via `chart_service.py`
+- Chart generation returns base64-encoded images via `services/market/charts.py`
 - Options Greeks use vectorized Black-Scholes in `core/options_greeks.py`
 - Data freshness: 60-second cooldown per ticker in `DataService`
 

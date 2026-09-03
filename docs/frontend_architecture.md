@@ -85,7 +85,7 @@ Flask ── HTML fragment ─────────────────�
 Key files:
 - `data_pipeline/job_cache.py` — in-process JobCache (TTL 90 s).
 - `app.py::_render_streaming_slice` — shared `/render/<kind>` handler.
-- `services/analysis_service.py::generate_*_slice` — per-tab compute.
+- `services/market/analysis/facade.py::generate_*_slice` — per-tab compute.
 - `templates/partials/fragments/*.html` — rendered fragments.
 
 The browser-side HTMX library replaces each placeholder when its fragment

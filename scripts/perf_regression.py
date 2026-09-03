@@ -59,8 +59,9 @@ def _form_payload(tickers_csv: str) -> dict:
 
 def run_benchmark(tickers: list[str]) -> float:
     import threading
-    from urllib.request import urlopen, Request, build_opener, ProxyHandler, install_opener
     from urllib.parse import urlencode
+    from urllib.request import ProxyHandler, Request, build_opener, install_opener, urlopen
+
     from werkzeug.serving import make_server
 
     # Ensure localhost bypasses any HTTP_PROXY set by init_yf_proxy().

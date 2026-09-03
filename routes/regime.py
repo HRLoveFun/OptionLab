@@ -12,6 +12,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from services.regime.facade import RegimeService
 from utils.rate_limit import client_ip, rate_limit
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,6 @@ bp = Blueprint("regime", __name__)
 @bp.route("/api/regime/current", methods=["GET"])
 def regime_current():
     """Current composite regime label (VIX / SPY)."""
-    from services.regime_service import RegimeService
-
     persist = request.args.get("persist", "0").lower() in ("1", "true", "yes")
     try:
         result = RegimeService.append_today() if persist else RegimeService.compute_current()
@@ -31,9 +30,7 @@ def regime_current():
     except Exception as e:
         logger.error("regime_current error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "regime_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "regime_failed", "message": str(e)}),
             500,
         )
 
@@ -41,8 +38,6 @@ def regime_current():
 @bp.route("/api/regime/history", methods=["GET"])
 def regime_history():
     """Regime history (persisted log, or live fallback if log is empty)."""
-    from services.regime_service import RegimeService
-
     try:
         days = int(request.args.get("days", 180))
     except (TypeError, ValueError):
@@ -54,9 +49,7 @@ def regime_history():
     except Exception as e:
         logger.error("regime_history error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "regime_history_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "regime_history_failed", "message": str(e)}),
             500,
         )
 
@@ -64,8 +57,6 @@ def regime_history():
 @bp.route("/api/regime/backfill", methods=["POST"])
 def regime_backfill():
     """Backfill regime log for the last N trading days."""
-    from services.regime_service import RegimeService
-
     allowed, retry = rate_limit(f"backfill:{client_ip()}", max_calls=5, window_sec=3600)
     if not allowed:
         return (
@@ -92,8 +83,6 @@ def regime_backfill():
     except Exception as e:
         logger.error("regime_backfill error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "regime_backfill_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "regime_backfill_failed", "message": str(e)}),
             500,
         )

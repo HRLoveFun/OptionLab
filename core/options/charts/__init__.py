@@ -13,5 +13,5 @@ Contracts:
 Dependencies UPWARD:
   - core._shared.plotting
 Dependencies DOWNWARD:
-  - services.chart_service, services.options_chain_service
+  - services.market.charts, services.options.chain
 """

@@ -183,18 +183,72 @@ def rule_sqlite_bypass(ctx: Context) -> None:
 
 
 # ── Rule: import-direction ───────────────────────────────────────
-_LAYERS = {"app": 0, "services": 1, "core": 2, "data_pipeline": 3, "utils": 99}
+# INVARIANT: the layer order is app → routes → services → core → data_pipeline
+# → utils. A layer may only depend on layers *below* it, and ``routes`` may not
+# skip across ``services`` into ``core``.
+#
+# WHY an explicit allow-list instead of the previous numeric comparison: the
+# numeric form compared layer numbers and therefore
+#   (a) treated routes→core as a legal "downward" call,
+#   (b) skipped ``routes/`` entirely (it was absent from the map, so both the
+#       file's own layer and any import of it resolved to None), and
+#   (c) exempted ``utils`` wholesale via a sentinel value.
+# Those three blind spots let the declared architecture drift from the real
+# import graph. The allow-list states the intended edges directly.
+_ALLOWED_DEPS: dict[str, set[str]] = {
+    "app": {"routes", "services", "core", "data_pipeline", "utils"},
+    "routes": {"services", "data_pipeline", "utils"},
+    "services": {"core", "data_pipeline", "utils"},
+    # TRADEOFF: core→data_pipeline is directionally legal but breaks core's
+    # purity contract. It is policed by the separate ``core-purity`` rule so the
+    # two concerns (direction vs. purity) can be whitelisted and paid down at
+    # different paces.
+    "core": {"data_pipeline", "utils"},
+    "data_pipeline": {"utils"},
+    # utils is a leaf: it may not reach back into any business layer.
+    "utils": set(),
+}
 
 
-def _layer_of(path: Path) -> int | None:
+def _layer_of(path: Path) -> str | None:
     try:
         rel = path.relative_to(REPO_ROOT) if path.is_absolute() else path
     except ValueError:
         return None
     head = rel.parts[0] if rel.parts else ""
     if head == "app.py":
-        return _LAYERS["app"]
-    return _LAYERS.get(head)
+        return "app"
+    return head if head in _ALLOWED_DEPS else None
+
+
+def _is_suppressed_at(path: Path, lineno: int, rule: str) -> bool:
+    lines = _read(path)
+    if not 1 <= lineno <= len(lines):
+        return False
+    return _is_suppressed(lines[lineno - 1], rule)
+
+
+def _imported_heads(path: Path) -> list[tuple[int, str]]:
+    """Every absolutely-imported top-level package with its line number.
+
+    WHY ast.walk and not a scan of top-level statements: ``routes/`` historically
+    hid its service imports inside function bodies, which kept them invisible to
+    static review. Function-local imports are dependencies just the same.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    out: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        mods: list[str] = []
+        if isinstance(node, ast.Import):
+            mods = [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            mods = [node.module]
+        for m in mods:
+            out.append((getattr(node, "lineno", 1), m.split(".", 1)[0]))
+    return out
 
 
 def rule_import_direction(ctx: Context) -> None:
@@ -202,31 +256,102 @@ def rule_import_direction(ctx: Context) -> None:
         if path.suffix != ".py":
             continue
         layer = _layer_of(path)
-        if layer is None or layer == _LAYERS["utils"]:
+        if layer is None:
             continue
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except Exception:
+        allowed = _ALLOWED_DEPS[layer]
+        for lineno, head in _imported_heads(path):
+            if head not in _ALLOWED_DEPS or head == layer:
+                continue  # third-party/stdlib, or intra-layer import
+            if head in allowed:
+                continue
+            if _is_suppressed_at(path, lineno, "import-direction"):
+                continue
+            ctx.add(
+                "import-direction",
+                path,
+                lineno,
+                f"layer '{layer}' must not import from '{head}' "
+                f"(allowed: {sorted(allowed) or 'nothing — utils is a leaf layer'}) — see ADR 0001",
+            )
+
+
+# ── Rule: core-purity ────────────────────────────────────────────
+# INVARIANT: core/ is pure computation — no DB, no network, no Flask.
+# HACK: a handful of call sites still fetch through data_pipeline. They carry a
+# ``# doc-guard: allow=core-purity`` marker and are tracked as tech debt; the
+# migration lifts the fetch up into services/ and passes the snapshot in.
+def rule_core_purity(ctx: Context) -> None:
+    for path in ctx.files:
+        if path.suffix != ".py" or _layer_of(path) != "core":
             continue
-        for node in ast.walk(tree):
-            mods = []
-            if isinstance(node, ast.Import):
-                mods = [a.name for a in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                mods = [node.module]
-            for m in mods:
-                head = m.split(".", 1)[0]
-                target = _LAYERS.get(head)
-                if target is None or target == _LAYERS["utils"]:
-                    continue
-                if target < layer:  # importing a higher layer
-                    src_layer = next((name for name, lv in _LAYERS.items() if lv == layer), "?")
-                    ctx.add(
-                        "import-direction",
-                        path,
-                        getattr(node, "lineno", 1),
-                        f"layer '{src_layer}' must not import from '{head}' (ADR 0001)",
-                    )
+        for lineno, head in _imported_heads(path):
+            if head != "data_pipeline":
+                continue
+            if _is_suppressed_at(path, lineno, "core-purity"):
+                continue
+            ctx.add(
+                "core-purity",
+                path,
+                lineno,
+                "core/ must stay pure — importing 'data_pipeline' breaks the "
+                "computation/IO split; fetch upstream and pass data in (ADR 0001)",
+            )
+
+
+# ── Rule: db-access ──────────────────────────────────────────────
+# INVARIANT: data_pipeline/repos.py is the only place that builds SQL and
+# data_pipeline/db.py the only place that owns connections. Upper layers must go
+# through repos.py / DataService so WAL pragmas and the query cache apply.
+_DB_IMPORT_RE = re.compile(r"^\s*from\s+data_pipeline\.db\s+import\s+(.+)$")
+# Connection lifecycle helpers are not SQL access: they have no repos.py
+# equivalent and every threaded render path must call them to avoid leaking the
+# thread-local connection.
+_DB_LIFECYCLE_ALLOWED = {"close_thread_conn"}
+
+
+def rule_db_access(ctx: Context) -> None:
+    for path in ctx.files:
+        if path.suffix != ".py" or _layer_of(path) not in ("routes", "services"):
+            continue
+        for i, line in enumerate(_read(path), 1):
+            m = _DB_IMPORT_RE.match(line)
+            if not m:
+                continue
+            names = {n.strip().split(" as ")[0].strip() for n in m.group(1).split(",")}
+            if names and names <= _DB_LIFECYCLE_ALLOWED:
+                continue
+            if _is_suppressed(line, "db-access"):
+                continue
+            ctx.add(
+                "db-access",
+                path,
+                i,
+                "do not touch data_pipeline.db primitives — go through "
+                "data_pipeline/repos.py or DataService (ADR 0003)",
+            )
+
+
+# ── Rule: single-yf-exit ─────────────────────────────────────────
+# INVARIANT: yf_client.py is the single module allowed to talk to yfinance, so
+# proxy setup and the token-bucket throttle can never be bypassed (ADR 0005).
+_YF_IMPORT_RE = re.compile(r"^\s*(import\s+yfinance\b|from\s+yfinance\b)")
+_YF_SINGLE_EXIT = REPO_ROOT / "data_pipeline" / "yf_client.py"
+
+
+def rule_single_yf_exit(ctx: Context) -> None:
+    for path in ctx.files:
+        if path.suffix != ".py" or path.resolve() == _YF_SINGLE_EXIT:
+            continue
+        if "tests/" in str(path) or "scripts/" in str(path):
+            continue
+        for i, line in enumerate(_read(path), 1):
+            if _YF_IMPORT_RE.search(line) and not _is_suppressed(line, "single-yf-exit"):
+                ctx.add(
+                    "single-yf-exit",
+                    path,
+                    i,
+                    "only data_pipeline/yf_client.py may import yfinance — see docs/constraints.md §2 / ADR 0005",
+                )
 
 
 # ── Rule: module-docstring ───────────────────────────────────────
@@ -246,7 +371,12 @@ def rule_module_docstring(ctx: Context) -> None:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if not (tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Constant) and isinstance(tree.body[0].value.value, str)):
+        if not (
+            tree.body
+            and isinstance(tree.body[0], ast.Expr)
+            and isinstance(tree.body[0].value, ast.Constant)
+            and isinstance(tree.body[0].value.value, str)
+        ):
             ctx.add(
                 "module-docstring",
                 path,
@@ -305,6 +435,9 @@ ALL_RULES = {
     "yfinance-session-kwarg": rule_yfinance_session_kwarg,
     "sqlite-bypass": rule_sqlite_bypass,
     "import-direction": rule_import_direction,
+    "core-purity": rule_core_purity,
+    "db-access": rule_db_access,
+    "single-yf-exit": rule_single_yf_exit,
     "module-docstring": rule_module_docstring,
     "adr-link-integrity": rule_adr_link_integrity,
     "adr-index-fresh": rule_adr_index_fresh,
@@ -315,7 +448,7 @@ def collect_files(paths: list[str] | None) -> list[Path]:
     if paths:
         return [Path(p).resolve() for p in paths if Path(p).exists()]
     out: list[Path] = []
-    for sub in ("app.py", "core", "data_pipeline", "services", "utils", "docs"):
+    for sub in ("app.py", "routes", "core", "data_pipeline", "services", "utils", "docs"):
         p = REPO_ROOT / sub
         if p.is_file():
             out.append(p)

@@ -11,7 +11,7 @@ Contracts:
 Dependencies UPWARD:
   - core.options.simulation.expiry
 Dependencies DOWNWARD:
-  - services.options_simulation_service, routes.options, tests
+  - services.options.simulation, routes.options, tests
 """
 
 from core.options.simulation.expiry import parse_expiries, simulate_expiry

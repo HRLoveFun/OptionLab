@@ -6,9 +6,9 @@ import logging
 from core.regime import SLOPE_LOOKBACK, SMA_WINDOW
 from data_pipeline.cleaning import clean_range
 from data_pipeline.data_ops import _cache_invalidate
-from data_pipeline.db import fetch_df, init_db
 from data_pipeline.downloader import upsert_raw_prices
 from data_pipeline.processing import process_frequencies
+from data_pipeline.repos import count_clean_rows
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +18,7 @@ MIN_TRADING_ROWS = SMA_WINDOW + SLOPE_LOOKBACK + 5
 
 def _count_clean_rows(ticker: str) -> int:
     """Return how many priced rows the DB holds for ``ticker``."""
-    init_db()
-    df = fetch_df(
-        "SELECT COUNT(*) AS n FROM clean_prices WHERE ticker=? AND close IS NOT NULL",
-        (ticker,),
-    )
-    if df.empty:
-        return 0
-    try:
-        return int(df.iloc[0]["n"])
-    except (KeyError, TypeError, ValueError):
-        return 0
+    return count_clean_rows(ticker)
 
 
 def _bootstrap_history(ticker: str, days: int = BOOTSTRAP_DAYS) -> None:
@@ -52,6 +42,3 @@ def _bootstrap_history(ticker: str, days: int = BOOTSTRAP_DAYS) -> None:
         logger.error("Regime bootstrap for %s crashed: %s", ticker, e, exc_info=True)
     finally:
         _cache_invalidate(ticker)
-
-
-

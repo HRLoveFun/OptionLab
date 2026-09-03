@@ -24,6 +24,7 @@ def _extract_job_id(html: str) -> str:
     m = _JOB_ID_RE.search(html)
     return m.group(1) if m else ""
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -39,6 +40,7 @@ def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False)
     init_db()
     # Drop the cross-test query cache that DataService maintains (TTL 60s).
     from data_pipeline.data_ops import _cache_invalidate
+
     _cache_invalidate(ticker)
     dates = pd.bdate_range(end=dt.date.today(), periods=n_rows)
     np.random.seed(42)
@@ -68,10 +70,15 @@ def _patch_downloads(monkeypatch):
     """Disable all real yfinance download paths for unit tests."""
     from data_pipeline.data_ops import DataService
 
-    # Block the manual_update → pipeline path
+    # Block the manual_update → pipeline path. Patch BOTH the DataService
+    # facade and the module-level function: _query.py calls the _update module
+    # directly because facade imports _query (the reverse edge would be an
+    # import cycle), so patching only the class would be bypassed.
     monkeypatch.setattr(DataService, "manual_update", staticmethod(lambda *a, **kw: None))
-    # Block the ensure_range → chunked backfill path
+    monkeypatch.setattr("data_pipeline.data_ops._update.manual_update", lambda *a, **kw: None)
+    # Block the ensure_range → chunked backfill path (same dual patching).
     monkeypatch.setattr(DataService, "ensure_range", staticmethod(lambda *a, **kw: True))
+    monkeypatch.setattr("data_pipeline.data_ops._range.ensure_range", lambda *a, **kw: True)
     # Block the data_context fallback to yfinance
     monkeypatch.setattr("core.market.data_context._download_data", lambda *a, **kw: None)
 
@@ -308,7 +315,7 @@ class TestFlaskAnalysisPost:
     def test_analysis_service_direct(self, _patch_downloads):
         """Direct AnalysisService call with good data produces charts."""
         _seed_clean_prices("NVDA", 60)
-        from services.market_analysis import AnalysisService
+        from services.market.analysis import AnalysisService
 
         form_data = {
             "ticker": "NVDA",

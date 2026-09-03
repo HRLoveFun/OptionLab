@@ -16,7 +16,11 @@ from typing import Any
 
 from core.portfolio import Position, aggregate_greeks, attribute_pnl
 from core.strategies import Leg
-from data_pipeline.db import get_conn
+from data_pipeline.repos import (
+    insert_tracked_strategy,
+    select_tracked_strategies,
+    update_tracked_strategy_closed,
+)
 from data_pipeline.yf_client import fetch_spots_bulk
 from utils.api_errors import ApiError
 
@@ -68,31 +72,21 @@ def create_position(payload: dict[str, Any]) -> dict[str, Any]:
     notes = payload.get("notes")
     entry_meta = payload.get("entry_meta") or {}
 
-    with get_conn() as conn:
-        cur = conn.execute(
-            """
-            INSERT INTO tracked_strategies
-              (ticker, template, expiry, entry_date, entry_spot,
-               entry_net_premium, qty, legs_json, entry_meta_json,
-               status, notes)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                ticker,
-                template,
-                expiry,
-                entry_date,
-                entry_spot,
-                entry_net_premium,
-                qty,
-                _legs_to_json(legs),
-                json.dumps(entry_meta),
-                "open",
-                notes,
-            ),
+    new_id = insert_tracked_strategy(
+        (
+            ticker,
+            template,
+            expiry,
+            entry_date,
+            entry_spot,
+            entry_net_premium,
+            qty,
+            _legs_to_json(legs),
+            json.dumps(entry_meta),
+            "open",
+            notes,
         )
-        conn.commit()
-        new_id = cur.lastrowid
+    )
     return {"status": "ok", "id": new_id}
 
 
@@ -107,11 +101,7 @@ def list_positions(status: str | None = "open") -> list[dict[str, Any]]:
     ).split()
     where = "WHERE status = ?" if status else ""
     params = (status,) if status else ()
-    with get_conn() as conn:
-        rows = conn.execute(
-            f"SELECT {', '.join(cols)} FROM tracked_strategies {where} ORDER BY id DESC",
-            params,
-        ).fetchall()
+    rows = select_tracked_strategies(cols, status)
     out: list[dict[str, Any]] = []
     for r in rows:
         d = _row_to_dict(r, cols)
@@ -122,14 +112,11 @@ def list_positions(status: str | None = "open") -> list[dict[str, Any]]:
 
 
 def close_position(position_id: int, closed_value: float) -> dict[str, Any]:
-    with get_conn() as conn:
-        cur = conn.execute(
-            "UPDATE tracked_strategies SET status='closed', closed_date=?, closed_value=? WHERE id=?",
-            (date.today().isoformat(), float(closed_value), int(position_id)),
-        )
-        conn.commit()
-        if cur.rowcount == 0:
-            raise ApiError(f"position {position_id} not found", code="not_found", status=404)
+    rowcount = update_tracked_strategy_closed(
+        position_id, date.today().isoformat(), float(closed_value)
+    )
+    if rowcount == 0:
+        raise ApiError(f"position {position_id} not found", code="not_found", status=404)
     return {"status": "ok", "id": position_id}
 
 

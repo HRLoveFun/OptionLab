@@ -1,12 +1,14 @@
-"""Market review time-series payload for Chart.js.
+"""Market review Chart.js time-series payload (pure).
 
-Domain:    Market Review — Time Series
+Builds the per-asset time-series dict consumed by the frontend from an
+already-fetched close-price panel. No I/O — the panel is supplied by
+``services.market_review`` (ADR 0003 / architecture review §2 `core-purity`).
+
 Contracts:
-  - market_review_timeseries(instrument, start_date, end_date) -> dict
-Dependencies UPWARD:
-  - core.market_review.fetch, core.market_review.compute
-Dependencies DOWNWARD:
-  - services.market_service
+  - build_timeseries(instrument, data, returns, display_names) -> dict
+Dependencies:
+  - core.market_review.compute (build_review)
+  - core.market_review.constants (_canonicalize_instrument)
 """
 
 from __future__ import annotations
@@ -14,12 +16,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from core.market_review.compute import market_review
-from core.market_review.fetch import _canonicalize_instrument, fetch_market_data
+from core.market_review.compute import build_review
+from core.market_review.constants import _canonicalize_instrument
 
 
-def market_review_timeseries(instrument: str, start_date=None, end_date=None) -> dict:
-    data, returns, valid_display = fetch_market_data(instrument, start_date, end_date)
+def build_timeseries(instrument, data, returns, display_names) -> dict:
+    """Build the Chart.js time-series payload from a pre-fetched panel."""
     instrument = _canonicalize_instrument(instrument)
     dates = data.index.strftime("%Y-%m-%d").tolist()
 
@@ -27,10 +29,14 @@ def market_review_timeseries(instrument: str, start_date=None, end_date=None) ->
         return [round(float(x), 4) if pd.notna(x) else None for x in series]
 
     assets_out = {}
-    for asset in valid_display:
+    for asset in display_names:
         cum_ret = ((data[asset] / data[asset].iloc[0]) - 1) * 100
         roll_vol = returns[asset].rolling(20).std() * np.sqrt(252) * 100
-        roll_corr = returns[instrument].rolling(20).corr(returns[asset]) if asset != instrument else pd.Series(1.0, index=returns.index)
+        roll_corr = (
+            returns[instrument].rolling(20).corr(returns[asset])
+            if asset != instrument
+            else pd.Series(1.0, index=returns.index)
+        )
         assets_out[asset] = {
             "prices": _safe(data[asset]),
             "cum_returns": _safe(cum_ret),
@@ -45,7 +51,7 @@ def market_review_timeseries(instrument: str, start_date=None, end_date=None) ->
         "YTD": f"{today.year}-01-01",
     }
     try:
-        summary_html = market_review(instrument, start_date, end_date).to_html(
+        summary_html = build_review(instrument, data, returns, display_names).to_html(
             classes="table table-striped", index=True, escape=False
         )
     except Exception:

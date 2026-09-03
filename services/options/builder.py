@@ -100,8 +100,8 @@ def _vol_context(ticker: str, current_iv_pct: float | None) -> dict[str, Any]:
     try:
         from datetime import date, timedelta
 
-        from data_pipeline.data_ops import DataService
         from core import signals as signals_mod
+        from data_pipeline.data_ops import DataService
 
         start = date.today() - timedelta(days=400)
         df = DataService.get_cleaned_daily(ticker, start=start)

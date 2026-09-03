@@ -8,18 +8,20 @@ import pandas as pd
 from data_pipeline.db import fetch_df, init_db
 
 from . import _globals as _g
+from . import _range as _r
+from . import _update as _u
 
 logger = logging.getLogger(__name__)
 
 
 def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> pd.DataFrame:
     """Return cleaned daily prices, triggering update + backfill if needed."""
-    from . import _service as _svc
-
+    # INVARIANT: call sibling modules directly, never the DataService facade —
+    # facade imports this module, so reaching back up would be an import cycle.
     start = start or (dt.date.today() - dt.timedelta(days=365 * 5))
     end = end or dt.date.today()
-    _svc.DataService.manual_update(ticker, days=7)
-    _svc.DataService.ensure_range(ticker, start, end)
+    _u.manual_update(ticker, days=7)
+    _r.ensure_range(ticker, start, end)
     cache_key = (ticker, "clean", str(start), str(end))
     cached = _g._cache_get(cache_key)
     if cached is not None:
@@ -38,9 +40,7 @@ def get_processed(
 ) -> pd.DataFrame:
     start = start or (dt.date.today() - dt.timedelta(days=365 * 5))
     end = end or dt.date.today()
-    from . import _service as _svc
-
-    _svc.DataService.manual_update(ticker, days=7)
+    _u.manual_update(ticker, days=7)
     cache_key = (ticker, "processed", frequency, str(start), str(end))
     cached = _g._cache_get(cache_key)
     if cached is not None:
@@ -57,9 +57,7 @@ def get_processed(
 def get_processed_data(ticker: str, start: dt.date, end: dt.date, frequency: str = "W") -> pd.DataFrame:
     """Get processed data including osc_high, osc_low, and other features."""
     try:
-        from . import _service as _svc
-
-        _svc.DataService.manual_update(ticker, days=7)
+        _u.manual_update(ticker, days=7)
         cache_key = (ticker, "processed", frequency, str(start), str(end))
         cached = _g._cache_get(cache_key)
         if cached is not None:
@@ -90,12 +88,10 @@ def get_latest_spot(ticker: str) -> float | None:
         except (TypeError, ValueError):
             pass
 
-    try:
-        import yfinance as yf
-        from utils.network import yf_throttle
+    from data_pipeline.yf_client import fetch_spot
 
-        yf_throttle()
-        price = yf.Ticker(ticker).fast_info.last_price
+    try:
+        price = fetch_spot(ticker)
         if price and price > 0:
             return float(price)
     except Exception:

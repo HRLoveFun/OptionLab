@@ -1,11 +1,11 @@
-"""Tests for core/strategies.py and services/strategy_service.py."""
+"""Tests for core/strategies.py and services/options/strategies.py."""
 
 import math
 
 import pytest
 
 from core import strategies as S
-from services.strategy_service import analyze, list_strategies
+from services.options.strategies import analyze, list_strategies
 
 
 def test_long_call_unbounded_profit_bounded_loss():

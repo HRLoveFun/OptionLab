@@ -131,7 +131,7 @@ def test_coverage_report_empty():
 def test_regime_log_idempotent(monkeypatch):
     """Re-running append_today on the same date should update, not duplicate."""
 
-    from services import regime_service as svc
+    from services.regime import facade as svc
 
     end = dt.date(2024, 4, 15)
     fake_spy = _series(np.linspace(100, 150, 70), end)
@@ -157,7 +157,7 @@ def test_regime_log_idempotent(monkeypatch):
 
 
 def test_regime_backfill_persists_range(monkeypatch):
-    from services import regime_service as svc
+    from services.regime import facade as svc
 
     end = dt.date(2024, 5, 31)
     fake_spy = _series(np.linspace(100, 150, 200), end)
@@ -208,7 +208,7 @@ def test_fetch_df_aggregate_query_without_date_column():
 
 def test_regime_history_empty_db_returns_ok(monkeypatch):
     """Regression: hitting /api/regime/history on a fresh DB must not 500."""
-    from services import regime_service as svc
+    from services.regime import facade as svc
 
     # Simulate no market data available (DataService returns empty series)
     monkeypatch.setattr(svc, "_fetch_close_series", lambda *a, **k: pd.Series(dtype=float))
@@ -224,7 +224,7 @@ def test_ensure_history_triggers_bootstrap_when_thin(monkeypatch):
     must invoke the full pipeline. This is the fix for the "spy_insufficient_history:13"
     symptom where DataService only seeds 7 days per access.
     """
-    from services import regime_service as svc
+    from services.regime import facade as svc
 
     called = {"ticker": None, "days": None}
 
@@ -242,7 +242,7 @@ def test_ensure_history_triggers_bootstrap_when_thin(monkeypatch):
 
 def test_ensure_history_noop_when_db_populated(monkeypatch):
     """When the DB already has enough rows, no bootstrap should run."""
-    from services import regime_service as svc
+    from services.regime import facade as svc
 
     called = []
     monkeypatch.setattr(svc, "_bootstrap_history", lambda *a, **k: called.append(True))

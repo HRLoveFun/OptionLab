@@ -11,7 +11,8 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from services.market_service import MarketService
+from services.market.facade import MarketService
+from services.market.signals import get_signals
 from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,7 @@ def signals_route():
     raw_ticker = (request.args.get("ticker", "") or "").strip().upper()
     if not raw_ticker:
         return (
-            jsonify(
-                {"status": "error", "code": "missing_ticker", "message": "ticker is required"}
-            ),
+            jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}),
             400,
         )
     try:
@@ -36,15 +35,11 @@ def signals_route():
     iv_pct = request.args.get("iv_pct")
     iv_pct_val = float(iv_pct) if iv_pct not in (None, "") else None
     try:
-        from services.signals_service import get_signals
-
         return jsonify(get_signals(ticker, current_iv_pct=iv_pct_val))
     except Exception as e:
         logger.error("signals_route error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "signals_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "signals_failed", "message": str(e)}),
             500,
         )
 
@@ -57,9 +52,7 @@ def market_review_ts():
     start_date = data.get("start_date")
     if not raw_ticker:
         return (
-            jsonify(
-                {"status": "error", "code": "missing_ticker", "message": "No ticker provided"}
-            ),
+            jsonify({"status": "error", "code": "missing_ticker", "message": "No ticker provided"}),
             400,
         )
     try:
@@ -72,8 +65,6 @@ def market_review_ts():
     except Exception as e:
         logger.error("market_review_ts error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "market_review_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "market_review_failed", "message": str(e)}),
             500,
         )

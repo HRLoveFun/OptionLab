@@ -9,7 +9,7 @@ Contracts:
   - build_data_context(ticker, start_date, frequency, end_date) -> DataContext
   - DataContext exposes bars, daily_bars, horizon, ticker, frequency, is_valid
 Dependencies DOWNWARD:
-  - core.market.features, core.market.charts, services.analysis_service
+  - core.market.features, core.market.charts, services.market.analysis.facade
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ _YF_RETRY_BASE_DELAY = 3  # seconds
 # Internal helpers (extracted from former PriceDynamic)
 # ---------------------------------------------------------------------------
 
+
 def _normalize_ticker(ticker: str) -> str:
     from utils.ticker_utils import normalize_ticker
 
@@ -59,7 +60,7 @@ def _validate_inputs(ticker, start_date, frequency, end_date=None):
 
 
 def _fetch_daily_from_db(ticker: str, download_start: dt.date):
-    from data_pipeline.data_ops import DataService
+    from data_pipeline.data_ops import DataService  # doc-guard: allow=core-purity
 
     try:
         DataService.initialize()
@@ -92,7 +93,7 @@ def _fetch_daily_from_db(ticker: str, download_start: dt.date):
 
 
 def _download_data(ticker: str, download_start: dt.date):
-    from data_pipeline.yf_client import fetch_daily_ohlcv
+    from data_pipeline.yf_client import fetch_daily_ohlcv  # doc-guard: allow=core-purity
 
     yf_end = dt.date.today() + dt.timedelta(days=1)
     df = fetch_daily_ohlcv(
@@ -163,11 +164,7 @@ def _fetch_raw_data(ticker: str, user_start_date: dt.date, frequency: str):
     raw_data = _fetch_daily_from_db(ticker, download_start)
     db_data = raw_data
     db_min = raw_data.index.min().date() if raw_data is not None and not raw_data.empty else None
-    needs_yfinance = (
-        raw_data is None
-        or raw_data.empty
-        or (db_min is not None and db_min > user_start_date)
-    )
+    needs_yfinance = raw_data is None or raw_data.empty or (db_min is not None and db_min > user_start_date)
     if needs_yfinance:
         yf_data = _download_data(ticker, download_start)
         if yf_data is not None and not yf_data.empty:
@@ -181,6 +178,7 @@ def _fetch_raw_data(ticker: str, user_start_date: dt.date, frequency: str):
 # ---------------------------------------------------------------------------
 # DataContext
 # ---------------------------------------------------------------------------
+
 
 class DataContext:
     """Immutable-ish container for market data fetched for a given ticker/horizon."""

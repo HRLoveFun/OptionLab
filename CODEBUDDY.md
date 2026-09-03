@@ -22,7 +22,7 @@ E2E deps are deliberately **not** in `requirements.txt`; install `pytest-playwri
 python app.py                                              # dev server; PORT defaults to 5001
 gunicorn app:app -b 0.0.0.0:5001 --workers 2 --threads 4   # production
 ```
-`app.py` boots the DB schema, propagates `YF_PROXY` to curl_cffi, installs the error envelope and rate limiter, and starts APScheduler only on the worker that wins the leader lock. Set `RATE_LIMIT_DISABLED=1` to disable throttling (tests do).
+`app.py` boots the DB schema, propagates `YF_PROXY` to curl_cffi, installs the error envelope and the in-house rate limiter (`utils/rate_limit.py::install`), and starts APScheduler only on the worker that wins the leader lock. APScheduler is **lazily imported and optional** — it is only required when `AUTO_UPDATE_TICKERS` is set. Set `RATE_LIMIT_DISABLED=1` to disable throttling (tests do).
 
 ### Lint & format
 ```bash
@@ -65,6 +65,8 @@ Config in `vitest.config.js`; setup file `tests/unit/setup.js`.
 python scripts/doc_guard.py                      # all L1 invariants (exit non-zero on violation)
 python scripts/doc_guard.py --files a.py b.md    # only changed files (what pre-commit/CI do)
 python scripts/doc_guard.py --rule import-direction --json
+python scripts/arch_metrics.py                   # fan-in/out, cycles, god files, dead-code report
+python scripts/arch_metrics.py --check           # CI drift gate vs .github/data/arch_baseline.json
 python scripts/regen_adr_index.py                # regenerate docs/decisions/README.md, then commit
 python scripts/audit_tags.py                     # tag-coverage regression vs .github/data/tag_baseline.json
 python scripts/audit_tags.py --update-baseline   # accept new uncovered constants
@@ -85,9 +87,18 @@ OptionLab is a single-process Flask dashboard for equity/options research. It pu
 app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 ```
 
-- `app.py` is a **thin adapter**: it only wires middleware (`/api/v1/*` → `/api/*` path rewrite), installs the JSON error envelope (`utils/api_errors.py::install`), mounts `flask-limiter`, and registers the seven blueprints exported from `routes/__init__.py`.
+- `app.py` is a **thin adapter**: it only wires middleware (`/api/v1/*` → `/api/*` path rewrite), installs the JSON error envelope (`utils/api_errors.py::install`), installs the in-house rate limiter (`utils/rate_limit.py::install`), and registers the seven blueprints exported from `routes/__init__.py`.
 - `routes/` are blueprints with **no business logic** — they parse request args and delegate.
-- `services/` **orchestrates**: it is Flask-aware (can raise `ApiError`, read `request`) but performs no heavy computation.
+- `services/` **orchestrates**: it is Flask-aware (can raise `ApiError`, read `request`) but performs no heavy computation. It is **packaged by business domain**, and each package exposes a `facade.py` as its entry point:
+
+  | package | contains |
+  | --- | --- |
+  | `services/market/` | `facade.py` (MarketService), `analysis/` (AnalysisService + slices), `charts.py`, `signals.py`, `form.py`, `validation.py`, `health.py`, `dispatch.py` |
+  | `services/options/` | `chain.py`, `preload.py`, `simulation.py`, `strategies.py`, `builder.py` |
+  | `services/portfolio/` | `facade.py` (tracked positions), `analysis.py` (Greeks/P&L) |
+  | `services/regime/` | `facade.py` (RegimeService), `ops/` (bootstrap + `regime_log` writes) |
+
+  Cross-domain imports inside `services/` are legal (e.g. `market/dispatch.py` calls `options/chain.py`); the *layer* direction is what `doc_guard.py` polices, not the domain boundaries.
 - `core/` is **pure computation**: no Flask, no DB, no network. Data in → numbers/DataFrames out.
 - `data_pipeline/` owns **every** I/O boundary: yfinance calls, SQLite, the scheduler.
 - Import direction is a hard invariant. `core/` and `data_pipeline/` must never import `services/`, `routes/`, or `app.py`; `data_pipeline/` must never import `core/`. Enforced by `doc_guard.py`'s `import-direction` rule.
@@ -100,7 +111,7 @@ Because `core/` is pure, a new analytical feature is normally: add a pure functi
 
 Each tab shell in the skeleton emits an HTMX placeholder (`hx-get="/render/<kind>?job=…&ticker=…" hx-trigger="load" hx-swap="outerHTML"`). The browser then fans out four parallel requests.
 
-All four `/render/<kind>` routes funnel into **`utils/render_helpers.py::render_streaming_slice`**. It:
+All four `/render/<kind>` routes funnel into **`services/market/dispatch.py::render_streaming_slice`** (moved out of `utils/` so utils stays a leaf layer). It:
 1. reads `job`/`ticker` from the query string;
 2. **auto-bootstraps a synthetic job** with defaults when `job` is missing (direct URL / refresh / bookmark) instead of erroring;
 3. dispatches via the `_RENDER_KIND_SLICES` table, which maps kind → `(AnalysisService method name, fragment template)`. Attribute names are stored as *strings* and late-bound with `getattr` so test monkey-patches are honoured. `options_chain` is special-cased to call `OptionsChainService.generate_options_chain_analysis` directly (it needs no `MarketAnalyzer`);
@@ -110,25 +121,25 @@ All four `/render/<kind>` routes funnel into **`utils/render_helpers.py::render_
 
 Failures return `render_error_fragment`, which is usually **HTTP 200** on purpose (expired job) so HTMX swaps a helpful message rather than showing a browser error toast.
 
-Consequence for contributors: a new tab needs a row in `_RENDER_KIND_SLICES`, a `generate_*_slice` staticmethod on `services/market_analysis.AnalysisService`, a fragment template, and a placeholder in `index.html` — but **no new route body**.
+Consequence for contributors: a new tab needs a row in `_RENDER_KIND_SLICES`, a `generate_*_slice` staticmethod on `services.market.analysis.AnalysisService`, a fragment template, and a placeholder in `index.html` — but **no new route body**.
 
-### `services/market_analysis/` — the slice factory
+### `services/market/analysis/` — the slice factory
 
-`AnalysisService` (`_service.py`) is the facade. `_build_analyzer_or_error` constructs a `core.market.analyzer.MarketAnalyzer` from form data and returns an `{"error": …}` dict instead of raising when data is unusable — every slice method follows the same "swallow, log, return an error dict" pattern so one bad tab never 500s the page. `generate_market_review_slice` delegates to `MarketService.generate_market_review`; `generate_statistical_slice` / `generate_assessment_slice` call the private builders in `_statistical.py` / `_assessment.py` inside a `try/finally: gc.collect()`. `_summary.py::generate_summary_analysis` does multi-ticker aggregation and `_sizing.py::calculate_position_size` does risk sizing.
+`AnalysisService` (`facade.py`) is the facade. `_build_analyzer_or_error` constructs a `core.market.analyzer.MarketAnalyzer` from form data and returns an `{"error": …}` dict instead of raising when data is unusable — every slice method follows the same "swallow, log, return an error dict" pattern so one bad tab never 500s the page. `generate_market_review_slice` delegates to `MarketService.generate_market_review`; `generate_statistical_slice` / `generate_assessment_slice` call the private builders in `statistical.py` / `assessment.py` inside a `try/finally: gc.collect()`. `summary.py::generate_summary_analysis` does multi-ticker aggregation and `sizing.py::calculate_position_size` does risk sizing.
 
-`_statistical.py` wraps chart builders in `_cached_or_build(key, builder)` — a second, chart-level memo keyed by `(ticker, chart name, params)` on top of the job cache, because PNG encoding is the expensive part.
+`statistical.py` wraps chart builders in `_cached_or_build(key, builder)` — a second, chart-level memo keyed by `(ticker, chart name, params)` on top of the job cache, because PNG encoding is the expensive part.
 
 ### `core/` — computation
 
-- **`core/market/`** — `analyzer.py::MarketAnalyzer` is the workhorse: `generate_scatter_plots`, `generate_volatility_dynamics`, `generate_oscillation_projection`, `analyze_options`. It returns **base64 PNG strings plus feature series**, and `models.py` defines `MarketFeatures`, `Band`, `ProjectionResult` dataclasses. `data_context.py::DataContext` / `build_data_context()` is the read path: DB-first, yfinance fallback, then resample to D/W/M. `price_dynamic.py` is a backward-compat shim over it. `features/` (returns, osc, volatility) and `projections/oscillation.py` hold the primitives; `charts/` holds one matplotlib renderer per chart.
-- **`core/options/`** — `chain/analyzer.py::OptionsChainAnalyzer` derives IV smile/skew, OI profile, expected move from a *snapshot* chain; `chain/filters.py` does DTE/moneyness filtering; `chain/{metrics,term_structure,liquidity,html_tables}.py` add max-pain, ATM IV term structure, and pre-rendered HTML tables. `greeks/black_scholes.py::greeks_vectorized` is numpy-vectorised over whole chains (scipy per-contract is ~30× slower, see `docs/constraints.md` §6). `greeks/portfolio.py` aggregates portfolio Greeks and theta-decay paths. `simulation/expiry.py` holds `parse_expiries` + `simulate_expiry` — pure expiry-payoff maths, driven by `services/options_simulation_service.py::run_simulation` (which validates input and bounds the strike × expiry × IV grid).
-- **`core/strategies/`** — `models.py::Leg` is the universal unit. `factories.py` builds multi-leg templates (spreads, straddles, iron condor, butterfly, calendar…); `payoff.py`, `greeks.py`, `prob_profit.py`, `analyze.py` aggregate them. `services/strategy_builder.py` picks *real* strikes off the live chain to instantiate a template.
+- **`core/market/`** — `analyzer.py::MarketAnalyzer` is the **thin orchestrator**: it builds the `DataContext` and exposes `is_data_valid()` plus the chart builders `generate_scatter_plots`, `generate_high_low_scatter`, `generate_return_osc_high_low_chart`, `generate_volatility_dynamics`, `generate_oscillation_projection`, `analyze_options` — all of which **delegate** to `charts/facade.py::MarketChartAssembly`. `MarketChartAssembly` owns every chart-rendering method (and the feature/projection primitives that feed them), so the chart-assembly fan-out lives in one cohesive module rather than magnetising `MarketAnalyzer` (mirrors `core.options.charts.facade`). `MarketAnalyzer` returns **base64 PNG strings plus feature series**, and `models.py` defines `MarketFeatures`, `Band`, `ProjectionResult` dataclasses. `data_context.py::DataContext` / `build_data_context()` is the read path: DB-first, yfinance fallback, then resample to D/W/M. `price_dynamic.py` is a backward-compat shim over it. `features/` (returns, osc, volatility) and `projections/oscillation.py` hold the primitives; `charts/` holds one matplotlib renderer per chart.
+- **`core/options/`** — `chain/analyzer.py::OptionsChainAnalyzer` derives IV smile/skew, OI profile, expected move from a *snapshot* chain; `chain/filters.py` does DTE/moneyness filtering; `chain/{metrics,term_structure,liquidity,html_tables}.py` add max-pain, ATM IV term structure, and pre-rendered HTML tables. `greeks/black_scholes.py::greeks_vectorized` is numpy-vectorised over whole chains (scipy per-contract is ~30× slower, see `docs/constraints.md` §6). `greeks/portfolio.py` aggregates portfolio Greeks and theta-decay paths. `simulation/expiry.py` holds `parse_expiries` + `simulate_expiry` — pure expiry-payoff maths, driven by `services/options/simulation.py::run_simulation` (which validates input and bounds the strike × expiry × IV grid).
+- **`core/strategies/`** — `models.py::Leg` is the universal unit. `factories.py` builds multi-leg templates (spreads, straddles, iron condor, butterfly, calendar…); `payoff.py`, `greeks.py`, `prob_profit.py`, `analyze.py` aggregate them. `services/options/builder.py` picks *real* strikes off the live chain to instantiate a template.
 - **`core/{signals,regime,market_review,portfolio,decision}/`** — pure OHLCV signals (HV/RSI/Bollinger), regime classification, cross-ticker summary tables, P&L attribution, and the put-selling candidate scorer.
 
 ### `data_pipeline/` — I/O, caching, persistence
 
-- **`data_pipeline/data_ops/` — `DataService` (facade)** — `DataService` in `_service.py` delegates to `_query.py`, `_range.py`, `_update.py`, `_globals.py`. This is the **single read entry point** for the rest of the app. `ensure_range(ticker, start, end)` is DB-first with a memo + in-flight de-duplication and a TTL, which is what stops concurrent UI requests from stampeding Yahoo. `get_cleaned_daily`, `get_processed`, `get_latest_spot` are the common reads.
-- **`yf_client.py`** is the **only** module allowed to call yfinance. Every call goes through `yf_throttle()` (token bucket, 5 req/s, burst 5). Never call `yf.download` elsewhere, and never pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently fails (ADR 0005, `docs/constraints.md` §2).
+- **`data_pipeline/data_ops/` — `DataService` (facade)** — `DataService` in `facade.py` delegates to `_query.py`, `_range.py`, `_update.py`, `_globals.py`. This is the **single read entry point** for the rest of the app. `ensure_range(ticker, start, end)` is DB-first with a memo + in-flight de-duplication and a TTL, which is what stops concurrent UI requests from stampeding Yahoo. `get_cleaned_daily`, `get_processed`, `get_latest_spot` are the common reads. Note `_query.py` calls `_update`/`_range` module functions directly — never the facade — to avoid an import cycle.
+- **`yf_client.py`** is the **only** module allowed to call yfinance (enforced by `doc_guard` `single-yf-exit`; whitelisted exceptions are registered in `docs/architecture_review.md` §2). Every call goes through `yf_throttle()` (token bucket, 5 req/s, burst 5). Never call `yf.download` elsewhere, and never pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently fails (ADR 0005, `docs/constraints.md` §2).
 - **`db.py`** — `init_db()` creates the schema with `CREATE TABLE IF NOT EXISTS` (no migration framework). `get_conn()` is a context manager yielding a **thread-local** connection with WAL + `synchronous=NORMAL` + `busy_timeout=5000` applied once per thread; it does **not** close on exit. Tables: `raw_prices`, `clean_prices`, `processed_prices`, `market_review_prices`, `regime_log`, `data_quality_log`, `tracked_strategies`.
 - **`repos.py`** is the only place that builds SQL. Go through it rather than hand-writing queries.
 - **`cleaning.py` / `processing.py`** — align to business days and mark gaps as NA with **no interpolation** (the machine isn't 24/7; invented prices are worse than missing ones), then engineer returns/MAs/HV.
@@ -148,15 +159,15 @@ UI changes must satisfy the P1–P5 contract in `docs/frontend_architecture.md` 
 - **Every new module under `core/`, `data_pipeline/`, or `services/` needs a top-level docstring** (`doc_guard.py` `module-docstring`), preferably in the `Domain: / Context: / Contracts: / Dependencies:` shape used by e.g. `utils/render_helpers.py`.
 - **Language**: code, comments, logs, identifiers in English; UI strings may be Chinese — do not "translate" template Chinese.
 - Use `logging.getLogger(__name__)`, never `print()`; type-hint public signatures.
-- **After any code change, update the docs in the same response**: new non-obvious constant → add a tag; new constraint → `docs/constraints.md`; new module boundary/tech → an ADR from `docs/decisions/TEMPLATE.md` **and** run `scripts/regen_adr_index.py`; new user-visible term → `docs/glossary.md`. Then self-check against `doc_guard.py`'s rules (`tag-syntax`, `yfinance-throttle`, `yfinance-session-kwarg`, `sqlite-bypass`, `import-direction`, `module-docstring`, `adr-link-integrity`, `adr-index-fresh`).
+- **After any code change, update the docs in the same response**: new non-obvious constant → add a tag; new constraint → `docs/constraints.md`; new module boundary/tech → an ADR from `docs/decisions/TEMPLATE.md` **and** run `scripts/regen_adr_index.py`; new user-visible term → `docs/glossary.md`; new layer exemption → `docs/architecture_review.md` §2. Then self-check against `doc_guard.py`'s rules (`tag-syntax`, `yfinance-throttle`, `yfinance-session-kwarg`, `sqlite-bypass`, `import-direction`, `core-purity`, `db-access`, `single-yf-exit`, `module-docstring`, `adr-link-integrity`, `adr-index-fresh`) and run `python scripts/arch_metrics.py --check` to confirm no metric regression.
 - Tests use behavioural names (`test_<subject>_<expected_behaviour>`), not bare symbol names.
 
 ### Where to look first
 
 | Question | File |
 |---|---|
-| How does a request get served? | `routes/core.py` → `utils/render_helpers.py` |
-| Where does data come from? | `data_pipeline/data_ops/_service.py`, `_range.py`, `yf_client.py` |
+| How does a request get served? | `routes/core.py` → `services/market/dispatch.py` |
+| Where does data come from? | `data_pipeline/data_ops/facade.py` (`DataService`), `_range.py`, `yf_client.py` |
 | Schema / SQL | `data_pipeline/db.py` (`init_db`), `repos.py` |
 | Chart/analysis maths | `core/market/analyzer.py`, `core/options/`, `core/strategies/` |
 | Frontend contract | `docs/frontend_architecture.md` |
@@ -180,7 +191,7 @@ Load order is fixed in `templates/index.html`: `eventBus.js → api.js → state
 
 ### `core/options/chain/` — option-chain analytics
 
-- **`analyzer.py`** — `OptionsChainAnalyzer(ticker, snapshot=None)`; pass a pre-fetched snapshot (preferred) to avoid a network call. Public: `get_snapshot_summary()`, `plot_iv_smile(expiry)`, `plot_iv_term_structure()`, `plot_iv_surface()`, `plot_skew_analysis(expiry)`, `plot_oi_volume_profile(expiry)`, `plot_pcr_summary()`, `get_expected_move_table()`, `get_key_metrics_table()` — all return base64 PNG `str|None` / HTML `str|None`. Module fn `get_odds_with_vol_context(spot, target_pct, chain, expiries) → dict`.
+- **`analyzer.py`** — `OptionsChainAnalyzer(ticker, snapshot=...)`; the snapshot is **required** and must be fetched upstream (`services/options/chain._build_analyzer` is the designated fetcher) — the analyzer performs no I/O (INVARIANT, guarded by `doc_guard` `core-purity`). Public: `get_snapshot_summary()`, `plot_iv_smile(expiry)`, `plot_iv_term_structure()`, `plot_iv_surface()`, `plot_skew_analysis(expiry)`, `plot_oi_volume_profile(expiry)`, `plot_pcr_summary()`, `get_expected_move_table()`, `get_key_metrics_table()` — all return base64 PNG `str|None` / HTML `str|None`. Module fn `get_odds_with_vol_context(spot, target_pct, chain, expiries) → dict`.
 - **`filters.py`** — `filter_option_chain(result, max_dte=60, moneyness_low=0.7, moneyness_high=1.3, max_contracts=1000)` applies the DTE filter, then moneyness filter, then **iteratively narrows** the moneyness band by ±0.05 if contract count exceeds `max_contracts`. Plus `filter_by_moneyness`, `_filter_expirations_by_dte`.
 - **`metrics.py`** — `max_pain(calls, puts)`, `expected_move(calls, puts, spot)` (ATM straddle proxy), `skew_25d(puts, calls, spot)`.
 - **`term_structure.py`** — `atm_iv_for_expiry(puts, spot)` (in **%**), `iv_rank(term_structure)`, `iv_percentile(term_structure)`, `calc_implied_realized_vol(move_pct, dte)`.
@@ -196,7 +207,7 @@ Load order is fixed in `templates/index.html`: `eventBus.js → api.js → state
 
 Pure, network-free single-option payoff sweep across strike × maturity × IV. Reuses `greeks_vectorized` for entry premium/delta, so it doubles as the golden oracle for the client-side JS port (see `docs/plans/simulation_tab.md`, ADR 0007).
 
-- **`expiry.py`** — `parse_expiries(values, today=None) → list[{"dte","date","label"}]` normalises DTE integers / ISO dates (drops past/out-of-range). `simulate_expiry(spot, strikes, expiries, ivs, option_type, side, r, qty, multiplier, n_points, range_pct) → dict` returns `{spot, prices, strikes, combos, results}` where `results[i].cells` is parallel to `combos`; each cell carries `premium`, `delta`, `breakeven`, `pop`, `max_profit/max_loss` (unbounded → `None` + `unbounded_*` flags). Clamps via `_MIN_DTE=1`, `_MAX_DTE=3650`, `_MIN_IV=0.001`, `_MAX_IV=5.0`. Served by `POST /api/simulate_expiry` → `services/options_simulation_service.run_simulation` (which validates the grid caps before calling in).
+- **`expiry.py`** — `parse_expiries(values, today=None) → list[{"dte","date","label"}]` normalises DTE integers / ISO dates (drops past/out-of-range). `simulate_expiry(spot, strikes, expiries, ivs, option_type, side, r, qty, multiplier, n_points, range_pct) → dict` returns `{spot, prices, strikes, combos, results}` where `results[i].cells` is parallel to `combos`; each cell carries `premium`, `delta`, `breakeven`, `pop`, `max_profit/max_loss` (unbounded → `None` + `unbounded_*` flags). Clamps via `_MIN_DTE=1`, `_MAX_DTE=3650`, `_MIN_IV=0.001`, `_MAX_IV=5.0`. Served by `POST /api/simulate_expiry` → `services/options/simulation.run_simulation` (which validates the grid caps before calling in).
 
 ### `core/strategies/`
 
@@ -204,11 +215,11 @@ Pure, network-free single-option payoff sweep across strike × maturity × IV. R
 - **`factories.py`** — `long_call/long_put/short_call/short_put`, `bull_call_spread`, `bear_put_spread`, `bear_call_spread`, `bull_put_spread`, `long_straddle/strangle`, `short_straddle/strangle`, `iron_condor`, `long_butterfly`, `calendar_spread` → `list[Leg]`.
 - **`payoff.py`** — `payoff_at_expiration(legs, prices)`, `net_premium(legs)`, `find_breakevens(prices, pnl)`. **`greeks.py`** — `net_greeks(legs, spot, r=0.05)`. **`prob_profit.py`** — `prob_profit(prices, pnl, spot, sigma, dte, r=0.05)`. **`analyze.py`** — `analyze_strategy(...)`.
 
-### `services/options_*` — option orchestration
+### `services/options/` — option orchestration
 
-- **`options_chain_service.py`** — `OptionsChainService.fetch_records(ticker)` returns JSON rows (each with a `liq_score`/`liq_reason` from `liquidity_score`); `fetch_records_filtered(...)` runs `filter_option_chain`; `generate_options_chain_analysis(ticker)` returns a dict of `oc_*` keys (snapshot, iv_smile, iv_term_structure, iv_surface, skew_analysis, oi_volume, pcr_summary, expected_move, key_metrics, vol_premium) where **each chart step is wrapped in its own try/except** so one failure doesn't blank the tab.
-- **`options_simulation_service.py`** — `run_simulation(payload)` validates the request and bounds the grid (`MAX_STRIKES=15, MAX_EXPIRIES=6, MAX_IVS=5, MAX_CELLS=300, MAX_POINTS=201`), then hands off to `core.options.simulation.expiry.simulate_expiry` / `parse_expiries`. `resolve_spot(ticker, override)` prefers an explicit spot, else Yahoo.
+- **`chain.py`** — `OptionsChainService.fetch_records(ticker)` returns JSON rows (each with a `liq_score`/`liq_reason` from `liquidity_score`); `fetch_records_filtered(...)` runs `filter_option_chain`; `generate_options_chain_analysis(ticker)` returns a dict of `oc_*` keys (snapshot, iv_smile, iv_term_structure, iv_surface, skew_analysis, oi_volume, pcr_summary, expected_move, key_metrics, vol_premium) where **each chart step is wrapped in its own try/except** so one failure doesn't blank the tab.
+- **`simulation.py`** — `run_simulation(payload)` validates the request and bounds the grid (`MAX_STRIKES=15, MAX_EXPIRIES=6, MAX_IVS=5, MAX_CELLS=300, MAX_POINTS=201`), then hands off to `core.options.simulation.expiry.simulate_expiry` / `parse_expiries`. `resolve_spot(ticker, override)` prefers an explicit spot, else Yahoo.
 
 ### `core/market/analyzer.py`
 
-`MarketAnalyzer(ticker, start_date, frequency, end_date)`, `is_data_valid()`, and the chart builders `generate_scatter_plots`, `generate_high_low_scatter`, `generate_return_osc_high_low_chart`, `generate_volatility_dynamics`, `generate_oscillation_projection`, `analyze_options`. Each returns base64 PNG strings plus feature series/DataFrames; it is the workhorse behind the statistical, assessment and market-review slices.
+`MarketAnalyzer(ticker, start_date, frequency, end_date)`, `is_data_valid()`, `_get_current_price()`, and the chart builders `generate_scatter_plots`, `generate_high_low_scatter`, `generate_return_osc_high_low_chart`, `generate_volatility_dynamics`, `generate_oscillation_projection`, `analyze_options`. It is a **thin orchestrator**: it builds the `DataContext` and delegates every chart builder to `charts/facade.py::MarketChartAssembly` (which owns the rendering + feature/projection primitives). Each builder returns base64 PNG strings plus feature series/DataFrames; together they back the statistical, assessment and market-review slices.

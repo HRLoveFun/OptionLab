@@ -1,7 +1,7 @@
 """Data-quality logging — yfinance failures, scheduler errors, anomalies.
 
 Writes one row per incident into ``data_quality_log``. Read paths live in
-:mod:`services.health_service` (already aggregated by ``/health/data``).
+:mod:`services.market.health` (already aggregated by ``/health/data``).
 
 The logger NEVER raises: a logging failure must not mask the original error
 the caller is reporting. Callers may safely ``log_failure(...)`` from inside

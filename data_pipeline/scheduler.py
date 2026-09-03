@@ -1,10 +1,15 @@
-"""Background scheduler for automated market data updates."""
+"""Background scheduler for automated market data updates.
+
+APScheduler is an *optional* dependency: it is only needed when
+``AUTO_UPDATE_TICKERS`` is set. The import therefore happens lazily inside
+``UpdateScheduler.__init__`` so that importing this module (e.g. for
+``acquire_scheduler_lock`` in tests) never requires the package to be
+installed. See ``docs/constraints.md`` §6.
+"""
+
 import logging
 import os
 from pathlib import Path
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 from .data_ops import DataService
 
@@ -62,11 +67,28 @@ def acquire_scheduler_lock(lock_path: str | None = None):
 
 class UpdateScheduler:
     def __init__(self):
+        # WHY lazy: APScheduler is only required when AUTO_UPDATE_TICKERS is
+        # configured. Importing at module scope made an optional feature a
+        # hard startup dependency — `python app.py` crashed with
+        # ModuleNotFoundError even when the scheduler was never started.
+        try:
+            from apscheduler.schedulers.background import BackgroundScheduler
+        except ModuleNotFoundError as exc:  # pragma: no cover - env dependent
+            raise ModuleNotFoundError(
+                "APScheduler is required for AUTO_UPDATE_TICKERS. "
+                "Install it with `pip install APScheduler==3.10.4`, or unset AUTO_UPDATE_TICKERS."
+            ) from exc
+
         self.scheduler = BackgroundScheduler(timezone=os.environ.get("SCHED_TZ", "UTC"))
+
+    def _cron_trigger(self, **kwargs):
+        from apscheduler.triggers.cron import CronTrigger
+
+        return CronTrigger(**kwargs)
 
     def start_daily_update(self, tickers: list[str]):
         hour, minute = _parse_time_env("SCHED_DAILY_TIME", "16:15")
-        trigger = CronTrigger(hour=hour, minute=minute)
+        trigger = self._cron_trigger(hour=hour, minute=minute)
 
         def job():
             for t in tickers:
@@ -87,7 +109,7 @@ class UpdateScheduler:
         """
         day = int(os.environ.get("SCHED_MONTHLY_DAY", "1"))
         hour, minute = _parse_time_env("SCHED_MONTHLY_TIME", "02:00")
-        trigger = CronTrigger(day=day, hour=hour, minute=minute)
+        trigger = self._cron_trigger(day=day, hour=hour, minute=minute)
 
         def correlation_job():
             for t in tickers:

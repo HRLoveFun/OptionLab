@@ -41,7 +41,7 @@ patterns:
     related_files:
       - data_pipeline/downloader.py
       - data_pipeline/processing.py
-      - services/analysis_service.py
+      - services/market/analysis/facade.py
 
   dtype-mismatch:
     hook_regex: "object.*dtype|dtype.*object|to_numeric|astype"

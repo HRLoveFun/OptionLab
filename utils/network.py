@@ -4,7 +4,6 @@ import logging
 import os
 import threading as _threading
 
-
 # ── yfinance proxy ────────────────────────────────────────────────
 # CONSTRAINT: yfinance >= 0.2.50 uses curl_cffi internally, NOT requests.
 # It does honour standard HTTP_PROXY / HTTPS_PROXY env vars, but it does

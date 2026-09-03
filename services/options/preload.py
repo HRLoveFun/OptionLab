@@ -9,6 +9,7 @@ Contracts:
   - expiry_df_to_records(df, expiry) -> list[dict]
 Dependencies UPWARD:
   - core.options.chain.analyzer (OptionsChainAnalyzer, _dte)
+  - data_pipeline.yf_client
 Dependencies DOWNWARD:
   - routes/options.py
 """
@@ -22,6 +23,7 @@ from typing import Any
 import pandas as pd
 
 from core.options.chain.analyzer import OptionsChainAnalyzer, _dte
+from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +40,7 @@ def expiry_df_to_records(df: pd.DataFrame | None, expiry: str) -> list[dict[str,
     for _, row in df.iterrows():
         bid = float(row.get("bid", 0) or 0)
         ask = float(row.get("ask", 0) or 0)
-        mid = (
-            (bid + ask) / 2
-            if bid > 0 and ask > 0
-            else float(row.get("lastPrice", 0) or 0)
-        )
+        mid = (bid + ask) / 2 if bid > 0 and ask > 0 else float(row.get("lastPrice", 0) or 0)
         result.append(
             {
                 "strike": float(row["strike"]),
@@ -66,7 +64,7 @@ def build_preload_payload(ticker: str) -> dict[str, Any]:
     Returns a dict with keys:
         ticker, spot, expiries, chain
     """
-    analyzer = OptionsChainAnalyzer(ticker)
+    analyzer = OptionsChainAnalyzer(ticker, snapshot=fetch_option_chain(ticker))
     chain_out: dict[str, Any] = {}
     for exp in analyzer.expiries:
         if exp not in analyzer.chain:

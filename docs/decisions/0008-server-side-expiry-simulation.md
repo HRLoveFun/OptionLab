@@ -39,7 +39,7 @@ Forces at play:
    the two concerns would bloat `analyze_strategy` and break its return shape.
 3. **New `core/options/simulation/` package** with pure `simulate_expiry` +
    `parse_expiries`, plus a thin validation/bounding layer in
-   `services/options_simulation_service.py`. **Chosen.**
+   `services/options/simulation.py`. **Chosen.**
 
 ## Decision
 
@@ -60,7 +60,7 @@ and network:
     Unbounded P&L is encoded as `max_profit`/`max_loss = None` plus
     `unbounded_profit`/`unbounded_loss` flags (mirroring the `±inf` logic the
     plan preserves for the JS port at T5).
-- **`services/options_simulation_service.py`**
+- **`services/options/simulation.py`**
   - `run_simulation(payload) -> dict` — validates the JSON body, resolves the
     spot (explicit `spot` override wins; otherwise `data_pipeline/yf_client.
     fetch_spot`, which is the only yfinance chokepoint, ADR 0005), enforces grid
@@ -88,13 +88,13 @@ JSON body and return `jsonify(run_simulation(data))`.
   `static/sim/*` aligned via golden tests (`scripts/gen_sim_golden.py`, plan T6);
   the standalone Pages tab is tracked separately under
   `docs/plans/simulation_tab.md` and ADR 0007; the pre-existing `±inf` JSON
-  serialisation bug in `services/strategy_service.py` (plan T19) is out of scope
+  serialisation bug in `services/options/strategies.py` (plan T19) is out of scope
   for this ADR.
 
 ## References
 
 - Related code: `core/options/simulation/expiry.py`,
-  `services/options_simulation_service.py`,
+  `services/options/simulation.py`,
   `routes/options.py` (`POST /api/simulate_expiry`),
   `core/options/greeks/black_scholes.py`
 - Related ADR: 0007 (public Pages + client-side sim), 0001 (three-layer

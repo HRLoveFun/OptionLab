@@ -71,7 +71,7 @@ Follow the data through each stage, checking for where it breaks. See [pipeline 
 3. **processing.py** → `build_features()` → reads `clean_prices`, writes to `processed_prices`
 4. **core/price_dynamic.py** → `_fetch_daily_from_db()` → reads `processed_prices`
 5. **core/market_analyzer.py** → uses PriceDynamic features for charts
-6. **services/analysis_service.py** → calls chart methods, returns base64 images
+6. **services/market/analysis/facade.py** → calls chart methods, returns base64 images
 
 ### Step 5: Identify Root Cause
 

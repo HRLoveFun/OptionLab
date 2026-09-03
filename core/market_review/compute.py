@@ -1,12 +1,13 @@
-"""Market review computation and formatting.
+"""Market review computation (pure).
 
-Domain:    Market Review — Compute & Format
+Turns an already-fetched close-price panel into the returns / volatility /
+correlation summary table. No I/O — the panel is supplied by
+``services.market_review`` (ADR 0003 / architecture review §2 `core-purity`).
+
 Contracts:
-  - market_review(instrument, start_date, end_date) -> pd.DataFrame
-Dependencies UPWARD:
-  - core.market_review.fetch
-Dependencies DOWNWARD:
-  - services.market_service
+  - build_review(instrument, data, returns, display_names) -> pd.DataFrame
+Dependencies:
+  - core.market_review.constants (BENCHMARKS, _canonicalize_instrument)
 """
 
 from __future__ import annotations
@@ -16,11 +17,23 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from core.market_review.fetch import _canonicalize_instrument, fetch_market_data
+from core.market_review.constants import _canonicalize_instrument
 
 
-def market_review(instrument, start_date: dt.date | None = None, end_date: dt.date | None = None):
-    data, returns, display_names = fetch_market_data(instrument, start_date, end_date)
+def build_review(instrument, data, returns, display_names):
+    """Build the market-review summary table from a pre-fetched panel.
+
+    Parameters
+    ----------
+    instrument : str
+        The primary instrument (ticker or benchmark display name).
+    data : pd.DataFrame
+        Wide close-price panel, date-indexed, columns == ``display_names``.
+    returns : pd.DataFrame
+        Period-over-period returns of ``data`` (same shape).
+    display_names : list[str]
+        Display names aligned with ``data.columns``.
+    """
     instrument = _canonicalize_instrument(instrument)
     today = data.index[-1]
     periods = {

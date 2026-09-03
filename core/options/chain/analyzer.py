@@ -11,11 +11,9 @@ Contracts:
 Dependencies UPWARD:
   - core.options.chain.metrics, term_structure, liquidity, html_tables
   - core.options.charts.*
-  - data_pipeline.yf_client
 Dependencies DOWNWARD:
-  - services.options_chain_service, services.options_chain_preload
+  - services.options.chain, services.options.preload
   - core.decision.candidate, core.decision.market_data
-  - routes.options
 """
 
 from __future__ import annotations
@@ -30,13 +28,14 @@ from core.options.chain.html_tables import expected_move_table as _expected_move
 from core.options.chain.html_tables import key_metrics_table as _key_metrics_table
 from core.options.chain.liquidity import liquidity_score as _liquidity_score
 from core.options.chain.term_structure import atm_iv_for_expiry
-from core.options.charts.iv_smile import render_iv_smile
-from core.options.charts.iv_surface import render_iv_surface
-from core.options.charts.iv_term import render_iv_term_structure
-from core.options.charts.oi_volume import render_oi_volume
-from core.options.charts.pcr import render_pcr
-from core.options.charts.skew import render_skew
-from data_pipeline.yf_client import fetch_option_chain
+from core.options.charts.facade import (
+    render_iv_smile,
+    render_iv_surface,
+    render_iv_term_structure,
+    render_oi_volume,
+    render_pcr,
+    render_skew,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +95,7 @@ def get_odds_with_vol_context(
     dte = max(_dte(nearest), 1)
     T = dte / 365
     sigma = atm_iv
-    z = (target_pct / 100) / (sigma * (T ** 0.5))
+    z = (target_pct / 100) / (sigma * (T**0.5))
     prob_touch = 2 * (1 - _norm_cdf(abs(z)))
 
     return {
@@ -119,17 +118,21 @@ def get_odds_with_vol_context(
 class OptionsChainAnalyzer:
     """Analyses an option chain snapshot.
 
-    New code should fetch data upstream (e.g. via ``data_pipeline.yf_client``)
-    and pass the raw snapshot here.  The ``ticker``-only constructor still
-    works for backward compatibility but triggers a network call.
+    INVARIANT: this class performs no I/O. Callers fetch the snapshot upstream
+    (``data_pipeline.yf_client.fetch_option_chain``) and inject it via
+    ``snapshot=``. WHY: keeping ``core/`` pure means the analyzer can be driven
+    entirely by fixture data in tests, and every network call stays behind the
+    single yfinance exit point where proxy setup and throttling are enforced.
     """
 
-    def __init__(self, ticker: str = "^SPX", *, snapshot: dict | None = None):
+    def __init__(self, ticker: str = "^SPX", *, snapshot: dict):
+        if snapshot is None:
+            raise ValueError(
+                "OptionsChainAnalyzer requires snapshot=... — fetch it upstream via "
+                "data_pipeline.yf_client.fetch_option_chain (core/ must stay pure)"
+            )
         self.ticker = ticker
-        if snapshot is not None:
-            self._init_from_snapshot(snapshot)
-        else:
-            self._init_from_yfinance(ticker)
+        self._init_from_snapshot(snapshot)
 
     def _init_from_snapshot(self, snap: dict):
         spot = snap.get("spot")
@@ -138,10 +141,6 @@ class OptionsChainAnalyzer:
         self.spot: float = float(spot)
         self.expiries: list = list(snap.get("expiries", []))
         self.chain: dict = dict(snap.get("chain", {}))
-
-    def _init_from_yfinance(self, ticker: str):
-        snap = fetch_option_chain(ticker)
-        self._init_from_snapshot(snap)
 
     def get_snapshot_summary(self) -> dict:
         nearest = self.expiries[0] if self.expiries else None
@@ -155,7 +154,7 @@ class OptionsChainAnalyzer:
             "expiries": self.expiries,
             "nearest_expiry": nearest,
             "atm_strike": atm,
-            "timestamp": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "timestamp": dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M UTC"),
         }
 
     # ------------------------------------------------------------------
@@ -243,11 +242,13 @@ class OptionsChainAnalyzer:
                 p_vol = puts["volume"].sum()
                 c_oi = calls["openInterest"].sum()
                 p_oi = puts["openInterest"].sum()
-                rows.append({
-                    "expiry": exp,
-                    "vol_pcr": (p_vol / c_vol) if c_vol > 0 else np.nan,
-                    "oi_pcr": (p_oi / c_oi) if c_oi > 0 else np.nan,
-                })
+                rows.append(
+                    {
+                        "expiry": exp,
+                        "vol_pcr": (p_vol / c_vol) if c_vol > 0 else np.nan,
+                        "oi_pcr": (p_oi / c_oi) if c_oi > 0 else np.nan,
+                    }
+                )
             return render_pcr(rows, self.ticker)
         except Exception as e:
             logger.error("plot_pcr_summary failed: %s", e, exc_info=True)

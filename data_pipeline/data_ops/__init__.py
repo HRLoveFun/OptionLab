@@ -6,8 +6,8 @@ same underlying objects.
 """
 
 from ._globals import (
-    GAP_SCAN_DAYS,
     _QUERY_CACHE_TTL,
+    GAP_SCAN_DAYS,
     _cache_get,
     _cache_invalidate,
     _cache_set,
@@ -16,7 +16,7 @@ from ._globals import (
     _update_lock_mutex,
     _update_locks,
 )
-from ._service import DataService
+from .facade import DataService
 
 __all__ = [
     "DataService",

@@ -1,7 +1,6 @@
 """Put option selection — quantitative decision process.
 
 Dependency graph:
-    models.py       # Candidate dataclass
     market_data.py  # IV rank / percentile / term structure
     candidate.py    # Build candidate matrix
     enrich.py       # Derived metrics

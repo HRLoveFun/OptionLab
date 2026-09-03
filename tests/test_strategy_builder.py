@@ -1,4 +1,4 @@
-"""Tests for services/strategy_builder.py."""
+"""Tests for services/options/builder.py."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ os.environ.setdefault("RATE_LIMIT_DISABLED", "1")
 import pandas as pd
 import pytest
 
-from services import strategy_builder as sb
+from services.options import builder as sb
 from utils.api_errors import ApiError
 
 

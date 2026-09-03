@@ -13,6 +13,14 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from services.portfolio.analysis import PortfolioAnalysisService
+from services.portfolio.facade import (
+    close_position,
+    create_position,
+    list_positions,
+    portfolio_snapshot,
+)
+
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("portfolio", __name__)
@@ -28,23 +36,17 @@ def portfolio_analysis():
 
     if not positions:
         return (
-            jsonify(
-                {"status": "error", "code": "no_positions", "message": "No positions provided"}
-            ),
+            jsonify({"status": "error", "code": "no_positions", "message": "No positions provided"}),
             400,
         )
 
     try:
-        from services.portfolio_analysis_service import PortfolioAnalysisService
-
         result = PortfolioAnalysisService.run(positions, account_size, max_risk_pct)
         return jsonify(result)
     except Exception as e:
         logger.error("portfolio_analysis error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "portfolio_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "portfolio_failed", "message": str(e)}),
             500,
         )
 
@@ -52,8 +54,6 @@ def portfolio_analysis():
 @bp.route("/api/portfolio/positions", methods=["GET", "POST"])
 def portfolio_positions():
     """List open positions (GET) or create a new one (POST)."""
-    from services.portfolio_service import create_position, list_positions
-
     if request.method == "POST":
         return jsonify(create_position(request.get_json(silent=True) or {}))
     status = request.args.get("status", "open") or None
@@ -62,8 +62,6 @@ def portfolio_positions():
 
 @bp.route("/api/portfolio/positions/<int:position_id>/close", methods=["POST"])
 def portfolio_close(position_id: int):
-    from services.portfolio_service import close_position
-
     body = request.get_json(silent=True) or {}
     return jsonify(close_position(position_id, float(body.get("closed_value", 0.0))))
 
@@ -71,6 +69,4 @@ def portfolio_close(position_id: int):
 @bp.route("/api/portfolio/snapshot", methods=["GET"])
 def portfolio_snapshot_route():
     """Aggregate Greeks + per-position P&L attribution across all open positions."""
-    from services.portfolio_service import portfolio_snapshot
-
     return jsonify(portfolio_snapshot())

@@ -11,7 +11,7 @@ import os
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from data_pipeline.db import get_conn
+from data_pipeline.repos import fetch_ticker_inventory
 
 _FRESHNESS_DAYS = int(os.environ.get("DATA_FRESHNESS_DAYS", "5"))
 
@@ -26,26 +26,13 @@ def _last_business_day(today: date | None = None) -> date:
 
 def per_ticker_summary() -> list[dict[str, Any]]:
     """Return a row per ticker with latest date, row count, and NaN counts."""
-    sql = """
-        SELECT
-            ticker,
-            COUNT(*) AS rows,
-            MAX(date) AS latest_date,
-            MIN(date) AS earliest_date,
-            SUM(CASE WHEN close IS NULL THEN 1 ELSE 0 END) AS null_close,
-            SUM(CASE WHEN volume IS NULL THEN 1 ELSE 0 END) AS null_volume
-        FROM raw_prices
-        GROUP BY ticker
-        ORDER BY ticker
-    """
     out: list[dict[str, Any]] = []
     last_bday = _last_business_day().isoformat()
     threshold = (date.today() - timedelta(days=_FRESHNESS_DAYS)).isoformat()
-    with get_conn() as conn:
-        for row in conn.execute(sql).fetchall():
-            ticker, rows, latest, earliest, null_close, null_volume = row
-            stale = (latest or "") < threshold
-            out.append(
+    for row in fetch_ticker_inventory():
+        ticker, rows, latest, earliest, null_close, null_volume = row
+        stale = (latest or "") < threshold
+        out.append(
                 {
                     "ticker": ticker,
                     "rows": int(rows or 0),

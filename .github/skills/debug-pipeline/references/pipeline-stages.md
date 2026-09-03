@@ -57,7 +57,7 @@ Data flows through 5 stages. A failure at any stage can propagate downstream as 
 
 **Check**: Log output `"Projection DataFrame created: X total dates, Y historical data points"`
 
-## Stage 5: Service + Route (`services/analysis_service.py`, `app.py`)
+## Stage 5: Service + Route (`services/market/analysis/facade.py`, `app.py`)
 
 **Function**: `AnalysisService.run_analysis()` → chart methods → base64 images
 **Input**: DataFrames from core modules

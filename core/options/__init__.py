@@ -1,7 +1,6 @@
 """Options Analysis Domain.
 
 Dependency graph (flows downward):
-    models.py             # Data contracts (Greeks, OptionLeg)
     greeks/               # Pure Black-Scholes computation
     ├── black_scholes.py
     └── portfolio.py

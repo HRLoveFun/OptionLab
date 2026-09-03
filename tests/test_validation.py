@@ -1,6 +1,6 @@
-"""Tests for services/validation_service.py."""
+"""Tests for services/market/validation.py."""
 
-from services.validation_service import ValidationService
+from services.market.validation import ValidationService
 
 
 def _base_form(**overrides):

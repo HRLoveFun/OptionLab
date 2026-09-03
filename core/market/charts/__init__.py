@@ -14,5 +14,5 @@ Contracts:
 Dependencies UPWARD:
   - core._shared.plotting, core.market.features, core.market.projections
 Dependencies DOWNWARD:
-  - services.chart_service, app.py routes
+  - services.market.charts, app.py routes
 """

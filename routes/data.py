@@ -14,6 +14,7 @@ import os
 from flask import Blueprint, jsonify, request
 
 from data_pipeline.data_ops import DataService
+from services.market.health import overall_summary
 from utils.rate_limit import client_ip, rate_limit
 from utils.ticker_utils import normalize_ticker
 
@@ -26,13 +27,9 @@ bp = Blueprint("data", __name__)
 def health_data():
     """Return data-quality snapshot of the local SQLite cache."""
     try:
-        from services.health_service import overall_summary
-
         full = overall_summary()
         expected = os.environ.get("HEALTH_TOKEN", "").strip()
-        provided = (
-            request.args.get("token") or request.headers.get("X-Health-Token") or ""
-        ).strip()
+        provided = (request.args.get("token") or request.headers.get("X-Health-Token") or "").strip()
         if expected and provided != expected:
             return jsonify(
                 {
@@ -42,9 +39,7 @@ def health_data():
                     "total_rows": full.get("total_rows"),
                     "stale_count": len(full.get("stale_tickers", [])),
                     "nan_count": len(full.get("tickers_with_nan_close", [])),
-                    "failures_24h_total": sum(
-                        full.get("failures_24h_by_class", {}).values()
-                    ),
+                    "failures_24h_total": sum(full.get("failures_24h_by_class", {}).values()),
                     "freshness_threshold_days": full.get("freshness_threshold_days"),
                     "redacted": True,
                 }
@@ -53,9 +48,7 @@ def health_data():
     except Exception as e:
         logger.error("health_data error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "health_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "health_failed", "message": str(e)}),
             500,
         )
 
@@ -64,26 +57,20 @@ def health_data():
 def health_status():
     """Public lightweight status endpoint for frontend degradation banner."""
     try:
-        from services.health_service import overall_summary
-
         full = overall_summary()
         return jsonify(
             {
                 "status": full.get("status"),
                 "stale_count": len(full.get("stale_tickers", [])),
                 "nan_count": len(full.get("tickers_with_nan_close", [])),
-                "failures_24h_total": sum(
-                    full.get("failures_24h_by_class", {}).values()
-                ),
+                "failures_24h_total": sum(full.get("failures_24h_by_class", {}).values()),
                 "generated_at": full.get("generated_at"),
             }
         )
     except Exception as e:
         logger.error("health_status error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "health_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "health_failed", "message": str(e)}),
             500,
         )
 
@@ -135,8 +122,6 @@ def data_seed():
     except Exception as e:
         logger.error("data_seed error for %s: %s", ticker, e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "seed_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "seed_failed", "message": str(e)}),
             500,
         )

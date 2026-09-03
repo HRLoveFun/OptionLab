@@ -27,13 +27,20 @@ from core.regime import (
     regime_transitions,
 )
 from data_pipeline.data_ops import DataService
-from data_pipeline.db import fetch_df, init_db
-from services.regime_ops._bootstrap import (
+from data_pipeline.repos import fetch_regime_log_window
+from services.regime.ops._bootstrap import (
     BOOTSTRAP_DAYS,
     MIN_TRADING_ROWS,
     _bootstrap_history,
     _count_clean_rows,
 )
+from services.regime.ops._persistence import (
+    _load_log_df,
+    _previous_log_row,
+    _upsert_log_rows,
+)
+
+logger = logging.getLogger(__name__)
 
 VIX_TICKER = "^VIX"
 SPY_TICKER = "SPY"
@@ -59,22 +66,15 @@ def _fetch_close_series(ticker: str, start: dt.date, end: dt.date) -> pd.Series:
     return s.sort_index()
 
 
-from services.regime_ops._persistence import (
-    _load_log_df,
-    _previous_log_row,
-    _upsert_log_rows,
-)
-
-logger = logging.getLogger(__name__)
-
-
 def _ensure_history(ticker: str) -> None:
     """Guarantee enough rows for 20-day SMA + 5-day slope. No-op when already present."""
     if _count_clean_rows(ticker) < MIN_TRADING_ROWS:
         _bootstrap_history(ticker)
 
 # Re-export at module level so test monkey-patches targeting
-# ``services.regime_service._xxx`` continue to work during the transition.
+# ``services.regime.facade._xxx`` keep working: the helpers now live in
+# ``services.regime.ops``, and patching the re-bound name here is what the
+# rest of this module actually calls.
 __all__ = [
     "RegimeService",
     "VIX_TICKER",
@@ -245,11 +245,7 @@ class RegimeService:
     @staticmethod
     def coverage_window(start_date: dt.date, end_date: dt.date) -> dict[str, Any]:
         """Charter §6 support: coverage report between two dates from the persisted log."""
-        init_db()
-        df = fetch_df(
-            "SELECT * FROM regime_log WHERE date>=? AND date<=? ORDER BY date ASC",
-            (start_date.isoformat(), end_date.isoformat()),
-        )
+        df = fetch_regime_log_window(start_date, end_date)
         return {
             "start": start_date.isoformat(),
             "end": end_date.isoformat(),

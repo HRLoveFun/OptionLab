@@ -11,7 +11,7 @@ Contracts:
 Dependencies UPWARD:
   - pandas, numpy
 Dependencies DOWNWARD:
-  - core.options.charts, services.options_chain_service
+  - core.options.charts, services.options.chain
 """
 
 from core.options.chain.analyzer import OptionsChainAnalyzer, _dte, get_odds_with_vol_context, liquidity_score

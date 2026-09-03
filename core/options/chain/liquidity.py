@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - None
 Dependencies DOWNWARD:
-  - services.options_chain_service
+  - services.options.chain
 """
 
 from __future__ import annotations

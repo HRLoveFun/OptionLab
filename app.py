@@ -48,27 +48,13 @@ class _ApiV1AliasMiddleware:
 app.wsgi_app = _ApiV1AliasMiddleware(app.wsgi_app)
 
 
-# ── Rate limiting — defends Yahoo upstream and the local box from abusive
-# clients. Disabled by setting RATE_LIMIT_DISABLED=1 (e.g. in tests).
-try:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
+# ── Rate limiting — global per-IP throttle defending this process (not the
+# Yahoo upstream; that one lives in utils/network.py::yf_throttle).
+# Implemented in-house so 429s use the same JSON envelope as every other API
+# error. Disabled by setting RATE_LIMIT_DISABLED=1 (e.g. in tests).
+from utils.rate_limit import install as _install_rate_limit  # noqa: E402
 
-    if os.environ.get("RATE_LIMIT_DISABLED", "").strip() not in ("1", "true", "yes"):
-        _default = os.environ.get("RATE_LIMIT_DEFAULT", "120 per minute")
-        limiter = Limiter(
-            key_func=get_remote_address,
-            app=app,
-            default_limits=[_default],
-            storage_uri=os.environ.get("RATE_LIMIT_STORAGE", "memory://"),
-        )
-        logger.info("Rate limiter enabled: default=%s", _default)
-    else:
-        limiter = None
-        logger.info("Rate limiter disabled via RATE_LIMIT_DISABLED")
-except ImportError:
-    limiter = None
-    logger.warning("flask-limiter not installed; running without rate limiting")
+_install_rate_limit(app)
 
 # Propagate YF_PROXY → HTTP_PROXY/HTTPS_PROXY for curl_cffi (used by yfinance)
 init_yf_proxy()
@@ -76,11 +62,9 @@ init_yf_proxy()
 # Initialize DB
 DataService.initialize()
 _scheduler = None
-_scheduler_lock_handle = (
-    acquire_scheduler_lock()
-    if os.environ.get("AUTO_UPDATE_TICKERS", "").strip()
-    else None
-)
+# APScheduler is imported lazily inside UpdateScheduler, so a missing package
+# only matters when the operator actually asked for auto-updates.
+_scheduler_lock_handle = acquire_scheduler_lock() if os.environ.get("AUTO_UPDATE_TICKERS", "").strip() else None
 try:
     auto_update = os.environ.get("AUTO_UPDATE_TICKERS", "").strip()
     if auto_update and _scheduler_lock_handle is not None:
@@ -93,6 +77,8 @@ try:
             logger.info("Monthly correlation update scheduler started for: %s", tickers)
     elif auto_update and _scheduler_lock_handle is None:
         logger.info("Skipping scheduler init — leader lock held by another worker.")
+except ModuleNotFoundError as e:
+    logger.warning("Auto-update scheduler disabled — %s", e)
 except Exception as e:
     logger.warning("Scheduler init failed: %s", e)
 

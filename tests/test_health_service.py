@@ -1,11 +1,11 @@
-"""Tests for services/health_service.py."""
+"""Tests for services/market/health.py."""
 
 from __future__ import annotations
 
 import pandas as pd
 
 from data_pipeline.db import get_conn
-from services.health_service import overall_summary, per_ticker_summary
+from services.market.health import overall_summary, per_ticker_summary
 
 
 def _seed(ticker: str, dates: list[str], close_vals: list[float | None]) -> None:

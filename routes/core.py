@@ -18,11 +18,10 @@ import logging
 from flask import Blueprint, jsonify, render_template, request
 
 from data_pipeline.job_cache import create_job
-from services.form_service import FormService
-from services.market_service import MarketService
-from services.validation_service import ValidationService
-from utils.render_helpers import render_streaming_slice
-from utils.ticker_utils import normalize_ticker, parse_tickers
+from services.market.dispatch import render_streaming_slice
+from services.market.facade import MarketService
+from services.market.form import FormService
+from services.market.validation import ValidationService
 from utils.constants import (
     DEFAULT_FREQUENCY,
     DEFAULT_RISK_THRESHOLD,
@@ -30,7 +29,7 @@ from utils.constants import (
     DEFAULT_SIDE_BIAS,
     DEFAULT_TICKER,
 )
-from utils.date_helpers import parse_month_str
+from utils.ticker_utils import normalize_ticker, parse_tickers
 
 logger = logging.getLogger(__name__)
 
@@ -52,13 +51,7 @@ def api_v1_meta():
         {
             "status": "ok",
             "version": "v1",
-            "routes": sorted(
-                {
-                    r.rule
-                    for r in current_app.url_map.iter_rules()
-                    if r.rule.startswith("/api/")
-                }
-            ),
+            "routes": sorted({r.rule for r in current_app.url_map.iter_rules() if r.rule.startswith("/api/")}),
         }
     )
 
@@ -83,9 +76,7 @@ def index():
             tickers_raw = form_data.get("ticker", "")
             tickers = parse_tickers(tickers_raw)
             if not tickers:
-                return render_template(
-                    "index.html", error="Please enter at least one ticker symbol."
-                )
+                return render_template("index.html", error="Please enter at least one ticker symbol.")
 
             first_ticker = tickers[0]
             job_id = create_job({**form_data, "ticker": first_ticker}, tickers)
@@ -116,9 +107,7 @@ def index():
 
     except Exception as e:
         logger.error("Unexpected error in main route: %s", e, exc_info=True)
-        return render_template(
-            "index.html", error=f"An unexpected error occurred: {str(e)}. Please try again."
-        )
+        return render_template("index.html", error=f"An unexpected error occurred: {str(e)}. Please try again.")
 
 
 # ── HTMX streaming render endpoints ──────────────────────────────────────────
@@ -183,12 +172,7 @@ def validate_tickers_bulk():
             is_valid, message = MarketService.validate_ticker(yahoo_ticker)
             price = None
             if is_valid:
-                try:
-                    from data_pipeline.yf_client import fetch_spot
-
-                    price = fetch_spot(yahoo_ticker)
-                except Exception:
-                    pass
+                price = MarketService.fetch_spot(yahoo_ticker)
             results[raw_ticker] = {"valid": is_valid, "price": price, "message": message}
         except Exception:
             results[raw_ticker] = {"valid": False, "price": None, "message": "validation error"}

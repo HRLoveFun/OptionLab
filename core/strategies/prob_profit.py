@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - scipy.stats, numpy
 Dependencies DOWNWARD:
-  - services.strategy_service
+  - services.options.strategies
 """
 
 from __future__ import annotations

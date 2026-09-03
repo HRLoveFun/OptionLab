@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - core.strategies.models
 Dependencies DOWNWARD:
-  - services.strategy_builder, services.strategy_service
+  - services.options.builder, services.options.strategies
 """
 
 from __future__ import annotations

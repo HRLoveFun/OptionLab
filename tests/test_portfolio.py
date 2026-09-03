@@ -60,7 +60,7 @@ def test_attribute_pnl_with_iv_drop_hurts_long_vega():
 
 def test_create_and_list_position():
     from data_pipeline.db import init_db
-    from services.portfolio_service import create_position, list_positions
+    from services.portfolio.facade import create_position, list_positions
 
     init_db()
     res = create_position(
@@ -82,7 +82,7 @@ def test_create_and_list_position():
 
 
 def test_create_position_rejects_missing_ticker():
-    from services.portfolio_service import create_position
+    from services.portfolio.facade import create_position
     from utils.api_errors import ApiError
 
     with pytest.raises(ApiError):
@@ -91,7 +91,7 @@ def test_create_position_rejects_missing_ticker():
 
 def test_portfolio_snapshot_uses_mocked_spots(monkeypatch):
     from data_pipeline.db import init_db
-    from services import portfolio_service as ps
+    from services.portfolio import facade as ps
 
     init_db()
     ps.create_position(

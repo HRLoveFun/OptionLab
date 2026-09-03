@@ -29,7 +29,7 @@ def clear_mr_cache():
             ...
     """
     try:
-        from core.market_review import _mr_cache, _mr_cache_lock
+        from services.market_review import _mr_cache, _mr_cache_lock
     except ImportError:
         yield lambda: None
         return

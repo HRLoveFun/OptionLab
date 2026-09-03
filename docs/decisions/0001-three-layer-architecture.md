@@ -39,7 +39,7 @@ Enforced by:
 
 - **Positive**: every module has one clear responsibility; tests can target a layer.
 - **Positive**: AI code reviewers can be told "this module belongs to layer X" and infer the rules.
-- **Trade-off**: one extra hop for trivial endpoints (e.g. `/health` still goes through `services/health_service.py`). Acceptable.
+- **Trade-off**: one extra hop for trivial endpoints (e.g. `/health` still goes through `services/market/health.py`). Acceptable.
 - **Trade-off**: enforcing direction by convention, not by package private/public. We rely on hooks + reviews.
 
 ## References

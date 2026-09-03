@@ -37,4 +37,4 @@ State is mostly per-panel; cross-panel coordination is light (an event bus + a f
 
 - `templates/index.html`
 - `static/main.js`, `static/components/`
-- `services/chart_service.py` (server-side chart rendering)
+- `services/market/charts.py` (server-side chart rendering)

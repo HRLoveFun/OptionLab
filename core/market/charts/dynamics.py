@@ -7,7 +7,7 @@ Contracts:
 Dependencies UPWARD:
   - core._shared.plotting, core.market.charts._scales
 Dependencies DOWNWARD:
-  - services.chart_service
+  - services.market.charts
 """
 
 from __future__ import annotations

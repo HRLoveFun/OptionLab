@@ -15,7 +15,6 @@ import re
 import pytest
 from playwright.sync_api import Page, expect
 
-
 _ACTIVE_RE = re.compile(r"\bactive\b")
 # Console errors that are environmental (missing CDN) rather than app bugs.
 _RESOURCE_ERR_RE = re.compile(r"Failed to load resource|net::ERR", re.IGNORECASE)

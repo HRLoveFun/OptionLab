@@ -10,7 +10,7 @@ Dependencies UPWARD:
   - pandas, numpy
   - core.regime.classify, core.regime.models
 Dependencies DOWNWARD:
-  - services.regime_service
+  - services.regime.facade
 """
 
 from __future__ import annotations

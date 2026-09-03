@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - core.signals.hv, core.signals.rsi, core.signals.bollinger
 Dependencies DOWNWARD:
-  - services.signals_service
+  - services.market.signals
 """
 
 from __future__ import annotations

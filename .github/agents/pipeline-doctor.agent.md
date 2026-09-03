@@ -14,7 +14,7 @@ data_pipeline/cleaning.py   → clean_prices table
 data_pipeline/processing.py → processed_prices table
 core/price_dynamic.py       → features DataFrame
 core/market_analyzer.py     → chart generation
-services/analysis_service.py → base64 images to frontend
+services/market/analysis/facade.py → base64 images to frontend
 ```
 
 ## Constraints

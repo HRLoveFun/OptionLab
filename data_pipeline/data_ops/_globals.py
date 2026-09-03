@@ -1,7 +1,7 @@
 """Shared globals for data operations (locks, caches, TTLs).
 
 All heavy-lifting state (cooldown locks, query cache, TTL constants) is
-co-located here so that ``data_ops._service.DataService`` and tests operate
+co-located here so that ``data_ops.facade.DataService`` and tests operate
 on the **same** underlying objects.
 """
 

@@ -14,7 +14,7 @@ import datetime as dt
 import pytest
 
 from core.options.simulation import parse_expiries, simulate_expiry
-from services.options_simulation_service import run_simulation
+from services.options.simulation import run_simulation
 
 
 # --------------------------------------------------------------------------
@@ -51,8 +51,9 @@ def _combos():
 
 
 def test_simulate_expiry_premium_matches_black_scholes():
-    from core.options.greeks.black_scholes import greeks_vectorized
     import numpy as np
+
+    from core.options.greeks.black_scholes import greeks_vectorized
 
     res = simulate_expiry(SPOT, STRIKES, _combos(), [0.2], "call", "long")
     T = 30 / 365.0

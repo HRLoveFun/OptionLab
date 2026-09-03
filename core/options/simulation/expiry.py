@@ -15,7 +15,7 @@ Dependencies UPWARD:
   - numpy, scipy.stats
   - core.options.greeks.black_scholes
 Dependencies DOWNWARD:
-  - services.options_simulation_service, routes.options, tests
+  - services.options.simulation, routes.options, tests
 """
 
 from __future__ import annotations

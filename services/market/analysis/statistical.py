@@ -3,8 +3,8 @@
 import gc
 import logging
 
-from core.correlation_validator import CorrelationValidator
-from services.chart_service import ChartService
+from core.market.correlation_validator import CorrelationValidator
+from services.market.charts import ChartService
 from utils.constants import DEFAULT_RISK_THRESHOLD, DEFAULT_ROLLING_WINDOW
 
 logger = logging.getLogger(__name__)

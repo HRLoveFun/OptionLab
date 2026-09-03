@@ -4,13 +4,13 @@ import gc
 import logging
 
 from core.market.analyzer import MarketAnalyzer
-from services.market_service import MarketService
+from services.market.facade import MarketService
 from utils.date_helpers import exclusive_month_end
 
-from ._assessment import _generate_assessment
-from ._sizing import calculate_position_size
-from ._statistical import _generate_statistical_analysis
-from ._summary import generate_summary_analysis
+from .assessment import _generate_assessment
+from .sizing import calculate_position_size
+from .statistical import _generate_statistical_analysis
+from .summary import generate_summary_analysis
 
 logger = logging.getLogger(__name__)
 

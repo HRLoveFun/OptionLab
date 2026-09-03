@@ -6,11 +6,35 @@ all charts / tables as a single result dictionary for the Flask route.
 import logging
 import math
 
-from core.options.chain.analyzer import OptionsChainAnalyzer, liquidity_score
+from core.options.chain.analyzer import (
+    OptionsChainAnalyzer,
+    get_odds_with_vol_context,
+    liquidity_score,
+)
 from core.options.chain.filters import filter_option_chain
 from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
+
+# Plausibility window for quoted IV; yfinance occasionally returns stale or
+# unit-confused values on thin contracts.
+_IV_LO, _IV_HI = 0.01, 5.0
+
+
+def _iv_ok(v) -> bool:
+    try:
+        return _IV_LO <= float(v) <= _IV_HI
+    except (TypeError, ValueError):
+        return False
+
+
+def _build_analyzer(ticker: str) -> OptionsChainAnalyzer:
+    """Fetch the snapshot upstream and hand it to the pure analyzer.
+
+    INVARIANT: this is the single place where the options route family touches
+    the network — core.options.chain.analyzer stays I/O-free.
+    """
+    return OptionsChainAnalyzer(ticker, snapshot=fetch_option_chain(ticker))
 
 
 def _clean_num(v) -> float | None:
@@ -135,8 +159,7 @@ class OptionsChainService:
 
         # --- Fetch snapshot upstream and inject into analyzer -------------
         try:
-            snap = fetch_option_chain(ticker)
-            analyzer = OptionsChainAnalyzer(ticker, snapshot=snap)
+            analyzer = _build_analyzer(ticker)
         except Exception as e:
             logger.warning(f"OptionsChainAnalyzer init failed for {ticker}: {e}")
             return result
@@ -244,5 +267,78 @@ class OptionsChainService:
             return result
         return filter_option_chain(
             result, max_dte, moneyness_low, moneyness_high, max_contracts
+        )
+
+    # ------------------------------------------------------------------
+    # Client-side chart payloads (used by /api/options_chart/*)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def iv_smile_points(ticker: str, expiry: str | None = None) -> dict:
+        """IV smile data points for one expiry.
+
+        Returns ``{}`` when the chain has no expiries; the route turns that into
+        a 404. Kept here (not in the route) so DataFrame work stays out of
+        ``routes/``.
+        """
+        analyzer = _build_analyzer(ticker)
+        if not analyzer.expiries:
+            return {}
+        exp = expiry if expiry in analyzer.chain else analyzer.expiries[0]
+        calls = analyzer.chain[exp]["calls"].dropna(subset=["impliedVolatility"])
+        puts = analyzer.chain[exp]["puts"].dropna(subset=["impliedVolatility"])
+        calls = calls[calls["impliedVolatility"].apply(_iv_ok)]
+        puts = puts[puts["impliedVolatility"].apply(_iv_ok)]
+        return {
+            "expiry": exp,
+            "spot": round(analyzer.spot, 2),
+            "calls": [
+                {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
+                for r in calls.itertuples()
+            ],
+            "puts": [
+                {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
+                for r in puts.itertuples()
+            ],
+        }
+
+    @staticmethod
+    def oi_profile_points(ticker: str, expiry: str | None = None) -> dict:
+        """Open-interest / volume profile data points for one expiry."""
+        analyzer = _build_analyzer(ticker)
+        if not analyzer.expiries:
+            return {}
+        exp = expiry if expiry in analyzer.chain else analyzer.expiries[0]
+        calls = analyzer.chain[exp]["calls"]
+        puts = analyzer.chain[exp]["puts"]
+        return {
+            "expiry": exp,
+            "spot": round(analyzer.spot, 2),
+            "calls": [
+                {
+                    "strike": float(r.strike),
+                    "oi": float(r.openInterest or 0),
+                    "volume": float(r.volume or 0),
+                }
+                for r in calls.itertuples()
+            ],
+            "puts": [
+                {
+                    "strike": float(r.strike),
+                    "oi": float(r.openInterest or 0),
+                    "volume": float(r.volume or 0),
+                }
+                for r in puts.itertuples()
+            ],
+        }
+
+    @staticmethod
+    def odds_with_vol(ticker: str, target_pct: float) -> dict:
+        """Probability-of-touch odds enriched with ATM IV context."""
+        analyzer = _build_analyzer(ticker)
+        return get_odds_with_vol_context(
+            spot=analyzer.spot,
+            target_pct=target_pct,
+            chain=analyzer.chain,
+            expiries=analyzer.expiries,
         )
 

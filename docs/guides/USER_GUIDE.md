@@ -633,7 +633,7 @@ The **Summary** tab is rendered **only** when more than one ticker is submitted 
 | **Regime** | Current composite regime label (see §8) |
 | **1M / 1Q / YTD Return** | Trailing return windows |
 
-The card grid is built server-side from `summary_data` (computed by `services/market_analysis/`) and streamed into `templates/partials/tab_summary.html`. When only one ticker is requested, the tab is omitted entirely.
+The card grid is built server-side from `summary_data` (computed by `services/market/analysis/`) and streamed into `templates/partials/tab_summary.html`. When only one ticker is requested, the tab is omitted entirely.
 
 ---
 

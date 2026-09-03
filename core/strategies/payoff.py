@@ -8,7 +8,7 @@ Contracts:
 Dependencies UPWARD:
   - numpy
 Dependencies DOWNWARD:
-  - services.strategy_service, core.strategies.greeks
+  - services.options.strategies, core.strategies.greeks
 """
 
 from __future__ import annotations

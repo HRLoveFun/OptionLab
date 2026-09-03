@@ -20,19 +20,27 @@ app.py                       Flask entry point — registers blueprints, middlew
     ├── regime.py              /api/regime/*
     └── strategies.py          /api/strategies, /api/strategy/*
 └── services/                Orchestration layer (Flask-aware, no heavy computation)
-    ├── market_analysis/       Statistical & assessment slice generation
-    ├── market_service.py      Ticker validation + market review
-    ├── options_chain_service.py  Chain fetch, filter, chart generation
-    ├── portfolio_service.py   Tracked-position CRUD
-    ├── portfolio_analysis_service.py  Multi-leg portfolio analytics
-    ├── strategy_builder.py    Strategy instantiation from live chain
-    ├── chart_service.py       Matplotlib → base64 PNG rendering
-    ├── form_service.py        POST form normalisation
-    ├── health_service.py      DB freshness metrics
-    ├── regime_service.py      Regime labelling & persistence
-    ├── signals_service.py     OHLCV signal vectors
-    ├── strategy_service.py    Strategy catalogue & analytics
-    └── validation_service.py  Pure form-value validation
+    ├── market/                Price analysis domain
+    │   ├── facade.py            Ticker validation + market review
+    │   ├── analysis/            Statistical & assessment slice generation
+    │   ├── charts.py            Matplotlib → base64 PNG rendering
+    │   ├── signals.py           OHLCV signal vectors
+    │   ├── form.py              POST form normalisation
+    │   ├── validation.py        Pure form-value validation
+    │   ├── health.py            DB freshness metrics
+    │   └── dispatch.py          /render/<kind> streaming dispatch
+    ├── options/               Options domain
+    │   ├── chain.py             Chain fetch, filter, chart generation
+    │   ├── preload.py           Chain preload for the position module
+    │   ├── simulation.py        Expiry-simulation payload validation
+    │   ├── strategies.py        Strategy catalogue & analytics
+    │   └── builder.py           Strategy instantiation from live chain
+    ├── portfolio/             Portfolio domain
+    │   ├── facade.py            Tracked-position CRUD
+    │   └── analysis.py          Multi-leg portfolio analytics
+    └── regime/                Regime domain
+        ├── facade.py            Regime labelling & persistence
+        └── ops/                 History bootstrap + regime_log writes
 └── core/                    Pure computation (no Flask, no I/O)
     ├── market/
     │   ├── analyzer.py          Master OHLCV → features + charts pipeline
@@ -69,7 +77,6 @@ app.py                       Flask entry point — registers blueprints, middlew
     ├── date_helpers.py        parse_month_str, exclusive_month_end
     ├── network.py             init_yf_proxy, yf_throttle (token-bucket rate limiter)
     ├── api_errors.py          ApiError + unified Flask JSON error envelope
-    ├── data_utils.py          Small numeric helpers
     ├── ticker_utils.py        Yahoo ↔ Futu ticker normalisation
     ├── render_helpers.py      Streaming slice renderers for HTMX
     └── rate_limit.py          Rate-limit utilities
@@ -93,9 +100,9 @@ contract (state machine, tab flags, P1–P5 design principles).
 
 ### `app.py`
 Flask entry point. Registers blueprints, installs the unified error envelope
-and `/api/v1` alias middleware, mounts `flask-limiter`, propagates `YF_PROXY`
-to `curl_cffi`, initialises the SQLite schema, and (for one elected worker)
-starts the APScheduler daily/monthly jobs.
+and `/api/v1` alias middleware, installs the in-house per-IP rate limiter,
+propagates `YF_PROXY` to `curl_cffi`, initialises the SQLite schema, and (for
+one elected worker) starts the APScheduler daily/monthly jobs.
 
 ### `routes/` — HTTP blueprints (thin, no business logic)
 
@@ -111,22 +118,44 @@ starts the APScheduler daily/monthly jobs.
 
 ### `services/` — orchestration (Flask-aware, no computation)
 
+Packaged by business domain; each package exposes a `facade.py` entry point.
+
+**`services/market/`**
+
 | File | Role | Pulls from |
 |---|---|---|
-| [`services/market_analysis/_service.py`](services/market_analysis/_service.py) | Top-level "run a full market analysis" facade for `/render/statistical` and `/render/assessment`. | `core/market.analyzer`, `core/correlation_validator`, `data_pipeline/data_ops` |
-| [`services/chart_service.py`](services/chart_service.py) | Builds matplotlib figures and returns base64 PNGs; caches by `(ticker, kind, params)`. | `core/*`, `data_pipeline/data_ops` |
-| [`services/form_service.py`](services/form_service.py) | Extracts and normalises POST form fields, applying defaults from `utils/constants.py`. | `utils/constants`, `utils/date_helpers` |
-| [`services/health_service.py`](services/health_service.py) | Aggregates DB freshness / row-count / NaN metrics for `/health/*`. | `data_pipeline/db`, `data_pipeline/repos` |
-| [`services/market_service.py`](services/market_service.py) | Ticker validation + market-review summary for `/api/validate_*` and `/render/market_review`. | `core/market_review`, `core/market.data_context` |
-| [`services/options_chain_service.py`](services/options_chain_service.py) | Drives `/render/options_chain` and `/api/option_chain`: fetches live chain, applies DTE/moneyness filters, generates charts/tables. | `core/options/chain/analyzer`, `core/options/chain/filters` |
-| [`services/options_chain_preload.py`](services/options_chain_preload.py) | Pre-loads option chain for Position module dropdowns with in-memory caching. | `data_pipeline/yf_client` |
-| [`services/portfolio_service.py`](services/portfolio_service.py) | CRUD for tracked positions in SQLite; computes live P&L via `data_pipeline/repos`. | `core/portfolio`, `data_pipeline/repos` |
-| [`services/portfolio_analysis_service.py`](services/portfolio_analysis_service.py) | Stateless "analyse this basket of legs" endpoint backing `/api/portfolio_analysis`. | `core/options/greeks/portfolio`, `core/strategies` |
-| [`services/regime_service.py`](services/regime_service.py) | Labels & persists market regimes; serves `/api/regime/*`. | `core/regime`, `data_pipeline/repos` |
-| [`services/signals_service.py`](services/signals_service.py) | Wraps `core/signals` over DB-cached daily bars for `/api/signals`. | `core/signals`, `data_pipeline/data_ops` |
-| [`services/strategy_service.py`](services/strategy_service.py) | API layer over `core/strategies` multi-leg analytics. | `core/strategies` |
-| [`services/strategy_builder.py`](services/strategy_builder.py) | Picks real strikes from the live chain to instantiate a strategy template. | `core/strategies`, `core/options/chain/analyzer` |
-| [`services/validation_service.py`](services/validation_service.py) | Pure form-value validation rules (date ranges, frequency, …). | (none) |
+| [`services/market/facade.py`](services/market/facade.py) | Ticker validation + market-review summary for `/api/validate_*` and `/render/market_review`. | `core/market_review`, `core/market.data_context` |
+| [`services/market/analysis/facade.py`](services/market/analysis/facade.py) | Top-level "run a full market analysis" facade for `/render/statistical` and `/render/assessment`. | `core/market.analyzer`, `core/market.correlation_validator`, `data_pipeline/data_ops` |
+| [`services/market/charts.py`](services/market/charts.py) | Builds matplotlib figures and returns base64 PNGs; caches by `(ticker, kind, params)`. | `core/*`, `data_pipeline/data_ops` |
+| [`services/market/signals.py`](services/market/signals.py) | Wraps `core/signals` over DB-cached daily bars for `/api/signals`. | `core/signals`, `data_pipeline/data_ops` |
+| [`services/market/form.py`](services/market/form.py) | Extracts and normalises POST form fields, applying defaults from `utils/constants.py`. | `utils/constants`, `utils/date_helpers` |
+| [`services/market/validation.py`](services/market/validation.py) | Pure form-value validation rules (date ranges, frequency, …). | (none) |
+| [`services/market/health.py`](services/market/health.py) | Aggregates DB freshness / row-count / NaN metrics for `/health/*`. | `data_pipeline/db`, `data_pipeline/repos` |
+| [`services/market/dispatch.py`](services/market/dispatch.py) | Shared `/render/<kind>` handler: job lookup, memoisation, fragment render. | `services/market/analysis`, `services/options/chain` |
+
+**`services/options/`**
+
+| File | Role | Pulls from |
+|---|---|---|
+| [`services/options/chain.py`](services/options/chain.py) | Drives `/render/options_chain` and `/api/option_chain`: fetches live chain, applies DTE/moneyness filters, generates charts/tables. | `core/options/chain/analyzer`, `core/options/chain/filters` |
+| [`services/options/preload.py`](services/options/preload.py) | Pre-loads option chain for Position module dropdowns with in-memory caching. | `data_pipeline/yf_client` |
+| [`services/options/simulation.py`](services/options/simulation.py) | Validates `POST /api/simulate_expiry` payloads and bounds the strike × expiry × IV grid. | `core/options/simulation` |
+| [`services/options/strategies.py`](services/options/strategies.py) | API layer over `core/strategies` multi-leg analytics. | `core/strategies` |
+| [`services/options/builder.py`](services/options/builder.py) | Picks real strikes from the live chain to instantiate a strategy template. | `core/strategies`, `core/options/chain/analyzer` |
+
+**`services/portfolio/`**
+
+| File | Role | Pulls from |
+|---|---|---|
+| [`services/portfolio/facade.py`](services/portfolio/facade.py) | CRUD for tracked positions in SQLite; computes live P&L via `data_pipeline/repos`. | `core/portfolio`, `data_pipeline/repos` |
+| [`services/portfolio/analysis.py`](services/portfolio/analysis.py) | Stateless "analyse this basket of legs" endpoint backing `/api/portfolio_analysis`. | `core/options/greeks/portfolio`, `core/strategies` |
+
+**`services/regime/`**
+
+| File | Role | Pulls from |
+|---|---|---|
+| [`services/regime/facade.py`](services/regime/facade.py) | Labels & persists market regimes; serves `/api/regime/*`. | `core/regime`, `data_pipeline/repos` |
+| [`services/regime/ops/`](services/regime/ops/) | History bootstrap + `regime_log` read/write helpers. | `data_pipeline/db`, `data_pipeline/downloader` |
 
 ### `core/` — pure computation (no Flask, no I/O)
 
@@ -158,7 +187,7 @@ starts the APScheduler daily/monthly jobs.
 | [`data_pipeline/data_ops/`](data_pipeline/data_ops/) | `DataService` facade — DB-first cache with a 60 s freshness window, the single read entry-point. |
 | [`data_pipeline/db.py`](data_pipeline/db.py) | `get_conn()` context manager, schema bootstrap, WAL pragmas, thread-local connection pooling. |
 | [`data_pipeline/repos.py`](data_pipeline/repos.py) | Repository wrappers — the only modules that build SQL. |
-| [`data_pipeline/scheduler.py`](data_pipeline/scheduler.py) | APScheduler wrapper: daily backfill + monthly correlation refresh, gated by a leader-lock file. |
+| [`data_pipeline/scheduler.py`](data_pipeline/scheduler.py) | APScheduler wrapper: daily backfill + monthly correlation refresh, gated by a leader-lock file. APScheduler is imported lazily — it is optional and only needed when `AUTO_UPDATE_TICKERS` is set. |
 | [`data_pipeline/job_cache.py`](data_pipeline/job_cache.py) | TTL'd in-process map keyed by `job_id`; lets `/render/<kind>` partials share the same form payload. |
 | [`data_pipeline/quality_log.py`](data_pipeline/quality_log.py) | Persists pipeline anomalies for `/health/data`. |
 
@@ -168,9 +197,9 @@ starts the APScheduler daily/monthly jobs.
 |---|---|
 | [`utils/constants.py`](utils/constants.py) | Domain constants (default ticker/window/frequency, MA windows). |
 | [`utils/date_helpers.py`](utils/date_helpers.py) | `parse_month_str`, `exclusive_month_end`. |
-| [`utils/network.py`](utils/network.py) | `init_yf_proxy()` (propagates `YF_PROXY` → env vars) and `yf_throttle()` (token-bucket rate limiter). |
+| [`utils/network.py`](utils/network.py) | `init_yf_proxy()` (propagates `YF_PROXY` → env vars) and `yf_throttle()` (**outbound** token-bucket throttle for yfinance). |
+| [`utils/rate_limit.py`](utils/rate_limit.py) | **Inbound** per-IP throttle: `rate_limit()` token bucket + `install(app)` global hook. 429s use the same JSON envelope as `ApiError` (`code: "rate_limited"`). |
 | [`utils/api_errors.py`](utils/api_errors.py) | `ApiError` class + Flask error handlers that produce a uniform JSON envelope. |
-| [`utils/data_utils.py`](utils/data_utils.py) | Small numeric helpers shared across `core/`. |
 | [`utils/ticker_utils.py`](utils/ticker_utils.py) | Yahoo ↔ Futu (`US.NVDA` / `NVDA`) ticker normalisation. |
 | [`utils/render_helpers.py`](utils/render_helpers.py) | Streaming slice renderers for HTMX. |
 
@@ -257,6 +286,13 @@ pip install -r requirements.txt
 npm install                  # only needed for vitest / playwright
 ```
 
+Deploying? Install `requirements-prod.txt` instead — it pulls in `gunicorn`,
+which the dev server never needs:
+
+```bash
+pip install -r requirements-prod.txt
+```
+
 ### 3. Configure environment
 
 ```bash
@@ -270,7 +306,7 @@ cp .env.example .env
 # Dev server (autoreload)
 python app.py                # http://127.0.0.1:5001
 
-# Production
+# Production (gunicorn ships with requirements-prod.txt, not requirements.txt)
 gunicorn app:app -b 0.0.0.0:5001 --workers 2 --threads 4
 ```
 
@@ -305,9 +341,11 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
 |---|---|---|
 | `MARKET_DB_PATH` | SQLite path | `./market_data.sqlite` |
 | `YF_PROXY` | HTTP/SOCKS proxy for yfinance (curl_cffi) | `http://127.0.0.1:1087` (recommended; required behind VPN) |
-| `AUTO_UPDATE_TICKERS` | Comma-separated tickers for daily backfill | unset |
+| `AUTO_UPDATE_TICKERS` | Comma-separated tickers for daily backfill (requires `APScheduler`) | unset |
 | `SCHED_TZ` | Timezone for scheduler cron | `UTC` |
 | `JOB_CACHE_TTL` | Per-job render cache lifetime (seconds) | `90` |
+| `RATE_LIMIT_DEFAULT` | Inbound per-IP request budget (`<n> per <unit>`) | `120 per minute` |
+| `RATE_LIMIT_DISABLED` | Set to `1` to disable inbound throttling (tests do) | unset |
 
 ---
 
@@ -322,7 +360,7 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
   threads.
 - **Logging**: use `logging.getLogger(__name__)`; no `print()` in production
   code. The dev server logs to stderr at INFO.
-- **Charts**: server-side base64 PNG generation in `services/chart_service.py`.
+- **Charts**: server-side base64 PNG generation in `services/market/charts.py`.
   The market-review chart is the one exception — it streams JSON to Chart.js
   on the browser.
 

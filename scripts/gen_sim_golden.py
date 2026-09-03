@@ -12,10 +12,10 @@ Run from the repo root:
 """
 from __future__ import annotations
 
+import datetime
 import json
 import math
 import sys
-import datetime
 from pathlib import Path
 
 # Ensure the repo root is importable when run as `python scripts/gen_sim_golden.py`.

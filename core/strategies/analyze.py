@@ -6,7 +6,7 @@ Contracts:
 Dependencies UPWARD:
   - core.strategies.payoff, core.strategies.greeks, core.strategies.prob_profit
 Dependencies DOWNWARD:
-  - services.strategy_service, tests
+  - services.options.strategies, tests
 """
 
 from __future__ import annotations

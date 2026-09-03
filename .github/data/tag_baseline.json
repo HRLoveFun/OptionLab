@@ -22,9 +22,9 @@
     "core/regime.py:53: VIX_MID_HIGH=20.0",
     "core/regime.py:54: VIX_HIGH_STRESS=30.0",
     "core/signals.py:33: TRADING_DAYS_PER_YEAR=252",
-    "services/chart_service.py:29: _CACHE_MAX_ENTRIES=64",
-    "services/regime_service.py:39: MIN_LOOKBACK_DAYS=90",
-    "services/regime_service.py:40: BOOTSTRAP_DAYS=400",
+    "services/market/charts.py:29: _CACHE_MAX_ENTRIES=64",
+    "services/regime/facade.py:39: MIN_LOOKBACK_DAYS=90",
+    "services/regime/facade.py:40: BOOTSTRAP_DAYS=400",
     "utils/utils.py:10: DEFAULT_RISK_THRESHOLD=90",
     "utils/utils.py:11: DEFAULT_ROLLING_WINDOW=120"
   ]

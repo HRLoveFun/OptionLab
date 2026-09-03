@@ -2,7 +2,7 @@
 
 Domain:    Option Decision — Market Data
 Contracts:
-  - fetch_market_data(ticker) -> dict
+  - fetch_market_data(ticker, snapshot) -> dict
   - get_term_structure(analyzer) -> dict[int, float]
   - calculate_iv_rank(term_structure) -> float | None
   - calculate_iv_percentile(term_structure) -> float | None
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _dte(expiry_str: str) -> int:
     import datetime as dt
+
     today = dt.date.today()
     exp = dt.datetime.strptime(expiry_str, "%Y-%m-%d").date()
     return max(0, (exp - today).days)
@@ -49,8 +50,13 @@ def calculate_iv_percentile(term_structure: dict[int, float]) -> float | None:
     return iv_percentile(term_structure)
 
 
-def fetch_market_data(ticker: str) -> dict:
-    analyzer = OptionsChainAnalyzer(ticker)
+def fetch_market_data(ticker: str, snapshot: dict) -> dict:
+    """Assemble the market context the decision pipeline ranks on.
+
+    INVARIANT: ``snapshot`` is fetched by the caller and injected here — core/
+    performs no I/O, so every network hop stays in services/ or data_pipeline/.
+    """
+    analyzer = OptionsChainAnalyzer(ticker, snapshot=snapshot)
     ts = get_term_structure(analyzer)
     return {
         "spot_price": analyzer.spot,

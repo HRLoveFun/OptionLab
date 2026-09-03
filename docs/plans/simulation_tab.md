@@ -152,7 +152,7 @@ ES module and mounts `static/features/simulation.js`.
 ### Phase 5 — Polish & cross-cutting
 
 - [ ] **T19** Fix the pre-existing `-Infinity` JSON serialization bug in
-      `services/strategy_service.py` (`±inf` → `None`/`"unlimited"`); **separate PR + ADR
+      `services/options/strategies.py` (`±inf` → `None`/`"unlimited"`); **separate PR + ADR
       note** (it affects `/api/strategy/analyze` for naked options, unrelated to the sim
       tab's pure-JS path).
 - [ ] **T20** Doc note: reuse of `payoff_chart.js` relaxes constraint §7's "charts are

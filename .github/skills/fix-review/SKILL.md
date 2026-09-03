@@ -63,7 +63,7 @@ For each changed production file, check that a corresponding test exists:
 # Map production file to test file
 # data_pipeline/downloader.py → tests/test_yf_download.py or tests/test_processing.py
 # core/market_analyzer.py → tests/test_market_review.py
-# services/validation_service.py → tests/test_validation.py
+# services/market/validation.py → tests/test_validation.py
 ```
 
 If no test covers the fix:

@@ -1,11 +1,12 @@
 """Market data downloader: fetches raw price data from external sources."""
+
 import datetime as dt
 import logging
 import os
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
+import yfinance as yf  # doc-guard: allow=single-yf-exit
 
 from utils.network import yf_throttle
 
@@ -154,9 +155,7 @@ def upsert_raw_prices(
             f"Gap for {ticker} spans {(end - effective_start).days}d (>{MAX_AUTO_BACKFILL_DAYS}); "
             f"capping backfill at {capped_start}. Use seed_history for older data."
         )
-        result.warnings.append(
-            f"Backfill capped at {MAX_AUTO_BACKFILL_DAYS} days; oldest gaps require seed_history"
-        )
+        result.warnings.append(f"Backfill capped at {MAX_AUTO_BACKFILL_DAYS} days; oldest gaps require seed_history")
         effective_start = capped_start
     if effective_start != start:
         logger.info(f"Expanding download range for {ticker}: {start}..{end} → {effective_start}..{end}")

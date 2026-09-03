@@ -9,7 +9,7 @@ Contracts:
 Dependencies UPWARD:
   - pandas, numpy
 Dependencies DOWNWARD:
-  - core.market.charts, services.analysis_service
+  - core.market.charts, services.market.analysis.facade
 """
 
 from __future__ import annotations

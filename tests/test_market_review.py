@@ -45,13 +45,13 @@ def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
 class TestMarketReviewCache:
     def test_cache_hit_avoids_refetch(self, clear_mr_cache):
         """After first fetch, second call should use L1 cache."""
-        from core.market_review import BENCHMARKS, _fetch_market_data
+        from services.market_review import BENCHMARKS, _fetch_market_data
 
         all_tickers = ["AAPL"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=60)
         clear_mr_cache()
 
-        with patch("core.market_review.fetch_close_panel"):
+        with patch("services.market_review.fetch_close_panel"):
             # First call — should use DB (not yfinance since we seeded)
             data1, ret1, disp1 = _fetch_market_data("AAPL")
             # Second call — should hit L1 cache
@@ -61,13 +61,13 @@ class TestMarketReviewCache:
 
     def test_cache_returns_copy(self, clear_mr_cache):
         """Cached data should be a copy — mutations don't affect cache."""
-        from core.market_review import BENCHMARKS, _fetch_market_data
+        from services.market_review import BENCHMARKS, _fetch_market_data
 
         all_tickers = ["MSFT"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=60)
         clear_mr_cache()
 
-        with patch("core.market_review.fetch_close_panel"):
+        with patch("services.market_review.fetch_close_panel"):
             data1, _, _ = _fetch_market_data("MSFT")
             original_shape = data1.shape
             data1.drop(data1.index[:10], inplace=True)
@@ -81,13 +81,13 @@ class TestMarketReviewCache:
 class TestMarketReviewOutput:
     def test_returns_dataframe(self, clear_mr_cache):
         """market_review() returns a DataFrame with MultiIndex columns."""
-        from core.market_review import BENCHMARKS, market_review
+        from services.market_review import BENCHMARKS, market_review
 
         all_tickers = ["GOOGL"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
 
-        with patch("core.market_review.fetch_close_panel"):
+        with patch("services.market_review.fetch_close_panel"):
             result = market_review("GOOGL")
             assert isinstance(result, pd.DataFrame)
             assert isinstance(result.columns, pd.MultiIndex)
@@ -95,13 +95,13 @@ class TestMarketReviewOutput:
 
     def test_result_contains_expected_assets(self, clear_mr_cache):
         """Result index should contain the primary ticker and benchmark names."""
-        from core.market_review import BENCHMARKS, market_review
+        from services.market_review import BENCHMARKS, market_review
 
         all_tickers = ["TSLA"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
 
-        with patch("core.market_review.fetch_close_panel"):
+        with patch("services.market_review.fetch_close_panel"):
             result = market_review("TSLA")
             assert "TSLA" in result.index
 
@@ -112,13 +112,13 @@ class TestMarketReviewOutput:
 class TestMarketReviewTimeseries:
     def test_returns_dict_structure(self, clear_mr_cache):
         """market_review_timeseries() returns dict with expected keys."""
-        from core.market_review import BENCHMARKS, market_review_timeseries
+        from services.market_review import BENCHMARKS, market_review_timeseries
 
         all_tickers = ["AMZN"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
 
-        with patch("core.market_review.fetch_close_panel"):
+        with patch("services.market_review.fetch_close_panel"):
             result = market_review_timeseries("AMZN")
             assert "dates" in result
             assert "assets" in result
@@ -127,13 +127,13 @@ class TestMarketReviewTimeseries:
 
     def test_assets_have_expected_fields(self, clear_mr_cache):
         """Each asset entry should have prices, cum_return, rolling_vol."""
-        from core.market_review import BENCHMARKS, market_review_timeseries
+        from services.market_review import BENCHMARKS, market_review_timeseries
 
         all_tickers = ["META"] + list(BENCHMARKS.values())
         _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
 
-        with patch("core.market_review.fetch_close_panel"):
+        with patch("services.market_review.fetch_close_panel"):
             result = market_review_timeseries("META")
             for _asset_name, asset_data in result["assets"].items():
                 assert "prices" in asset_data

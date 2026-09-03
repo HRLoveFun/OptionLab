@@ -1,4 +1,4 @@
-"""LRU cache behaviour for services.chart_service.
+"""LRU cache behaviour for services.market.charts.
 
 WHY: chart cache eviction and hit/miss accounting were uncovered by existing
 tests. These behaviours are load-bearing: a leak here grows matplotlib memory
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from services import chart_service as cs
+from services.market import charts as cs
 
 
 @pytest.fixture(autouse=True)

@@ -27,13 +27,28 @@ core/                  # 核心分析逻辑
   correlation_validator.py  # 滚动相关性验证（收益率自相关 + 高低振荡相关）
   options_chain_analyzer.py # IV 曲面、偏度、OI 分布、PCR、预期波动
   options_greeks.py    #   向量化 Black-Scholes Greeks（Delta/Gamma/Theta/Vega）及组合分析
-services/              # 请求编排层
-  form_service.py      #   表单数据提取与解析（含仓位管理参数）
-  validation_service.py#   输入校验（含仓位管理参数校验）
-  analysis_service.py  #   完整分析流程编排 + 仓位管理计算
-  market_service.py    #   标的验证 + Market Review 生成
-  options_chain_service.py # Options Chain 分析编排 + Vol Premium 上下文
-  chart_service.py     #   图表服务
+services/              # 请求编排层（按业务域分包）
+  market/              #   行情分析域
+    facade.py          #     标的验证 + Market Review 生成
+    analysis/          #     完整分析流程编排 + 仓位管理计算
+    charts.py          #     图表服务
+    signals.py         #     OHLCV 信号向量
+    form.py            #     表单数据提取与解析（含仓位管理参数）
+    validation.py      #     输入校验（含仓位管理参数校验）
+    health.py          #     数据新鲜度指标
+    dispatch.py        #     /render/<kind> 流式分发
+  options/             #   期权域
+    chain.py           #     Options Chain 分析编排 + Vol Premium 上下文
+    preload.py         #     持仓模块下拉用的链缓存
+    simulation.py      #     到期模拟入参校验
+    strategies.py      #     策略目录与分析
+    builder.py         #     按实时链实例化策略
+  portfolio/           #   组合域
+    facade.py          #     持仓 CRUD
+    analysis.py        #     多腿组合分析
+  regime/              #   市场状态域
+    facade.py          #     状态标注与持久化
+    ops/               #     历史回填 + regime_log 写入
 data_pipeline/         # 数据管道（下载 → 清洗 → 加工 → 服务）
   downloader.py        #   通过 yfinance 下载 OHLCV 并写入 raw_prices
   cleaning.py          #   对齐交易日、标记异常（5σ 波动、成交量异常）、前向填充
@@ -137,7 +152,7 @@ python app.py
 | 数据源 | yfinance |
 | 数据库 | SQLite |
 | 图表 | matplotlib, Chart.js (前端 Odds) |
-| 调度 | APScheduler |
+| 调度 | APScheduler（可选，仅 `AUTO_UPDATE_TICKERS` 启用时需要） |
 | 前端 | 原生 JavaScript, CSS, Jinja2 |
 | 部署 | Gunicorn / Netlify |
 
@@ -151,7 +166,7 @@ python tests/test_chart_time_range.py
 
 ```bash
 # Gunicorn 示例
-gunicorn --bind 0.0.0.0:8000 app:application
+gunicorn --bind 0.0.0.0:8000 app:app
 ```
 
 Netlify 配置已包含在 `netlify.toml`，使用 Python 3.11 构建。

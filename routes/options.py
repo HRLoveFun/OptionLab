@@ -15,31 +15,22 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from core.options.chain.analyzer import OptionsChainAnalyzer
-from services.options_chain_preload import (
+from services.options.chain import OptionsChainService
+from services.options.preload import (
     build_preload_payload,
 )
-from services.options_chain_preload import (
+from services.options.preload import (
     get_cached as get_preload_cached,
 )
-from services.options_chain_preload import (
+from services.options.preload import (
     set_cached as set_preload_cached,
 )
-from services.options_chain_service import OptionsChainService
+from services.options.simulation import run_simulation
 from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("options", __name__)
-
-_IV_LO, _IV_HI = 0.01, 5.0
-
-
-def _iv_ok(v):
-    try:
-        return _IV_LO <= float(v) <= _IV_HI
-    except (TypeError, ValueError):
-        return False
 
 
 @bp.route("/api/option_chain", methods=["GET"])
@@ -115,9 +106,7 @@ def preload_option_chain():
     raw_ticker = data.get("ticker", "").strip().upper()
     if not raw_ticker:
         return (
-            jsonify(
-                {"status": "error", "code": "missing_ticker", "message": "No ticker provided"}
-            ),
+            jsonify({"status": "error", "code": "missing_ticker", "message": "No ticker provided"}),
             400,
         )
 
@@ -137,9 +126,7 @@ def preload_option_chain():
     except Exception as e:
         logger.error("preload_option_chain failed for %s: %s", ticker, e)
         return (
-            jsonify(
-                {"status": "error", "code": "option_chain_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "option_chain_failed", "message": str(e)}),
             500,
         )
 
@@ -150,9 +137,7 @@ def iv_smile_json():
     raw_ticker = (request.args.get("ticker", "") or "").strip().upper()
     if not raw_ticker:
         return (
-            jsonify(
-                {"status": "error", "code": "missing_ticker", "message": "ticker is required"}
-            ),
+            jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}),
             400,
         )
     try:
@@ -161,41 +146,17 @@ def iv_smile_json():
         ticker = raw_ticker
     expiry = request.args.get("expiry")
     try:
-        analyzer = OptionsChainAnalyzer(ticker)
-        if not analyzer.expiries:
+        points = OptionsChainService.iv_smile_points(ticker, expiry)
+        if not points:
             return (
-                jsonify(
-                    {"status": "error", "code": "no_expiries", "message": "no expiries"}
-                ),
+                jsonify({"status": "error", "code": "no_expiries", "message": "no expiries"}),
                 404,
             )
-        exp = expiry if expiry in analyzer.chain else analyzer.expiries[0]
-        calls = analyzer.chain[exp]["calls"].dropna(subset=["impliedVolatility"])
-        puts = analyzer.chain[exp]["puts"].dropna(subset=["impliedVolatility"])
-        calls = calls[calls["impliedVolatility"].apply(_iv_ok)]
-        puts = puts[puts["impliedVolatility"].apply(_iv_ok)]
-        return jsonify(
-            {
-                "status": "ok",
-                "ticker": ticker,
-                "expiry": exp,
-                "spot": round(analyzer.spot, 2),
-                "calls": [
-                    {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
-                    for r in calls.itertuples()
-                ],
-                "puts": [
-                    {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
-                    for r in puts.itertuples()
-                ],
-            }
-        )
+        return jsonify({"status": "ok", "ticker": ticker, **points})
     except Exception as e:
         logger.error("iv_smile_json error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "iv_smile_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "iv_smile_failed", "message": str(e)}),
             500,
         )
 
@@ -206,9 +167,7 @@ def oi_profile_json():
     raw_ticker = (request.args.get("ticker", "") or "").strip().upper()
     if not raw_ticker:
         return (
-            jsonify(
-                {"status": "error", "code": "missing_ticker", "message": "ticker is required"}
-            ),
+            jsonify({"status": "error", "code": "missing_ticker", "message": "ticker is required"}),
             400,
         )
     try:
@@ -217,47 +176,17 @@ def oi_profile_json():
         ticker = raw_ticker
     expiry = request.args.get("expiry")
     try:
-        analyzer = OptionsChainAnalyzer(ticker)
-        if not analyzer.expiries:
+        points = OptionsChainService.oi_profile_points(ticker, expiry)
+        if not points:
             return (
-                jsonify(
-                    {"status": "error", "code": "no_expiries", "message": "no expiries"}
-                ),
+                jsonify({"status": "error", "code": "no_expiries", "message": "no expiries"}),
                 404,
             )
-        exp = expiry if expiry in analyzer.chain else analyzer.expiries[0]
-        calls = analyzer.chain[exp]["calls"]
-        puts = analyzer.chain[exp]["puts"]
-        return jsonify(
-            {
-                "status": "ok",
-                "ticker": ticker,
-                "expiry": exp,
-                "spot": round(analyzer.spot, 2),
-                "calls": [
-                    {
-                        "strike": float(r.strike),
-                        "oi": float(r.openInterest or 0),
-                        "volume": float(r.volume or 0),
-                    }
-                    for r in calls.itertuples()
-                ],
-                "puts": [
-                    {
-                        "strike": float(r.strike),
-                        "oi": float(r.openInterest or 0),
-                        "volume": float(r.volume or 0),
-                    }
-                    for r in puts.itertuples()
-                ],
-            }
-        )
+        return jsonify({"status": "ok", "ticker": ticker, **points})
     except Exception as e:
         logger.error("oi_profile_json error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "oi_profile_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "oi_profile_failed", "message": str(e)}),
             500,
         )
 
@@ -270,9 +199,7 @@ def odds_with_vol():
     target_pct = float(data.get("target_pct", 10))
     if not raw_ticker:
         return (
-            jsonify(
-                {"status": "error", "code": "missing_ticker", "message": "No ticker provided"}
-            ),
+            jsonify({"status": "error", "code": "missing_ticker", "message": "No ticker provided"}),
             400,
         )
     try:
@@ -280,22 +207,12 @@ def odds_with_vol():
     except ValueError:
         ticker = raw_ticker
     try:
-        from core.options.chain.analyzer import get_odds_with_vol_context
-
-        analyzer = OptionsChainAnalyzer(ticker)
-        result = get_odds_with_vol_context(
-            spot=analyzer.spot,
-            target_pct=target_pct,
-            chain=analyzer.chain,
-            expiries=analyzer.expiries,
-        )
+        result = OptionsChainService.odds_with_vol(ticker, target_pct)
         return jsonify({"status": "ok", **result})
     except Exception as e:
         logger.error("odds_with_vol error: %s", e, exc_info=True)
         return (
-            jsonify(
-                {"status": "error", "code": "odds_failed", "message": str(e)}
-            ),
+            jsonify({"status": "error", "code": "odds_failed", "message": str(e)}),
             500,
         )
 
@@ -307,7 +224,5 @@ def simulate_expiry_route():
     Body: {ticker, spot?, option_type, side, strikes?, expiries?, ivs?,
            r?, qty?, multiplier?, n_points?, range_pct?}
     """
-    from services.options_simulation_service import run_simulation
-
     data = request.get_json(silent=True) or {}
     return jsonify(run_simulation(data))

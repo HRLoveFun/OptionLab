@@ -43,8 +43,8 @@ def manual_update(ticker: str, days: int = 7) -> bool:
             )
             start = min(gaps)
 
-        import data_pipeline.downloader as _dl
         import data_pipeline.cleaning as _cl
+        import data_pipeline.downloader as _dl
         import data_pipeline.processing as _pr
 
         dl_result = _dl.upsert_raw_prices(ticker, start, end)
@@ -73,8 +73,8 @@ def seed_history(ticker: str, years: int = 5) -> None:
     """One-time helper to seed multi-year history for a ticker into the DB."""
     end = dt.date.today()
     start = end - dt.timedelta(days=years * 365)
-    import data_pipeline.downloader as _dl
     import data_pipeline.cleaning as _cl
+    import data_pipeline.downloader as _dl
     import data_pipeline.processing as _pr
 
     _dl.upsert_raw_prices(ticker, start, end)

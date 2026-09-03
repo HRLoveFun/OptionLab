@@ -9,7 +9,7 @@ Dependencies UPWARD:
   - core._shared.plotting
   - numpy, pandas, matplotlib
 Dependencies DOWNWARD:
-  - services.chart_service
+  - services.market.charts
 """
 
 from __future__ import annotations
