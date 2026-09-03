@@ -286,13 +286,6 @@ pip install -r requirements.txt
 npm install                  # only needed for vitest / playwright
 ```
 
-Deploying? Install `requirements-prod.txt` instead — it pulls in `gunicorn`,
-which the dev server never needs:
-
-```bash
-pip install -r requirements-prod.txt
-```
-
 ### 3. Configure environment
 
 ```bash
@@ -305,9 +298,6 @@ cp .env.example .env
 ```bash
 # Dev server (autoreload)
 python app.py                # http://127.0.0.1:5001
-
-# Production (gunicorn ships with requirements-prod.txt, not requirements.txt)
-gunicorn app:app -b 0.0.0.0:5001 --workers 2 --threads 4
 ```
 
 ---
