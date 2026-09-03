@@ -9,3 +9,6 @@ python-dotenv==1.1.1
 # Optional: required only when AUTO_UPDATE_TICKERS is set (imported lazily by
 # data_pipeline/scheduler.py). See docs/constraints.md §6.
 APScheduler==3.10.4
+# Production WSGI server. Required by Render's start command
+# (`gunicorn --bind 0.0.0.0:$PORT app:app`). Also installed in deploy/Dockerfile.
+gunicorn>=23.0.0
