@@ -4,155 +4,155 @@
   "expirations": [
     {
       "date": "2026-09-04",
-      "dte": 1,
-      "label": "2026-09-04 (1D)",
+      "dte": 0.25,
+      "label": "2026-09-04 (0.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-07",
-      "dte": 4,
-      "label": "2026-09-07 (4D)",
+      "dte": 3.25,
+      "label": "2026-09-07 (3.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-08",
-      "dte": 5,
-      "label": "2026-09-08 (5D)",
+      "dte": 4.25,
+      "label": "2026-09-08 (4.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-09",
-      "dte": 6,
-      "label": "2026-09-09 (6D)",
+      "dte": 5.25,
+      "label": "2026-09-09 (5.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-10",
-      "dte": 7,
-      "label": "2026-09-10 (7D)",
+      "dte": 6.25,
+      "label": "2026-09-10 (6.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-11",
-      "dte": 8,
-      "label": "2026-09-11 (8D)",
+      "dte": 7.25,
+      "label": "2026-09-11 (7.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-14",
-      "dte": 11,
-      "label": "2026-09-14 (11D)",
+      "dte": 10.25,
+      "label": "2026-09-14 (10.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-15",
-      "dte": 12,
-      "label": "2026-09-15 (12D)",
+      "dte": 11.25,
+      "label": "2026-09-15 (11.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-16",
-      "dte": 13,
-      "label": "2026-09-16 (13D)",
+      "dte": 12.25,
+      "label": "2026-09-16 (12.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-17",
-      "dte": 14,
-      "label": "2026-09-17 (14D)",
+      "dte": 13.25,
+      "label": "2026-09-17 (13.25D)",
       "kind": "daily",
       "cycle": null
     },
     {
       "date": "2026-09-18",
-      "dte": 15,
-      "label": "2026-09-18 (15D)",
+      "dte": 14.25,
+      "label": "2026-09-18 (14.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-09-25",
-      "dte": 22,
-      "label": "2026-09-25 (22D)",
+      "dte": 21.25,
+      "label": "2026-09-25 (21.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-10-02",
-      "dte": 29,
-      "label": "2026-10-02 (29D)",
+      "dte": 28.25,
+      "label": "2026-10-02 (28.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-10-09",
-      "dte": 36,
-      "label": "2026-10-09 (36D)",
+      "dte": 35.25,
+      "label": "2026-10-09 (35.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-10-16",
-      "dte": 43,
-      "label": "2026-10-16 (43D)",
+      "dte": 42.25,
+      "label": "2026-10-16 (42.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-10-23",
-      "dte": 50,
-      "label": "2026-10-23 (50D)",
+      "dte": 49.25,
+      "label": "2026-10-23 (49.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-10-30",
-      "dte": 57,
-      "label": "2026-10-30 (57D)",
+      "dte": 56.25,
+      "label": "2026-10-30 (56.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-11-06",
-      "dte": 64,
-      "label": "2026-11-06 (64D)",
+      "dte": 63.25,
+      "label": "2026-11-06 (63.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-11-13",
-      "dte": 71,
-      "label": "2026-11-13 (71D)",
+      "dte": 70.25,
+      "label": "2026-11-13 (70.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-11-20",
-      "dte": 78,
-      "label": "2026-11-20 (78D)",
+      "dte": 77.25,
+      "label": "2026-11-20 (77.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-11-27",
-      "dte": 85,
-      "label": "2026-11-27 (85D)",
+      "dte": 84.25,
+      "label": "2026-11-27 (84.25D)",
       "kind": "standard",
       "cycle": "weekly"
     },
     {
       "date": "2026-12-04",
-      "dte": 92,
-      "label": "2026-12-04 (92D)",
+      "dte": 91.25,
+      "label": "2026-12-04 (91.25D)",
       "kind": "standard",
       "cycle": "weekly"
     }

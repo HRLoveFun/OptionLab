@@ -7,7 +7,10 @@
 
 import { normCdf, normPdf } from './norm.js';
 
-export const T_MIN = 1 / 365;
+// Smallest maturity BS is willing to price: one hour of a 365-day year. The
+// premium matrix prices intraday columns with fractional DTE, so the floor
+// sits below the one-calendar-day minimum the expiry simulator enforces.
+export const T_MIN = 1 / 365 / 24;
 export const SIGMA_MIN = 0.001;
 export const SIGMA_MAX = 20.0;
 

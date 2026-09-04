@@ -13,12 +13,15 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
-import random
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "site" / "fixtures"
 REF_DATE = "2026-09-04"
+# Fixed wall clock (10:00 ET, mid-session) so the intraday DTE fraction
+# (16:00 ET close minus now) is deterministic in the committed fixture.
+REF_NOW = dt.datetime(2026, 9, 4, 10, 0, tzinfo=ZoneInfo("America/New_York"))
 TICKER = "NVDA"
 SPOT = 182.45
 
@@ -38,12 +41,16 @@ def _adjust_to_business_day(d: dt.date, forward: bool) -> dt.date:
     return d
 
 
-def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle):
-    dte = (d - ref).days + 1
+def _fmt_dte(dte: float) -> str:
+    return f"{dte:.2f}".rstrip("0").rstrip(".")
+
+
+def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle, frac: float):
+    dte = round((d - ref).days + frac, 6)
     return {
         "date": d.isoformat(),
         "dte": dte,
-        "label": f"{d.isoformat()} ({dte}D)",
+        "label": f"{d.isoformat()} ({_fmt_dte(dte)}D)",
         "kind": kind,
         "cycle": cycle,
     }
@@ -62,12 +69,15 @@ def gen_calendar() -> dict:
     # the Pages workflow runs without numpy/scipy. Parity is covered by
     # tests/test_pages_fixtures.py.
     ref = dt.date.fromisoformat(REF_DATE)
+    frac = (16 * 3600 - (REF_NOW.hour * 3600 + REF_NOW.minute * 60 + REF_NOW.second)) / 86400
     daily: list[dict] = []
     d = _adjust_to_business_day(ref, forward=True)
     guard = 0
     while len(daily) < 10 and guard < 400:
         guard += 1
-        daily.append(_make_entry(d, ref, "daily", None))
+        entry = _make_entry(d, ref, "daily", None, frac)
+        if entry["dte"] >= 1 / 24:  # mirror of core _MIN_HORIZON_DAYS
+            daily.append(entry)
         d = _adjust_to_business_day(d + dt.timedelta(days=1), forward=True)
     standard: list[dict] = []
     last_daily = dt.date.fromisoformat(daily[-1]["date"]) if daily else ref
@@ -78,7 +88,7 @@ def gen_calendar() -> dict:
         cur = _next_friday(cur)
         eff = _adjust_to_business_day(cur, forward=False)
         if eff > last_daily:
-            standard.append(_make_entry(eff, ref, "standard", "weekly"))
+            standard.append(_make_entry(eff, ref, "standard", "weekly", frac))
     by_date: dict[str, dict] = {}
     for entry in standard + daily:
         by_date.setdefault(entry["date"], entry)

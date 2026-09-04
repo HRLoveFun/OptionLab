@@ -30,7 +30,7 @@ import { bsGreeks, T_MIN, SIGMA_MIN, SIGMA_MAX } from './black_scholes.js';
 // Horizontal axis: 1–90 DTE in 5-day steps (1, 6, 11, … 86).
 export const DEFAULT_RANGE_PCT = 0.2;
 export const DEFAULT_TARGET_ROWS = 41;
-export const MIN_DTE = 1;
+export const MIN_DTE = 1 / 24;
 export const MAX_DTE = 3650;
 export const MIN_IV_PCT = 0.1;
 export const MAX_IV_PCT = 500;
@@ -76,7 +76,9 @@ export function normalizeDtes(values) {
   const out = [];
   const seen = new Set();
   for (const v of raw) {
-    const d = Math.round(Number(v));
+    // DTE is fractional (intraday remainder to the 16:00 ET close) — keep the
+    // float, only the one-hour floor and the 3650-day cap apply.
+    const d = Number(v);
     if (!Number.isFinite(d) || d < MIN_DTE || d > MAX_DTE || seen.has(d)) continue;
     seen.add(d);
     out.push(d);
@@ -237,7 +239,7 @@ export function buildPremiumMatrix(opts) {
   const rawDtes = expirations ? expirations.map((e) => e.dte) : dtes;
   const dteList = normalizeDtes(rawDtes);
   if (!dteList.length) {
-    throw new Error(`at least one DTE between ${MIN_DTE} and ${MAX_DTE} is required`);
+    throw new Error(`at least one DTE above ${MIN_DTE} and up to ${MAX_DTE} is required`);
   }
 
   const iv = ivPctN / 100;
@@ -250,7 +252,8 @@ export function buildPremiumMatrix(opts) {
   const metaByDte = new Map();
   if (expirations) {
     for (const e of expirations) {
-      const d = Math.round(Number(e.dte));
+      // Keyed by the exact (fractional) dte — same number the calendar emitted.
+      const d = Number(e.dte);
       if (Number.isFinite(d)) metaByDte.set(d, e);
     }
   }

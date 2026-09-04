@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request
 
@@ -234,10 +235,10 @@ def simulate_expiry_route():
 def expiry_calendar_route():
     """List standard listed + daily expirations for the Premium Matrix columns.
 
-    Query params: ref (default today, 'YYYY-MM-DD'), standard (default 12),
-                   daily (default 10).
+    Query params: ref (default today in US/Eastern, 'YYYY-MM-DD'),
+                   standard (default 12), daily (default 10).
     """
-    ref = request.args.get("ref") or dt.date.today().isoformat()
+    ref = request.args.get("ref") or dt.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
     n_standard = request.args.get("standard", 12)
     n_daily = request.args.get("daily", 10)
     try:

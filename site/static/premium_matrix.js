@@ -82,6 +82,13 @@
         return (v > 0 ? '+' : '') + v.toFixed(2) + 'σ';
     }
 
+    // DTE is fractional (intraday remainder to the 16:00 ET close): 0.25D,
+    // 14.92D, 22D. Two decimals max, trailing zeros trimmed.
+    function fmtDte(v) {
+        if (v === null || v === undefined || !isFinite(v)) return '—';
+        return String(Math.round(v * 100) / 100);
+    }
+
     /* -- inputs --------------------------------------------------------- */
     // The input is clamped on read, so a blank or oversized spread can never
     // reach the engine. The minimum is 1% (not zero): below that the engine
@@ -126,7 +133,7 @@
         if (/spot/i.test(raw)) return '标的价格必须为正数。';
         if (/ivPct/i.test(raw)) return '隐含波动率需在 0.1% ~ 500% 之间。';
         if (/rPct/i.test(raw)) return '无风险利率需在 -5% ~ 50% 之间。';
-        if (/DTE/i.test(raw)) return '至少需要 1 ~ 3650 天之间的一个到期期限。';
+        if (/DTE/i.test(raw)) return '至少需要一个剩余 1 小时 ~ 3650 天之间的到期期限。';
         if (/ladder|widen/i.test(raw)) return '当前价格下行权价过密，请提高标的价格。';
         return '溢价率矩阵计算失败：' + raw;
     }
@@ -308,10 +315,10 @@
                 // aria-label — it would mask the DTE / 1σ text the cell already
                 // announces; the action lives in `title` instead.
                 + ' tabindex="0"'
-                + ' title="' + col.dte + ' 天后到期 · 1σ 波动 ' + fmtPct(col.sigma_pct, 2)
+                + ' title="' + fmtDte(col.dte) + ' 天后到期 · 1σ 波动 ' + fmtPct(col.sigma_pct, 2)
                 + (col.date ? ' · ' + col.date + (col.cycle ? ' (' + col.cycle + ')' : '') : '')
                 + ' · 点击设为 σ 参考列，左右键切换">'
-                + '<span class="pm-head-main">' + col.dte + 'D</span>'
+                + '<span class="pm-head-main">' + fmtDte(col.dte) + 'D</span>'
                 + '<span class="pm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
                 + '<span class="pm-head-date">' + datePart + '</span>'
                 + '<span class="pm-head-pair">'
@@ -454,7 +461,7 @@
 
     function renderSigmaHeader() {
         const head = el('pm-head-sigma');
-        if (head) head.textContent = 'σ @' + data.columns[refCol].dte + 'D';
+        if (head) head.textContent = 'σ @' + fmtDte(data.columns[refCol].dte) + 'D';
     }
 
     // Only the 41 row-header cells change when the reference column moves.
@@ -502,7 +509,7 @@
         const refIdx = data.ref_column_index;
         const cell = row.cells[refIdx];
         const col = data.columns[refIdx];
-        const dteTag = col.dte + 'D';
+        const dteTag = fmtDte(col.dte) + 'D';
 
         setText('pm-hero-label', 'ATM premium rate · ' + dteTag);
         setText('pm-kpi-sigma-label', '1σ move · ' + dteTag);

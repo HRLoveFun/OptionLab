@@ -24,6 +24,7 @@ from __future__ import annotations
 import datetime as dt
 import math
 import re
+from zoneinfo import ZoneInfo
 
 import numpy as np
 from scipy.stats import norm
@@ -40,6 +41,14 @@ _MIN_IV = 0.001
 _MAX_IV = 5.0
 
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# US equity options expire at the 16:00 America/New_York close; DTE is measured
+# against that clock, in that timezone, regardless of the server's local time.
+_ET = ZoneInfo("America/New_York")
+
+# CONSTRAINT: a column with under an hour to the close has no meaningful time
+# value left to price — the JS engine (MIN_DTE / T_MIN) drops it as well.
+_MIN_HORIZON_DAYS = 1 / 24
 
 
 def _prob_above(spot: float, level: float, T: float, r: float, sigma: float) -> float:
@@ -387,17 +396,23 @@ def _adjust_to_business_day(d: dt.date, holidays: set[dt.date], forward: bool) -
     return d
 
 
-def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle):
-    # +1: a listed expiration is a *whole* day out, so the same-day column reads
-    # 1D rather than 0D. Dates themselves are untouched (Fridays stay Fridays).
-    dte = (d - ref).days + 1
+def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle, frac: float):
+    # Fractional DTE: whole calendar days plus the fraction of the current day
+    # still left before the 16:00 ET close. Dates themselves are untouched
+    # (Fridays stay Fridays).
+    dte = round((d - ref).days + frac, 6)
     return {
         "date": d.isoformat(),
         "dte": dte,
-        "label": f"{d.isoformat()} ({dte}D)",
+        "label": f"{d.isoformat()} ({_fmt_dte(dte)}D)",
         "kind": kind,         # "standard" | "daily"
         "cycle": cycle,       # "weekly" | None
     }
+
+
+def _fmt_dte(dte: float) -> str:
+    """Compact DTE for labels: ``0.25``, ``14.92``, ``22``."""
+    return f"{dte:.2f}".rstrip("0").rstrip(".")
 
 
 def _next_friday(d: dt.date) -> dt.date:
@@ -413,6 +428,7 @@ def generate_expiry_calendar(
     n_standard: int = 12,
     n_daily: int = 10,
     holidays=None,
+    now: dt.datetime | None = None,
 ) -> list[dict]:
     """Build upcoming option expirations for a Premium Matrix.
 
@@ -423,16 +439,33 @@ def generate_expiry_calendar(
 
     Each entry is ``{"date", "dte", "label", "kind", "cycle"}`` and is sorted
     by date ascending with duplicate dates de-duplicated (a ``standard`` entry
-    wins over a ``daily`` one on collision). ``dte`` is calendar days vs
-    ``reference_date`` **plus one** (``(date - ref).days + 1``), so a same-day
-    expiration reads ``1D`` rather than ``0D``.
+    wins over a ``daily`` one on collision).
+
+    ``dte`` is **fractional calendar time** until the 16:00 ET close::
+
+        dte = (date - ref_date).days + (16 - ref_time.hours) / 24
+
+    where ``ref_time`` is ``now`` (or the wall clock) in
+    ``America/New_York`` — both the expiry date and the reference instant live
+    in the ET timezone. Consequences:
+
+    - a same-day column carries the intraday remainder (``10:00 ET`` →
+      ``0.25D``), never a padded ``1D``;
+    - when ``now`` is at or past 16:00 ET the same-day column's ``dte`` drops
+      to ``<= 0`` — it is **expired** and removed, and the daily series rolls
+      forward to the next business day (future columns keep the exact
+      fractional remaining time, e.g. Friday 18:00 → Monday ``2.917D``);
+    - any column with less than one hour left is dropped as unpriceable
+      (``_MIN_HORIZON_DAYS``, mirrored by the JS engine's ``MIN_DTE``).
 
     ``reference_date`` may be a ``date`` or an ISO ``"YYYY-MM-DD"`` string.
-    ``holidays`` is an optional ``set[date]``; when omitted (or empty) no
-    holiday adjustment is applied — only weekends are skipped. Pass NYSE
-    holiday dates to enable the Friday roll-back behaviour.
+    ``now`` is an optional ``datetime`` (naive values are assumed ET) used to
+    make the fraction deterministic in tests. ``holidays`` is an optional
+    ``set[date]``; when omitted (or empty) no holiday adjustment is applied —
+    only weekends are skipped. Pass NYSE holiday dates to enable the Friday
+    roll-back behaviour.
 
-    Pure / deterministic — no network, no external state.
+    Pure / deterministic apart from the default wall-clock ``now``.
     """
     if isinstance(reference_date, str):
         try:
@@ -447,8 +480,18 @@ def generate_expiry_calendar(
     if n_standard < 0 or n_daily < 0:
         raise ValueError("n_standard and n_daily must be >= 0")
 
+    # Fraction of a day still left before the 16:00 ET close, from `now` in
+    # America/New_York (negative once the market has closed).
+    if now is None:
+        now = dt.datetime.now(_ET)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=_ET)
+    else:
+        now = now.astimezone(_ET)
+    frac = (16 * 3600 - (now.hour * 3600 + now.minute * 60 + now.second)) / 86400
+
     # Default: no holiday adjustment — only weekends are skipped. Pass an
-    # explicit set of dates to enable NYSE-aware rolling of the third-Friday
+    # explicit set of dates to enable NYSE-aware rolling of the weekly-Friday
     # expirations.
     holidays = set(holidays) if holidays else set()
 
@@ -461,7 +504,11 @@ def generate_expiry_calendar(
     guard = 0
     while len(daily) < n_daily and guard < 400:
         guard += 1
-        daily.append(_make_entry(d, ref, "daily", None))
+        entry = _make_entry(d, ref, "daily", None, frac)
+        # Expired (dte <= 0 — the ref day at/after the close) or sub-hour
+        # columns are dropped; the series rolls on to the next business day.
+        if entry["dte"] >= _MIN_HORIZON_DAYS:
+            daily.append(entry)
         d = _adjust_to_business_day(d + dt.timedelta(days=1), holidays, forward=True)
 
     # --- standard listed expirations: every Friday AFTER the last daily day --
@@ -480,7 +527,7 @@ def generate_expiry_calendar(
         # (the daily entry wins the de-dupe anyway), and the ladder continues
         # with the next Friday.
         if eff > last_daily:
-            standard.append(_make_entry(eff, ref, "standard", "weekly"))
+            standard.append(_make_entry(eff, ref, "standard", "weekly", frac))
 
     # --- merge + dedupe (standard wins on date collision) --------------------
     by_date: dict[str, dict] = {}
