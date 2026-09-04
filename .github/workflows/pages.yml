@@ -1,13 +1,20 @@
 name: Deploy Frontend to GitHub Pages
 
+# The Pages site is an identical-UI static mirror of the Flask app:
+# scripts/build_pages_site.py renders the REAL templates/index.html with a
+# committed data snapshot (site/snapshot/snapshot.json) using REAL static/*.
+# Only site/pages-shim.js is Pages-only code (demo fetch stub). static/* and
+# templates/* are never forked for Pages — one UI to learn.
 on:
   push:
     branches: [main]
     paths:
       - 'static/**'
-      - 'site/**'
-      - 'scripts/gen_pages_fixtures.py'
-      - 'scripts/build_pages_showcase.py'
+      - 'templates/**'
+      - 'site/snapshot/**'
+      - 'site/fixtures/**'
+      - 'site/pages-shim.js'
+      - 'scripts/build_pages_site.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -30,25 +37,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Regenerate deterministic fixtures + showcase so committed site/
-      # can never drift from the generator scripts.
-      - name: Generate fixtures and showcase
-        run: |
-          python scripts/gen_pages_fixtures.py
-          python scripts/build_pages_showcase.py
-
-      # Vendor live static JS/CSS + sim engine into the published tree.
-      # Pages subpages reference ../vendor/* and ../fixtures/* with relative
-      # paths so the Project Pages subpath (/OptionLab/) keeps working.
+      # Assemble is CI-safe by design: plain Jinja2 render of the committed
+      # snapshot + verbatim static/ copy. No network, no DB, no matplotlib.
+      # Refresh the snapshot locally via:
+      #   python scripts/build_pages_site.py --refresh-snapshot
       - name: Assemble site
         run: |
-          mkdir -p site/sim site/vendor/sim site/vendor/state site/fixtures site/showcase site/assets
-          cp -r static/sim/* site/sim/
-          cp -r static/sim/* site/vendor/sim/
-          cp static/api.js static/eventBus.js static/option-chain.js static/market_review_chart.js static/market_review.js static/premium_matrix.js static/simulation.js static/utils.js site/vendor/
-          cp -r static/state/* site/vendor/state/
-          rm -f site/vendor/state/README.md
-          cp static/styles.css site/vendor/styles.css
+          pip install jinja2
+          python scripts/build_pages_site.py
           echo "--- site tree ---" && find site -type f | sort
 
       - name: Upload Pages artifact

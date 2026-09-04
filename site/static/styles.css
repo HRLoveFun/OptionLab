@@ -1,0 +1,3018 @@
+/* ============================================================
+   Market Dashboard – Clean & Friendly
+   Color palette: slate-900 header, white panels, blue accent
+   ============================================================ */
+
+/* ── Reset & Base ── */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* ============================================================
+   Design Tokens (CSS custom properties)
+   ------------------------------------------------------------
+   Naming convention:
+     --<group>-<role|shade>
+   Groups:
+     blue/slate  → palette primitives (raw colors)
+     success/warning/error → semantic intent colors
+     regime-*    → market regime classification colors
+                   (consumed by both CSS and JS via
+                   getComputedStyle(document.documentElement)
+                   .getPropertyValue('--regime-...'))
+     font/radius/sidebar/header/shadow → typography & geometry
+   When adding a new token:
+     1. Document its semantic meaning here
+     2. Prefer extending the existing group over creating new ones
+     3. If consumed from JS (e.g. Chart.js datasets), keep the
+        token in the regime-* group so the contract stays clear.
+   ============================================================ */
+:root {
+    /* Brand — primary blue used for accents, links, focus rings */
+    --blue: #3b82f6;
+    /* default accent */
+    --blue-dark: #2563eb;
+    /* hover / pressed state */
+    --blue-light: #eff6ff;
+    /* tinted background (info banners) */
+    --blue-muted: #bfdbfe;
+    /* borders, subtle separators */
+
+    /* Neutrals — slate palette for text, surfaces, dividers */
+    --slate-50: #f8fafc;
+    /* lightest surface */
+    --slate-100: #f1f5f9;
+    /* page background */
+    --slate-200: #e2e8f0;
+    /* hairline borders */
+    --slate-300: #cbd5e1;
+    /* disabled / placeholder */
+    --slate-500: #64748b;
+    /* muted text */
+    --slate-700: #334155;
+    /* secondary text */
+    --slate-900: #0f172a;
+    /* primary text, header bg */
+
+    /* Semantic — convey intent independent of palette */
+    --success: #10b981;
+    /* positive outcomes, gains */
+    --warning: #f59e0b;
+    /* caution, incomplete data */
+    --error: #ef4444;
+    /* failures, losses */
+    --error-bg: #fef2f2;
+    /* tinted error background */
+
+    /* Regime — market regime classification (shared with regime.js)
+       Volatility regimes: ascending stress level                   */
+    --regime-low-vol: #10b981;
+    /* LOW_VOL    — calm market      */
+    --regime-mid-vol: #3b82f6;
+    /* MID_VOL    — normal vol       */
+    --regime-high-vol: #f59e0b;
+    /* HIGH_VOL   — elevated vol     */
+    --regime-stress-vol: #ef4444;
+    /* STRESS_VOL — crisis territory */
+    /*    Direction regimes                                         */
+    --regime-up-trend: #10b981;
+    /* UP_TREND                       */
+    --regime-down-trend: #ef4444;
+    /* DOWN_TREND                     */
+    --regime-chop: #f59e0b;
+    /* CHOP — sideways / no trend     */
+    /*    Fallback for UNKNOWN_VOL / UNKNOWN_DIR / missing data     */
+    --regime-unknown: #94a3b8;
+    /*    Fallback color used by regimeBadge() when label not in map */
+    --regime-badge-fallback: #64748b;
+
+    /* Typography — single font parameter governing the whole project */
+    --font: 'Calibri', 'Candara', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    /* Geometry — radii, layout sizes, elevation */
+    --radius-sm: 6px;
+    /* inputs, small chips */
+    --radius-md: 10px;
+    /* cards, panels */
+    --radius-lg: 14px;
+    /* hero containers */
+    --sidebar-w: 220px;
+    /* left navigation width */
+    --header-h: 60px;
+    /* sticky top header height */
+    --shadow: 0 1px 4px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04);
+    /* resting */
+    --shadow-md: 0 4px 16px rgb(0 0 0 / .10);
+    /* raised */
+
+    /* Premium matrix crosshair — translucent on purpose: a row tint and a
+       column tint have to stack, not hide one another (see the pm-matrix
+       block for the paint order that makes that work). */
+    --pm-row-hover: rgba(59, 130, 246, .07);
+    --pm-col-hover: rgba(59, 130, 246, .12);
+    --pm-rail-hover: rgba(59, 130, 246, .16);
+    --pm-atm-bg: rgba(59, 130, 246, .08);
+}
+
+html {
+    font-size: 15px;
+}
+
+body {
+    font-family: var(--font);
+    background: var(--slate-100);
+    color: var(--slate-900);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Header ── */
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    background: var(--slate-900);
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .06), var(--shadow-md);
+}
+
+.header-inner {
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    color: #fff;
+}
+
+.brand-icon {
+    background: var(--blue);
+    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.header-brand h1 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.header-brand .subtitle {
+    font-size: .75rem;
+    color: var(--slate-300);
+    font-weight: 400;
+}
+
+.header-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.badge-ticker {
+    background: var(--blue);
+    color: #fff;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+}
+
+.badge-meta {
+    font-size: .7rem;
+    color: var(--slate-300);
+}
+
+/* ── App Body – sidebar + main ── */
+.app-body {
+    flex: 1;
+    display: flex;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.5rem;
+    gap: 1.25rem;
+    align-items: flex-start;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+    width: var(--sidebar-w);
+    flex-shrink: 0;
+    position: sticky;
+    top: calc(var(--header-h) + 1.5rem);
+}
+
+.tab-nav {
+    background: #fff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: .5rem;
+    gap: 2px;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .65rem .85rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--slate-500);
+    font-size: .82rem;
+    font-weight: 500;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    text-align: left;
+    width: 100%;
+}
+
+.tab-btn i {
+    font-size: .85rem;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+.tab-btn:hover {
+    background: var(--slate-100);
+    color: var(--slate-700);
+}
+
+.tab-btn.active {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-weight: 600;
+}
+
+/* ── Main Panel ── */
+.main-panel {
+    flex: 1;
+    min-width: 0;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ── Panel Header ── */
+.panel-header {
+    margin-bottom: 1.25rem;
+}
+
+.panel-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .25rem;
+}
+
+.panel-header h2 i {
+    color: var(--blue);
+    font-size: 1rem;
+}
+
+.panel-desc {
+    color: var(--slate-500);
+    font-size: .85rem;
+}
+
+/* ── Form Cards ── */
+.form-card {
+    background: #fff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.form-card-title {
+    padding: .9rem 1.25rem;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--slate-500);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    border-bottom: 1px solid var(--slate-100);
+    background: var(--slate-50);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem 1.25rem;
+    padding: 1.25rem;
+}
+
+/* Time Horizon compact layout - no longer needed as separate styling */
+
+/* ── Form Fields ── */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+
+.form-group label {
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.label-unit {
+    font-weight: 400;
+    color: var(--slate-500);
+    font-size: .75rem;
+}
+
+.form-group input,
+.form-group select {
+    padding: .55rem .75rem;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .875rem;
+    font-family: var(--font);
+    background: #fff;
+    color: #000;
+    transition: border-color .15s, box-shadow .15s;
+    outline: none;
+    width: 100%;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
+}
+
+.form-group input::placeholder {
+    color: var(--slate-300);
+}
+
+.horizon-fields {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.horizon-fields input {
+    flex: 1;
+}
+
+.to-separator {
+    color: var(--slate-400);
+    font-size: .75rem;
+    flex-shrink: 0;
+}
+
+/* Compact range input for Time Horizon */
+.compact-range-input {
+    display: flex;
+    align-items: center;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    overflow: hidden;
+}
+
+.compact-range-input input {
+    flex: 1;
+    border: none;
+    padding: .55rem .5rem;
+    font-size: .875rem;
+    font-family: var(--font);
+    background: transparent;
+    color: #000;
+    outline: none;
+    min-width: 0;
+}
+
+.compact-range-input input:focus {
+    background: var(--blue-light);
+}
+
+.compact-range-input .range-separator {
+    color: var(--slate-400);
+    font-size: .75rem;
+    padding: 0 .25rem;
+    flex-shrink: 0;
+}
+
+.field-hint {
+    font-size: .75rem;
+    color: var(--slate-400);
+}
+
+.validation-warning {
+    font-size: .75rem;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    padding: .35rem .6rem;
+    border-radius: var(--radius-sm);
+}
+
+/* Ticker validation */
+.ticker-validation {
+    font-size: .75rem;
+    font-weight: 500;
+}
+
+.ticker-validation.valid {
+    color: var(--success);
+}
+
+.ticker-validation.invalid {
+    color: var(--error);
+}
+
+.ticker-validation.warning {
+    color: var(--warning);
+}
+
+/* ── Collapsible Positions ── */
+.form-card.collapsible .form-card-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.form-card.collapsible .form-card-title:hover {
+    background: var(--slate-100);
+}
+
+.optional-tag {
+    display: inline-block;
+    background: var(--slate-200);
+    color: var(--slate-500);
+    font-size: .68rem;
+    padding: 1px 6px;
+    border-radius: 999px;
+    margin-left: .4rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    vertical-align: middle;
+}
+
+.chevron-icon {
+    color: var(--slate-400);
+    transition: transform .2s;
+    font-size: .8rem;
+}
+
+.collapsible-body {
+    padding: 1.25rem;
+}
+
+/* ── Positions Table ── */
+.options-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+}
+
+.options-table th {
+    padding: .5rem .75rem;
+    background: var(--slate-50);
+    color: var(--slate-500);
+    font-weight: 600;
+    font-size: .73rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--slate-200);
+    text-align: left;
+}
+
+.options-table td {
+    padding: .45rem .75rem;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.options-table input,
+.options-table select {
+    width: 100%;
+    padding: .35rem .5rem;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .8rem;
+    font-family: var(--font);
+    background: #fff;
+    color: #000;
+    outline: none;
+}
+
+.options-table input:focus,
+.options-table select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, .12);
+}
+
+.add-row-container {
+    padding-top: .85rem;
+    border-top: 1px dashed var(--slate-200);
+    margin-top: .5rem;
+}
+
+/* ── Buttons ── */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: .25rem 0 .5rem;
+}
+
+.btn-primary {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    padding: .65rem 1.5rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: .875rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    transition: background .15s, box-shadow .15s;
+}
+
+.btn-primary:hover {
+    background: var(--blue-dark);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, .3);
+}
+
+.btn-primary:active {
+    background: #1d4ed8;
+}
+
+.btn-primary.btn-lg {
+    padding: .75rem 2rem;
+    font-size: .95rem;
+}
+
+.btn-primary:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--blue);
+    border: 1.5px solid var(--blue-muted);
+    padding: .45rem 1rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    transition: background .15s, border-color .15s;
+}
+
+.btn-ghost:hover {
+    background: var(--blue-light);
+    border-color: var(--blue);
+}
+
+.btn-delete {
+    background: transparent;
+    color: var(--error);
+    border: none;
+    padding: .3rem .5rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: .75rem;
+    transition: background .15s;
+}
+
+.btn-delete:hover {
+    background: var(--error-bg);
+}
+
+/* ── Meta Bar ── */
+.meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-bottom: 1.25rem;
+}
+
+.meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    color: var(--slate-700);
+    font-size: .75rem;
+    font-weight: 500;
+    padding: .3rem .7rem;
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+}
+
+.meta-chip i {
+    color: var(--blue);
+    font-size: .7rem;
+}
+
+/* ── Content Cards (Charts / Tables) ── */
+.content-card {
+    background: #fff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.content-card-title {
+    padding: .85rem 1.25rem;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--slate-700);
+    border-bottom: 1px solid var(--slate-100);
+    background: var(--slate-50);
+}
+
+.chart-wrapper {
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.analysis-chart {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+}
+
+.charts-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* ── Tables inside content cards ── */
+.table-wrapper {
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+}
+
+.table-wrapper table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+}
+
+.table-wrapper th {
+    padding: .5rem .75rem;
+    background: var(--slate-50);
+    color: var(--slate-500);
+    font-size: .73rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--slate-200);
+    text-align: left;
+}
+
+.table-wrapper td {
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--slate-100);
+    color: var(--slate-700);
+}
+
+.table-wrapper tr:last-child td {
+    border-bottom: none;
+}
+
+.table-wrapper tr:hover td {
+    background: var(--slate-50);
+}
+
+/* ── Market Review – inline bars ── */
+.mr-cell-inner {
+    line-height: 1.3;
+}
+
+.mr-bar-wrap {
+    position: relative;
+    height: 4px;
+    width: 100%;
+    margin-top: 3px;
+    background: var(--slate-100);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.mr-bar {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 2px;
+}
+
+.mr-bar-pos {
+    background: #22c55e;
+}
+
+.mr-bar-neg {
+    background: #ef4444;
+}
+
+.mr-bar-neutral {
+    background: #6366f1;
+    left: 0;
+}
+
+/* center-line for diverging bars */
+.mr-bar-wrap.diverging::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--slate-300);
+}
+
+/* ── Market Review – sortable column headers ── */
+.mr-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.mr-sortable:hover {
+    background: var(--slate-100);
+    color: var(--slate-700);
+}
+
+.mr-sort-icon {
+    opacity: .5;
+    font-style: normal;
+    font-size: .65rem;
+    margin-left: 2px;
+}
+
+.mr-sortable.sorted .mr-sort-icon {
+    opacity: 1;
+    color: var(--primary, #6366f1);
+}
+
+/* ── Alert ── */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: .85rem;
+    margin-bottom: 1rem;
+}
+
+.alert-error {
+    background: var(--error-bg);
+    color: var(--error);
+    border-left: 4px solid var(--error);
+}
+
+/* ── No-results inline notice ── */
+.no-results-notice {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: 1rem 1.25rem;
+    background: var(--slate-50);
+    border: 1px dashed var(--slate-300);
+    border-radius: var(--radius-md);
+    color: var(--slate-500);
+    font-size: .85rem;
+    margin-top: .5rem;
+}
+
+.no-results-notice i {
+    color: var(--blue);
+}
+
+.no-results-notice strong {
+    color: var(--slate-700);
+}
+
+/* ── Empty State ── */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--slate-400);
+    background: #fff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+}
+
+.empty-icon {
+    display: block;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    opacity: .3;
+}
+
+.empty-state p {
+    font-size: .95rem;
+}
+
+.empty-state strong {
+    color: var(--slate-600);
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+    .app-body {
+        padding: 1rem;
+        gap: 1rem;
+    }
+
+    :root {
+        --sidebar-w: 190px;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    /* Responsive layout - 2 columns on tablet */
+}
+
+@media (max-width: 768px) {
+    .app-body {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        position: static;
+    }
+
+    .tab-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: .35rem;
+        gap: 2px;
+    }
+
+    .tab-btn {
+        flex: 1 1 auto;
+        justify-content: center;
+        padding: .5rem .6rem;
+        font-size: .73rem;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Responsive layout - 1 column on mobile */
+
+    .horizon-fields {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .to-separator {
+        display: none;
+    }
+
+    .header-brand .subtitle {
+        display: none;
+    }
+
+    .badge-meta {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-body {
+        padding: .75rem;
+    }
+
+    .tab-btn span {
+        display: none;
+    }
+
+    .tab-btn {
+        flex: 0 0 auto;
+    }
+
+    .form-actions {
+        justify-content: stretch;
+    }
+
+    .btn-primary.btn-lg {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ── Print ── */
+@media print {
+
+    .site-header,
+    .sidebar {
+        display: none;
+    }
+
+    .main-panel {
+        padding: 0;
+    }
+
+    .tab-content {
+        display: block !important;
+    }
+
+    .content-card {
+        box-shadow: none;
+        border: 1px solid var(--slate-200);
+        break-inside: avoid;
+    }
+}
+
+/* ── Animations ── */
+.tab-content.active {
+    animation: fadeSlide .2s ease-out both;
+}
+
+@keyframes fadeSlide {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================
+   Option Chain – T-format table
+   ============================================================ */
+
+/* Generic panel toolbar — primary actions go on the right. See
+   docs/frontend_architecture.md for the button-placement contract. */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.toolbar .toolbar-spacer {
+    flex: 1 1 auto;
+}
+
+.toolbar .toolbar-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+/* Status / loading / error / empty banners (panel state machine).
+   Exactly one is visible at any time — see static/state/panelState.js. */
+.panel-banner {
+    padding: .6rem .9rem;
+    border-radius: 6px;
+    font-size: .85rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .75rem;
+}
+
+.panel-banner--loading {
+    background: var(--bg-info, #eef4fb);
+    color: var(--text-info, #1f4f8b);
+}
+
+.panel-banner--error {
+    background: var(--bg-error, #fdecea);
+    color: var(--text-error, #a3231b);
+}
+
+.panel-banner--empty {
+    background: var(--bg-muted, #f6f7f9);
+    color: var(--text-muted, #6b7280);
+}
+
+/* Toolbar row (ticker input + button + spot) */
+.oc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.oc-ticker-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.oc-ticker-input {
+    padding: .45rem .75rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .9rem;
+    font-family: var(--font);
+    width: 160px;
+    background: #fff;
+    color: #000;
+    transition: border-color .2s;
+}
+
+.oc-ticker-input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--blue-muted);
+}
+
+/* Target % × Spot widget */
+.oc-target-row {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .85rem;
+    color: var(--slate-500);
+}
+
+.oc-target-label {
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.oc-target-input {
+    width: 68px;
+    padding: .3rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .85rem;
+    font-family: var(--font);
+    text-align: right;
+    background: #fff;
+    color: #000;
+    transition: border-color .2s;
+}
+
+.oc-target-input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--blue-muted);
+}
+
+.oc-target-unit {
+    color: var(--slate-500);
+}
+
+.oc-target-value {
+    font-size: .78rem;
+    color: #b45309;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius-sm);
+    padding: .2rem .55rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Status / error banner */
+.oc-status {
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-md);
+    padding: .75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: .875rem;
+}
+
+.oc-status i {
+    margin-right: .4rem;
+}
+
+/* Expiration subtab list */
+.oc-exp-tabs {
+    margin-bottom: .75rem;
+    overflow-x: auto;
+    padding-bottom: .4rem;
+}
+
+.oc-exp-tab-list {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: nowrap;
+    min-width: max-content;
+}
+
+.oc-exp-btn {
+    padding: .3rem .7rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--slate-700);
+    font-size: .78rem;
+    font-family: var(--font);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+.oc-exp-btn:hover {
+    background: var(--blue-light);
+    border-color: var(--blue-muted);
+}
+
+.oc-exp-btn.active {
+    background: var(--blue);
+    border-color: var(--blue-dark);
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Chain wrapper */
+.oc-chain-wrapper {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+}
+
+/* T-format — grid: 6 call cols | 1 strike col | 6 put cols */
+.oc-t-header,
+.oc-t-subheader,
+.oc-t-row {
+    display: grid;
+    grid-template-columns: minmax(320px, 6fr) minmax(80px, 1fr) minmax(320px, 6fr);
+    min-width: 760px;
+}
+
+/* Section headers (Calls / Strike / Puts) */
+.oc-t-header {
+    border-bottom: 2px solid var(--slate-200);
+}
+
+.oc-t-calls-header,
+.oc-t-strike-header,
+.oc-t-puts-header {
+    padding: .55rem .75rem;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.oc-t-calls-header {
+    color: #2563eb;
+    background: #eff6ff;
+    text-align: right;
+    border-right: 1px solid var(--slate-200);
+}
+
+.oc-t-strike-header {
+    color: var(--slate-700);
+    background: var(--slate-50);
+    text-align: center;
+    border-right: 1px solid var(--slate-200);
+}
+
+.oc-t-puts-header {
+    color: #7c3aed;
+    background: #f5f3ff;
+    text-align: left;
+}
+
+/* Sub-column header row */
+.oc-t-subheader {
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--slate-500);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.oc-t-calls-sub,
+.oc-t-puts-sub {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    padding: .3rem .5rem;
+}
+
+.oc-t-calls-sub {
+    text-align: right;
+    border-right: 1px solid var(--slate-200);
+}
+
+.oc-t-puts-sub {
+    text-align: left;
+}
+
+.oc-t-calls-sub span,
+.oc-t-puts-sub span {
+    padding: 0 .25rem;
+}
+
+.oc-t-strike-sub {
+    padding: .3rem .25rem;
+    text-align: center;
+    border-right: 1px solid var(--slate-200);
+}
+
+/* Data rows */
+.oc-chain-body {
+    font-size: .82rem;
+}
+
+.oc-t-row {
+    border-bottom: 1px solid var(--slate-100);
+    transition: background .1s;
+}
+
+.oc-t-row:last-child {
+    border-bottom: none;
+}
+
+.oc-t-row:hover>div {
+    background: var(--slate-50) !important;
+}
+
+/* Liquidity score row styling */
+.oc-t-row.oc-liq-avoid>div {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.oc-t-row.oc-liq-fair>div {
+    background: #fffbe6;
+}
+
+/* Calls & Puts cell grids */
+.oc-t-calls,
+.oc-t-puts {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    align-items: center;
+    padding: .35rem .5rem;
+}
+
+.oc-t-calls {
+    text-align: right;
+    border-right: 1px solid var(--slate-200);
+    color: var(--slate-700);
+}
+
+.oc-t-puts {
+    text-align: left;
+    color: var(--slate-700);
+}
+
+.oc-t-calls span,
+.oc-t-puts span {
+    padding: 0 .25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* In-The-Money highlight */
+.oc-itm {
+    background: var(--blue-light);
+}
+
+.oc-itm span {
+    color: var(--blue-dark);
+    font-weight: 500;
+}
+
+/* Strike column — emphasized per Design Principle P1 (primary identifier
+   inside the chain row). Bumped +2px and weight 700 vs surrounding cells. */
+.oc-t-strike {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .35rem .25rem;
+    font-weight: 700;
+    font-size: 1rem;
+    /* +2px vs the .82rem default of calls/puts cells */
+    color: var(--slate-900);
+    background: var(--slate-50);
+    border-right: 1px solid var(--slate-200);
+    letter-spacing: .01em;
+}
+
+/* OI / Volume cells de-emphasized so liquidity context doesn't compete
+   with price columns. Calls grid order: IV%, OI, Vol, Bid, Ask, Last, Prem
+   — so OI = nth-child(2), Vol = nth-child(3).
+   Puts grid mirrors: Prem, Last, Bid, Ask, Vol, OI, IV%
+   — so Vol = nth-child(5), OI = nth-child(6). */
+.oc-t-calls>span:nth-child(2),
+.oc-t-calls>span:nth-child(3),
+.oc-t-puts>span:nth-child(5),
+.oc-t-puts>span:nth-child(6) {
+    color: var(--slate-500);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Spot-price divider row */
+.oc-spot-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fffbeb;
+    border-top: 2px dashed #fbbf24;
+    border-bottom: 2px dashed #fbbf24;
+    padding: .3rem .75rem;
+    min-width: 760px;
+}
+
+.oc-spot-label {
+    font-size: .8rem;
+    font-weight: 700;
+    color: #b45309;
+    letter-spacing: .03em;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+}
+
+.oc-spot-label i {
+    color: #f59e0b;
+    font-size: .75rem;
+}
+
+.oc-spot-label strong {
+    color: #92400e;
+    font-size: .9rem;
+}
+
+/* Odd column values */
+.oc-odd-pos {
+    color: #166534;
+    font-weight: 600;
+}
+
+.oc-odd-neg {
+    color: var(--error);
+    font-weight: 600;
+}
+
+.oc-prem-pos {
+    color: #166534;
+    font-weight: 600;
+}
+
+.oc-prem-neg {
+    color: var(--error);
+    font-weight: 600;
+}
+
+/* Null placeholder */
+.oc-null {
+    color: var(--slate-300);
+}
+
+/* No-data message */
+.oc-no-data {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--slate-500);
+    font-style: italic;
+}
+
+/* ============================================================
+   Odds Tab – stacked charts (Call upper, Put lower)
+   ============================================================ */
+.odds-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+    .odds-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================
+   Module 0: Multi-ticker badges
+   ============================================================ */
+.ticker-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-top: .4rem;
+}
+
+.ticker-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    font-size: .73rem;
+    font-weight: 600;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.ticker-badge.valid {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.ticker-badge.invalid {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.ticker-badge i {
+    font-size: .65rem;
+}
+
+/* Ticker tab navigation (for multi-ticker results) */
+.ticker-tab-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-bottom: 1rem;
+    padding: .5rem 0;
+}
+
+.ticker-tab-btn {
+    padding: .35rem .85rem;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--slate-700);
+    font-size: .8rem;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+.ticker-tab-btn:hover {
+    background: var(--blue-light);
+    border-color: var(--blue-muted);
+}
+
+.ticker-tab-btn.active {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+}
+
+/* ============================================================
+   Module 2: Position cascade dropdowns
+   ============================================================ */
+.pos-select {
+    width: 100%;
+    padding: .3rem .4rem;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .75rem;
+    font-family: var(--font);
+    background: #fff;
+    color: #000;
+    outline: none;
+    transition: border-color .15s;
+}
+
+.pos-select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, .12);
+}
+
+.pos-price-input,
+.pos-qty-input {
+    width: 72px;
+    padding: .3rem .4rem;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .75rem;
+    font-family: var(--font);
+    background: #fff;
+    color: #000;
+    outline: none;
+    text-align: right;
+}
+
+.pos-price-input:focus,
+.pos-qty-input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, .12);
+}
+
+/* ============================================================
+   Module 3: Portfolio Analysis results panel
+   ============================================================ */
+#portfolio-results-panel {
+    margin-top: 1rem;
+}
+
+.greeks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: .6rem;
+}
+
+.greek-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--slate-50);
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    padding: .5rem;
+}
+
+.greek-label {
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--slate-500);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.greek-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--slate-900);
+}
+
+.portfolio-chart-img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-sm);
+    margin-top: .5rem;
+}
+
+/* ============================================================
+   Module 4A: Market Review interactive chart toolbar
+   ============================================================ */
+.mr-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .75rem;
+    padding: .5rem 0;
+}
+
+.btn-group {
+    display: inline-flex;
+    gap: 0;
+}
+
+.btn-group .btn-toggle {
+    border-radius: 0;
+}
+
+.btn-group .btn-toggle:first-child {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.btn-group .btn-toggle:last-child {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.btn-toggle {
+    padding: .3rem .65rem;
+    border: 1px solid var(--slate-200);
+    background: #fff;
+    color: var(--slate-600);
+    font-size: .73rem;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+.btn-toggle:hover {
+    background: var(--slate-100);
+}
+
+.btn-toggle.active {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+}
+
+.btn-sm {
+    padding: .25rem .55rem;
+    font-size: .7rem;
+}
+
+.asset-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    margin-top: .35rem;
+}
+
+.asset-toggles .btn-toggle {
+    font-size: .7rem;
+    padding: .2rem .5rem;
+}
+
+/* Chart container within Market Review */
+.mr-chart-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+}
+
+/* Collapsible data table toggle */
+.toggle-summary-btn {
+    background: none;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    padding: .3rem .65rem;
+    font-size: .73rem;
+    color: var(--slate-600);
+    cursor: pointer;
+    font-family: var(--font);
+    font-weight: 500;
+}
+
+.toggle-summary-btn:hover {
+    background: var(--slate-50);
+}
+
+/* ============================================================
+   Module 4B: Vol Context table
+   ============================================================ */
+.vol-context-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+    margin-top: .5rem;
+}
+
+.vol-context-table th {
+    padding: .45rem .6rem;
+    background: var(--slate-50);
+    color: var(--slate-500);
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--slate-200);
+    text-align: left;
+}
+
+.vol-context-table td {
+    padding: .45rem .6rem;
+    border-bottom: 1px solid var(--slate-100);
+    color: var(--slate-700);
+}
+
+.vol-premium-high {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.vol-premium-low {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+/* ============================================================
+   Module 5: Summary / Correlation
+   ============================================================ */
+.summary-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.summary-info {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--shadow);
+}
+
+.summary-info h4 {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--slate-700);
+    margin-bottom: .5rem;
+}
+
+.correlation-heatmap {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: .5rem;
+}
+
+.vol-comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+}
+
+.vol-comparison-table th {
+    padding: .45rem .6rem;
+    background: var(--slate-50);
+    color: var(--slate-500);
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--slate-200);
+}
+
+.vol-comparison-table td {
+    padding: .45rem .6rem;
+    border-bottom: 1px solid var(--slate-100);
+    color: var(--slate-700);
+    text-align: center;
+}
+
+.section-subtitle {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+/* ============================================================
+   Design System — UI Principles (see docs/frontend_architecture.md)
+   ------------------------------------------------------------
+   P1: Information hierarchy   →  .kpi-strip / .kpi-card / .metric-hero
+   P2: Four-state machine      →  panel-banner / .empty-state (above)
+   P3: Semantic color lock     →  .semantic-pos / -neg / -info / -warn
+   P4: Button spec             →  .btn-* (above) — focus rings below
+   P5: Accessibility baseline  →  :focus-visible + sr-only helpers
+   ============================================================ */
+
+/* P1 — Hero metric. Use for the single primary number per panel.
+   Render in the 24–32px range with a tight label.
+   Example markup:
+       <div class="metric-hero">
+         <div class="metric-hero__label">Total Return (ETD)</div>
+         <div class="metric-hero__value semantic-pos">+12.4%</div>
+       </div>                                                       */
+.metric-hero {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    padding: .75rem 1rem;
+    background: var(--blue-light);
+    border: 1px solid var(--blue-muted);
+    border-radius: var(--radius-md);
+    min-width: 180px;
+}
+
+.metric-hero__label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.metric-hero__value {
+    font-size: 1.9rem;
+    /* ≈ 28px @ 15px root  → within the 24–32px hero range */
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--slate-900);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+}
+
+.metric-hero__sub {
+    font-size: .78rem;
+    color: var(--slate-500);
+    margin-top: .15rem;
+}
+
+/* P1 — KPI strip: secondary metrics row.
+   Use immediately below the hero metric. */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .75rem;
+    margin: 1rem 0;
+}
+
+.kpi-card {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    padding: .75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    box-shadow: var(--shadow);
+}
+
+.kpi-card--primary {
+    background: var(--blue-light);
+    border-color: var(--blue-muted);
+}
+
+.kpi-card__label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.kpi-card__value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-card--primary .kpi-card__value {
+    /* hero variant inside KPI strip — sized into the 24–32px range */
+    font-size: 1.9rem;
+    line-height: 1.1;
+}
+
+.kpi-card__sub {
+    font-size: .75rem;
+    color: var(--slate-500);
+}
+
+/* P3 — Semantic color helpers. The ONLY four colors approved for
+   conveying meaning. Decorative use is forbidden — see PR checklist.
+       .semantic-pos  → gain / up-trend / completed   (green)
+       .semantic-neg  → loss / down-trend / failure   (red)
+       .semantic-info → neutral accent / informational (blue)
+       .semantic-warn → caution / incomplete / chop    (orange)         */
+.semantic-pos {
+    color: var(--success);
+}
+
+.semantic-neg {
+    color: var(--error);
+}
+
+.semantic-info {
+    color: var(--blue);
+}
+
+.semantic-warn {
+    color: var(--warning);
+}
+
+.semantic-pos-bg {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.semantic-neg-bg {
+    background: var(--error-bg);
+    color: #991b1b;
+}
+
+.semantic-info-bg {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+}
+
+.semantic-warn-bg {
+    background: #fffbeb;
+    color: #92400e;
+}
+
+/* P5 — Visible focus ring on all interactive elements. Tabs, buttons,
+   inputs, links. Never override without supplying an alternative. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.btn-toggle:focus-visible,
+.tab-btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* P5 — Visually hidden helper for screen-reader-only labels. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================================
+   Market Review — column hierarchy (P1)
+   The pandas-rendered table has columns:
+       1 = index (asset name)
+       2 = Last Close
+       3-6 = Return (1M, 1Q, YTD, ETD)
+       7-10 = Volatility (...)
+       11-14 = Correlation (...)
+   We highlight columns 1-6 (asset / close / return) as the
+   left-side priority block per the design brief.
+   ============================================================ */
+.mr-priority-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.mr-priority-table tbody td:nth-child(-n+6),
+.mr-priority-table tbody th:first-child {
+    background: var(--blue-light);
+    font-weight: 600;
+}
+
+.mr-priority-table tbody td:nth-child(2),
+.mr-priority-table tbody td:nth-child(3),
+.mr-priority-table tbody td:nth-child(4),
+.mr-priority-table tbody td:nth-child(5),
+.mr-priority-table tbody td:nth-child(6) {
+    color: var(--slate-900);
+}
+
+.mr-priority-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--slate-50);
+    z-index: 1;
+}
+
+/* ============================================================
+   Regime hero — P1 + P3
+   Large composite label for the current market regime.
+   ============================================================ */
+.regime-hero {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.2fr) 2fr;
+    gap: 1.25rem;
+    align-items: stretch;
+    padding: 1rem 0;
+}
+
+@media (max-width: 720px) {
+    .regime-hero {
+        grid-template-columns: 1fr;
+    }
+}
+
+.regime-hero__primary {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, var(--slate-50), #fff);
+    border: 1px solid var(--slate-200);
+    box-shadow: var(--shadow);
+}
+
+.regime-hero__date {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--slate-500);
+}
+
+.regime-hero__label {
+    font-size: 1.85rem;
+    /* ≈ 28px — primary regime composite label */
+    font-weight: 700;
+    line-height: 1.15;
+    margin: .35rem 0 .5rem;
+    color: var(--slate-900);
+    letter-spacing: -.01em;
+}
+
+.regime-hero__badges {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+}
+
+.regime-badge {
+    display: inline-block;
+    padding: .25rem .7rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: .82rem;
+    color: #fff;
+    background: var(--regime-badge-fallback);
+    letter-spacing: .02em;
+}
+
+.regime-hero__metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: .6rem;
+}
+
+.regime-hero__metric {
+    background: #fff;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-md);
+    padding: .6rem .8rem;
+}
+
+.regime-hero__metric-label {
+    font-size: .7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--slate-500);
+}
+
+.regime-hero__metric-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--slate-900);
+    margin-top: .2rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Hero placeholder while loading / empty (state machine P2) */
+.regime-hero--placeholder {
+    color: var(--slate-500);
+    font-style: italic;
+    padding: 1.5rem 1rem;
+}
+
+
+/* ============================================================
+   Simulation Tab — expiry payoff grid (strike × maturity × IV)
+   P1: hero P&L metric; P2: four-state panel; P3: semantic
+   green/red reused for gains/losses only.
+   ============================================================ */
+
+/* Hero metric + KPI strip share one row so the primary number is
+   never separated from its supporting context. */
+.sim-hero-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.sim-kpi-strip {
+    margin: 0;
+    flex: 1 1 520px;
+}
+
+/* Chart controls: strike / scenario selectors + terminal-price slider */
+.sim-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    padding: .25rem 0 1rem;
+}
+
+.sim-control {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+}
+
+.sim-control > label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.sim-control--grow {
+    flex: 1 1 320px;
+}
+
+.sim-scenario-number {
+    width: 7.5rem;
+    padding: .35rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .85rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--slate-900);
+    background: #fff;
+}
+
+.sim-chart-wrapper {
+    height: 380px;
+}
+
+/* ── P&L matrix: strikes down the rows, scenarios across the columns ── */
+.sim-matrix-scroll {
+    overflow-x: auto;
+    padding: .25rem 0 .5rem;
+}
+
+.sim-matrix {
+    border-collapse: collapse;
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.sim-matrix th[scope="col"] {
+    padding: .5rem .7rem;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    text-align: right;
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--slate-500);
+    vertical-align: bottom;
+}
+
+.sim-matrix th[scope="col"]:first-child {
+    text-align: left;
+}
+
+.sim-col-main {
+    display: block;
+    color: var(--slate-700);
+}
+
+.sim-col-sub {
+    display: block;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--slate-500);
+}
+
+.sim-matrix th[scope="row"] {
+    padding: 0;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-100);
+    text-align: left;
+}
+
+.sim-strike-btn {
+    width: 100%;
+    padding: .45rem .7rem;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    color: var(--slate-700);
+    text-align: left;
+    cursor: pointer;
+}
+
+.sim-strike-btn:hover {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+}
+
+.sim-strike-btn[aria-pressed="true"] {
+    background: var(--blue-light);
+    color: var(--blue-dark);
+}
+
+.sim-matrix td {
+    padding: .45rem .7rem;
+    border-bottom: 1px solid var(--slate-100);
+    text-align: right;
+    color: var(--slate-700);
+}
+
+.sim-matrix tr.sim-row-active td,
+.sim-matrix tr.sim-row-active th[scope="row"] {
+    box-shadow: inset 0 0 0 1px var(--blue-muted);
+}
+
+.sim-matrix tbody tr:hover td {
+    filter: brightness(.97);
+}
+
+/* ── Scenario detail table ── */
+.sim-detail {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.sim-detail th {
+    padding: .5rem .75rem;
+    background: var(--slate-50);
+    color: var(--slate-500);
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--slate-200);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.sim-detail th:first-child,
+.sim-detail td:first-child {
+    text-align: left;
+}
+
+.sim-detail td {
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--slate-100);
+    text-align: right;
+    color: var(--slate-700);
+    white-space: nowrap;
+}
+
+.sim-detail tr.sim-row-active td {
+    background: var(--blue-light);
+}
+
+@media (max-width: 720px) {
+    .sim-chart-wrapper {
+        height: 300px;
+    }
+
+    .sim-controls {
+        gap: .75rem;
+    }
+}
+
+/* ── Premium matrix: strikes down the rows, expiries across the columns ──
+   Cell anatomy: <td.pm-cell> is a flex row holding one .pm-half per side
+   (call then put); each half stacks the price above the premium rate. The
+   four toolbar switches only flip data-show-* attributes on the table, so
+   hiding a value costs one attribute write — no recompute, no re-render.
+   The fill-side switch is the exception: it sits with the other matrix
+   switches but reprices the grid, because it changes the price basis, not
+   the layout — hence the divider that sets it apart. */
+.pm-fill-side {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-left: .25rem;
+    padding-left: .6rem;
+    border-left: 1px solid var(--slate-200);
+}
+
+.pm-fill-side__label {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: var(--slate-500);
+}
+
+.pm-matrix-toolbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+}
+
+.pm-matrix-toolbar__left {
+    display: flex;
+    align-items: flex-end;
+    gap: .85rem;
+    flex-wrap: wrap;
+}
+
+.pm-matrix-toolbar__right {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: wrap;
+}
+
+.pm-field-inline {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.pm-field-inline label {
+    font-size: .68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.pm-field-inline select {
+    padding: .35rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--slate-900);
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.pm-hint {
+    max-width: 24rem;
+    font-size: .75rem;
+    color: var(--slate-500);
+}
+
+/* Legend — bullet explanations below the matrix panel. */
+.pm-legend {
+    margin-top: 1rem;
+}
+
+.pm-legend-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.pm-legend-heading {
+    margin: 0 0 .5rem;
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.pm-legend-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: .8rem;
+    line-height: 1.55;
+    color: var(--slate-500);
+}
+
+.pm-legend-list > li {
+    margin-bottom: .4rem;
+}
+
+.pm-legend-list ul {
+    margin-top: .35rem;
+    padding-left: 1.1rem;
+}
+
+.pm-legend-list code {
+    font-size: .72rem;
+    color: var(--slate-700);
+    background: var(--slate-50);
+    padding: .05rem .3rem;
+    border-radius: var(--radius-sm);
+}
+
+.pm-legend-list strong {
+    color: var(--slate-700);
+}
+
+.pm-empty-hint {
+    margin-top: .75rem;
+    padding: .5rem .75rem;
+    border-radius: var(--radius-sm);
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-size: .8rem;
+}
+
+.pm-matrix-scroll {
+    max-height: 70vh;
+    overflow: auto;
+    /* Own stacking context so the sticky header + rails compose as one layer
+       with the body and never clip through it on scroll (the "穿模" guard). */
+    isolation: isolate;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+}
+
+.pm-matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .74rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    /* One source of truth for the geometry shared by the data halves and the
+       header halves, so a sub-column can never drift from the numbers it
+       labels. */
+    --pm-half-min: 4.6rem;
+    --pm-strike-w: 4.4rem;
+    --pm-sigma-w: 4.6rem;
+    /* Rewritten by static/premium_matrix.js with the measured width of the
+       strike column; the rem value is only the pre-layout fallback. */
+    --pm-sigma-left: 4.4rem;
+}
+
+.pm-caption {
+    caption-side: top;
+    padding: .45rem .7rem;
+    text-align: left;
+    font-size: .72rem;
+    color: var(--slate-500);
+}
+
+.pm-matrix th,
+.pm-matrix td {
+    padding: .3rem .55rem;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.pm-matrix thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    font-size: .68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--slate-500);
+    text-align: right;
+}
+
+/* The two top-left corner cells are doubly sticky (top + left). They MUST sit
+   above both the sticky header row (z-index 3, from `.pm-matrix thead th`) and
+   the sticky left rails (z-index 2). So the z-index here is written on a
+   selector that OUT-SPECIFIES `.pm-matrix thead th` (0,1,2): a bare
+   `.pm-head-strike` (0,1,0) loses to it and falls back to z-index 3, which is
+   exactly what let a scrolled DTE header paint over the corner — the "穿模"
+   clip on horizontal scroll (equal z-index + later DOM order wins). */
+.pm-matrix thead th.pm-head-strike,
+.pm-matrix thead th.pm-head-sigma {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    text-align: right;
+}
+
+.pm-head-strike {
+    left: 0;
+    width: var(--pm-strike-w);
+}
+
+.pm-head-sigma {
+    left: var(--pm-sigma-left);
+    width: var(--pm-sigma-w);
+}
+
+.pm-matrix tbody th[scope="row"] {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: var(--pm-strike-w);
+    background: var(--slate-50);
+    text-align: right;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.pm-matrix td.pm-sigma {
+    position: sticky;
+    left: var(--pm-sigma-left);
+    z-index: 2;
+    width: var(--pm-sigma-w);
+    background: var(--slate-50);
+    text-align: right;
+    font-weight: 500;
+    color: var(--slate-500);
+}
+
+/* DTE header — mirrors the data cell one-for-one.
+   .pm-head-pair uses the exact same flex rules as .pm-cell and the header
+   <th> is padding-free (like the data <td>), so the CALL / PUT labels line up
+   with the halves they name. Keep these two blocks in sync. */
+.pm-matrix th.pm-head-dte {
+    padding: 0;
+    text-align: center;
+    vertical-align: bottom;
+}
+
+.pm-head-main {
+    display: block;
+    padding: .2rem .4rem 0;
+    font-size: .74rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: var(--slate-700);
+}
+
+.pm-head-sub {
+    display: block;
+    padding: 0 .4rem .14rem;
+    font-size: .64rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--slate-500);
+}
+
+.pm-head-date {
+    display: block;
+    padding: 0 .4rem .14rem;
+    font-size: .64rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--slate-500);
+}
+
+.pm-head-pair {
+    display: flex;
+    border-top: 1px solid var(--slate-200);
+}
+
+.pm-head-half {
+    flex: 1 1 0;
+    min-width: var(--pm-half-min);
+    padding: .12rem .45rem .16rem;
+    border-left: 2px solid transparent;
+    text-align: right;
+    font-size: .62rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    color: var(--slate-500);
+}
+
+.pm-head-half--call {
+    border-left-color: var(--blue-muted);
+}
+
+.pm-head-half--put {
+    border-left-color: var(--slate-200);
+}
+
+.pm-matrix td.pm-cell {
+    padding: 0;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+/* The flex container is a span inside the <td>, never the <td> itself — a
+   flex <td> stops being a table cell and every column collapses onto the
+   first one. .pm-head-pair is its exact counterpart in the header. */
+.pm-pair {
+    display: flex;
+    align-items: stretch;
+}
+
+/* No background here: the cell layer paints above the <col> layer, so an
+   opaque fill would hide the crosshair. The put half's 2px left border is
+   the call | put divider. */
+.pm-half {
+    flex: 1 1 0;
+    min-width: var(--pm-half-min);
+    padding: .26rem .45rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .05rem;
+    border-left: 2px solid transparent;
+}
+
+.pm-half--call {
+    border-left-color: var(--blue-muted);
+}
+
+.pm-half--put {
+    border-left-color: var(--slate-200);
+}
+
+.pm-val {
+    display: block;
+    line-height: 1.3;
+}
+
+.pm-val--price {
+    font-weight: 600;
+    color: var(--slate-900);
+}
+
+.pm-val--rate {
+    font-size: .68rem;
+    color: var(--slate-500);
+}
+
+.pm-row-atm th[scope="row"],
+.pm-row-atm td.pm-sigma {
+    box-shadow: inset 2px 0 0 var(--blue);
+    color: var(--blue-dark);
+}
+
+.pm-row-atm .pm-half {
+    background: var(--pm-atm-bg);
+}
+
+/* ── Crosshair ────────────────────────────────────────────────────────────
+   Table backgrounds paint in this order (back to front): table → column
+   groups → columns → row groups → rows → cells. So the column tint sits
+   under the row tint and the cell tint — every layer above is translucent,
+   which is what lets a hovered row and a hovered column stack visibly
+   instead of one erasing the other. */
+.pm-matrix col.pm-col-dte.is-hover {
+    background: var(--pm-col-hover);
+}
+
+/* The DTE header is a sticky TOP mask: it must stay opaque so a vertical
+   scroll never lets the row sliding underneath show through the crosshair.
+   The tint is layered over the opaque base (background-color) instead of
+   replacing it — otherwise the translucent fill reveals the content behind
+   it (the "穿模" clip when the matrix is scrolled). */
+.pm-matrix th.pm-head-dte.is-hover {
+    background-color: var(--slate-50);
+    background-image: linear-gradient(var(--pm-rail-hover), var(--pm-rail-hover));
+}
+
+.pm-matrix tbody tr:hover {
+    background: var(--pm-row-hover);
+}
+
+/* The left rails are sticky LEFT masks: opaque so the columns scrolling
+   underneath never bleed through. Their hover tint is layered over the opaque
+   base (background-color) rather than replacing it — a translucent rail would
+   let the horizontally-scrolled data behind it show through (the "穿模" clip). */
+.pm-matrix tbody tr:hover th[scope="row"],
+.pm-matrix tbody tr:hover td.pm-sigma {
+    background-color: var(--slate-50);
+    background-image: linear-gradient(var(--pm-rail-hover), var(--pm-rail-hover));
+}
+
+/* Switchable visibility — pure CSS, driven by data-show-* on the table. */
+.pm-matrix[data-show-price="0"] .pm-val--price,
+.pm-matrix[data-show-premium="0"] .pm-val--rate,
+.pm-matrix[data-show-call="0"] .pm-half--call,
+.pm-matrix[data-show-put="0"] .pm-half--put {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    .pm-hint {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 720px) {
+    /* Narrow screens keep the strike column and drop the sigma rail.
+       COUPLED: static/premium_matrix.js watches this exact breakpoint and
+       drops the matching <col>, because <col> maps to columns by position —
+       change one without the other and the crosshair highlights the wrong
+       column. */
+    .pm-head-sigma,
+    .pm-matrix td.pm-sigma {
+        display: none;
+    }
+
+    .pm-matrix-scroll {
+        max-height: 60vh;
+    }
+}
+
+
+/* ============================================================
+   Onyx Theme — minimalist black with gold + purple accents.
+   Append-only override layer. Reassigns design tokens from the
+   :root block at the top of this file; nothing above is edited.
+   ============================================================ */
+:root {
+    color-scheme: dark;
+
+    /* Brand → Gold (primary accent) */
+    --blue: #d4af37;
+    --blue-dark: #f5c842;
+    --blue-light: rgba(212, 175, 55, .10);
+    --blue-muted: rgba(212, 175, 55, .35);
+
+    /* Neutrals → Onyx scale (dark surfaces, light text) */
+    --slate-50: #1a1a1a;
+    --slate-100: #0a0a0a;
+    --slate-200: #262626;
+    --slate-300: #525252;
+    --slate-500: #a3a3a3;
+    --slate-700: #d4d4d4;
+    --slate-900: #fafafa;
+
+    /* Semantic — recalibrated for dark backgrounds */
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+    --error-bg: #2a1212;
+
+    /* Purple — secondary accent (also retargets regime mid-vol) */
+    --purple: #a855f7;
+    --purple-deep: #7c3aed;
+    --regime-mid-vol: #a855f7;
+
+    /* Premium matrix crosshair — gold, still translucent so row and column
+       tints stack (see the pm-matrix block for the paint order). */
+    --pm-row-hover: rgba(212, 175, 55, .08);
+    --pm-col-hover: rgba(212, 175, 55, .15);
+    --pm-rail-hover: rgba(212, 175, 55, .20);
+    --pm-atm-bg: rgba(212, 175, 55, .10);
+
+    /* Notice fallbacks consumed by var(--bg-info, …) etc. */
+    --bg-info: rgba(168, 85, 247, .12);
+    --text-info: #c084fc;
+    --bg-error: #2a1212;
+    --text-error: #f87171;
+    --bg-muted: #141414;
+    --text-muted: #a3a3a3;
+
+    /* Elevation: borders > shadows in minimalism */
+    --shadow: 0 0 0 1px rgb(255 255 255 / .06);
+    --shadow-md: 0 12px 32px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .06);
+}
+
+/* Header — onyx with a single gold hairline */
+.site-header {
+    background: #050505;
+    box-shadow: 0 1px 0 rgba(212, 175, 55, .22);
+}
+
+.brand-icon {
+    background: transparent;
+    color: var(--blue);
+    border: 1px solid var(--blue-muted);
+}
+
+.badge-ticker {
+    background: var(--blue);
+    color: #0a0a0a;
+}
+
+/* All surfaces that were hardcoded #fff → onyx surface-1 */
+.tab-nav,
+.form-card,
+.meta-chip,
+.content-card,
+.empty-state,
+.oc-target-value,
+.oc-exp-btn,
+.oc-chain-wrapper,
+.oc-spot-row,
+.ticker-tab-btn,
+.btn-toggle,
+.summary-info,
+.kpi-card,
+.regime-hero__metric,
+.sim-scenario-number,
+.sim-matrix th[scope="col"],
+.sim-matrix th[scope="row"],
+.sim-detail th,
+.pm-field-inline select {
+    background: #141414;
+}
+
+.form-card,
+.tab-nav,
+.content-card,
+.kpi-card {
+    border: 1px solid var(--slate-200);
+}
+
+/* Sidebar tabs — page bg is now near-black, so default hover on slate-100 disappears */
+.tab-btn:hover {
+    background: rgba(255, 255, 255, .04);
+    color: var(--slate-700);
+}
+
+.tab-btn.active {
+    background: var(--blue-light);
+    color: var(--blue);
+    box-shadow: inset 2px 0 0 var(--blue);
+}
+
+/* New: section labels added to sidebar HTML for grouping */
+.tab-section-label {
+    font-size: .62rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--slate-300);
+    padding: .85rem .85rem .3rem;
+    font-weight: 600;
+}
+
+.tab-section-label:first-child {
+    padding-top: .25rem;
+}
+
+/* Ticker chips → purple secondary accent */
+.ticker-tab-nav .ticker-tab-btn {
+    background: transparent;
+    color: var(--slate-500);
+    border: 1px solid var(--slate-200);
+}
+
+.ticker-tab-nav .ticker-tab-btn:hover {
+    color: var(--purple);
+    border-color: var(--purple);
+}
+
+.ticker-tab-nav .ticker-tab-btn.active {
+    background: rgba(168, 85, 247, .14);
+    color: var(--purple);
+    border-color: var(--purple);
+}
+
+/* Form controls — only focus styles need an override; default border/color flow from tokens */
+.form-group input:focus,
+.form-group select:focus,
+.options-table input:focus,
+.options-table select:focus,
+.oc-ticker-input:focus,
+.oc-target-input:focus,
+.pos-qty-input:focus,
+.pos-select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, .18);
+}
+
+.compact-range-input input:focus {
+    background: var(--blue-light);
+}
+
+/* Primary CTA — gold needs dark text for AA contrast */
+.btn-primary {
+    background: var(--blue);
+    color: #0a0a0a;
+}
+
+.btn-primary:hover {
+    background: var(--blue-dark);
+    box-shadow: 0 6px 18px rgba(212, 175, 55, .28);
+}
+
+.btn-primary:active {
+    background: var(--blue-dark);
+}
+
+/* Health banner — inline-styled in HTML, !important required to override */
+#health-banner {
+    background: #2a1f08 !important;
+    color: var(--warning) !important;
+    border-bottom-color: rgba(251, 191, 36, .4) !important;
+}
+
+#health-banner a,
+#health-banner button {
+    color: var(--warning) !important;
+}
+
+/* Validation pastel block was amber-on-cream; rebalance for dark */
+.validation-warning {
+    background: #2a1f08;
+    border-color: rgba(251, 191, 36, .4);
+    color: var(--warning);
+}
+
+/* Hero gradient at line 2024 used a literal #fff; restate in onyx */
+.regime-hero__primary {
+    background: linear-gradient(135deg, #1a1a1a, #141414);
+}
+
+/* ============================================================
+   Premium Matrix — section separation between major panel areas.
+   Scoped to #tab-premium-matrix so no other tab is affected.
+   Goal: each stacked area (toolbar / inputs / hero+KPIs / matrix /
+   legend) reads as its own block, and the toolbar-vs-grid boundary
+   inside the matrix card is unmistakable — in both light and dark
+   themes (tokens resolve per theme: --slate-300 is the strong
+   hairline, --slate-200 the inner divider).
+   ============================================================ */
+#tab-premium-matrix > .toolbar {
+    padding-bottom: .75rem;
+    border-bottom: 1px solid var(--slate-300);
+    margin-bottom: 1.25rem;
+}
+
+#tab-premium-matrix .content-card {
+    border: 1px solid var(--slate-300);
+    margin-bottom: 1.25rem;
+}
+
+#tab-premium-matrix .content-card > .content-card-title {
+    border-bottom: 1px solid var(--slate-300);
+}
+
+/* Hero + KPI strip sits between two cards: keep its vertical rhythm
+   in step with the cards above and below it. */
+#tab-premium-matrix .sim-hero-row {
+    margin: 1.25rem 0;
+}
+
+#tab-premium-matrix .metric-hero {
+    border: 1px solid var(--blue-muted);
+    box-shadow: var(--shadow);
+}
+
+#tab-premium-matrix .kpi-card {
+    border-color: var(--slate-300);
+}
+
+/* Matrix card internals: padded toolbar, a full-width divider, then
+   an inset scroll box so controls / grid never touch or merge. */
+#tab-premium-matrix .pm-matrix-toolbar {
+    margin: 0;
+    padding: 1rem 1.25rem .9rem;
+    border-bottom: 1px solid var(--slate-300);
+}
+
+#tab-premium-matrix .pm-matrix-scroll {
+    margin: 1rem 1.25rem 1.25rem;
+    border: 1px solid var(--slate-300);
+}
+
+#tab-premium-matrix .pm-empty-hint {
+    margin: 0 1.25rem 1.25rem;
+}
+
+/* Legend card internals: pad the body and rule the two groups apart. */
+#tab-premium-matrix .pm-legend {
+    margin-top: 0;
+}
+
+#tab-premium-matrix .pm-legend-groups {
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+#tab-premium-matrix .pm-legend-group + .pm-legend-group {
+    padding-top: 1rem;
+    border-top: 1px solid var(--slate-200);
+}
+
+@media (max-width: 720px) {
+    #tab-premium-matrix .pm-matrix-toolbar {
+        padding: .85rem .85rem .75rem;
+    }
+
+    #tab-premium-matrix .pm-matrix-scroll {
+        margin: .75rem .85rem .85rem;
+    }
+
+    #tab-premium-matrix .pm-empty-hint {
+        margin: 0 .85rem .85rem;
+    }
+
+    #tab-premium-matrix .pm-legend-groups {
+        padding: .85rem .85rem 1rem;
+    }
+}

@@ -1,47 +1,13 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Expiry Odds — OptionLab Pages</title>
-  <link rel="stylesheet" href="../assets/pages-shell.css" />
-  <link rel="stylesheet" href="../vendor/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-  <script>window.PAGES_SAMPLE = { base: '../fixtures' };</script>
-  <script src="../assets/pages-sample.js"></script>
+  <meta http-equiv="refresh" content="0; url=../#tab-odds" />
+  <link rel="canonical" href="../#tab-odds" />
+  <title>Expiry Odds — OptionLab demo</title>
 </head>
 <body>
-<div class="pages-wrap">
-  <p class="muted"><a href="../">← 门户</a> · Expiry Odds <span class="badge badge--sample">示例数据可交互</span></p>
-  <h1>Expiry Odds</h1>
-  <div class="pages-notice pages-notice--sample" id="pages-sample-note" role="status" aria-live="polite">
-    <strong>示例数据：</strong><span data-sample-msg>NVDA 合成链快照，滑杆本地重绘可用。</span>
-    实时赔率需 <code>GET /api/option_chain</code> + <code>POST /api/odds_with_vol</code>。
-  </div>
-  <div class="pages-card" style="margin-bottom:.75rem">
-    <label>Ticker <input id="ticker" value="NVDA" style="width:100px" /></label>
-    <label>est. move % <input id="odds-target-pct" type="number" value="10" min="0" step="1" style="width:80px" /></label>
-    <span id="odds-target-value" class="muted"></span>
-    <input id="cfg-max-dte" type="hidden" value="45" />
-    <input id="cfg-moneyness-low" type="hidden" value="0.7" />
-    <input id="cfg-moneyness-high" type="hidden" value="1.3" />
-    <button class="btn" onclick="loadOddsData()">Reload</button>
-  </div>
-  <div class="pages-grid">
-    <div class="pages-card"><h3>Long Call Odds</h3><canvas id="odds-call-chart"></canvas></div>
-    <div class="pages-card"><h3>Long Put Odds</h3><canvas id="odds-put-chart"></canvas></div>
-  </div>
-  <div class="pages-card" style="margin-top:.75rem"><h3>Vol Context</h3><div id="odds-vol-context"></div></div>
-</div>
-<script src="../vendor/eventBus.js"></script>
-<script src="../vendor/api.js"></script>
-<script src="../vendor/state/store.js"></script>
-<script src="../vendor/state/optionChainState.js"></script>
-<script src="../vendor/state/oddsChainState.js"></script>
-<script src="../vendor/state/panelState.js"></script>
-<script src="../vendor/option-chain.js"></script>
-<script>
-  window.addEventListener('DOMContentLoaded', () => { loadOddsData(); });
-</script>
+  <p>This demo page moved into the identical app UI — continuing to the “Expiry Odds” tab…
+  <a href="../#tab-odds">continue</a>.</p>
 </body>
 </html>

@@ -358,15 +358,22 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
 
 ## Deployment — GitHub Pages
 
-The **Simulation** tab is a fully client-side payoff simulator (Black–Scholes +
-expiry P&L + distribution stats) that needs no backend. It is published as a
-standalone static site on **GitHub Pages** (public repo — see ADR
-[0007](docs/decisions/0007-public-github-pages.md)).
+https://hrlovefun.github.io/OptionLab/ is an **identical-UI static mirror** of
+this Flask app: the same `templates/index.html`, the same `static/` (CSS/JS),
+the same tab interactions — users learn one UI. Only one file is Pages-only:
+`site/pages-shim.js`, a fetch-level stub that answers backend endpoints with
+committed snapshot fixtures. `static/` and `templates/` are never forked.
 
-- Source of truth: `static/sim/` (pure ES modules, zero `fetch`).
-- Pages artifact: `site/` (params form + payoff curve + K×DTE matrix), built by
-  `.github/workflows/pages.yml` and pushed to the `gh-pages` branch.
-- The Flask app mounts the same `static/sim/` module as a tab — two hosts, one codebase.
+- Snapshot source of truth: `site/snapshot/snapshot.json` (NVDA analysis
+  slices incl. matplotlib PNGs) + `site/fixtures/*.json` (chain, regime,
+  validation, time-series). Regenerate locally with full deps + DB:
+  `python scripts/build_pages_site.py --refresh-snapshot`.
+- Pages artifact: `site/` (`index.html` rendered from the real templates,
+  `static/` copied verbatim, legacy demo URLs kept as redirects), assembled by
+  `scripts/build_pages_site.py` (CI-safe: plain Jinja2, no network/DB) and
+  deployed by `.github/workflows/pages.yml`.
+- The banner on the demo site states the snapshot ticker/date; the analysis
+  form submit is intercepted with an explanation instead of navigating.
 
 > Requires the repository to be **public** (free GitHub Pages). The local
 > `market_data.sqlite` is excluded from the public tree (see ADR 0007).

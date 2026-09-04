@@ -1,0 +1,16 @@
+{
+ "status": "ok",
+ "label": {
+  "date": "2026-04-29",
+  "vol_regime": "MID_VOL",
+  "dir_regime": "UP_TREND",
+  "vix_value": 17.940000534057617,
+  "sma_20": 692.0847473144531,
+  "sma_slope_5d": 0.02536997795025052,
+  "close_vs_sma_pct": 0.0281038209634763,
+  "notes": ""
+ },
+ "data_complete": true,
+ "source": "log",
+ "sample_note": "Persisted regime_log snapshot for GitHub Pages demo."
+}

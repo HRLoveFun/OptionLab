@@ -1,0 +1,76 @@
+{
+ "status": "ok",
+ "results": {
+  "000300.SS": {
+   "valid": true,
+   "price": 4529.1,
+   "message": "demo snapshot"
+  },
+  "AAPL": {
+   "valid": true,
+   "price": 280.14,
+   "message": "demo snapshot"
+  },
+  "DX-Y.NYB": {
+   "valid": true,
+   "price": 99.0,
+   "message": "demo snapshot"
+  },
+  "GC=F": {
+   "valid": true,
+   "price": 4491.7,
+   "message": "demo snapshot"
+  },
+  "GLD": {
+   "valid": true,
+   "price": 396.75,
+   "message": "demo snapshot"
+  },
+  "META": {
+   "valid": true,
+   "price": 669.12,
+   "message": "demo snapshot"
+  },
+  "NVDA": {
+   "valid": true,
+   "price": 228.45,
+   "message": "demo snapshot"
+  },
+  "SPY": {
+   "valid": true,
+   "price": 713.8,
+   "message": "demo snapshot"
+  },
+  "^HSI": {
+   "valid": true,
+   "price": 25213.31,
+   "message": "demo snapshot"
+  },
+  "^N225": {
+   "valid": true,
+   "price": 64214.48,
+   "message": "demo snapshot"
+  },
+  "^SPX": {
+   "valid": true,
+   "price": 7747.71,
+   "message": "demo snapshot"
+  },
+  "^STOXX": {
+   "valid": true,
+   "price": 649.1,
+   "message": "demo snapshot"
+  },
+  "^TNX": {
+   "valid": true,
+   "price": 4.76,
+   "message": "demo snapshot"
+  },
+  "^VIX": {
+   "valid": true,
+   "price": 18.71,
+   "message": "demo snapshot"
+  }
+ },
+ "sample_note": "Demo validation snapshot (NVDA + benchmarks)."
+}
