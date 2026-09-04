@@ -5,6 +5,21 @@ Pulls historical prices and option chains via [yfinance](https://github.com/rana
 caches them in SQLite, and renders a streaming HTMX UI with vanilla JS state
 management on top of Chart.js / Alpine.js.
 
+**Live demo (GitHub Pages, static snapshot):** <https://hrlovefun.github.io/OptionLab/>
+
+**Features**
+
+- Streaming dashboard: submit a ticker and each analysis tab loads in
+  parallel (`/render/<kind>` fragments) instead of one blocking POST.
+- Market analysis: oscillation projection, volatility dynamics, HV/RSI/
+  Bollinger signals, cross-ticker market review, regime labelling.
+- Options: live chain analytics (IV smile/skew, OI profile, expected move,
+  max pain, term structure), vectorised Black–Scholes Greeks, multi-leg
+  strategy analysis, expiry simulation and a client-side premium matrix.
+- Portfolio: tracked positions with live P&L and portfolio-level Greeks.
+- Fully client-side tabs (Simulation, Premium Matrix) also run standalone
+  on GitHub Pages with zero backend.
+
 ---
 
 ## Architecture
@@ -67,7 +82,7 @@ app.py                       Flask entry point — registers blueprints, middlew
     ├── repos.py               SQL builders (prices, regime, positions, …)
     ├── yf_client.py           Single chokepoint for yfinance (token-bucket throttle, proxy)
     ├── downloader.py          Raw bar / chain fetch with gap detection
-    ├── cleaning.py            Time-series alignment & anomaly repair
+    ├── cleaning.py            Time-series alignment; gaps marked NA (no interpolation)
     ├── processing.py          Feature engineering (returns, MAs, HV)
     ├── scheduler.py           APScheduler daily + monthly correlation refresh
     ├── job_cache.py           In-process TTL cache for /render/<kind> payloads
@@ -182,7 +197,7 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
 |---|---|
 | [`data_pipeline/yf_client.py`](data_pipeline/yf_client.py) | Single chokepoint for `yfinance` calls: token-bucket throttle, proxy probe, error mapping. |
 | [`data_pipeline/downloader.py`](data_pipeline/downloader.py) | Uses `yf_client` to fetch raw bars / option chains, with gap detection against the DB. |
-| [`data_pipeline/cleaning.py`](data_pipeline/cleaning.py) | Drops/repairs broken rows from raw frames. |
+| [`data_pipeline/cleaning.py`](data_pipeline/cleaning.py) | Aligns to business days and drops broken rows; missing gaps are marked NA — never interpolated. |
 | [`data_pipeline/processing.py`](data_pipeline/processing.py) | Feature engineering (returns, MAs, HV) on cleaned bars. |
 | [`data_pipeline/data_ops/`](data_pipeline/data_ops/) | `DataService` facade — DB-first cache with a 60 s freshness window, the single read entry-point. |
 | [`data_pipeline/db.py`](data_pipeline/db.py) | `get_conn()` context manager, schema bootstrap, WAL pragmas, thread-local connection pooling. |
@@ -205,12 +220,13 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
 
 ### Frontend (`static/`, `templates/`)
 
-- [`templates/index.html`](templates/index.html) is the skeleton; each
-  `templates/partials/tab_*.html` is the markup loaded into the matching
-  HTMX placeholder by `/render/<kind>`.
+- [`templates/index.html`](templates/index.html) is the skeleton. Tab shells
+  are server-side includes (`templates/partials/tab_*.html`); the actual
+  content fragments swapped into the HTMX placeholders by `/render/<kind>`
+  live in [`templates/partials/fragments/`](templates/partials/fragments/).
 - [`static/main.js`](static/main.js) bootstraps the form and tab manager;
   per-tab logic lives in `market_review.js`, `option-chain.js`,
-  `position.js`, `regime.js`.
+  `position.js`, `premium_matrix.js`, `regime.js`, `simulation.js`.
 - [`static/api.js`](static/api.js) is the only `fetch` wrapper — it owns
   abort handling and error normalisation. Components must not call `fetch`
   directly.
@@ -219,9 +235,9 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
   …) that back the streaming-tab state machine.
 - [`static/eventBus.js`](static/eventBus.js) is the cross-component pub/sub.
 - [`static/cache.js`](static/cache.js) is the versioned `localStorage` wrapper.
-- [`static/components/payoff_chart.js`](static/components/payoff_chart.js) is
-  the only Chart.js renderer that runs in the browser (everything else is
-  server-side PNG).
+- Chart.js renderers that run in the browser (everything else is
+  server-side PNG): [`static/market_review_chart.js`](static/market_review_chart.js)
+  and [`static/components/payoff_chart.js`](static/components/payoff_chart.js).
 - [`static/sim/`](static/sim/) — **pure, dependency-free, zero-I/O** payoff
   simulator (Black–Scholes pricing, expiry P&L, distribution stats). Shared by the
   Flask "Simulation" tab and the standalone GitHub Pages site. No `fetch` — portable.
@@ -265,9 +281,11 @@ Repo-maintenance helpers, all standalone:
 `/api/v1/<path>` is an alias for every `/api/<path>` route (rewriting
 middleware in `app.py`).
 
-> **Simulation tab** is purely client-side (`static/sim/` + `static/features/simulation.js`).
-> It performs Black–Scholes pricing and expiry-payoff math in the browser and needs **no**
-> HTTP endpoint, so it also runs standalone on GitHub Pages.
+> **Simulation and Premium Matrix tabs** are purely client-side
+> (`static/sim/` + `static/features/simulation.js`, `static/premium_matrix.js`).
+> They perform Black–Scholes pricing, expiry-payoff math and premium-matrix
+> evaluation in the browser and need **no** HTTP endpoint, so they also run
+> standalone on GitHub Pages.
 
 ---
 
