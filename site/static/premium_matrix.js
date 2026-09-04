@@ -20,10 +20,11 @@
  *     JS writes the real strike-column width into --pm-sigma-left, so the
  *     sigma rail can never drift when a long strike stretches column one
  *   - hovering a column only highlights it (the y axis); it never rewrites
- *     values. Clicking a column HEADER (or pressing Enter on it) promotes it
- *     to the sigma reference. The header is the only control left, so it has
- *     to be focusable AND has to carry the state: `.is-ref` on the <col> and
- *     the <th> is the sole readout of which column the rail is computed for.
+ *     values. Clicking anywhere in a column — data cell or header — promotes
+ *     it to the sigma reference; ArrowLeft / ArrowRight on a focused header
+ *     walk the date axis. There is no select, so the header still has to be
+ *     focusable AND carry the state: `.is-ref` on the <col> and the <th> is
+ *     the sole readout of which column the rail is computed for.
  */
 (function () {
     'use strict';
@@ -301,15 +302,15 @@
         data.columns.forEach(function (col, i) {
             const datePart = col.date ? col.date.slice(5) : '';
             out += '<th scope="col" data-col="' + i + '" class="pm-head-dte"'
-                // Focusable on purpose: the header is the ONLY sigma-reference
-                // control, so with the select gone it has to be reachable by
-                // Tab and activatable by Enter / Space (handled in wire()).
-                // No aria-label — it would mask the DTE / 1σ text the cell
-                // already announces; the action lives in `title` instead.
+                // Focusable on purpose: the header anchors the keyboard walk —
+                // Tab here, then Enter / Space to pick, ArrowLeft / ArrowRight
+                // to step along the date axis (handled in wire()). No
+                // aria-label — it would mask the DTE / 1σ text the cell already
+                // announces; the action lives in `title` instead.
                 + ' tabindex="0"'
                 + ' title="' + col.dte + ' 天后到期 · 1σ 波动 ' + fmtPct(col.sigma_pct, 2)
                 + (col.date ? ' · ' + col.date + (col.cycle ? ' (' + col.cycle + ')' : '') : '')
-                + ' · 点击或按回车设为 σ 参考列">'
+                + ' · 点击设为 σ 参考列，左右键切换">'
                 + '<span class="pm-head-main">' + col.dte + 'D</span>'
                 + '<span class="pm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
                 + '<span class="pm-head-date">' + datePart + '</span>'
@@ -409,10 +410,21 @@
         if (head) head.classList.add('is-hover');
     }
 
-    // A column HEADER is the sigma-reference control; a data cell is not.
-    function headerFrom(node) {
+    // Any element carrying a column index — data cell or header — picks that
+    // column as the sigma reference.
+    function columnFrom(node) {
         if (!node || !node.closest) return null;
-        return node.closest('th.pm-head-dte[data-col]');
+        return node.closest('[data-col]');
+    }
+
+    // Roving focus for the arrow keys: after stepping, drop the caret on the
+    // new header so the next press keeps walking (and the focusin crosshair
+    // follows it).
+    function focusHeader(idx) {
+        const table = el('pm-matrix');
+        if (!table) return;
+        const head = table.querySelector('th.pm-head-dte[data-col="' + idx + '"]');
+        if (head) head.focus();
     }
 
     function clearHoverCol() {
@@ -599,10 +611,9 @@
         if (runBtn) runBtn.addEventListener('click', run);
 
         // Hover / focus is the crosshair only — it highlights a column and
-        // never rewrites a value. Promoting a column to the sigma reference is
-        // explicit: a click or Enter on its HEADER. Data cells are excluded on
-        // purpose — clicking one while reading the grid used to silently
-        // re-scale the whole sigma rail.
+        // never rewrites a value. Picking a column is explicit: a click
+        // anywhere in it (cell or header), Enter / Space on a header, or the
+        // arrow keys walking the date axis from a focused header.
         const host = el('pm-matrix-body');
         if (host) {
             host.addEventListener('mouseover', function (ev) {
@@ -619,16 +630,27 @@
                 setHoverCol(Number(target.dataset.col) || 0);
             });
             host.addEventListener('click', function (ev) {
-                const target = headerFrom(ev.target);
+                const target = columnFrom(ev.target);
                 if (!target) return;
                 setRefCol(Number(target.dataset.col) || 0);
             });
-            // Enter / Space on a focused header — the keyboard's only way to
-            // move the reference now that the select is gone. Space has to be
-            // swallowed, or it scrolls the matrix out from under the user.
             host.addEventListener('keydown', function (ev) {
+                // ArrowLeft / ArrowRight step the reference one column at a
+                // time, clamped at the edges, with roving focus so repeated
+                // presses keep walking the date axis.
+                if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+                    if (!data || !ev.target.closest || !ev.target.closest('th.pm-head-dte')) return;
+                    ev.preventDefault();
+                    const step = ev.key === 'ArrowLeft' ? -1 : 1;
+                    const next = Math.min(Math.max(refCol + step, 0), data.columns.length - 1);
+                    setRefCol(next);
+                    focusHeader(next);
+                    return;
+                }
+                // Enter / Space activate the focused header. Space has to be
+                // swallowed, or it scrolls the matrix out from under the user.
                 if (ev.key !== 'Enter' && ev.key !== ' ' && ev.key !== 'Spacebar') return;
-                const target = headerFrom(ev.target);
+                const target = columnFrom(ev.target);
                 if (!target) return;
                 ev.preventDefault();
                 setRefCol(Number(target.dataset.col) || 0);

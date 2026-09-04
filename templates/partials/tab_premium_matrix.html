@@ -95,15 +95,6 @@
 
         <div class="content-card">
             <div class="pm-matrix-toolbar">
-                <div class="pm-matrix-toolbar__left">
-                    <p class="pm-hint">
-                        Row header shows the strike and its sigma multiple for the
-                        <strong>reference column</strong> — the one whose header
-                        carries the gold bar. Hover a column to highlight it;
-                        click its header (or focus it and press Enter) to make it
-                        the reference.
-                    </p>
-                </div>
                 <div class="pm-matrix-toolbar__right" role="group" aria-label="Matrix switches">
                     <button type="button" class="btn-toggle active" data-pm-toggle="price"
                             aria-pressed="true">Price</button>
@@ -174,10 +165,10 @@
                             </ul>
                         </li>
                         <li>Hovering highlights the whole column and the whole row;
-                            clicking a column <strong>header</strong> (or pressing
-                            Enter on it) makes it the σ reference, and it keeps the
-                            bar until another one is picked. Clicking a data cell
-                            only highlights — it never moves the reference.</li>
+                            clicking anywhere in a column (cell or header) makes it
+                            the σ reference, and it keeps the bar until another one
+                            is picked. From a focused header, ArrowLeft /
+                            ArrowRight step along the date axis.</li>
                     </ul>
                 </div>
             </div>

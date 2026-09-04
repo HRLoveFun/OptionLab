@@ -266,43 +266,51 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(window.premiumMatrixDebug().refCol).toBe(0);
     });
 
-    it('moves the sigma reference from the keyboard (Enter / Space)', async () => {
+    it('moves the sigma reference from the keyboard (Enter / Space / arrows)', async () => {
         await window.loadPremiumMatrix();
         await flush();
         const table = document.getElementById('pm-matrix');
-        // The header is the only control left, so it has to be tabbable.
-        expect(table.querySelector('th.pm-head-dte').getAttribute('tabindex')).toBe('0');
+        const head = (i) => table.querySelector('th.pm-head-dte[data-col="' + i + '"]');
+        // The header anchors the arrow-key walk, so it has to be tabbable.
+        expect(head(0).getAttribute('tabindex')).toBe('0');
 
-        table.querySelector('th.pm-head-dte[data-col="0"]')
-            .dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        head(0).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
-        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('0');
+        expect(head(0).classList.contains('is-ref')).toBe(true);
 
         // Space activates too — and is swallowed, or it scrolls the grid away.
         const space = new window.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
-        table.querySelector('th.pm-head-dte[data-col="1"]').dispatchEvent(space);
+        head(1).dispatchEvent(space);
         expect(space.defaultPrevented).toBe(true);
         expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @6D');
 
-        // Any other key is not an activation.
-        table.querySelector('th.pm-head-dte[data-col="2"]')
-            .dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        // ArrowLeft / ArrowRight walk the date axis one column at a time, and
+        // move focus with the reference so the next press keeps stepping.
+        head(1).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
+        head(0).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+        // Clamped at the left edge instead of wrapping.
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
+        head(0).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
         expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @6D');
+        // Focus travelled with the reference; the old column is unmarked.
+        expect(document.activeElement).toBe(head(1));
+        expect(head(0).classList.contains('is-ref')).toBe(false);
+        expect(table.querySelectorAll('.is-ref')).toHaveLength(2);
     });
 
-    it('leaves the reference alone when a data cell is clicked', async () => {
+    it('picks the reference when a data cell is clicked', async () => {
         await window.loadPremiumMatrix();
         await flush();
         const table = document.getElementById('pm-matrix');
-        const headBefore = document.getElementById('pm-head-sigma').textContent;
 
-        // Clicking a cell is a read, not a selection: only the header picks.
+        // Clicking anywhere in a column — data cell or header — promotes it.
         table.querySelector('tbody tr td.pm-cell[data-col="0"]')
             .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 
-        expect(document.getElementById('pm-head-sigma').textContent).toBe(headBefore);
-        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('6');
-        expect(window.premiumMatrixDebug().refCol).toBe(6);
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
+        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('0');
+        expect(window.premiumMatrixDebug().refCol).toBe(0);
     });
 
     it('reports invalid inputs in Chinese and falls back to idle without a price', async () => {

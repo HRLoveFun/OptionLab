@@ -2343,23 +2343,10 @@ textarea:focus-visible,
     margin-bottom: .75rem;
 }
 
-.pm-matrix-toolbar__left {
-    display: flex;
-    align-items: flex-end;
-    gap: .85rem;
-    flex-wrap: wrap;
-}
-
 .pm-matrix-toolbar__right {
     display: flex;
     gap: .35rem;
     flex-wrap: wrap;
-}
-
-.pm-hint {
-    max-width: 24rem;
-    font-size: .75rem;
-    color: var(--slate-500);
 }
 
 /* Legend — bullet explanations below the matrix panel. */
@@ -2712,12 +2699,6 @@ textarea:focus-visible,
 .pm-matrix[data-show-call="0"] .pm-half--call,
 .pm-matrix[data-show-put="0"] .pm-half--put {
     display: none;
-}
-
-@media (max-width: 1024px) {
-    .pm-hint {
-        max-width: 100%;
-    }
 }
 
 @media (max-width: 720px) {

@@ -370,16 +370,8 @@ def test_premium_matrix_crosshair_highlights_one_column(page: Page, live_server:
     expect(rail).to_have_text(before)
     expect(page.locator("#pm-head-sigma")).not_to_have_text(f"σ @{dtes[7]}D")
 
-    # Clicking a DATA cell is a read, not a selection — only the header picks.
-    # text_content, not inner_text: the header is uppercased by CSS ("Σ @…"),
-    # while to_have_text compares against the DOM text ("σ @…").
-    default_head = page.locator("#pm-head-sigma").text_content()
+    # Clicking anywhere in a column — data cell or header — promotes it.
     page.locator("#pm-matrix tbody tr").nth(3).locator("td.pm-cell[data-col='7']").click()
-    expect(page.locator("#pm-head-sigma")).to_have_text(default_head)
-    expect(rail).to_have_text(before)
-
-    # Clicking the header is what changes the reference.
-    page.locator("#pm-matrix th.pm-head-dte[data-col='7']").click()
     expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[7]}D")
     expect(rail).not_to_have_text(before)
     # The header (and its <col>) is the state readout now the select is gone.
@@ -396,8 +388,9 @@ def test_premium_matrix_reference_is_keyboard_reachable(page: Page, live_server:
 
     `#pm-ref-dte` used to be the only Tab-reachable control for the sigma
     reference. Its replacement — the column header — therefore has to be
-    focusable, activatable by Enter / Space, and able to announce which column
-    is picked, or the removal would strand keyboard and screen-reader users.
+    focusable, activatable by Enter / Space, and ArrowLeft / ArrowRight have to
+    walk the date axis, or the removal would strand keyboard and screen-reader
+    users.
     """
     _open_tab(page, live_server)
 
@@ -422,6 +415,15 @@ def test_premium_matrix_reference_is_keyboard_reachable(page: Page, live_server:
     page.keyboard.press("Space")
     expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[3]}D")
     assert page.evaluate("() => document.getElementById('pm-matrix-body').scrollTop") == scroll_before
+
+    # ArrowLeft / ArrowRight walk the date axis with roving focus — repeated
+    # presses keep stepping without re-tabbing.
+    page.keyboard.press("ArrowRight")
+    expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[4]}D")
+    expect(page.locator("#pm-matrix th.pm-head-dte[data-col='4']")).to_be_focused()
+    page.keyboard.press("ArrowLeft")
+    expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[3]}D")
+    expect(page.locator("#pm-matrix th.pm-head-dte[data-col='3']")).to_be_focused()
 
     # The mark follows the reference instead of accumulating.
     expect(page.locator("#pm-matrix .is-ref")).to_have_count(2)
