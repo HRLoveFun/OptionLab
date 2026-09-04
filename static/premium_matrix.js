@@ -154,17 +154,36 @@
     }
 
     // Fetch the standard + daily expiry calendar from the API and use it as the
-    // matrix columns. Fails loudly so the panel shows an error banner.
+    // matrix columns. On GitHub Pages (no backend) falls back to the committed
+    // fixture so the panel stays fully interactive with sample columns.
     async function loadCalendar() {
-        if (!window.api || typeof window.api.get !== 'function') {
-            throw new Error('api unavailable');
-        }
         const params = new URLSearchParams({ standard: '12', daily: '10' });
-        const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'pm-calendar' });
-        if (!resp || resp.status !== 'ok' || !Array.isArray(resp.expirations)) {
-            throw new Error('invalid calendar response');
+        if (window.api && typeof window.api.get === 'function') {
+            try {
+                const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'pm-calendar' });
+                if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
+                    return resp.expirations;
+                }
+            } catch (_) { /* fall through to fixture */ }
         }
-        return resp.expirations;
+        if (window.PagesSample && typeof window.PagesSample.getJSON === 'function') {
+            const resp = await window.PagesSample.getJSON([
+                '/api/expiry_calendar?' + params.toString(),
+                window.PagesSample.fixture('expiry_calendar.json'),
+                '../fixtures/expiry_calendar.json',
+            ]);
+            if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
+                return resp.expirations;
+            }
+        } else {
+            try {
+                const resp = await fetch('../fixtures/expiry_calendar.json').then((r) => r.json());
+                if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
+                    return resp.expirations;
+                }
+            } catch (_) { /* fall through to error */ }
+        }
+        throw new Error('api unavailable');
     }
 
     function finishRun(res) {

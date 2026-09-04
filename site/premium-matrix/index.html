@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Premium Matrix — OptionLab Pages</title>
+  <link rel="stylesheet" href="../assets/pages-shell.css" />
+  <link rel="stylesheet" href="../vendor/styles.css" />
+  <script>window.PAGES_SAMPLE = { base: '../fixtures' };</script>
+  <script src="../assets/pages-sample.js"></script>
+</head>
+<body>
+<div class="pages-wrap">
+  <p class="muted"><a href="../">← 门户</a> · Premium Matrix <span class="badge badge--live">可交互</span></p>
+  <h1>Premium Matrix</h1>
+  <div class="pages-notice pages-notice--sample" role="status" aria-live="polite">
+    <strong>示例环境：</strong>到期日历使用内置快照（<code>fixtures/expiry_calendar.json</code>），
+    所有价格均为假设输入的 Black–Scholes 理论值，无需后端，Price / Prem.rate / Call / Put / Side 开关全可用。
+  </div>
+  <div id="pm-app">
+    <div class="pages-card" style="margin-bottom:.75rem">
+      <label>Price <input id="pm-price" type="number" value="100" step="0.01" /></label>
+      <label>IV% <input id="pm-iv" type="number" value="25" step="0.1" /></label>
+      <label>Rate% <input id="pm-rate" type="number" value="3" step="0.1" /></label>
+      <label>Spread% <input id="pm-spread" type="number" value="2" step="0.5" /></label>
+      <button class="btn" data-action="pm-run">Recalculate</button>
+      <span class="muted">其余工具条（Side / 参考列 / 显隐开关）见下表。</span>
+    </div>
+    <div class="pm-matrix-toolbar__right" role="group" aria-label="Matrix switches" style="display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0">
+      <button type="button" class="btn-toggle active" data-pm-toggle="price" aria-pressed="true">Price</button>
+      <button type="button" class="btn-toggle active" data-pm-toggle="premium" aria-pressed="true">Prem. rate</button>
+      <button type="button" class="btn-toggle active" data-pm-toggle="call" aria-pressed="true">Call</button>
+      <button type="button" class="btn-toggle active" data-pm-toggle="put" aria-pressed="true">Put</button>
+      <button type="button" class="btn-toggle active" data-pm-side="buy" aria-pressed="true">Buy at ask</button>
+      <button type="button" class="btn-toggle" data-pm-side="sell" aria-pressed="false">Sell at bid</button>
+      <select id="pm-ref-dte" aria-label="Sigma reference"></select>
+    </div>
+    <div class="pages-card">
+      <div>ATM premium rate: <strong id="pm-hero-value">—</strong> <span class="muted" id="pm-hero-sub"></span></div>
+      <div class="muted"><span id="pm-kpi-sigma"></span> <span id="pm-kpi-call"></span> <span id="pm-kpi-put"></span> <span id="pm-kpi-grid"></span></div>
+    </div>
+    <div id="pm-matrix-body" style="overflow:auto;margin-top:.75rem"></div>
+    <p class="muted" id="pm-all-hidden" role="status" hidden>请至少打开一个数值开关和一个方向开关。</p>
+  </div>
+  <p class="muted">完整 Flask 版另含 live 参数联动；数学引擎一致（<code>static/sim/premium_matrix.js</code>）。</p>
+</div>
+<script src="../vendor/eventBus.js"></script>
+<script src="../vendor/api.js"></script>
+<script src="../vendor/state/store.js"></script>
+<script src="../vendor/state/panelState.js"></script>
+<script src="../vendor/state/tabFlagsState.js"></script>
+<script type="module">
+  import '../vendor/sim/premium_matrix.js';
+  window.addEventListener('DOMContentLoaded', () => {
+    // minimal appState for the DOM layer
+    const s = document.createElement('script');
+    s.src = '../vendor/premium_matrix.js';
+    s.onload = () => window.loadPremiumMatrix && window.loadPremiumMatrix();
+    document.body.appendChild(s);
+  });
+</script>
+</body>
+</html>

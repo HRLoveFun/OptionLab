@@ -11,6 +11,51 @@
 const _ocState = () => window.appState.optionChain;
 const _ocPanel = (phase, opts) => window.appState.panels.set('option_chain', phase, opts);
 
+/* Pages fixture fallback: try the live API first, then the committed NVDA
+ * snapshot so the chain / odds tabs stay interactive on GitHub Pages. */
+function _pagesFixtureCandidates(name) {
+    if (window.PagesSample && typeof window.PagesSample.fixture === 'function') {
+        return [window.PagesSample.fixture(name), '../fixtures/' + name];
+    }
+    return ['../fixtures/' + name];
+}
+function _markSampleUsed(note) {
+    try {
+        window.PAGES_SAMPLE_USED = true;
+        const el = document.getElementById('pages-sample-note');
+        if (el && note) {
+            el.hidden = false;
+            const msg = el.querySelector('[data-sample-msg]');
+            if (msg) msg.textContent = note;
+        }
+    } catch (_) { /* ignore */ }
+}
+function _fetchChainJSON(url, signal) {
+    return fetch(url, { signal }).then(r => {
+        if (!r.ok) {
+            return r.json().catch(() => ({ error: `Server error (${r.status})` })).then(j => {
+                // Non-OK from Flask is real — but on Pages (404/HTML) fall back.
+                if (r.status === 404 && /html/i.test(r.headers.get('content-type') || '')) {
+                    throw new Error('pages-fallback');
+                }
+                return j;
+            });
+        }
+        return r.json();
+    }).catch(err => {
+        if (err && err.name === 'AbortError') throw err;
+        // Pages fallback: committed NVDA snapshot.
+        const cands = _pagesFixtureCandidates('option_chain.nvda.json');
+        return (window.PagesSample && window.PagesSample.getJSON
+            ? window.PagesSample.getJSON(cands)
+            : fetch(cands[0]).then(r => r.json())
+        ).then(data => {
+            _markSampleUsed(data && data.sample_note);
+            return data;
+        });
+    });
+}
+
 function loadOptionChain() {
     const input = document.getElementById('ticker');
     const rawTicker = (input ? input.value : '').trim().toUpperCase();
@@ -36,13 +81,7 @@ function loadOptionChain() {
 
     const signal = _ocState().beginRequest();
 
-    fetch(`/api/option_chain?${params}`, { signal })
-        .then(r => {
-            if (!r.ok) {
-                return r.json().catch(() => ({ error: `Server error (${r.status})` }));
-            }
-            return r.json();
-        })
+    _fetchChainJSON(`/api/option_chain?${params}`, signal)
         .then(data => {
             if (data.error) { _ocPanel('error', { message: data.error }); return; }
             _ocState().setData(data);
@@ -319,9 +358,16 @@ function loadOddsData() {
     fetch(`/api/option_chain?${params}`, { signal })
         .then(r => {
             if (!r.ok) {
-                return r.json().catch(() => ({ error: `Server error (${r.status})` }));
+                return r.json().catch(() => { throw new Error('pages-fallback'); });
             }
             return r.json();
+        })
+        .catch(() => {
+            const cands = _pagesFixtureCandidates('option_chain.nvda.json');
+            const p = (window.PagesSample && window.PagesSample.getJSON
+                ? window.PagesSample.getJSON(cands)
+                : fetch(cands[0]).then(rr => rr.json()));
+            return p.then(data => { _markSampleUsed(data && data.sample_note); return data; });
         })
         .then(data => {
             if (data.error) { _oddsPanel('error', { message: data.error }); return; }
@@ -528,19 +574,33 @@ async function _oddsLoadVolContext() {
     const ticker = (input ? input.value : '').trim().toUpperCase();
     const tgt = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
     const volCtxDiv = document.getElementById('odds-vol-context');
-    if (!volCtxDiv || !ticker) return;
+    if (!volCtxDiv) return;
+    if (!ticker && !window.PAGES_SAMPLE_USED && !window.PagesSample) return;
 
     try {
         const resp = await fetch('/api/odds_with_vol', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ticker, target_pct: tgt })
+            body: JSON.stringify({ ticker: ticker || 'NVDA', target_pct: tgt })
         });
         const data = await resp.json();
         if (data.status === 'ok') {
             renderVolContextTable(volCtxDiv, data);
+            return;
         }
+        throw new Error('fallback');
     } catch (e) {
+        try {
+            const cands = _pagesFixtureCandidates('odds_with_vol.nvda.json');
+            const data = window.PagesSample && window.PagesSample.getJSON
+                ? await window.PagesSample.getJSON(cands)
+                : await fetch(cands[0]).then(r => r.json());
+            if (data && (data.vol_context || data.odds_by_expiry)) {
+                renderVolContextTable(volCtxDiv, data);
+                _markSampleUsed(data.sample_note);
+                return;
+            }
+        } catch (_) { /* ignore */ }
         console.warn('Vol context load error:', e);
     }
 }

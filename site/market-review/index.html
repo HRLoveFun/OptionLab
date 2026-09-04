@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Market Review — OptionLab Pages</title>
+  <link rel="stylesheet" href="../assets/pages-shell.css" />
+  <link rel="stylesheet" href="../vendor/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script>window.PAGES_SAMPLE = { base: '../fixtures' };</script>
+  <script src="../assets/pages-sample.js"></script>
+</head>
+<body>
+<div class="pages-wrap">
+  <p class="muted"><a href="../">← 门户</a> · Market Review <span class="badge badge--sample">示例数据可交互</span></p>
+  <h1>Market Review</h1>
+  <div class="pages-notice pages-notice--sample" id="pages-sample-note" hidden role="status" aria-live="polite">
+    <strong>示例数据：</strong><span data-sample-msg>NVDA + 基准合成走势（240 天），非实时。</span>
+  </div>
+  <div class="pages-notice" role="status" aria-live="polite">
+    <strong>静态部分：</strong>汇总表格（Return / Vol / Corr）在 Flask 版由
+    <code>GET /render/market_review</code> 服务端渲染；此处展示快照说明，时间序列图为可交互示例。
+  </div>
+  <div class="pages-card" style="margin-bottom:.75rem">
+    <div class="btn-group" id="mr-mode-btns">
+      <button class="btn-toggle active" onclick="setMrMode('return')">Return</button>
+      <button class="btn-toggle" onclick="setMrMode('vol')">Volatility</button>
+      <button class="btn-toggle" onclick="setMrMode('corr')">Correlation</button>
+    </div>
+    <div class="btn-group" id="mr-period-btns" style="margin-left:.5rem">
+      <button class="btn-toggle" onclick="setMrPeriod('1M')">1M</button>
+      <button class="btn-toggle" onclick="setMrPeriod('1Q')">1Q</button>
+      <button class="btn-toggle active" onclick="setMrPeriod('YTD')">YTD</button>
+    </div>
+    <div id="asset-toggle-container" style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap"></div>
+  </div>
+  <div class="pages-card">
+    <div id="market-review-chart-container" style="height:420px;position:relative"><canvas id="market-review-chart"></canvas></div>
+  </div>
+</div>
+<script src="../vendor/market_review_chart.js"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    loadMarketReviewChart('NVDA');
+    const note = document.getElementById('pages-sample-note');
+    if (note) note.hidden = false;
+  });
+</script>
+</body>
+</html>

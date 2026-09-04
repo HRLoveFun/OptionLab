@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OptionLab — Expiry Payoff Simulator</title>
+  <style>
+    :root {
+      --bg: #0c0f17; --panel: #141925; --panel-2: #1c2333; --border: #2a3245;
+      --text: #e6e9f0; --muted: #9aa4b8; --accent: #4f8cff;
+      --success: #34c98b; --error: #ff6b6b; --warning: #ffb454;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           background: var(--bg); color: var(--text); line-height: 1.5; }
+    header, main { max-width: 1080px; margin: 0 auto; padding: 1.25rem; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    .sub { color: var(--muted); margin: 0 0 1.25rem; font-size: .9rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: .75rem; background: var(--panel); padding: 1rem; border: 1px solid var(--border);
+            border-radius: 12px; }
+    .grid label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: .25rem; }
+    .grid input, .grid select { width: 100%; padding: .5rem; background: var(--panel-2);
+            border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+    .checkbox { display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--muted); }
+    button { margin-top: 1rem; padding: .65rem 1.2rem; background: var(--accent); color: #fff;
+             border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .hero { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: 1.25rem 0; }
+    .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: .9rem 1.2rem; min-width: 150px; }
+    .kpi .v { font-size: 1.3rem; font-weight: 700; }
+    .kpi .k { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .semantic-pos { color: var(--success); }
+    .semantic-neg { color: var(--error); }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-top: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    th, td { padding: .5rem .6rem; text-align: right; border-bottom: 1px solid var(--border); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    caption { text-align: left; color: var(--muted); font-size: .8rem; padding-bottom: .5rem; }
+    .note { color: var(--muted); font-size: .8rem; margin-top: .5rem; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+  <header>
+    <h1>OptionLab — Expiry Payoff Simulator</h1>
+    <p class="sub">Pure client-side Black–Scholes. No server, no data leaves your browser.
+       Entry IV prices the premium; forward vol (linked by default) drives the P&amp;L distribution.</p>
+  </header>
+  <main>
+    <section class="grid">
+      <div><label for="spot">Spot price</label><input id="spot" type="number" value="100" step="0.01"></div>
+      <div><label for="otype">Option type</label>
+        <select id="otype"><option value="call">Call</option><option value="put">Put</option></select></div>
+      <div><label for="side">Side</label>
+        <select id="side"><option value="long">Long</option><option value="short">Short</option></select></div>
+      <div><label for="strikes">Strikes (csv)</label><input id="strikes" value="95, 100, 105"></div>
+      <div><label for="expiries">Expiries (D or YYYY-MM-DD)</label><input id="expiries" value="7, 30, 60, 90"></div>
+      <div><label for="ivs">Entry IV % (csv)</label><input id="ivs" value="20, 30, 45"></div>
+      <div><label for="fivs">Forward IV % (csv, optional)</label><input id="fivs" placeholder="linked to entry"></div>
+      <div><label for="rate">Risk-free %</label><input id="rate" type="number" value="5" step="0.1"></div>
+      <div><label for="qty">Contracts</label><input id="qty" type="number" value="1" min="1"></div>
+      <div><label for="mult">Multiplier</label><input id="mult" type="number" value="100" min="1"></div>
+      <div class="checkbox"><input type="checkbox" id="link" checked><label for="link">Link forward vol to entry IV</label></div>
+    </section>
+    <button id="run">Simulate</button>
+
+    <div class="hero" id="hero"></div>
+    <div class="card"><canvas id="chart" height="120"></canvas></div>
+
+    <div class="card">
+      <table id="matrix"><caption>P&amp;L at expiration (per strike × maturity/IV)</caption></table>
+    </div>
+    <div class="card">
+      <table id="detail"><caption>Per-combo detail for selected strike</caption></table>
+    </div>
+    <p class="note">Results are research tooling, not financial advice. Black–Scholes assumes constant vol and rates.</p>
+  </main>
+
+  <script type="module">
+    import { simulateExpiry } from './grid.js';
+    const $ = (id) => document.getElementById(id);
+    const money = (v) => v == null ? '∞' : (v < 0 ? '−$' : '$') + Math.abs(v).toFixed(2);
+    const pct = (v) => (v * 100).toFixed(1) + '%';
+    const num = (v, d = 2) => Number(v).toFixed(d);
+
+    let last = null, selectedStrike = null;
+
+    function run() {
+      const payload = {
+        spot: parseFloat($('spot').value),
+        option_type: $('otype').value,
+        side: $('side').value,
+        strikes: $('strikes').value,
+        expiries: $('expiries').value,
+        ivs: $('ivs').value,
+        forwardIvs: $('link').checked ? null : $('fivs').value,
+        r_pct: parseFloat($('rate').value),
+        qty: parseInt($('qty').value, 10) || 1,
+        multiplier: parseFloat($('mult').value) || 100,
+      };
+      try {
+        last = simulateExpiry(payload);
+      } catch (e) {
+        alert(e.message);
+        return;
+      }
+      selectedStrike = last.strikes.reduce((a, k) =>
+        Math.abs(k - last.spot) < Math.abs(a - last.spot) ? k : a, last.strikes[0]);
+      render();
+    }
+
+    function pnlAtSpot(row) {
+      const cell = row.cells[0]; // first combo
+      const intr = last.option_type === 'call'
+        ? Math.max(last.spot - row.strike, 0) : Math.max(row.strike - last.spot, 0);
+      return (last.side === 'long' ? 1 : -1) * last.qty * last.multiplier * (intr - cell.premium);
+    }
+
+    function render() {
+      const row = last.results.find((r) => r.strike === selectedStrike);
+      const spotPnl = pnlAtSpot(row);
+      $('hero').innerHTML = `
+        <div class="kpi"><div class="k">P&amp;L @ spot (K=${selectedStrike})</div>
+          <div class="v ${spotPnl >= 0 ? 'semantic-pos' : 'semantic-neg'}">${money(spotPnl)}</div></div>
+        <div class="kpi"><div class="k">Premium</div><div class="v">${money(row.cells[0].premium)}</div></div>
+        <div class="kpi"><div class="k">Breakeven</div><div class="v">${num(row.cells[0].breakeven)}</div></div>
+        <div class="kpi"><div class="k">Prob. profit</div><div class="v">${pct(row.cells[0].pop)}</div></div>
+        <div class="kpi"><div class="k">Expected P&amp;L</div><div class="v ${row.cells[0].expected_pnl >= 0 ? 'semantic-pos' : 'semantic-neg'}">${money(row.cells[0].expected_pnl)}</div></div>`;
+
+      // payoff chart: one line per combo for the selected strike
+      const datasets = row.cells.map((c, i) => ({
+        label: `${c.dte}D @ ${c.iv_pct}%`,
+        data: last.prices.map((p, k) => ({ x: p, y: c.pnl[k] })),
+        borderWidth: 1.5,
+        pointRadius: 0,
+        borderColor: `hsl(${i * 40}, 70%, 60%)`,
+      }));
+      datasets.push({ label: 'spot', data: [{ x: last.spot, y: 0 }],
+        pointRadius: 5, pointBackgroundColor: '#fff', showLine: false });
+      if (window._chart) window._chart.destroy();
+      window._chart = new Chart($('chart'), {
+        type: 'line',
+        data: { datasets },
+        options: { animation: false, scales: { x: { title: { display: true, text: 'Underlying at expiration' } },
+          y: { title: { display: true, text: 'P&L' } } } },
+      });
+
+      // matrix: rows = strikes, cols = combos, value = pnl at spot
+      const m = $('matrix');
+      let html = '<thead><tr><th>Strike</th>';
+      last.combos.forEach((c) => { html += `<th>${c.dte}D<br>${c.iv_pct}%</th>`; });
+      html += '</tr></thead><tbody>';
+      last.results.forEach((r) => {
+        html += `<tr><td>${r.strike}</td>`;
+        r.cells.forEach((c) => {
+          const p = (last.side === 'long' ? 1 : -1) * last.qty * last.multiplier * (0 - 0); // placeholder
+          const v = (last.side === 'long' ? 1 : -1) * last.qty * last.multiplier * (0);
+          const atSpot = (last.side === 'long' ? 1 : -1) * last.qty * last.multiplier *
+            ((last.option_type === 'call' ? Math.max(last.spot - r.strike, 0) : Math.max(r.strike - last.spot, 0)) - c.premium);
+          const cls = atSpot > 0 ? 'semantic-pos' : (atSpot < 0 ? 'semantic-neg' : '');
+          html += `<td class="${cls}">${money(atSpot)}</td>`;
+        });
+        html += '</tr>';
+      });
+      m.innerHTML = html + '</tbody>';
+
+      // detail for selected strike
+      const d = $('detail');
+      let dh = '<thead><tr><th>Expiry</th><th>DTE</th><th>IV%</th><th>Premium</th><th>Delta</th>'
+        + '<th>Breakeven</th><th>Max profit</th><th>Max loss</th><th>PoP</th><th>E[P&L]</th></tr></thead><tbody>';
+      row.cells.forEach((c) => {
+        dh += `<tr><td>${c.expiry}</td><td>${c.dte}</td><td>${c.iv_pct}</td>`
+          + `<td>${money(c.premium)}</td><td>${num(c.delta, 3)}</td><td>${num(c.breakeven)}</td>`
+          + `<td>${c.max_profit == null ? '∞' : money(c.max_profit)}</td>`
+          + `<td>${c.max_loss == null ? '−∞' : money(c.max_loss)}</td>`
+          + `<td>${pct(c.pop)}</td>`
+          + `<td class="${c.expected_pnl >= 0 ? 'semantic-pos' : 'semantic-neg'}">${money(c.expected_pnl)}</td></tr>`;
+      });
+      d.innerHTML = dh + '</tbody>';
+    }
+
+    $('run').addEventListener('click', run);
+    run();
+  </script>
+</body>
+</html>

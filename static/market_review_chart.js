@@ -54,13 +54,8 @@ async function loadMarketReviewChart(ticker, startDate) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ticker, start_date: startDate || null })
         });
-        mrData = await resp.json();
-
-        if (mrData.status !== 'ok') {
-            container.innerHTML = `<div style="color:#ef4444;padding:2rem;">${mrData.message || 'Error loading data'}</div>`;
-            renderMrKpiStrip(/* error */ true);
-            return;
-        }
+        mrData = await resp.json().catch(() => null);
+        if (!mrData || mrData.status !== 'ok') throw new Error((mrData && (mrData.message || mrData.error)) || 'fallback');
 
         // Cache the successful response (with TTL timestamp)
         _mrTickerCache[cacheKey] = { data: mrData, _ts: Date.now() };
@@ -73,6 +68,28 @@ async function loadMarketReviewChart(ticker, startDate) {
         renderMrKpiStrip();
     } catch (e) {
         if (e.name === 'AbortError') return;
+        // Pages fallback: committed NVDA time-series snapshot.
+        try {
+            const cands = (window.PagesSample && window.PagesSample.fixture)
+                ? [window.PagesSample.fixture('market_review_ts.nvda.json'), '../fixtures/market_review_ts.nvda.json']
+                : ['../fixtures/market_review_ts.nvda.json'];
+            mrData = window.PagesSample && window.PagesSample.getJSON
+                ? await window.PagesSample.getJSON(cands)
+                : await fetch(cands[0]).then(r => r.json());
+            if (mrData && mrData.status === 'ok') {
+                try {
+                    window.PAGES_SAMPLE_USED = true;
+                    const note = document.getElementById('pages-sample-note');
+                    if (note) { note.hidden = false; }
+                } catch (_) { /* ignore */ }
+                container.innerHTML = '<canvas id="market-review-chart"></canvas>';
+                mrVisibleAssets = new Set(Object.keys(mrData.assets));
+                renderMarketReviewChart();
+                renderAssetToggleButtons();
+                renderMrKpiStrip();
+                return;
+            }
+        } catch (_) { /* fall through */ }
         container.innerHTML = `<div style="color:#ef4444;padding:2rem;">Network error: ${e.message}</div>`;
         renderMrKpiStrip(/* error */ true);
     }
