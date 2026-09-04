@@ -15,12 +15,9 @@ import datetime as dt
 import json
 import math
 import random
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 OUT_DIR = REPO_ROOT / "site" / "fixtures"
 REF_DATE = "2026-09-04"
 TICKER = "NVDA"
@@ -39,10 +36,62 @@ def _bs_call(s, k, t, r, sigma) -> float:
     return s * _norm_cdf(d1) - k * math.exp(-r * t) * _norm_cdf(d2)
 
 
-def gen_calendar() -> dict:
-    from core.options.simulation.expiry import generate_expiry_calendar
+def _adjust_to_business_day(d: dt.date, forward: bool) -> dt.date:
+    # Mirror of core.options.simulation.expiry._adjust_to_business_day with
+    # holidays=frozenset() (fixtures use no holiday adjustment — weekends only).
+    step = dt.timedelta(days=1 if forward else -1)
+    guard = 0
+    while d.weekday() in (5, 6) and guard < 10:
+        guard += 1
+        d += step
+    return d
 
-    exps = generate_expiry_calendar(REF_DATE, 12, 10)
+
+def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle):
+    dte = (d - ref).days + 1
+    return {
+        "date": d.isoformat(),
+        "dte": dte,
+        "label": f"{d.isoformat()} ({dte}D)",
+        "kind": kind,
+        "cycle": cycle,
+    }
+
+
+def _next_friday(d: dt.date) -> dt.date:
+    friday = d + dt.timedelta(days=1)
+    while friday.weekday() != 4:
+        friday += dt.timedelta(days=1)
+    return friday
+
+
+def gen_calendar() -> dict:
+    # Stdlib-only mirror of core.options.simulation.expiry.generate_expiry_calendar
+    # (ref, n_standard=12, n_daily=10, holidays=None). Kept dependency-free so
+    # the Pages workflow runs without numpy/scipy. Parity is covered by
+    # tests/test_pages_fixtures.py.
+    ref = dt.date.fromisoformat(REF_DATE)
+    daily: list[dict] = []
+    d = _adjust_to_business_day(ref, forward=True)
+    guard = 0
+    while len(daily) < 10 and guard < 400:
+        guard += 1
+        daily.append(_make_entry(d, ref, "daily", None))
+        d = _adjust_to_business_day(d + dt.timedelta(days=1), forward=True)
+    standard: list[dict] = []
+    last_daily = dt.date.fromisoformat(daily[-1]["date"]) if daily else ref
+    cur = last_daily
+    guard = 0
+    while len(standard) < 12 and guard < 600:
+        guard += 1
+        cur = _next_friday(cur)
+        eff = _adjust_to_business_day(cur, forward=False)
+        if eff > last_daily:
+            standard.append(_make_entry(eff, ref, "standard", "weekly"))
+    by_date: dict[str, dict] = {}
+    for entry in standard + daily:
+        by_date.setdefault(entry["date"], entry)
+    exps = sorted(by_date.values(), key=lambda e: e["date"])
     return {"status": "ok", "reference_date": REF_DATE, "expirations": exps}
 
 
