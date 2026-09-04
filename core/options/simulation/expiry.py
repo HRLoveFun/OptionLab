@@ -10,6 +10,7 @@ Context:
     set of maturities, show what every strike pays at expiration.
 Contracts:
   - parse_expiries(values, today=None) -> list[dict]
+  - generate_expiry_calendar(ref, n_standard=12, n_daily=10, holidays=None) -> list[dict]
   - simulate_expiry(...) -> dict
 Dependencies UPWARD:
   - numpy, scipy.stats
@@ -291,3 +292,185 @@ def simulate_expiry(
         "combos": combos,
         "results": results,
     }
+
+
+# ---------------------------------------------------------------------------
+# Expiration-calendar generation (Premium Matrix columns)
+# ---------------------------------------------------------------------------
+# US single-stock / ETF options list standard expirations on the **third
+# Friday** of every month. When that Friday is an exchange holiday the
+# expiration rolls back to the previous business day (usually Thursday).
+# January's third Friday is the long-dated LEAPS month; 3/6/9/12 third
+# Fridays are the quarterly expirations. On top of those, liquid underlyings
+# carry a *daily* (0DTE-style, every business day) series.
+#
+# The project otherwise ignores exchange holidays (see data_pipeline/cleaning
+# for the "B" frequency), but the listed-expiration rules *require* them, so
+# we ship a self-contained NYSE approximation here rather than depending on an
+# external calendar package.
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> dt.date:
+    """The ``n``-th ``weekday`` (Mon=0 … Sun=6) of ``year``/``month``.
+
+    ``n=5`` is interpreted as "the last such weekday" (e.g. last Monday of May
+    for Memorial Day).
+    """
+    if not 0 <= weekday <= 6:
+        raise ValueError("weekday must be 0 (Mon) .. 6 (Sun)")
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    first = dt.date(year, month, 1)
+    offset = (weekday - first.weekday()) % 7
+    target = first + dt.timedelta(days=offset) + dt.timedelta(days=7 * (n - 1))
+    # If n=5 overshot into next month, step back one week to land on the last.
+    while target.month != month:
+        target -= dt.timedelta(days=7)
+    return target
+
+
+def _easter(year: int) -> dt.date:
+    """Gregorian Easter Sunday (Anonymous / Meeus-Jones-Butcher algorithm)."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    lp = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * lp) // 451
+    month = (h + lp - 7 * m + 114) // 31
+    day = ((h + lp - 7 * m + 114) % 31) + 1
+    return dt.date(year, month, day)
+
+
+def _nyse_holiday_set(years) -> set[dt.date]:
+    """NYSE holiday approximation (fixed + moving rules).
+
+    Fixed-date holidays that fall on Saturday close on the prior Friday; those
+    on Sunday close on the following Monday — the standard NYSE convention.
+    """
+    holidays: set[dt.date] = set()
+    for year in years:
+        for fixed in (dt.date(year, 1, 1), dt.date(year, 6, 19),
+                      dt.date(year, 7, 4), dt.date(year, 12, 25)):
+            wd = fixed.weekday()
+            if wd == 5:  # Saturday -> prior Friday
+                holidays.add(fixed - dt.timedelta(days=1))
+            elif wd == 6:  # Sunday -> following Monday
+                holidays.add(fixed + dt.timedelta(days=1))
+            else:
+                holidays.add(fixed)
+        # Moving holidays.
+        holidays.add(_nth_weekday(year, 1, 0, 3))    # MLK — 3rd Mon Jan
+        holidays.add(_nth_weekday(year, 2, 0, 3))    # Presidents — 3rd Mon Feb
+        holidays.add(_nth_weekday(year, 5, 0, 5))    # Memorial — last Mon May
+        holidays.add(_nth_weekday(year, 9, 0, 1))    # Labor — 1st Mon Sep
+        holidays.add(_nth_weekday(year, 11, 3, 4))  # Thanksgiving — 4th Thu Nov
+        holidays.add(_easter(year) - dt.timedelta(days=2))  # Good Friday
+    return holidays
+
+
+def _adjust_to_business_day(d: dt.date, holidays: set[dt.date], forward: bool) -> dt.date:
+    """Nudge ``d`` to the nearest business day, skipping weekends + holidays.
+
+    ``forward=False`` rolls backward (used for the 3rd-Friday rule); ``True``
+    rolls forward (used when walking the daily series).
+    """
+    step = dt.timedelta(days=1 if forward else -1)
+    guard = 0
+    while (d.weekday() in (5, 6) or d in holidays) and guard < 10:
+        guard += 1
+        d += step
+    return d
+
+
+def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle):
+    dte = (d - ref).days
+    return {
+        "date": d.isoformat(),
+        "dte": dte,
+        "label": f"{d.isoformat()} ({dte}D)",
+        "kind": kind,         # "standard" | "daily"
+        "cycle": cycle,       # "monthly" | "quarterly" | "leaps" | None
+    }
+
+
+def generate_expiry_calendar(
+    reference_date,
+    n_standard: int = 12,
+    n_daily: int = 10,
+    holidays=None,
+) -> list[dict]:
+    """Build upcoming option expirations for a Premium Matrix.
+
+    Returns the next ``n_standard`` *standard listed* expirations (the
+    third-Friday monthly series; January tagged ``"leaps"``, 3/6/9/12 tagged
+    ``"quarterly"``, the rest ``"monthly"``) plus the next ``n_daily``
+    *daily* (0DTE-style, every business day) expirations from
+    ``reference_date`` (inclusive of ``reference_date`` itself when it is a
+    business day).
+
+    Each entry is ``{"date", "dte", "label", "kind", "cycle"}`` and is sorted
+    by date ascending with duplicate dates de-duplicated (a ``standard`` entry
+    wins over a ``daily`` one on collision). ``dte`` is calendar days vs
+    ``reference_date``; ``dte == 0`` means a same-day (0DTE) expiration.
+
+    ``reference_date`` may be a ``date`` or an ISO ``"YYYY-MM-DD"`` string.
+    ``holidays`` is an optional ``set[date]``; when omitted (or empty) no
+    holiday adjustment is applied — only weekends are skipped. Pass NYSE
+    holiday dates to enable the third-Friday roll-back behaviour.
+
+    Pure / deterministic — no network, no external state.
+    """
+    if isinstance(reference_date, str):
+        try:
+            ref = dt.datetime.strptime(reference_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(f"reference_date must be a date or 'YYYY-MM-DD', got {reference_date!r}")
+    elif isinstance(reference_date, dt.date):
+        ref = reference_date
+    else:
+        raise TypeError("reference_date must be a date or ISO string")
+
+    if n_standard < 0 or n_daily < 0:
+        raise ValueError("n_standard and n_daily must be >= 0")
+
+    # Default: no holiday adjustment — only weekends are skipped. Pass an
+    # explicit set of dates to enable NYSE-aware rolling of the third-Friday
+    # expirations.
+    holidays = set(holidays) if holidays else set()
+
+    # --- standard listed expirations: 3rd Friday, strictly after ref --------
+    standard: list[dict] = []
+    y, m = ref.year, ref.month
+    guard = 0
+    while len(standard) < n_standard and guard < 200:
+        guard += 1
+        exp = _adjust_to_business_day(_nth_weekday(y, m, 4, 3), holidays, forward=False)
+        if exp > ref:
+            cycle = "leaps" if m == 1 else ("quarterly" if m in (3, 6, 9, 12) else "monthly")
+            standard.append(_make_entry(exp, ref, "standard", cycle))
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+    # --- daily (0DTE-style) expirations: next n_daily business days ----------
+    daily: list[dict] = []
+    d = _adjust_to_business_day(ref, holidays, forward=True)
+    guard = 0
+    while len(daily) < n_daily and guard < 400:
+        guard += 1
+        daily.append(_make_entry(d, ref, "daily", None))
+        d = _adjust_to_business_day(d + dt.timedelta(days=1), holidays, forward=True)
+
+    # --- merge + dedupe (standard wins on date collision) --------------------
+    by_date: dict[str, dict] = {}
+    for entry in standard + daily:
+        by_date.setdefault(entry["date"], entry)
+    return sorted(by_date.values(), key=lambda e: e["date"])

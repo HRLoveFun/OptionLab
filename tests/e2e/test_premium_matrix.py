@@ -1,9 +1,11 @@
 """End-to-end smoke for the Premium Matrix tab.
 
-The tab is 100% client-side: it drives the pure engine (static/sim/
-premium_matrix.js) through the real Flask-served page and never calls any
-API. Assertions therefore run against the rendered grid, the KPI strip and
-the CSS-driven visibility switches.
+The tab drives the pure engine (static/sim/premium_matrix.js) through the
+real Flask-served page. Its columns are sourced from /api/expiry_calendar,
+which `mock_apis` fulfils with a stable 18-run DTE ladder (the calendar
+maths itself is covered by tests/test_expiry_calendar*.py). Assertions run
+against the rendered grid, the KPI strip and the CSS-driven visibility
+switches.
 """
 
 from __future__ import annotations
@@ -21,7 +23,9 @@ _RESOURCE_ERR_RE = re.compile(r"Failed to load resource|net::ERR", re.IGNORECASE
 _TOLERANCE_PX = 1.0
 
 ROWS = 41  # spot 100 ±20%, integer strikes
-COLUMNS = 18  # 1–90 DTE in 5-day steps
+# The column count is data-driven: the grid is keyed on the real expiry
+# calendar (standard + daily expiries), not on a fixed DTE ladder, so every
+# assertion that needs it reads it back from the rendered grid.
 
 
 def _app_errors(js_errors: list[str]) -> list[str]:
@@ -46,27 +50,38 @@ def _open_tab(page: Page, live_server: str) -> None:
     expect(page.locator("#pm-matrix")).to_be_visible(timeout=5000)
 
 
+def _dtes(page: Page) -> list[int]:
+    """Days to expiration of every rendered column, left to right."""
+    return page.evaluate("() => window.premiumMatrixDebug().data.columns.map((c) => c.dte)")
+
+
 @pytest.mark.usefixtures("mock_apis")
 def test_premium_matrix_renders_default_grid(page: Page, live_server: str, js_errors: list[str]) -> None:
-    """Defaults (100 / 25% / 3% / 0% spread) produce a 41 × 18 grid."""
+    """Defaults (100 / 25% / 3% / 2% spread) produce a full strike × expiry grid."""
     _open_tab(page, live_server)
+    dtes = _dtes(page)
+    assert len(dtes) > 1
+
+    # Default inputs: spot 100, IV 25%, rate 3%, spread 2% (buy side).
+    expect(page.locator("#pm-spread")).to_have_value("2")
+    expect(page.locator('[data-pm-side="buy"]')).to_have_attribute("aria-pressed", "true")
 
     expect(page.locator("#pm-matrix tbody tr")).to_have_count(ROWS)
-    expect(page.locator("#pm-matrix tbody tr").first.locator("td.pm-cell")).to_have_count(COLUMNS)
-    expect(page.locator("#pm-matrix .pm-half--call")).to_have_count(ROWS * COLUMNS)
-    expect(page.locator("#pm-matrix .pm-half--put")).to_have_count(ROWS * COLUMNS)
-    # 18 DTE columns + the strike and sigma rails
-    expect(page.locator("#pm-matrix thead th")).to_have_count(COLUMNS + 2)
+    expect(page.locator("#pm-matrix tbody tr").first.locator("td.pm-cell")).to_have_count(len(dtes))
+    expect(page.locator("#pm-matrix .pm-half--call")).to_have_count(ROWS * len(dtes))
+    expect(page.locator("#pm-matrix .pm-half--put")).to_have_count(ROWS * len(dtes))
+    # One column per expiry + the strike and sigma rails
+    expect(page.locator("#pm-matrix thead th")).to_have_count(len(dtes) + 2)
 
     # Column headers read "DTE · period-volatility" (e.g. "1D · 1.3%"),
     # and the page explains what the percentage means.
     first_col = page.locator("#pm-matrix thead th[data-col='0']")
-    expect(first_col).to_contain_text("1D")
+    expect(first_col).to_contain_text(f"{dtes[0]}D")
     expect(page.locator(".pm-axis-hint")).to_contain_text("1σ")
 
     # P1 hero + KPI strip are populated.
     expect(page.locator("#pm-hero-value")).to_contain_text("%", timeout=3000)
-    expect(page.locator("#pm-kpi-grid")).to_have_text(f"{ROWS} × {COLUMNS}")
+    expect(page.locator("#pm-kpi-grid")).to_have_text(f"{ROWS} × {len(dtes)}")
     expect(page.locator("#pm-kpi-sigma")).not_to_have_text("—")
     expect(page.locator("#pm-kpi-call")).not_to_have_text("—")
     expect(page.locator("#pm-kpi-put")).not_to_have_text("—")
@@ -128,6 +143,7 @@ def test_premium_matrix_recomputes_on_input_change(page: Page, live_server: str,
     before_call = call_kpi.inner_text()
     before_sigma = sigma_kpi.inner_text()
 
+    dtes = _dtes(page)
     page.fill("#pm-iv", "45")
     expect(call_kpi).not_to_have_text(before_call, timeout=3000)
     expect(sigma_kpi).not_to_have_text(before_sigma, timeout=3000)
@@ -135,9 +151,17 @@ def test_premium_matrix_recomputes_on_input_change(page: Page, live_server: str,
     # The sigma rail follows the selected reference column.
     sigma_cell = page.locator("#pm-matrix tbody tr").first.locator("td.pm-sigma")
     before_rail = sigma_cell.inner_text()
+    # The hero band (ATM premium rate, 1σ move, ATM call/put) is pinned to 30D
+    # and must NOT move when the sigma reference column changes.
+    hero_call = call_kpi.inner_text()
+    hero_put = page.locator("#pm-kpi-put").inner_text()
+    hero_sigma = sigma_kpi.inner_text()
     page.select_option("#pm-ref-dte", "0")
-    expect(page.locator("#pm-head-sigma")).to_have_text("σ @1D")
+    expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[0]}D")
     expect(sigma_cell).not_to_have_text(before_rail)
+    expect(call_kpi).to_have_text(hero_call)
+    expect(page.locator("#pm-kpi-put")).to_have_text(hero_put)
+    expect(sigma_kpi).to_have_text(hero_sigma)
 
     # A spread moves the buyer's fill above the mid.
     mid_sub = page.locator("#pm-kpi-call-sub")
@@ -172,7 +196,7 @@ def test_premium_matrix_header_lines_up_with_cells(page: Page, live_server: str,
     assert abs(_mid(main) - _mid(cell)) <= _TOLERANCE_PX
 
     # Same check on the last column, where drift is most visible.
-    last = COLUMNS - 1
+    last = len(_dtes(page)) - 1
     head = _box(page.locator(f"#pm-matrix th.pm-head-dte[data-col='{last}'] .pm-head-half--put"))
     cell = _box(row.locator(f"td.pm-cell[data-col='{last}'] .pm-half--put"))
     assert abs(head["x"] - cell["x"]) <= _TOLERANCE_PX
@@ -211,6 +235,102 @@ def test_premium_matrix_sticky_rails_stay_in_register(page: Page, live_server: s
 
 
 @pytest.mark.usefixtures("mock_apis")
+def test_premium_matrix_fill_side_switch_reprices(page: Page, live_server: str, js_errors: list[str]) -> None:
+    """The buy / sell switch is exclusive and reprices — unlike the CSS toggles.
+
+    It lives in the panel toolbar because it changes the price basis of every
+    cell, so flipping it is a real recompute, not an attribute write.
+    """
+    _open_tab(page, live_server)
+
+    buy = page.locator('[data-pm-side="buy"]')
+    sell = page.locator('[data-pm-side="sell"]')
+    # It sits with the Price / Prem. rate / Call / Put switches above the grid.
+    expect(page.locator(".pm-matrix-toolbar__right [data-pm-side='buy']")).to_have_count(1)
+    expect(buy).to_have_attribute("aria-pressed", "true")
+    expect(sell).to_have_attribute("aria-pressed", "false")
+
+    # A real spread is what separates the two sides of the book.
+    page.fill("#pm-spread", "8")
+    expect(page.locator("#pm-kpi-call")).not_to_have_text("—", timeout=3000)
+
+    def atm_call() -> dict:
+        return page.evaluate(
+            "() => { const d = window.premiumMatrixDebug().data;"
+            " const c = d.rows[d.atm_index].cells[d.ref_column_index].call;"
+            " return { mid: c.mid, fill: c.fill, side: d.perspective }; }"
+        )
+
+    bought = atm_call()
+    assert bought["side"] == "buy"
+    assert bought["fill"] > bought["mid"]  # buyer crosses to the ask
+
+    sell.click()
+    expect(sell).to_have_attribute("aria-pressed", "true")
+    expect(buy).to_have_attribute("aria-pressed", "false")
+
+    sold = atm_call()
+    assert sold["side"] == "sell"
+    assert sold["fill"] < sold["mid"]  # seller hits the bid
+    assert sold["fill"] < bought["fill"]
+
+    # Clicking the side that is already on is a no-op.
+    sell.click()
+    expect(sell).to_have_attribute("aria-pressed", "true")
+    assert atm_call() == sold
+
+    assert _app_errors(js_errors) == [], f"JS errors after flipping fill side: {js_errors}"
+
+
+@pytest.mark.usefixtures("mock_apis")
+def test_premium_matrix_spread_floor_is_one_tick(page: Page, live_server: str, js_errors: list[str]) -> None:
+    """The spread's DOLLAR effect is floored at $0.01 — the spread % is not.
+
+    A percentage floor would be meaningless: 4% of a 5-cent wing premium is a
+    fraction of a cent, which rounds away and makes buy and sell print the same
+    number. So zero stays a legal input and the fill is still one tick off mid.
+    """
+    _open_tab(page, live_server)
+
+    spread = page.locator("#pm-spread")
+    expect(spread).to_have_attribute("min", "0")
+
+    def atm_call() -> dict:
+        return page.evaluate(
+            "() => { const d = window.premiumMatrixDebug().data;"
+            " const c = d.rows[d.atm_index].cells[d.ref_column_index].call;"
+            " return { mid: c.mid, fill: c.fill }; }"
+        )
+
+    # Spread 0 → the fill sits one cent above the mid, never exactly on it.
+    spread.fill("0")
+    spread.press("Tab")
+    expect(spread).to_have_value("0")
+    bought = atm_call()
+    assert abs(bought["fill"] - (bought["mid"] + 0.01)) < 1e-6
+
+    page.locator('[data-pm-side="sell"]').click()
+    sold = atm_call()
+    assert abs(sold["fill"] - (sold["mid"] - 0.01)) < 1e-6
+
+    # Well above the floor the percentage wins: 8% → half of it, 4%, off the mid.
+    page.locator('[data-pm-side="buy"]').click()
+    spread.fill("8")
+    spread.press("Tab")
+    wide = atm_call()
+    assert abs(wide["fill"] - wide["mid"] * 1.04) < 1e-6
+
+    # And the ceiling still clamps (250% → 100% → half of mid again).
+    spread.fill("250")
+    spread.press("Tab")
+    expect(spread).to_have_value("100")
+    clamped = atm_call()
+    assert abs(clamped["fill"] - clamped["mid"] * 1.5) < 1e-6
+
+    assert _app_errors(js_errors) == [], f"JS errors after clamping the spread: {js_errors}"
+
+
+@pytest.mark.usefixtures("mock_apis")
 def test_premium_matrix_crosshair_highlights_one_column(page: Page, live_server: str, js_errors: list[str]) -> None:
     """Hovering pins the x axis; it never rewrites the numbers on screen."""
     _open_tab(page, live_server)
@@ -218,16 +338,17 @@ def test_premium_matrix_crosshair_highlights_one_column(page: Page, live_server:
     rail = page.locator("#pm-matrix tbody tr").first.locator("td.pm-sigma")
     before = rail.inner_text()
 
+    dtes = _dtes(page)
     page.locator("#pm-matrix tbody tr").nth(3).locator("td.pm-cell[data-col='7']").hover()
     expect(page.locator("#pm-matrix col.pm-col-dte[data-col='7']")).to_have_class(_HOVER_RE)
     expect(page.locator("#pm-matrix th.pm-head-dte[data-col='7']")).to_have_class(_HOVER_RE)
     # Values are untouched by hover — only a click promotes a column.
     expect(rail).to_have_text(before)
-    expect(page.locator("#pm-head-sigma")).not_to_have_text("σ @36D")
+    expect(page.locator("#pm-head-sigma")).not_to_have_text(f"σ @{dtes[7]}D")
 
     # Clicking is what changes the reference, and the select follows.
     page.locator("#pm-matrix tbody tr").nth(3).locator("td.pm-cell[data-col='7']").click()
-    expect(page.locator("#pm-head-sigma")).to_have_text("σ @36D")
+    expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[7]}D")
     expect(rail).not_to_have_text(before)
     expect(page.locator("#pm-ref-dte")).to_have_value("7")
 

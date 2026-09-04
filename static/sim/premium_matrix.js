@@ -7,9 +7,14 @@
 // Cell semantics (per spec):
 //   call premium rate = (K + P − S) / S   — rally needed to reach breakeven
 //   put  premium rate = (S − K + P) / S   — decline needed to reach breakeven
-// where P is the FILL price: mid from Black–Scholes, adjusted by half the
-// bid-ask spread — buy fills at the ask (mid × (1 + s/200)), sell fills at the
-// bid (mid × (1 − s/200)). Both perspectives share the same rate formulas.
+// where P is the FILL price: mid from Black–Scholes, moved off the mid by half
+// the bid-ask spread — buy fills at the ask (mid + offset), sell fills at the
+// bid (mid − offset), where
+//   offset = max(mid × s / 200, MIN_SPREAD_ABS)
+// i.e. the spread's dollar effect is floored at one cent (a penny is the
+// smallest tick an option trades on), so a cheap wing premium still shows a
+// real gap between the two sides. Both perspectives share the same rate
+// formulas.
 //
 // Perf notes (the grid is ~41 rows × 18 columns ≈ 738 cells):
 //   - per COLUMN: √T and e^(−rT) are computed once and cached (18×, not 738×)
@@ -23,10 +28,6 @@ import { normCdf } from './norm.js';
 import { bsGreeks, T_MIN, SIGMA_MIN, SIGMA_MAX } from './black_scholes.js';
 
 // Horizontal axis: 1–90 DTE in 5-day steps (1, 6, 11, … 86).
-export const DEFAULT_DTES = [
-  1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86,
-];
-
 export const DEFAULT_RANGE_PCT = 0.2;
 export const DEFAULT_TARGET_ROWS = 41;
 export const MIN_DTE = 1;
@@ -37,6 +38,11 @@ export const MIN_R_PCT = -5;
 export const MAX_R_PCT = 50;
 export const MIN_SPREAD_PCT = 0;
 export const MAX_SPREAD_PCT = 100;
+// Floor on the dollar effect of the spread, not on the spread input itself:
+// max(mid × spreadPct / 200, MIN_SPREAD_ABS). A 6% spread on a 5-cent premium
+// is 0.15 of a cent, which rounds to nothing and would make buy and sell print
+// the same number — one cent is the smallest real tick.
+export const MIN_SPREAD_ABS = 0.01;
 export const REF_DTE_DEFAULT = 30;
 
 // Candidate strike steps, coarsest that still keeps the ladder readable.
@@ -161,9 +167,11 @@ export function fillPrice(mid, spreadPct, perspective) {
   const m = Number(mid);
   if (!Number.isFinite(m)) return NaN;
   const s = Math.min(Math.max(Number(spreadPct) || 0, MIN_SPREAD_PCT), MAX_SPREAD_PCT);
-  const half = s / 200; // spread is a PERCENT of mid; half of it moves the fill
-  const mult = perspective === 'sell' ? 1 - half : 1 + half;
-  return Math.max(m * mult, 0);
+  // Spread is a PERCENT of mid and half of it moves the fill; the dollar
+  // result is then floored at one cent (see MIN_SPREAD_ABS).
+  const offset = Math.max((m * s) / 200, MIN_SPREAD_ABS);
+  const fill = perspective === 'sell' ? m - offset : m + offset;
+  return Math.max(fill, 0);
 }
 
 export function premiumRate(spot, strike, price, type) {
@@ -205,7 +213,8 @@ export function buildPremiumMatrix(opts) {
     rPct = 3,
     spreadPct = 0,
     perspective = 'buy',
-    dtes = DEFAULT_DTES,
+    dtes = null,
+    expirations = null,
     rangePct = DEFAULT_RANGE_PCT,
     targetRows = DEFAULT_TARGET_ROWS,
     putViaParity = true,
@@ -224,7 +233,8 @@ export function buildPremiumMatrix(opts) {
   }
   const spreadN = Math.min(Math.max(Number(spreadPct) || 0, MIN_SPREAD_PCT), MAX_SPREAD_PCT);
   const side = perspective === 'sell' ? 'sell' : 'buy';
-  const dteList = normalizeDtes(dtes);
+  const rawDtes = expirations ? expirations.map((e) => e.dte) : dtes;
+  const dteList = normalizeDtes(rawDtes);
   if (!dteList.length) {
     throw new Error(`at least one DTE between ${MIN_DTE} and ${MAX_DTE} is required`);
   }
@@ -234,8 +244,19 @@ export function buildPremiumMatrix(opts) {
   const range = Number(rangePct) || DEFAULT_RANGE_PCT;
   const target = Math.round(Number(targetRows)) || DEFAULT_TARGET_ROWS;
 
+  // Carry any per-expiration metadata (date / kind / cycle) onto the columns so
+  // the UI can label standard vs daily series. Keyed by dte for O(1) lookup.
+  const metaByDte = new Map();
+  if (expirations) {
+    for (const e of expirations) {
+      const d = Math.round(Number(e.dte));
+      if (Number.isFinite(d)) metaByDte.set(d, e);
+    }
+  }
+
   const signature = [
-    S, ivPctN, rPctN, spreadN, side, range, target, putViaParity ? 1 : 0, dteList.join(','),
+    S, ivPctN, rPctN, spreadN, side, range, target, putViaParity ? 1 : 0,
+    expirations ? 'E' : '', dteList.join(','),
   ].join('|');
   const hit = _memo.get(signature);
   if (hit) return hit;
@@ -248,8 +269,12 @@ export function buildPremiumMatrix(opts) {
 
   const columns = dteList.map((dte) => {
     const meta = _columnMeta(dte, r);
+    const ex = metaByDte.get(dte) || {};
     return {
       dte,
+      date: ex.date ?? null,
+      kind: ex.kind ?? null,
+      cycle: ex.cycle ?? null,
       sigma_move: _r(S * iv * meta.sqrtT, 6),
       sigma_pct: _r(iv * meta.sqrtT, 8),
     };
@@ -326,7 +351,6 @@ if (typeof window !== 'undefined') {
     sigmaMultiple,
     fillPrice,
     premiumRate,
-    DEFAULT_DTES,
     DEFAULT_RANGE_PCT,
     DEFAULT_TARGET_ROWS,
     REF_DTE_DEFAULT,

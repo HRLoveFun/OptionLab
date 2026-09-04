@@ -335,6 +335,29 @@ FAKE_REGIME_HISTORY: dict[str, Any] = {
 }
 
 
+# Premium Matrix columns are now driven by /api/expiry_calendar (standard +
+# daily listings). The e2e suite only exercises the render pipeline, not the
+# calendar maths (covered by tests/test_expiry_calendar*.py), so we return a
+# stable 18-run DTE ladder carrying the same metadata shape the real endpoint
+# emits.
+_TODAY = dt.date.today()
+_PREMIUM_MATRIX_DTES = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86]
+FAKE_EXPIRY_CALENDAR: dict[str, Any] = {
+    "status": "ok",
+    "reference_date": _TODAY.isoformat(),
+    "expirations": [
+        {
+            "date": (_TODAY + dt.timedelta(days=d)).isoformat(),
+            "dte": d,
+            "label": f"{d}D",
+            "kind": "standard",
+            "cycle": "monthly",
+        }
+        for d in _PREMIUM_MATRIX_DTES
+    ],
+}
+
+
 @pytest.fixture
 def mock_apis(page):
     """Intercept all `/api/*` calls and return canned JSON.
@@ -379,6 +402,8 @@ def mock_apis(page):
             )
         elif "/api/validate_ticker" in url:
             route.fulfill(status=200, content_type="application/json", json={"valid": True, "message": "valid_ticker"})
+        elif "/api/expiry_calendar" in url:
+            route.fulfill(status=200, content_type="application/json", json=FAKE_EXPIRY_CALENDAR)
         else:
             route.fallback()
 

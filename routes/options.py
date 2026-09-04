@@ -11,6 +11,7 @@ Routes:
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 
 from flask import Blueprint, jsonify, request
@@ -25,7 +26,8 @@ from services.options.preload import (
 from services.options.preload import (
     set_cached as set_preload_cached,
 )
-from services.options.simulation import run_simulation
+from services.options.simulation import generate_expiry_calendar_service, run_simulation
+from utils.api_errors import ApiError
 from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
@@ -226,3 +228,23 @@ def simulate_expiry_route():
     """
     data = request.get_json(silent=True) or {}
     return jsonify(run_simulation(data))
+
+
+@bp.route("/api/expiry_calendar", methods=["GET"])
+def expiry_calendar_route():
+    """List standard listed + daily expirations for the Premium Matrix columns.
+
+    Query params: ref (default today, 'YYYY-MM-DD'), standard (default 12),
+                   daily (default 10).
+    """
+    ref = request.args.get("ref") or dt.date.today().isoformat()
+    n_standard = request.args.get("standard", 12)
+    n_daily = request.args.get("daily", 10)
+    try:
+        result = generate_expiry_calendar_service(ref, n_standard, n_daily)
+    except ApiError as e:
+        return (
+            jsonify({"status": "error", "code": e.code, "message": e.message}),
+            e.status or 400,
+        )
+    return jsonify(result)

@@ -2310,7 +2310,27 @@ textarea:focus-visible,
    Cell anatomy: <td.pm-cell> is a flex row holding one .pm-half per side
    (call then put); each half stacks the price above the premium rate. The
    four toolbar switches only flip data-show-* attributes on the table, so
-   hiding a value costs one attribute write — no recompute, no re-render. */
+   hiding a value costs one attribute write — no recompute, no re-render.
+   The fill-side switch is the exception: it sits with the other matrix
+   switches but reprices the grid, because it changes the price basis, not
+   the layout — hence the divider that sets it apart. */
+.pm-fill-side {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-left: .25rem;
+    padding-left: .6rem;
+    border-left: 1px solid var(--slate-200);
+}
+
+.pm-fill-side__label {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: var(--slate-500);
+}
+
 .pm-matrix-toolbar {
     display: flex;
     align-items: flex-end;
@@ -2507,6 +2527,15 @@ textarea:focus-visible,
 }
 
 .pm-head-sub {
+    display: block;
+    padding: 0 .4rem .14rem;
+    font-size: .64rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--slate-500);
+}
+
+.pm-head-date {
     display: block;
     padding: 0 .4rem .14rem;
     font-size: .64rem;

@@ -10,6 +10,8 @@
  *   - the four visibility toggles only write data-show-* attributes on the
  *     table; CSS hides the matching spans, so toggling never recomputes or
  *     re-renders
+ *   - the fill-side switch (buy at ask / sell at bid) is mutually exclusive
+ *     and DOES recompute: it changes the price basis of every cell
  *   - a DTE header cell is built from the SAME two halves as a data cell
  *     (.pm-head-pair mirrors .pm-cell), and the header <th> / data <td> are
  *     both padding-free — that is what keeps the call / put sub-columns
@@ -30,6 +32,7 @@
     const NARROW_MQ = '(max-width: 720px)';
 
     let data = null;          // last engine payload
+    let calendar = null;      // last expiry calendar (the matrix columns)
     let refCol = 0;           // column index whose sigma the row headers show
     let hoverCol = null;      // column index under the cursor / keyboard focus
     let narrow = false;       // sigma rail hidden by the narrow-screen media query
@@ -42,6 +45,14 @@
     const el = (id) => document.getElementById(id);
 
     const TOGGLES = ['price', 'premium', 'call', 'put'];
+    // Fill side is a two-way switch (buy at ask / sell at bid), not a select:
+    // it reprices the whole grid, so it lives in the panel toolbar.
+    const SIDES = ['buy', 'sell'];
+    // Mirrors the min / max on #pm-spread. There is no percentage floor: the
+    // engine floors the spread's DOLLAR effect at one cent (MIN_SPREAD_ABS),
+    // so a zero spread still leaves the two fill sides one tick apart.
+    const SPREAD_MIN_PCT = 0;
+    const SPREAD_MAX_PCT = 100;
 
     function isNarrow() {
         return !!(window.matchMedia && window.matchMedia(NARROW_MQ).matches);
@@ -67,14 +78,41 @@
     }
 
     /* -- inputs --------------------------------------------------------- */
+    // The input is clamped on read, so a blank or oversized spread can never
+    // reach the engine. Zero is legal: the engine floors the spread's dollar
+    // effect at one cent, so both fill sides still differ by a tick.
+    function clampSpread(raw) {
+        const v = parseFloat(raw);
+        if (!isFinite(v)) return SPREAD_MIN_PCT;
+        return Math.min(Math.max(v, SPREAD_MIN_PCT), SPREAD_MAX_PCT);
+    }
+
+    function readSide() {
+        const pressed = document.querySelector('[data-pm-side][aria-pressed="true"]');
+        return pressed && pressed.getAttribute('data-pm-side') === 'sell' ? 'sell' : 'buy';
+    }
+
     function readInputs() {
         return {
             spot: parseFloat((el('pm-price') || {}).value),
             ivPct: parseFloat((el('pm-iv') || {}).value),
             rPct: parseFloat((el('pm-rate') || {}).value),
-            spreadPct: parseFloat((el('pm-spread') || {}).value) || 0,
-            perspective: (el('pm-perspective') || {}).value === 'sell' ? 'sell' : 'buy',
+            spreadPct: clampSpread((el('pm-spread') || {}).value),
+            perspective: readSide(),
         };
+    }
+
+    // Typing "0" (or clearing the field) is normalised on blur, not per
+    // keystroke — rewriting the value mid-typing would fight the user.
+    function normaliseSpreadInput() {
+        const input = el('pm-spread');
+        if (!input) return;
+        input.addEventListener('change', function () {
+            if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+            const text = String(clampSpread(input.value));
+            if (input.value !== text) input.value = text;
+            runWithCalendar();
+        });
     }
 
     function chineseMessage(err) {
@@ -88,7 +126,7 @@
     }
 
     /* -- run ------------------------------------------------------------ */
-    function compute() {
+    function compute(expirations) {
         const engine = window.PremiumMatrix;
         if (!engine || typeof engine.buildPremiumMatrix !== 'function') {
             throw new Error('engine unavailable');
@@ -99,48 +137,98 @@
             return null;
         }
         const started = (window.performance && performance.now) ? performance.now() : Date.now();
-        const res = engine.buildPremiumMatrix({
+        const payload = {
             spot: p.spot,
             ivPct: p.ivPct,
             rPct: p.rPct,
             spreadPct: p.spreadPct,
             perspective: p.perspective,
-        });
+        };
+        if (expirations) payload.expirations = expirations;
+        const res = engine.buildPremiumMatrix(payload);
         const ms = ((window.performance && performance.now) ? performance.now() : Date.now()) - started;
         console.info(`[premium_matrix] ${res.rows.length}×${res.columns.length} grid built in ${ms.toFixed(2)}ms`);
         return res;
     }
 
-    function run() {
-        window.appState.panels.set(PANEL, 'loading', { message: '正在计算溢价率矩阵…' });
-        let res = null;
-        try {
-            res = compute();
-        } catch (err) {
-            console.error('[premium_matrix] build failed:', err);
-            window.appState.panels.set(PANEL, 'error', { message: chineseMessage(err) });
-            return;
+    // Fetch the standard + daily expiry calendar from the API and use it as the
+    // matrix columns. Fails loudly so the panel shows an error banner.
+    async function loadCalendar() {
+        if (!window.api || typeof window.api.get !== 'function') {
+            throw new Error('api unavailable');
         }
+        const params = new URLSearchParams({ standard: '12', daily: '10' });
+        const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'pm-calendar' });
+        if (!resp || resp.status !== 'ok' || !Array.isArray(resp.expirations)) {
+            throw new Error('invalid calendar response');
+        }
+        return resp.expirations;
+    }
+
+    function finishRun(res) {
         if (!res) return;
         if (!res.rows || res.rows.length < 2) {
             window.appState.panels.set(PANEL, 'empty', { message: '当前输入下没有可用的行权价。' });
             return;
         }
-
         const first = !data;
         data = res;
         if (first) refCol = res.ref_column_index;
         refCol = Math.min(refCol, res.columns.length - 1);
-
         renderAll();
         window.appState.panels.set(PANEL, 'loaded', { data: res });
+    }
+
+    // A missing price is not an error — the user is still typing. Bail out
+    // BEFORE the calendar fetch, so the panel drops straight to idle.
+    function ensureSpot() {
+        const p = readInputs();
+        if (!isFinite(p.spot) || p.spot <= 0) {
+            window.appState.panels.set(PANEL, 'idle', { message: '请输入标的价格。' });
+            return false;
+        }
+        return true;
+    }
+
+    function run() {
+        if (!ensureSpot()) return;
+        window.appState.panels.set(PANEL, 'loading', { message: '正在计算溢价率矩阵…' });
+        loadCalendarThenRun();
+    }
+
+    // Only the four inputs and the fill side change what a cell WORTH is; the
+    // expiry calendar is the same set of columns every time. Recomputing from
+    // the cached calendar keeps a side flip or a spread edit synchronous — no
+    // request, no abort race, no loading flash.
+    function runWithCalendar() {
+        if (!ensureSpot()) return;
+        if (!calendar) { run(); return; }
+        try {
+            finishRun(compute(calendar));
+        } catch (err) {
+            console.error('[premium_matrix] build failed:', err);
+            window.appState.panels.set(PANEL, 'error', { message: chineseMessage(err) });
+        }
+    }
+
+    async function loadCalendarThenRun() {
+        try {
+            const expirations = await loadCalendar();
+            calendar = expirations;
+            finishRun(compute(expirations));
+        } catch (err) {
+            console.error('[premium_matrix] calendar load failed:', err);
+            window.appState.panels.set(PANEL, 'error', { message: chineseMessage(err) });
+        }
     }
 
     function scheduleRun() {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function () {
             debounceTimer = null;
-            run();
+            // Typing changes what a cell is WORTH, never which columns exist,
+            // so recompute locally instead of refetching the calendar.
+            runWithCalendar();
         }, DEBOUNCE_MS);
     }
 
@@ -187,10 +275,14 @@
             + '<th scope="col" class="pm-head-sigma" id="pm-head-sigma">σ</th>';
 
         data.columns.forEach(function (col, i) {
+            const datePart = col.date ? col.date.slice(5) : '';
             out += '<th scope="col" data-col="' + i + '" class="pm-head-dte"'
-                + ' title="' + col.dte + ' 天后到期 · 1σ 波动 ±' + fmtPct(col.sigma_pct, 2) + '">'
+                + ' title="' + col.dte + ' 天后到期 · 1σ 波动 ' + fmtPct(col.sigma_pct, 2)
+                + (col.date ? ' · ' + col.date + (col.cycle ? ' (' + col.cycle + ')' : '') : '')
+                + '">'
                 + '<span class="pm-head-main">' + col.dte + 'D</span>'
                 + '<span class="pm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
+                + '<span class="pm-head-date">' + datePart + '</span>'
                 + '<span class="pm-head-pair">'
                 + '<span class="pm-head-half pm-head-half--call">Call</span>'
                 + '<span class="pm-head-half pm-head-half--put">Put</span>'
@@ -303,8 +395,9 @@
         const next = Math.min(Math.max(Number(idx) || 0, 0), data.columns.length - 1);
         if (next === refCol) return;
         refCol = next;
+        // The hero band stays pinned to the 30D reference column, so changing
+        // the row-header sigma reference must NOT re-render it.
         renderSigmaColumn();
-        renderHero();
         if (syncSelect) {
             const sel = el('pm-ref-dte');
             if (sel) sel.value = String(next);
@@ -338,22 +431,34 @@
         }).join('');
     }
 
+    // The hero band (ATM premium rate, 1σ move, ATM call, ATM put) is computed
+    // from the matrix column CLOSEST TO 30D — `ref_column_index`, which the
+    // engine sets to the column with the smallest |dte − 30|. Each label shows
+    // the actual days used; it must never move when the user clicks a column to
+    // change the row-header sigma reference.
     function renderHero() {
         if (!data) return;
         const row = data.rows[data.atm_index];
-        const cell = row.cells[refCol];
-        const col = data.columns[refCol];
+        const refIdx = data.ref_column_index;
+        const cell = row.cells[refIdx];
+        const col = data.columns[refIdx];
+        const dteTag = col.dte + 'D';
+
+        setText('pm-hero-label', 'ATM premium rate · ' + dteTag);
+        setText('pm-kpi-sigma-label', '1σ move · ' + dteTag);
+        setText('pm-kpi-call-label', 'ATM call · ' + dteTag);
+        setText('pm-kpi-put-label', 'ATM put · ' + dteTag);
 
         const heroValue = el('pm-hero-value');
         if (heroValue) heroValue.textContent = fmtPct(cell.call.premium_rate);
         const heroSub = el('pm-hero-sub');
         if (heroSub) {
             heroSub.textContent = 'ATM ' + row.strike.toFixed(data.decimals)
-                + ' · ' + col.dte + 'D · put ' + fmtPct(cell.put.premium_rate);
+                + ' · put ' + fmtPct(cell.put.premium_rate);
         }
 
         setText('pm-kpi-sigma', fmt(col.sigma_move));
-        setText('pm-kpi-sigma-sub', fmtPct(col.sigma_pct, 2) + ' of ' + fmt(data.spot) + ' · ' + col.dte + 'D');
+        setText('pm-kpi-sigma-sub', fmtPct(col.sigma_pct, 2) + ' of ' + fmt(data.spot));
         setText('pm-kpi-call', fmt(cell.call.fill));
         setText('pm-kpi-call-sub', 'mid ' + fmt(cell.call.mid) + ' · ' + fmtPct(cell.call.premium_rate));
         setText('pm-kpi-put', fmt(cell.put.fill));
@@ -408,6 +513,28 @@
         });
     }
 
+    /* -- fill side ------------------------------------------------------- */
+    // Buy / sell are mutually exclusive — exactly one is pressed, and flipping
+    // it reprices the grid (the engine memoises per side, so flipping back is
+    // free). Unlike the four visibility toggles this one is NOT CSS-only.
+    function wireSide() {
+        SIDES.forEach(function (name) {
+            const btn = document.querySelector('[data-pm-side="' + name + '"]');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                if (btn.getAttribute('aria-pressed') === 'true') return;
+                SIDES.forEach(function (other) {
+                    const node = document.querySelector('[data-pm-side="' + other + '"]');
+                    if (!node) return;
+                    const on = other === name;
+                    node.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    node.classList.toggle('active', on);
+                });
+                runWithCalendar();
+            });
+        });
+    }
+
     /* -- events ---------------------------------------------------------- */
     function wire() {
         if (wired) return;
@@ -418,8 +545,8 @@
             const node = el(id);
             if (node) node.addEventListener('input', scheduleRun);
         });
-        const perspective = el('pm-perspective');
-        if (perspective) perspective.addEventListener('change', run);
+        normaliseSpreadInput();
+        wireSide();
 
         const runBtn = document.querySelector('[data-action="pm-run"]');
         if (runBtn) runBtn.addEventListener('click', run);
@@ -480,6 +607,6 @@
     };
 
     window.premiumMatrixDebug = function premiumMatrixDebug() {
-        return { data, refCol, hoverCol };
+        return { data, refCol, hoverCol, side: readSide(), spreadPct: clampSpread((el('pm-spread') || {}).value) };
     };
 })();

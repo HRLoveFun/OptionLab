@@ -17,6 +17,13 @@ import '../../static/sim/premium_matrix.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE = path.resolve(__dirname, '../../templates/partials/tab_premium_matrix.html');
 
+// Let the async calendar fetch (now the only column source) resolve in tests.
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// Column DTEs the calendar mock returns; kept in sync with conftest's
+// FAKE_EXPIRY_CALENDAR so header assertions stay deterministic.
+const LADDER_DTES = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86];
+
 function mountTemplate() {
     document.body.innerHTML = fs.readFileSync(TEMPLATE, 'utf8');
 }
@@ -36,6 +43,21 @@ describe('premium_matrix.js (DOM layer)', () => {
         mountTemplate();
         loadStateBundle();
         window.requestAnimationFrame = (cb) => { cb(); return 1; };
+        // Columns are sourced from /api/expiry_calendar; provide a deterministic
+        // canned response so the render pipeline runs without network.
+        window.api = {
+            get: vi.fn().mockResolvedValue({
+                status: 'ok',
+                reference_date: '2026-09-04',
+                expirations: [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86].map((d) => ({
+                    date: '2026-09-04',
+                    dte: d,
+                    label: `${d}D`,
+                    kind: 'standard',
+                    cycle: 'monthly',
+                })),
+            }),
+        };
         loadScript('static/premium_matrix.js');
     });
 
@@ -47,8 +69,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(typeof window.loadPremiumMatrix).toBe('function');
     });
 
-    it('renders the default 41 × 18 grid straight from the real partial', () => {
-        window.loadPremiumMatrix();
+    it('renders the default 41 × 18 grid straight from the real partial', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
 
         expect(phase()).toBe('loaded');
         const table = document.getElementById('pm-matrix');
@@ -73,8 +96,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(first.querySelector('.pm-half--call .pm-val--rate').textContent).toMatch(/%$/);
     });
 
-    it('fills the hero metric and the KPI strip', () => {
-        window.loadPremiumMatrix();
+    it('fills the hero metric and the KPI strip', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
 
         expect(document.getElementById('pm-hero-value').textContent).toMatch(/%$/);
         expect(document.getElementById('pm-hero-sub').textContent).toContain('ATM 100');
@@ -85,8 +109,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(document.getElementById('pm-kpi-call-sub').textContent).toContain('mid');
     });
 
-    it('drives the four visibility switches through data attributes only', () => {
-        window.loadPremiumMatrix();
+    it('drives the four visibility switches through data attributes only', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         const table = document.getElementById('pm-matrix');
         const hint = document.getElementById('pm-all-hidden');
         const click = (name) => document
@@ -117,9 +142,10 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(hint.hidden).toBe(false);
     });
 
-    it('recalculates on debounced input changes', () => {
+    it('recalculates on debounced input changes', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         vi.useFakeTimers();
-        window.loadPremiumMatrix();
         const before = document.getElementById('pm-kpi-call').textContent;
 
         fireInput('pm-iv', '45');
@@ -135,8 +161,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(document.getElementById('pm-kpi-call').textContent).not.toBe(after);
     });
 
-    it('re-scales the sigma rail when the reference expiry changes', () => {
-        window.loadPremiumMatrix();
+    it('re-scales the sigma rail when the reference expiry changes', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         const rail = document.querySelector('td.pm-sigma');
         const atThirtyOne = rail.textContent;
 
@@ -151,8 +178,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(Math.abs(parseFloat(rail.textContent))).toBeGreaterThan(Math.abs(parseFloat(atThirtyOne)));
     });
 
-    it('labels every expiration column with a CALL / PUT pair that mirrors the cell', () => {
-        window.loadPremiumMatrix();
+    it('labels every expiration column with a CALL / PUT pair that mirrors the cell', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         const table = document.getElementById('pm-matrix');
 
         // <col> map: two sticky rails, then one column per expiration.
@@ -162,10 +190,15 @@ describe('premium_matrix.js (DOM layer)', () => {
         const heads = table.querySelectorAll('th.pm-head-dte');
         expect(heads).toHaveLength(18);
         heads.forEach((head, i) => {
-            const dte = window.PremiumMatrix.DEFAULT_DTES[i];
-            expect(head.querySelector('.pm-head-main').textContent).toBe(`${dte}D`);
-            // The period volatility sits under the tenor, over the whole column.
-            expect(head.querySelector('.pm-head-sub').textContent).toMatch(/^±\d/);
+            const dte = LADDER_DTES[i];
+            const main = head.querySelector('.pm-head-main').textContent;
+            const sub = head.querySelector('.pm-head-sub').textContent;
+            const date = head.querySelector('.pm-head-date').textContent;
+            // Three-line header: DTE / ±1σ move / MM-DD.
+            expect(main).toBe(`${dte}D`);
+            expect(sub.startsWith('±')).toBe(true);
+            expect(sub.endsWith('%')).toBe(true);
+            expect(date).toMatch(/^\d{2}-\d{2}$/);
             // Header and data cell are split the same way — two halves each.
             expect(head.querySelector('.pm-head-pair').children).toHaveLength(2);
             expect(head.querySelector('.pm-head-half--call').textContent).toBe('Call');
@@ -177,8 +210,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(firstRow.querySelector('td.pm-cell').querySelectorAll('.pm-half')).toHaveLength(2);
     });
 
-    it('highlights a column on hover without rewriting a single value', () => {
-        window.loadPremiumMatrix();
+    it('highlights a column on hover without rewriting a single value', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         const table = document.getElementById('pm-matrix');
         const host = document.getElementById('pm-matrix-body');
         const rail = table.querySelector('td.pm-sigma');
@@ -205,8 +239,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(table.querySelectorAll('.is-hover')).toHaveLength(0);
     });
 
-    it('clicking a column promotes it to the sigma reference', () => {
-        window.loadPremiumMatrix();
+    it('clicking a column promotes it to the sigma reference', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         const table = document.getElementById('pm-matrix');
         const railBefore = table.querySelector('td.pm-sigma').textContent;
 
@@ -220,8 +255,9 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(window.premiumMatrixDebug().refCol).toBe(0);
     });
 
-    it('reports invalid inputs in Chinese and falls back to idle without a price', () => {
-        window.loadPremiumMatrix();
+    it('reports invalid inputs in Chinese and falls back to idle without a price', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
         expect(phase()).toBe('loaded');
 
         vi.useFakeTimers();
@@ -237,6 +273,7 @@ describe('premium_matrix.js (DOM layer)', () => {
         document
             .querySelector('[data-action="pm-run"]')
             .dispatchEvent(new window.Event('click', { bubbles: true }));
+        vi.advanceTimersByTime(1); // flush the async calendar fetch under fake timers
         expect(phase()).toBe('idle');
     });
 });

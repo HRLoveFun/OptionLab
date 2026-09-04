@@ -8,12 +8,17 @@ Context:
 Contracts:
   - simulate_expiry(...)          -> dict
   - parse_expiries(values, ...)   -> list[dict]
+  - generate_expiry_calendar(...) -> list[dict]
 Dependencies UPWARD:
   - core.options.simulation.expiry
 Dependencies DOWNWARD:
   - services.options.simulation, routes.options, tests
 """
 
-from core.options.simulation.expiry import parse_expiries, simulate_expiry
+from core.options.simulation.expiry import (
+    generate_expiry_calendar,
+    parse_expiries,
+    simulate_expiry,
+)
 
-__all__ = ["parse_expiries", "simulate_expiry"]
+__all__ = ["parse_expiries", "simulate_expiry", "generate_expiry_calendar"]

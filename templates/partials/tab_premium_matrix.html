@@ -42,23 +42,20 @@
             </div>
             <div class="form-group">
                 <label for="pm-spread">Spread %</label>
-                <input type="number" id="pm-spread" value="0" step="0.5" min="0" max="100">
-                <span class="field-hint">Bid-ask width as a percent of mid. 0 = trade at mid.</span>
-            </div>
-            <div class="form-group">
-                <label for="pm-perspective">Fill side</label>
-                <select id="pm-perspective">
-                    <option value="buy">Buy at ask (mid + spread/2)</option>
-                    <option value="sell">Sell at bid (mid - spread/2)</option>
-                </select>
-                <span class="field-hint">Both sides share the same premium-rate formulas.</span>
+                <input type="number" id="pm-spread" value="2" step="0.5" min="0" max="100">
+                <span class="field-hint">Bid-ask width as a percent of mid, 0 - 100. The
+                    fill moves half of it off the mid, floored at $0.01 a side.</span>
             </div>
         </div>
         <p class="panel-desc" style="margin-top:.75rem;">
             Premium rate — call: <code>(strike + premium - price) / price</code>;
             put: <code>(price - strike + premium) / price</code>. Mid is the
             Black-Scholes theoretical value; the fill moves half the spread away
-            from it, so a seller's rate is always lower than a buyer's.
+            from it — at least <code>$0.01</code>, the smallest tick an option
+            trades on, so cheap wing premiums still show a gap — and a seller's
+            rate is therefore always lower than a buyer's. Flip the
+            <strong>Side</strong> switch above the grid to price the other
+            side of the book.
         </p>
     </div>
 
@@ -79,23 +76,23 @@
         <!-- P1 — primary metric: ATM premium rate at the reference maturity. -->
         <div class="sim-hero-row">
             <div class="metric-hero" id="pm-hero">
-                <div class="metric-hero__label">ATM premium rate</div>
+                <div class="metric-hero__label" id="pm-hero-label">ATM premium rate</div>
                 <div class="metric-hero__value" id="pm-hero-value">—</div>
                 <div class="metric-hero__sub" id="pm-hero-sub">—</div>
             </div>
             <section class="kpi-strip sim-kpi-strip" aria-label="Premium matrix key metrics">
                 <div class="kpi-card">
-                    <span class="kpi-card__label">1σ move</span>
+                    <span class="kpi-card__label" id="pm-kpi-sigma-label">1σ move</span>
                     <span class="kpi-card__value" id="pm-kpi-sigma">—</span>
                     <span class="kpi-card__sub" id="pm-kpi-sigma-sub">—</span>
                 </div>
                 <div class="kpi-card">
-                    <span class="kpi-card__label">ATM call</span>
+                    <span class="kpi-card__label" id="pm-kpi-call-label">ATM call</span>
                     <span class="kpi-card__value" id="pm-kpi-call">—</span>
                     <span class="kpi-card__sub" id="pm-kpi-call-sub">—</span>
                 </div>
                 <div class="kpi-card">
-                    <span class="kpi-card__label">ATM put</span>
+                    <span class="kpi-card__label" id="pm-kpi-put-label">ATM put</span>
                     <span class="kpi-card__value" id="pm-kpi-put">—</span>
                     <span class="kpi-card__sub" id="pm-kpi-put-sub">—</span>
                 </div>
@@ -120,7 +117,7 @@
                         make it the reference.
                     </p>
                 </div>
-                <div class="pm-matrix-toolbar__right" role="group" aria-label="Cell value visibility">
+                <div class="pm-matrix-toolbar__right" role="group" aria-label="Matrix switches">
                     <button type="button" class="btn-toggle active" data-pm-toggle="price"
                             aria-pressed="true">Price</button>
                     <button type="button" class="btn-toggle active" data-pm-toggle="premium"
@@ -129,6 +126,19 @@
                             aria-pressed="true">Call</button>
                     <button type="button" class="btn-toggle active" data-pm-toggle="put"
                             aria-pressed="true">Put</button>
+                    <div class="pm-fill-side" role="group" aria-label="Side">
+                        <span class="pm-fill-side__label" id="pm-fill-side-label">Side</span>
+                        <div class="btn-group" aria-labelledby="pm-fill-side-label">
+                            <button type="button" class="btn-toggle active" data-pm-side="buy" aria-pressed="true"
+                                    title="Buy at ask — fill = mid + max(mid × spread/200, $0.01)">
+                                Buy at ask
+                            </button>
+                            <button type="button" class="btn-toggle" data-pm-side="sell" aria-pressed="false"
+                                    title="Sell at bid — fill = mid − max(mid × spread/200, $0.01)">
+                                Sell at bid
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="pm-matrix-scroll" id="pm-matrix-body"></div>

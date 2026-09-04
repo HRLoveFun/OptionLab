@@ -15,15 +15,19 @@ import {
   premiumRate,
   sigmaMove,
   sigmaMultiple,
-  DEFAULT_DTES,
+  MIN_SPREAD_ABS,
 } from '../../../static/sim/premium_matrix.js';
 
 const SPOT = 100;
 const IV = 25;
 const RF = 3;
+// The ladder the dashboard used to ship as a built-in default. We keep it here
+// as an explicit test fixture so structure assertions stay deterministic now
+// that the engine no longer falls back to a default column set.
+const LADDER_DTES = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86];
 
 function matrix(overrides) {
-  return buildPremiumMatrix({ spot: SPOT, ivPct: IV, rPct: RF, spreadPct: 0, ...overrides });
+  return buildPremiumMatrix({ spot: SPOT, ivPct: IV, rPct: RF, spreadPct: 0, dtes: LADDER_DTES, ...overrides });
 }
 
 function sortedUniqueGap(values) {
@@ -97,8 +101,21 @@ describe('fillPrice / premiumRate', () => {
   it('applies half the spread around the mid price', () => {
     expect(fillPrice(2, 4, 'buy')).toBeCloseTo(2 * 1.02, 12);
     expect(fillPrice(2, 4, 'sell')).toBeCloseTo(2 * 0.98, 12);
-    expect(fillPrice(2, 0, 'sell')).toBe(2);
     expect(fillPrice(2, 1000, 'sell')).toBe(1); // clamped to 100%
+  });
+
+  it('floors the spread at one cent, the smallest tick', () => {
+    // 4% of a 5-cent premium is 0.1 of a cent — the floor is what keeps the
+    // two sides of the book apart on cheap wing options.
+    expect(fillPrice(0.05, 4, 'buy')).toBeCloseTo(0.06, 12);
+    expect(fillPrice(0.05, 4, 'sell')).toBeCloseTo(0.04, 12);
+    // A zero spread is still one tick wide, never a fill at the exact mid.
+    expect(fillPrice(2, 0, 'buy')).toBeCloseTo(2.01, 12);
+    expect(fillPrice(2, 0, 'sell')).toBeCloseTo(1.99, 12);
+    // Above the floor the percentage wins.
+    expect(fillPrice(2, 4, 'buy')).toBeCloseTo(2 + 2 * 0.02, 12);
+    // And a fill never goes negative.
+    expect(fillPrice(0.005, 0, 'sell')).toBe(0);
   });
 
   it('uses the breakeven-move definitions verbatim', () => {
@@ -157,17 +174,23 @@ describe('buildPremiumMatrix — pricing', () => {
     expect(atm.strike).toBe(100);
     const col = m.columns.findIndex((c) => Math.abs(c.dte - 30) <= 1);
     const cell = atm.cells[col];
-    // BS(100, 100, 30/365, 3%, 25%) ≈ 2.98 → 2.98% of spot
+    // BS(100, 100, 30/365, 3%, 25%) ≈ 2.98 → 2.98% of spot. The rate is built
+    // on the FILL, which at a zero spread sits one tick (MIN_SPREAD_ABS) above
+    // the mid for a buyer.
     expect(cell.call.mid).toBeGreaterThan(2.5);
     expect(cell.call.mid).toBeLessThan(3.5);
-    expect(cell.call.premium_rate).toBeCloseTo(cell.call.mid / SPOT, 6);
+    expect(cell.call.premium_rate).toBeCloseTo((cell.call.mid + MIN_SPREAD_ABS) / SPOT, 6);
   });
 });
 
 describe('buildPremiumMatrix — structure', () => {
+  it('requires expiration columns when none are supplied', () => {
+    expect(() => buildPremiumMatrix({ spot: SPOT, ivPct: IV, rPct: RF })).toThrow(/DTE/);
+  });
+
   it('lays out 18 DTE columns and one cell per column', () => {
     const m = matrix();
-    expect(m.columns.map((c) => c.dte)).toEqual(DEFAULT_DTES);
+    expect(m.columns.map((c) => c.dte)).toEqual(LADDER_DTES);
     expect(m.columns).toHaveLength(18);
     expect(m.rows.every((r) => r.cells.length === m.columns.length)).toBe(true);
   });
@@ -246,6 +269,24 @@ describe('buildPremiumMatrix — shape of the rates', () => {
       .toBeLessThan(buy.rows[atm].cells[j].call.premium_rate);
     expect(sell.rows[atm].cells[j].put.fill)
       .toBeLessThan(buy.rows[atm].cells[j].put.fill);
+  });
+
+  it('keeps the two sides at least a tick apart on cheap wing premiums', () => {
+    const buy = matrix({ spreadPct: 4, perspective: 'buy' });
+    const sell = matrix({ spreadPct: 4, perspective: 'sell' });
+    let floored = 0;
+    for (let i = 0; i < buy.rows.length; i++) {
+      for (let j = 0; j < buy.columns.length; j++) {
+        const gap = buy.rows[i].cells[j].call.fill - sell.rows[i].cells[j].call.fill;
+        // Half the spread either side, floored at a penny — so the two quotes
+        // can never collapse onto the same rounded number.
+        expect(gap).toBeGreaterThanOrEqual(MIN_SPREAD_ABS - 1e-9);
+        expect(sell.rows[i].cells[j].call.fill).toBeLessThanOrEqual(sell.rows[i].cells[j].call.mid);
+        // 4% of the mid is below a penny out in the wings → the floor carries it.
+        if (buy.rows[i].cells[j].call.mid * 0.02 < MIN_SPREAD_ABS) floored += 1;
+      }
+    }
+    expect(floored).toBeGreaterThan(0);
   });
 
   it('higher IV raises every premium rate', () => {

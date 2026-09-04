@@ -18,12 +18,17 @@ Dependencies DOWNWARD:
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import math
 import re
 from typing import Any
 
-from core.options.simulation import parse_expiries, simulate_expiry
+from core.options.simulation import (
+    generate_expiry_calendar,
+    parse_expiries,
+    simulate_expiry,
+)
 from utils.api_errors import ApiError
 
 logger = logging.getLogger(__name__)
@@ -250,4 +255,50 @@ def run_simulation(payload: dict | None) -> dict:
         "ticker": ticker,
         "strike_source": "manual" if _numbers(payload.get("strikes")) else "auto",
         **result,
+    }
+
+
+def generate_expiry_calendar_service(
+    ref,
+    n_standard: int = 12,
+    n_daily: int = 10,
+    holidays=None,
+) -> dict:
+    """Validate inputs and build the expiry calendar for the Premium Matrix.
+
+    Delegates the pure maths to
+    :func:`core.options.simulation.generate_expiry_calendar`.
+    """
+    if isinstance(ref, str):
+        try:
+            ref = dt.datetime.strptime(ref, "%Y-%m-%d").date()
+        except ValueError:
+            raise ApiError("ref must be 'YYYY-MM-DD'", code="invalid_ref")
+    elif not isinstance(ref, dt.date):
+        raise ApiError("ref must be a date or 'YYYY-MM-DD'", code="invalid_ref")
+
+    try:
+        n_standard = int(n_standard)
+        n_daily = int(n_daily)
+    except (TypeError, ValueError):
+        raise ApiError("standard and daily counts must be integers", code="invalid_counts")
+
+    if not (0 <= n_standard <= 60 and 0 <= n_daily <= 60):
+        raise ApiError("standard and daily counts must be between 0 and 60", code="counts_out_of_range")
+
+    if holidays is not None:
+        try:
+            holidays = {dt.date.fromisoformat(h) if isinstance(h, str) else h for h in holidays}
+        except (ValueError, TypeError):
+            raise ApiError("holidays must be ISO date strings or date objects", code="invalid_holidays")
+
+    try:
+        expirations = generate_expiry_calendar(ref, n_standard, n_daily, holidays)
+    except (ValueError, TypeError) as e:
+        raise ApiError(str(e), code="invalid_calendar")
+
+    return {
+        "status": "ok",
+        "reference_date": ref.isoformat(),
+        "expirations": expirations,
     }
