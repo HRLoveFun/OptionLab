@@ -2928,3 +2928,91 @@ textarea:focus-visible,
 .regime-hero__primary {
     background: linear-gradient(135deg, #1a1a1a, #141414);
 }
+
+/* ============================================================
+   Premium Matrix — section separation between major panel areas.
+   Scoped to #tab-premium-matrix so no other tab is affected.
+   Goal: each stacked area (toolbar / inputs / hero+KPIs / matrix /
+   legend) reads as its own block, and the toolbar-vs-grid boundary
+   inside the matrix card is unmistakable — in both light and dark
+   themes (tokens resolve per theme: --slate-300 is the strong
+   hairline, --slate-200 the inner divider).
+   ============================================================ */
+#tab-premium-matrix > .toolbar {
+    padding-bottom: .75rem;
+    border-bottom: 1px solid var(--slate-300);
+    margin-bottom: 1.25rem;
+}
+
+#tab-premium-matrix .content-card {
+    border: 1px solid var(--slate-300);
+    margin-bottom: 1.25rem;
+}
+
+#tab-premium-matrix .content-card > .content-card-title {
+    border-bottom: 1px solid var(--slate-300);
+}
+
+/* Hero + KPI strip sits between two cards: keep its vertical rhythm
+   in step with the cards above and below it. */
+#tab-premium-matrix .sim-hero-row {
+    margin: 1.25rem 0;
+}
+
+#tab-premium-matrix .metric-hero {
+    border: 1px solid var(--blue-muted);
+    box-shadow: var(--shadow);
+}
+
+#tab-premium-matrix .kpi-card {
+    border-color: var(--slate-300);
+}
+
+/* Matrix card internals: padded toolbar, a full-width divider, then
+   an inset scroll box so controls / grid never touch or merge. */
+#tab-premium-matrix .pm-matrix-toolbar {
+    margin: 0;
+    padding: 1rem 1.25rem .9rem;
+    border-bottom: 1px solid var(--slate-300);
+}
+
+#tab-premium-matrix .pm-matrix-scroll {
+    margin: 1rem 1.25rem 1.25rem;
+    border: 1px solid var(--slate-300);
+}
+
+#tab-premium-matrix .pm-empty-hint {
+    margin: 0 1.25rem 1.25rem;
+}
+
+/* Legend card internals: pad the body and rule the two groups apart. */
+#tab-premium-matrix .pm-legend {
+    margin-top: 0;
+}
+
+#tab-premium-matrix .pm-legend-groups {
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+#tab-premium-matrix .pm-legend-group + .pm-legend-group {
+    padding-top: 1rem;
+    border-top: 1px solid var(--slate-200);
+}
+
+@media (max-width: 720px) {
+    #tab-premium-matrix .pm-matrix-toolbar {
+        padding: .85rem .85rem .75rem;
+    }
+
+    #tab-premium-matrix .pm-matrix-scroll {
+        margin: .75rem .85rem .85rem;
+    }
+
+    #tab-premium-matrix .pm-empty-hint {
+        margin: 0 .85rem .85rem;
+    }
+
+    #tab-premium-matrix .pm-legend-groups {
+        padding: .85rem .85rem 1rem;
+    }
+}
