@@ -116,7 +116,8 @@
                     </div>
                     <p class="pm-hint">
                         Row header shows the strike and its sigma multiple for the
-                        selected column; hover any column to preview it.
+                        selected column. Hover a column to highlight it, click it to
+                        make it the reference.
                     </p>
                 </div>
                 <div class="pm-matrix-toolbar__right" role="group" aria-label="Cell value visibility">
@@ -131,6 +132,14 @@
                 </div>
             </div>
             <div class="pm-matrix-scroll" id="pm-matrix-body"></div>
+            <p class="pm-axis-hint">
+                <strong>横轴</strong>每一列是一个到期期限，列头三行分别是：<code>31D</code> 为距到期天数，
+                <code>±7.1%</code> 为该期限内标的的 <strong>1σ 预期波动</strong>（约 68% 概率落在 ±7.1% 区间内，
+                公式为 <code>IV × √(DTE / 365)</code>），再往下 <code>CALL</code> / <code>PUT</code>
+                把该列左右两半标出来 —— 每个格子里，左半是 Call（价格在上、溢价率在下），右半是 Put。
+                <strong>纵轴</strong>每行是一个行权价：第一列是行权价，第二列是该行权价相对参考期限的 σ 倍数。
+                悬停会高亮整列与整行，点击某一列可把它设为 σ 参考列。
+            </p>
             <p class="pm-empty-hint" id="pm-all-hidden" role="status" hidden>
                 请至少打开一个数值开关（Price / Prem. rate）和一个方向开关（Call / Put）。
             </p>

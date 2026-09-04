@@ -90,8 +90,8 @@
     /*    Fallback color used by regimeBadge() when label not in map */
     --regime-badge-fallback: #64748b;
 
-    /* Typography */
-    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* Typography — single font parameter governing the whole project */
+    --font: 'Calibri', 'Candara', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
 
     /* Geometry — radii, layout sizes, elevation */
     --radius-sm: 6px;
@@ -108,6 +108,14 @@
     /* resting */
     --shadow-md: 0 4px 16px rgb(0 0 0 / .10);
     /* raised */
+
+    /* Premium matrix crosshair — translucent on purpose: a row tint and a
+       column tint have to stack, not hide one another (see the pm-matrix
+       block for the paint order that makes that work). */
+    --pm-row-hover: rgba(59, 130, 246, .07);
+    --pm-col-hover: rgba(59, 130, 246, .12);
+    --pm-rail-hover: rgba(59, 130, 246, .16);
+    --pm-atm-bg: rgba(59, 130, 246, .08);
 }
 
 html {
@@ -2355,6 +2363,27 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
+.pm-axis-hint {
+    margin: .75rem 0 0;
+    padding-top: .6rem;
+    border-top: 1px solid var(--slate-100);
+    font-size: .75rem;
+    line-height: 1.5;
+    color: var(--slate-500);
+}
+
+.pm-axis-hint code {
+    font-size: .72rem;
+    color: var(--slate-700);
+    background: var(--slate-50);
+    padding: .05rem .3rem;
+    border-radius: var(--radius-sm);
+}
+
+.pm-axis-hint strong {
+    color: var(--slate-700);
+}
+
 .pm-empty-hint {
     margin-top: .75rem;
     padding: .5rem .75rem;
@@ -2367,7 +2396,6 @@ textarea:focus-visible,
 .pm-matrix-scroll {
     max-height: 70vh;
     overflow: auto;
-    padding: .25rem 0 .5rem;
     border: 1px solid var(--slate-200);
     border-radius: var(--radius-sm);
 }
@@ -2378,6 +2406,15 @@ textarea:focus-visible,
     font-size: .74rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    /* One source of truth for the geometry shared by the data halves and the
+       header halves, so a sub-column can never drift from the numbers it
+       labels. */
+    --pm-half-min: 4.6rem;
+    --pm-strike-w: 4.4rem;
+    --pm-sigma-w: 4.6rem;
+    /* Rewritten by static/premium_matrix.js with the measured width of the
+       strike column; the rem value is only the pre-layout fallback. */
+    --pm-sigma-left: 4.4rem;
 }
 
 .pm-caption {
@@ -2408,6 +2445,8 @@ textarea:focus-visible,
     text-align: right;
 }
 
+/* The two sticky left rails must agree on where column one ends: the sigma
+   rail is pinned to the MEASURED strike width, not to a hard-coded guess. */
 .pm-head-strike,
 .pm-head-sigma {
     position: sticky;
@@ -2418,17 +2457,19 @@ textarea:focus-visible,
 
 .pm-head-strike {
     left: 0;
+    width: var(--pm-strike-w);
 }
 
 .pm-head-sigma {
-    left: 4.4rem;
+    left: var(--pm-sigma-left);
+    width: var(--pm-sigma-w);
 }
 
 .pm-matrix tbody th[scope="row"] {
     position: sticky;
     left: 0;
     z-index: 2;
-    min-width: 4.4rem;
+    width: var(--pm-strike-w);
     background: var(--slate-50);
     text-align: right;
     font-weight: 600;
@@ -2437,45 +2478,101 @@ textarea:focus-visible,
 
 .pm-matrix td.pm-sigma {
     position: sticky;
-    left: 4.4rem;
+    left: var(--pm-sigma-left);
     z-index: 2;
-    min-width: 4.4rem;
+    width: var(--pm-sigma-w);
     background: var(--slate-50);
     text-align: right;
     font-weight: 500;
     color: var(--slate-500);
 }
 
-.pm-matrix td.pm-cell {
-    /* The cell background bleeds through the 1px gap as the divider. */
+/* DTE header — mirrors the data cell one-for-one.
+   .pm-head-pair uses the exact same flex rules as .pm-cell and the header
+   <th> is padding-free (like the data <td>), so the CALL / PUT labels line up
+   with the halves they name. Keep these two blocks in sync. */
+.pm-matrix th.pm-head-dte {
     padding: 0;
-    background: var(--slate-100);
+    text-align: center;
+    vertical-align: bottom;
+}
+
+.pm-head-main {
+    display: block;
+    padding: .2rem .4rem 0;
+    font-size: .74rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    color: var(--slate-700);
+}
+
+.pm-head-sub {
+    display: block;
+    padding: 0 .4rem .14rem;
+    font-size: .64rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--slate-500);
+}
+
+.pm-head-pair {
+    display: flex;
+    border-top: 1px solid var(--slate-200);
+}
+
+.pm-head-half {
+    flex: 1 1 0;
+    min-width: var(--pm-half-min);
+    padding: .12rem .45rem .16rem;
+    border-left: 2px solid transparent;
+    text-align: right;
+    font-size: .62rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    color: var(--slate-500);
+}
+
+.pm-head-half--call {
+    border-left-color: var(--blue-muted);
+}
+
+.pm-head-half--put {
+    border-left-color: var(--slate-200);
+}
+
+.pm-matrix td.pm-cell {
+    padding: 0;
     border-bottom: 1px solid var(--slate-100);
 }
 
-.pm-cell {
+/* The flex container is a span inside the <td>, never the <td> itself — a
+   flex <td> stops being a table cell and every column collapses onto the
+   first one. .pm-head-pair is its exact counterpart in the header. */
+.pm-pair {
     display: flex;
     align-items: stretch;
-    gap: 1px;
 }
 
+/* No background here: the cell layer paints above the <col> layer, so an
+   opaque fill would hide the crosshair. The put half's 2px left border is
+   the call | put divider. */
 .pm-half {
     flex: 1 1 0;
-    min-width: 4.6rem;
+    min-width: var(--pm-half-min);
     padding: .26rem .45rem;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: .05rem;
-    background: var(--slate-50);
+    border-left: 2px solid transparent;
 }
 
 .pm-half--call {
-    border-left: 2px solid var(--blue-muted);
+    border-left-color: var(--blue-muted);
 }
 
 .pm-half--put {
-    border-left: 2px solid var(--slate-200);
+    border-left-color: var(--slate-200);
 }
 
 .pm-val {
@@ -2500,11 +2597,32 @@ textarea:focus-visible,
 }
 
 .pm-row-atm .pm-half {
-    background: var(--blue-light);
+    background: var(--pm-atm-bg);
 }
 
-.pm-matrix tbody tr:hover .pm-half {
-    filter: brightness(.97);
+/* ── Crosshair ────────────────────────────────────────────────────────────
+   Table backgrounds paint in this order (back to front): table → column
+   groups → columns → row groups → rows → cells. So the column tint sits
+   under the row tint and the cell tint — every layer above is translucent,
+   which is what lets a hovered row and a hovered column stack visibly
+   instead of one erasing the other. */
+.pm-matrix col.pm-col-dte.is-hover {
+    background: var(--pm-col-hover);
+}
+
+.pm-matrix th.pm-head-dte.is-hover {
+    background: var(--pm-rail-hover);
+}
+
+.pm-matrix tbody tr:hover {
+    background: var(--pm-row-hover);
+}
+
+/* The rails are opaque (they have to mask the columns scrolling under them),
+   so they need their own hover tint. */
+.pm-matrix tbody tr:hover th[scope="row"],
+.pm-matrix tbody tr:hover td.pm-sigma {
+    background: var(--pm-rail-hover);
 }
 
 /* Switchable visibility — pure CSS, driven by data-show-* on the table. */
@@ -2522,7 +2640,11 @@ textarea:focus-visible,
 }
 
 @media (max-width: 720px) {
-    /* Narrow screens keep the strike column and drop the sigma rail. */
+    /* Narrow screens keep the strike column and drop the sigma rail.
+       COUPLED: static/premium_matrix.js watches this exact breakpoint and
+       drops the matching <col>, because <col> maps to columns by position —
+       change one without the other and the crosshair highlights the wrong
+       column. */
     .pm-head-sigma,
     .pm-matrix td.pm-sigma {
         display: none;
@@ -2567,6 +2689,13 @@ textarea:focus-visible,
     --purple: #a855f7;
     --purple-deep: #7c3aed;
     --regime-mid-vol: #a855f7;
+
+    /* Premium matrix crosshair — gold, still translucent so row and column
+       tints stack (see the pm-matrix block for the paint order). */
+    --pm-row-hover: rgba(212, 175, 55, .08);
+    --pm-col-hover: rgba(212, 175, 55, .15);
+    --pm-rail-hover: rgba(212, 175, 55, .20);
+    --pm-atm-bg: rgba(212, 175, 55, .10);
 
     /* Notice fallbacks consumed by var(--bg-info, …) etc. */
     --bg-info: rgba(168, 85, 247, .12);

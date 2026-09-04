@@ -151,6 +151,75 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(Math.abs(parseFloat(rail.textContent))).toBeGreaterThan(Math.abs(parseFloat(atThirtyOne)));
     });
 
+    it('labels every expiration column with a CALL / PUT pair that mirrors the cell', () => {
+        window.loadPremiumMatrix();
+        const table = document.getElementById('pm-matrix');
+
+        // <col> map: two sticky rails, then one column per expiration.
+        expect(table.querySelectorAll('colgroup col.pm-col-rail')).toHaveLength(2);
+        expect(table.querySelectorAll('colgroup col.pm-col-dte')).toHaveLength(18);
+
+        const heads = table.querySelectorAll('th.pm-head-dte');
+        expect(heads).toHaveLength(18);
+        heads.forEach((head, i) => {
+            const dte = window.PremiumMatrix.DEFAULT_DTES[i];
+            expect(head.querySelector('.pm-head-main').textContent).toBe(`${dte}D`);
+            // The period volatility sits under the tenor, over the whole column.
+            expect(head.querySelector('.pm-head-sub').textContent).toMatch(/^±\d/);
+            // Header and data cell are split the same way — two halves each.
+            expect(head.querySelector('.pm-head-pair').children).toHaveLength(2);
+            expect(head.querySelector('.pm-head-half--call').textContent).toBe('Call');
+            expect(head.querySelector('.pm-head-half--put').textContent).toBe('Put');
+        });
+
+        const firstRow = table.querySelector('tbody tr');
+        expect(firstRow.querySelectorAll('td.pm-cell')).toHaveLength(18);
+        expect(firstRow.querySelector('td.pm-cell').querySelectorAll('.pm-half')).toHaveLength(2);
+    });
+
+    it('highlights a column on hover without rewriting a single value', () => {
+        window.loadPremiumMatrix();
+        const table = document.getElementById('pm-matrix');
+        const host = document.getElementById('pm-matrix-body');
+        const rail = table.querySelector('td.pm-sigma');
+        const railBefore = rail.textContent;
+        const headBefore = document.getElementById('pm-head-sigma').textContent;
+
+        table.querySelector('tbody tr td.pm-cell[data-col="5"]')
+            .dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+
+        expect(table.querySelector('col.pm-col-dte[data-col="5"]').classList.contains('is-hover')).toBe(true);
+        expect(table.querySelector('th.pm-head-dte[data-col="5"]').classList.contains('is-hover')).toBe(true);
+        // Hovering is a crosshair, not a preview: numbers stay put.
+        expect(rail.textContent).toBe(railBefore);
+        expect(document.getElementById('pm-head-sigma').textContent).toBe(headBefore);
+
+        // Exactly one column is ever highlighted.
+        table.querySelector('tbody tr td.pm-cell[data-col="6"]')
+            .dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+        expect(table.querySelector('col.pm-col-dte[data-col="5"]').classList.contains('is-hover')).toBe(false);
+        expect(table.querySelector('col.pm-col-dte[data-col="6"]').classList.contains('is-hover')).toBe(true);
+        expect(table.querySelectorAll('.is-hover')).toHaveLength(2); // <col> + header
+
+        host.dispatchEvent(new window.MouseEvent('mouseleave'));
+        expect(table.querySelectorAll('.is-hover')).toHaveLength(0);
+    });
+
+    it('clicking a column promotes it to the sigma reference', () => {
+        window.loadPremiumMatrix();
+        const table = document.getElementById('pm-matrix');
+        const railBefore = table.querySelector('td.pm-sigma').textContent;
+
+        table.querySelector('th.pm-head-dte[data-col="0"]')
+            .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
+        expect(table.querySelector('td.pm-sigma').textContent).not.toBe(railBefore);
+        // The select follows, so the control never contradicts the rail.
+        expect(document.getElementById('pm-ref-dte').value).toBe('0');
+        expect(window.premiumMatrixDebug().refCol).toBe(0);
+    });
+
     it('reports invalid inputs in Chinese and falls back to idle without a price', () => {
         window.loadPremiumMatrix();
         expect(phase()).toBe('loaded');

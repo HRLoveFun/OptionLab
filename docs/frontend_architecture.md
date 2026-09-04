@@ -9,7 +9,7 @@
 | Layer      | Technology                    | Purpose                     |
 | ---------- | ----------------------------- | --------------------------- |
 | Templating | Jinja2 (Flask)                | Server-side HTML rendering  |
-| Styling    | Vanilla CSS + Inter font      | Component styling           |
+| Styling    | Vanilla CSS + Calibri font    | Component styling           |
 | Icons      | Font Awesome 6                | UI icons                    |
 | Charts     | Chart.js 4 + date-fns adapter | Interactive charts          |
 | State      | Vanilla JS (no framework)     | Form persistence, tab state |
@@ -228,7 +228,7 @@ Auto-fill mid price from option dataset
 - **Success**: `#4CAF50` (green)
 - **Warning**: `#FF9800` (orange)
 - **Danger**: `#F44336` (red)
-- **Font**: Inter (300, 400, 500, 600, 700)
+- **Font**: Calibri (system font stack; governed by the `--font` variable in styles.css)
 
 ---
 
@@ -366,7 +366,6 @@ To add a new tab:
 - `chart.js@4` — Charting library
 - `chartjs-adapter-date-fns@3` — Date adapter for Chart.js
 - `font-awesome@6` — Icon library
-- `fonts.googleapis.com` — Inter font family
 
 **No npm/build step required** — all dependencies loaded via CDN.
 

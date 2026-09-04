@@ -10,24 +10,42 @@
  *   - the four visibility toggles only write data-show-* attributes on the
  *     table; CSS hides the matching spans, so toggling never recomputes or
  *     re-renders
- *   - the row-header sigma column is the only thing that changes when the
- *     reference expiry changes (hover, focus or the select) — 41 text updates
+ *   - a DTE header cell is built from the SAME two halves as a data cell
+ *     (.pm-head-pair mirrors .pm-cell), and the header <th> / data <td> are
+ *     both padding-free — that is what keeps the call / put sub-columns
+ *     pixel-aligned with the numbers they label (the x axis)
+ *   - the two sticky left rails share one measured width: after every render
+ *     JS writes the real strike-column width into --pm-sigma-left, so the
+ *     sigma rail can never drift when a long strike stretches column one
+ *   - hovering a column only highlights it (the y axis); it never rewrites
+ *     values. Clicking a column promotes it to the sigma reference.
  */
 (function () {
     'use strict';
 
     const PANEL = 'premium_matrix';
     const DEBOUNCE_MS = 150;
+    // Must stay in sync with the (max-width: 720px) block in styles.css, which
+    // drops the sigma rail on narrow screens.
+    const NARROW_MQ = '(max-width: 720px)';
 
     let data = null;          // last engine payload
     let refCol = 0;           // column index whose sigma the row headers show
+    let hoverCol = null;      // column index under the cursor / keyboard focus
+    let narrow = false;       // sigma rail hidden by the narrow-screen media query
     let wired = false;
     let debounceTimer = null;
     let rafPending = false;
+    let resizeRaf = false;
+    let railObserver = null;   // keeps --pm-sigma-left in step with column one
 
     const el = (id) => document.getElementById(id);
 
     const TOGGLES = ['price', 'premium', 'call', 'put'];
+
+    function isNarrow() {
+        return !!(window.matchMedia && window.matchMedia(NARROW_MQ).matches);
+    }
 
     function fmt(v, digits) {
         if (v === null || v === undefined || !isFinite(v)) return '—';
@@ -127,6 +145,18 @@
     }
 
     /* -- rendering ------------------------------------------------------- */
+    // The flex lives on a <span> INSIDE the <td>, never on the <td> itself:
+    // `display: flex` on a table cell removes it from the table's column
+    // layout, which stacks every data column on top of the first one.
+    function cellMarkup(cell, j) {
+        return '<td class="pm-cell" data-col="' + j + '">'
+            + '<span class="pm-pair">'
+            + halfMarkup(Object.assign({ kind: 'call' }, cell.call))
+            + halfMarkup(Object.assign({ kind: 'put' }, cell.put))
+            + '</span>'
+            + '</td>';
+    }
+
     function halfMarkup(side) {
         return '<span class="pm-half pm-half--' + side.kind + '">'
             + '<span class="pm-val pm-val--price">' + fmt(side.fill) + '</span>'
@@ -134,29 +164,49 @@
             + '</span>';
     }
 
-    function buildTableHtml() {
-        const decimals = data.decimals;
-        const head = ['<thead><tr>'
+    // One <col> per column. CSS paints the hovered column through its <col>,
+    // so highlighting a column costs a single class write instead of 41.
+    // <col> maps to columns BY POSITION, so the narrow-screen rule that hides
+    // the sigma rail has to drop its <col> too — otherwise every highlight
+    // would land one column to the right.
+    function buildColgroupHtml() {
+        let out = '<colgroup><col class="pm-col-rail">';
+        if (!narrow) out += '<col class="pm-col-rail">';
+        data.columns.forEach(function (col, i) {
+            out += '<col class="pm-col-dte" data-col="' + i + '">';
+        });
+        return out + '</colgroup>';
+    }
+
+    // The header mirrors the data cell exactly: a DTE caption centred over the
+    // whole column, then a CALL / PUT pair laid out by the same flex rules as
+    // .pm-cell, so each label sits over the half it describes.
+    function buildHeadHtml() {
+        let out = '<thead><tr>'
             + '<th scope="col" class="pm-head-strike">Strike</th>'
-            + '<th scope="col" class="pm-head-sigma" id="pm-head-sigma">σ</th>'];
+            + '<th scope="col" class="pm-head-sigma" id="pm-head-sigma">σ</th>';
 
         data.columns.forEach(function (col, i) {
-            head.push('<th scope="col" data-col="' + i + '" class="pm-head-dte">'
-                + '<span class="pm-col-main">' + col.dte + 'D</span>'
-                + '<span class="pm-col-sub">1σ ' + fmt(col.sigma_move) + ' · ' + fmtPct(col.sigma_pct, 1) + '</span>'
-                + '</th>');
+            out += '<th scope="col" data-col="' + i + '" class="pm-head-dte"'
+                + ' title="' + col.dte + ' 天后到期 · 1σ 波动 ±' + fmtPct(col.sigma_pct, 2) + '">'
+                + '<span class="pm-head-main">' + col.dte + 'D</span>'
+                + '<span class="pm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
+                + '<span class="pm-head-pair">'
+                + '<span class="pm-head-half pm-head-half--call">Call</span>'
+                + '<span class="pm-head-half pm-head-half--put">Put</span>'
+                + '</span>'
+                + '</th>';
         });
-        head.push('</tr></thead>');
+        return out + '</tr></thead>';
+    }
+
+    function buildTableHtml() {
+        const decimals = data.decimals;
 
         const body = ['<tbody>'];
         data.rows.forEach(function (row, i) {
             const atm = i === data.atm_index ? ' pm-row-atm' : '';
-            const cells = row.cells.map(function (cell, j) {
-                return '<td class="pm-cell" data-col="' + j + '">'
-                    + halfMarkup(Object.assign({ kind: 'call' }, cell.call))
-                    + halfMarkup(Object.assign({ kind: 'put' }, cell.put))
-                    + '</td>';
-            }).join('');
+            const cells = row.cells.map(cellMarkup).join('');
             body.push('<tr class="pm-row' + atm + '" data-strike="' + row.strike + '">'
                 + '<th scope="row" class="pm-strike">' + row.strike.toFixed(decimals) + '</th>'
                 + '<td class="pm-sigma" data-row="' + i + '">' + fmtSigma(row.cells[refCol].sigma_mult) + '</td>'
@@ -168,8 +218,10 @@
         return '<table class="pm-matrix" id="pm-matrix"'
             + ' data-show-price="1" data-show-premium="1" data-show-call="1" data-show-put="1">'
             + '<caption class="pm-caption">Premium matrix — call / put price and premium rate '
-            + 'by strike (rows) and days to expiration (columns)</caption>'
-            + head.join('')
+            + 'by strike (rows) and days to expiration (columns). Each expiration column is '
+            + 'split into a CALL half and a PUT half.</caption>'
+            + buildColgroupHtml()
+            + buildHeadHtml()
             + body.join('')
             + '</table>';
     }
@@ -181,10 +233,82 @@
         rafPending = true;
         requestAnimationFrame(function () {
             rafPending = false;
+            hoverCol = null;
             host.innerHTML = buildTableHtml();
             applyToggles();
             renderSigmaHeader();
+            syncRailOffset();
+            observeRail();
         });
+    }
+
+    // The sigma rail is sticky at `left: var(--pm-sigma-left)`. auto table
+    // layout only treats `width` as a suggestion, so a strike like "9876543"
+    // can stretch column one past the hard-coded 4.4rem and slide the rail out
+    // of register with its own header. Measuring the real width closes that gap.
+    function syncRailOffset() {
+        const table = el('pm-matrix');
+        if (!table) return;
+        const strike = table.querySelector('tbody th[scope="row"]');
+        if (!strike) return;
+        const width = strike.getBoundingClientRect().width || strike.offsetWidth || 0;
+        if (width > 0) table.style.setProperty('--pm-sigma-left', Math.round(width) + 'px');
+    }
+
+    // The panel is `display: none` until the panel state flips to 'loaded', so
+    // the first render measures a zero-width column. Watching the cell means
+    // the offset lands as soon as it is laid out — and re-lands on font swap,
+    // zoom, or a strike long enough to widen column one.
+    function observeRail() {
+        const table = el('pm-matrix');
+        if (!table) return;
+        if (railObserver) { railObserver.disconnect(); railObserver = null; }
+        if (typeof ResizeObserver === 'undefined') return;
+        const strike = table.querySelector('tbody th[scope="row"]');
+        if (!strike) return;
+        railObserver = new ResizeObserver(syncRailOffset);
+        railObserver.observe(strike);
+    }
+
+    // Crosshair: highlight exactly one column (the x axis). Rows are already
+    // highlighted by :hover in CSS, so together they pin down the cell.
+    function setHoverCol(idx) {
+        const table = el('pm-matrix');
+        if (!table) return;
+        const next = (idx === null || !isFinite(idx)) ? null : Number(idx);
+        if (next === hoverCol) return;
+        clearHoverCol();
+        hoverCol = next;
+        if (hoverCol === null) return;
+        const col = table.querySelector('col.pm-col-dte[data-col="' + hoverCol + '"]');
+        const head = table.querySelector('th.pm-head-dte[data-col="' + hoverCol + '"]');
+        if (col) col.classList.add('is-hover');
+        if (head) head.classList.add('is-hover');
+    }
+
+    function clearHoverCol() {
+        const table = el('pm-matrix');
+        if (!table || hoverCol === null) return;
+        const col = table.querySelector('col.pm-col-dte[data-col="' + hoverCol + '"]');
+        const head = table.querySelector('th.pm-head-dte[data-col="' + hoverCol + '"]');
+        if (col) col.classList.remove('is-hover');
+        if (head) head.classList.remove('is-hover');
+        hoverCol = null;
+    }
+
+    // Promote a column to the sigma reference. Explicit only (click or the
+    // select) — hovering must never rewrite numbers the user is reading.
+    function setRefCol(idx, syncSelect) {
+        if (!data) return;
+        const next = Math.min(Math.max(Number(idx) || 0, 0), data.columns.length - 1);
+        if (next === refCol) return;
+        refCol = next;
+        renderSigmaColumn();
+        renderHero();
+        if (syncSelect) {
+            const sel = el('pm-ref-dte');
+            if (sel) sel.value = String(next);
+        }
     }
 
     function renderSigmaHeader() {
@@ -288,6 +412,7 @@
     function wire() {
         if (wired) return;
         wired = true;
+        narrow = isNarrow();
 
         ['pm-price', 'pm-iv', 'pm-rate', 'pm-spread'].forEach(function (id) {
             const node = el(id);
@@ -302,30 +427,48 @@
         const refSel = el('pm-ref-dte');
         if (refSel) {
             refSel.addEventListener('change', function () {
-                refCol = Number(refSel.value) || 0;
-                renderSigmaColumn();
-                renderHero();
+                setRefCol(Number(refSel.value) || 0, false);
             });
         }
 
-        // Hover / keyboard focus previews a column's sigma multiples.
+        // Crosshair only: hover / focus highlights a column, and a click is
+        // what promotes it to the sigma reference. Values never move on hover.
         const host = el('pm-matrix-body');
         if (host) {
             host.addEventListener('mouseover', function (ev) {
                 const target = ev.target.closest ? ev.target.closest('[data-col]') : null;
                 if (!target) return;
-                const idx = Number(target.dataset.col);
-                if (idx === refCol) return;
-                refCol = idx;
-                renderSigmaColumn();
+                setHoverCol(Number(target.dataset.col));
+            });
+            host.addEventListener('mouseleave', function () {
+                setHoverCol(null);
             });
             host.addEventListener('focusin', function (ev) {
                 const target = ev.target.closest ? ev.target.closest('[data-col]') : null;
                 if (!target) return;
-                refCol = Number(target.dataset.col) || 0;
-                renderSigmaColumn();
+                setHoverCol(Number(target.dataset.col) || 0);
+            });
+            host.addEventListener('click', function (ev) {
+                const target = ev.target.closest ? ev.target.closest('[data-col]') : null;
+                if (!target) return;
+                setRefCol(Number(target.dataset.col) || 0, true);
             });
         }
+
+        // Crossing the 720px breakpoint adds or removes a column, which
+        // changes the <col> map, so the table has to be rebuilt. (Width
+        // changes inside a breakpoint are already covered by railObserver.)
+        window.addEventListener('resize', function () {
+            if (resizeRaf) return;
+            resizeRaf = true;
+            requestAnimationFrame(function () {
+                resizeRaf = false;
+                if (isNarrow() === narrow) return;
+                narrow = isNarrow();
+                hoverCol = null;
+                renderTable();
+            });
+        });
 
         wireToggles();
     }
@@ -337,6 +480,6 @@
     };
 
     window.premiumMatrixDebug = function premiumMatrixDebug() {
-        return { data, refCol };
+        return { data, refCol, hoverCol };
     };
 })();

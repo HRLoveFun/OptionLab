@@ -438,7 +438,7 @@ function _oddsRenderCharts() {
             // Label
             ctx.setLineDash([]);
             ctx.fillStyle = '#92400e';
-            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.font = 'bold 11px ' + getComputedStyle(document.documentElement).getPropertyValue('--font').trim();
             ctx.textAlign = 'center';
             ctx.fillText('Spot ' + spot.toFixed(2), xPx, yScale.top - 6);
             ctx.restore();
