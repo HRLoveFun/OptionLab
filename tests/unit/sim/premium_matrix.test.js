@@ -16,6 +16,7 @@ import {
   sigmaMove,
   sigmaMultiple,
   MIN_SPREAD_ABS,
+  MIN_SPREAD_PCT,
 } from '../../../static/sim/premium_matrix.js';
 
 const SPOT = 100;
@@ -101,7 +102,7 @@ describe('fillPrice / premiumRate', () => {
   it('applies half the spread around the mid price', () => {
     expect(fillPrice(2, 4, 'buy')).toBeCloseTo(2 * 1.02, 12);
     expect(fillPrice(2, 4, 'sell')).toBeCloseTo(2 * 0.98, 12);
-    expect(fillPrice(2, 1000, 'sell')).toBe(1); // clamped to 100%
+    expect(fillPrice(2, 1000, 'sell')).toBe(1); // clamped to 100% → offset = mid × 100/200 = 1
   });
 
   it('floors the spread at one cent, the smallest tick', () => {
@@ -109,7 +110,8 @@ describe('fillPrice / premiumRate', () => {
     // two sides of the book apart on cheap wing options.
     expect(fillPrice(0.05, 4, 'buy')).toBeCloseTo(0.06, 12);
     expect(fillPrice(0.05, 4, 'sell')).toBeCloseTo(0.04, 12);
-    // A zero spread is still one tick wide, never a fill at the exact mid.
+    // A 0% input is floored to the 1% minimum, which on a $2 mid is exactly one
+    // cent — so the fill is still one tick off mid, never on it.
     expect(fillPrice(2, 0, 'buy')).toBeCloseTo(2.01, 12);
     expect(fillPrice(2, 0, 'sell')).toBeCloseTo(1.99, 12);
     // Above the floor the percentage wins.
@@ -175,11 +177,12 @@ describe('buildPremiumMatrix — pricing', () => {
     const col = m.columns.findIndex((c) => Math.abs(c.dte - 30) <= 1);
     const cell = atm.cells[col];
     // BS(100, 100, 30/365, 3%, 25%) ≈ 2.98 → 2.98% of spot. The rate is built
-    // on the FILL, which at a zero spread sits one tick (MIN_SPREAD_ABS) above
-    // the mid for a buyer.
+    // on the FILL. The default spread input (0) floors to the 1% minimum, so a
+    // buyer's fill sits `mid × 1/200` above the mid (here 1% > the $0.01 floor).
     expect(cell.call.mid).toBeGreaterThan(2.5);
     expect(cell.call.mid).toBeLessThan(3.5);
-    expect(cell.call.premium_rate).toBeCloseTo((cell.call.mid + MIN_SPREAD_ABS) / SPOT, 6);
+    const offset = Math.max((cell.call.mid * MIN_SPREAD_PCT) / 200, MIN_SPREAD_ABS);
+    expect(cell.call.premium_rate).toBeCloseTo((cell.call.mid + offset) / SPOT, 6);
   });
 });
 
@@ -226,10 +229,13 @@ describe('buildPremiumMatrix — structure', () => {
 });
 
 describe('buildPremiumMatrix — shape of the rates', () => {
-  it('call rate rises with strike, put rate falls with strike', () => {
+  it('call rate rises with strike, put rate falls with strike (OTM side)', () => {
     const m = matrix();
     const col = m.ref_column_index;
-    for (let i = 1; i < m.rows.length; i++) {
+    // Across the OTM side the fill is monotonic in strike. The ITM side is
+    // excluded: a positive spread (now the 1% minimum, never zero) adds a
+    // mid-proportional haircut that can temporarily flatten a deep-ITM call.
+    for (let i = m.atm_index + 1; i < m.rows.length; i++) {
       const prev = m.rows[i - 1].cells[col];
       const cur = m.rows[i].cells[col];
       expect(cur.call.premium_rate).toBeGreaterThan(prev.call.premium_rate);

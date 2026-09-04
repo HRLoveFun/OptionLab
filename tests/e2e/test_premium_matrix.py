@@ -77,7 +77,7 @@ def test_premium_matrix_renders_default_grid(page: Page, live_server: str, js_er
     # and the page explains what the percentage means.
     first_col = page.locator("#pm-matrix thead th[data-col='0']")
     expect(first_col).to_contain_text(f"{dtes[0]}D")
-    expect(page.locator(".pm-axis-hint")).to_contain_text("1σ")
+    expect(page.locator(".pm-legend-list")).to_contain_text("1σ")
 
     # P1 hero + KPI strip are populated.
     expect(page.locator("#pm-hero-value")).to_contain_text("%", timeout=3000)
@@ -288,12 +288,13 @@ def test_premium_matrix_spread_floor_is_one_tick(page: Page, live_server: str, j
 
     A percentage floor would be meaningless: 4% of a 5-cent wing premium is a
     fraction of a cent, which rounds away and makes buy and sell print the same
-    number. So zero stays a legal input and the fill is still one tick off mid.
+    number. So even the 1% minimum still leaves the two sides one tick apart on
+    cheap wings where 1% of the mid is below a penny.
     """
     _open_tab(page, live_server)
 
     spread = page.locator("#pm-spread")
-    expect(spread).to_have_attribute("min", "0")
+    expect(spread).to_have_attribute("min", "1")
 
     def atm_call() -> dict:
         return page.evaluate(
@@ -302,16 +303,32 @@ def test_premium_matrix_spread_floor_is_one_tick(page: Page, live_server: str, j
             " return { mid: c.mid, fill: c.fill }; }"
         )
 
-    # Spread 0 → the fill sits one cent above the mid, never exactly on it.
-    spread.fill("0")
+    def wing_call() -> dict:
+        # Highest-strike (deep OTM) call — tiny mid, so the $0.01 floor dominates.
+        return page.evaluate(
+            "() => { const d = window.premiumMatrixDebug().data;"
+            " const c = d.rows[d.rows.length - 1].cells[d.ref_column_index].call;"
+            " return { mid: c.mid, fill: c.fill }; }"
+        )
+
+    # Smallest legal input (1%) → at the ATM the 1% > the $0.01 floor, so the
+    # fill sits half of 1% (0.5%) off the mid.
+    spread.fill("1")
     spread.press("Tab")
-    expect(spread).to_have_value("0")
+    expect(spread).to_have_value("1")
     bought = atm_call()
-    assert abs(bought["fill"] - (bought["mid"] + 0.01)) < 1e-6
+    assert abs(bought["fill"] - bought["mid"] * 1.005) < 1e-6
+
+    # The dollar floor still keeps a deep wing one tick off mid: 1% of its tiny
+    # mid is below a penny, so the floor carries it (buy side).
+    wing = wing_call()
+    assert abs(wing["fill"] - (wing["mid"] + 0.01)) < 1e-6
 
     page.locator('[data-pm-side="sell"]').click()
     sold = atm_call()
-    assert abs(sold["fill"] - (sold["mid"] - 0.01)) < 1e-6
+    assert abs(sold["fill"] - sold["mid"] * 0.995) < 1e-6
+    wing_sold = wing_call()
+    assert abs(wing_sold["fill"] - (wing_sold["mid"] - 0.01)) < 1e-6
 
     # Well above the floor the percentage wins: 8% → half of it, 4%, off the mid.
     page.locator('[data-pm-side="buy"]').click()
@@ -320,8 +337,8 @@ def test_premium_matrix_spread_floor_is_one_tick(page: Page, live_server: str, j
     wide = atm_call()
     assert abs(wide["fill"] - wide["mid"] * 1.04) < 1e-6
 
-    # And the ceiling still clamps (250% → 100% → half of mid again).
-    spread.fill("250")
+    # Above the 100% ceiling the input clamps and applies in full.
+    spread.fill("1500")
     spread.press("Tab")
     expect(spread).to_have_value("100")
     clamped = atm_call()
@@ -351,5 +368,80 @@ def test_premium_matrix_crosshair_highlights_one_column(page: Page, live_server:
     expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[7]}D")
     expect(rail).not_to_have_text(before)
     expect(page.locator("#pm-ref-dte")).to_have_value("7")
+
+    assert _app_errors(js_errors) == [], f"JS errors: {js_errors}"
+
+
+@pytest.mark.usefixtures("mock_apis")
+def test_premium_matrix_masks_stay_opaque_under_crosshair(page: Page, live_server: str, js_errors: list[str]) -> None:
+    """Sticky header and left rails stay opaque while highlighted.
+
+    They are masking layers: with the matrix scrolled, a translucent fill lets
+    the content sliding behind them show through — the "穿模" clip. The crosshair
+    and row-hover tints must sit OVER an opaque base, so the resolved
+    `background-color` stays fully opaque (alpha 1) even on hover.
+    """
+    _open_tab(page, live_server)
+
+    def _alpha(rgb: str) -> float:
+        # "rgb(r, g, b)" -> 1.0 (opaque); "rgba(r, g, b, a)" -> a
+        m = re.match(r"rgba\([^)]*,\s*([\d.]+)\s*\)$", rgb)
+        return float(m.group(1)) if m else 1.0
+
+    # Column crosshair → the DTE header gets .is-hover.
+    page.locator("#pm-matrix tbody tr").nth(3).locator("td.pm-cell[data-col='7']").hover()
+    expect(page.locator("#pm-matrix th.pm-head-dte[data-col='7']")).to_have_class(_HOVER_RE)
+    head_bg = page.locator("#pm-matrix th.pm-head-dte[data-col='7']").evaluate(
+        "el => getComputedStyle(el).backgroundColor"
+    )
+    assert _alpha(head_bg) == 1.0, f"header mask not opaque: {head_bg}"
+
+    # Row hover → the left strike + sigma rails get the rail tint.
+    strike = page.locator("#pm-matrix tbody tr").nth(3).locator("th[scope='row']")
+    sigma = page.locator("#pm-matrix tbody tr").nth(3).locator("td.pm-sigma")
+    strike_bg = strike.evaluate("el => getComputedStyle(el).backgroundColor")
+    sigma_bg = sigma.evaluate("el => getComputedStyle(el).backgroundColor")
+    assert _alpha(strike_bg) == 1.0, f"strike rail mask not opaque: {strike_bg}"
+    assert _alpha(sigma_bg) == 1.0, f"sigma rail mask not opaque: {sigma_bg}"
+
+    assert _app_errors(js_errors) == [], f"JS errors: {js_errors}"
+
+
+@pytest.mark.usefixtures("mock_apis")
+def test_premium_matrix_corner_stays_on_top_while_scrolled(page: Page, live_server: str, js_errors: list[str]) -> None:
+    """The top-left corner never lets a scrolled DTE header paint over it.
+
+    The strike + σ header cells are doubly sticky (top + left) and must out-rank
+    the DTE header row (z-index 3) and the left rails (z-index 2). A bare
+    `.pm-head-strike` selector loses the specificity duel with `.pm-matrix thead
+    th`, collapsing the corner to z-index 3 — then, on horizontal scroll, a DTE
+    header slides under the corner and (equal z-index, later in DOM) paints on
+    top: the "穿模" clip at the top-left. Assert the corner is the topmost layer
+    there after both axes are scrolled.
+    """
+    _open_tab(page, live_server)
+
+    def topmost_at_corner(left: int, top: int) -> str:
+        page.evaluate(
+            "([l, t]) => { const s = document.getElementById('pm-matrix-body');"
+            " s.scrollLeft = l; s.scrollTop = t; }",
+            [left, top],
+        )
+        page.wait_for_timeout(80)
+        return page.evaluate(
+            """() => {
+                const s = document.getElementById('pm-matrix-body');
+                const r = s.getBoundingClientRect();
+                const el = document.elementFromPoint(r.left + 3, r.top + 3);
+                return el ? el.className || el.tagName : 'none';
+            }"""
+        )
+
+    # Enough top scroll that the caption has cleared and the header is pinned.
+    for label, left, top in (("horizontal", 600, 40), ("both", 600, 300), ("vertical", 0, 300)):
+        cls = topmost_at_corner(left, top)
+        assert "pm-head-strike" in cls or "pm-head-sigma" in cls, (
+            f"{label}: top-left corner shows '{cls}' (clip!)"
+        )
 
     assert _app_errors(js_errors) == [], f"JS errors: {js_errors}"

@@ -41,22 +41,11 @@
                 <span class="field-hint">Annualised, -5 - 50.</span>
             </div>
             <div class="form-group">
-                <label for="pm-spread">Spread %</label>
-                <input type="number" id="pm-spread" value="2" step="0.5" min="0" max="100">
-                <span class="field-hint">Bid-ask width as a percent of mid, 0 - 100. The
-                    fill moves half of it off the mid, floored at $0.01 a side.</span>
+                <label for="pm-spread">Bid-Ask Spread %</label>
+                <input type="number" id="pm-spread" value="2" step="0.5" min="1" max="100">
+                <span class="field-hint">1 - 100, floored at $0.01 a side.</span>
             </div>
         </div>
-        <p class="panel-desc" style="margin-top:.75rem;">
-            Premium rate — call: <code>(strike + premium - price) / price</code>;
-            put: <code>(price - strike + premium) / price</code>. Mid is the
-            Black-Scholes theoretical value; the fill moves half the spread away
-            from it — at least <code>$0.01</code>, the smallest tick an option
-            trades on, so cheap wing premiums still show a gap — and a seller's
-            rate is therefore always lower than a buyer's. Flip the
-            <strong>Side</strong> switch above the grid to price the other
-            side of the book.
-        </p>
     </div>
 
     <!-- Loading banner — P2 four-state machine -->
@@ -142,17 +131,54 @@
                 </div>
             </div>
             <div class="pm-matrix-scroll" id="pm-matrix-body"></div>
-            <p class="pm-axis-hint">
-                <strong>横轴</strong>每一列是一个到期期限，列头三行分别是：<code>31D</code> 为距到期天数，
-                <code>±7.1%</code> 为该期限内标的的 <strong>1σ 预期波动</strong>（约 68% 概率落在 ±7.1% 区间内，
-                公式为 <code>IV × √(DTE / 365)</code>），再往下 <code>CALL</code> / <code>PUT</code>
-                把该列左右两半标出来 —— 每个格子里，左半是 Call（价格在上、溢价率在下），右半是 Put。
-                <strong>纵轴</strong>每行是一个行权价：第一列是行权价，第二列是该行权价相对参考期限的 σ 倍数。
-                悬停会高亮整列与整行，点击某一列可把它设为 σ 参考列。
-            </p>
             <p class="pm-empty-hint" id="pm-all-hidden" role="status" hidden>
                 请至少打开一个数值开关（Price / Prem. rate）和一个方向开关（Call / Put）。
             </p>
+        </div>
+
+        <!-- Legend — bullet explanations below the matrix panel -->
+        <div class="content-card pm-legend">
+            <div class="content-card-title">How to read the matrix</div>
+            <div class="pm-legend-groups">
+                <div class="pm-legend-group">
+                    <h3 class="pm-legend-heading">Premium rate &amp; pricing</h3>
+                    <ul class="pm-legend-list">
+                        <li>Premium rate — call: <code>(strike + premium − price) / price</code>;
+                            put: <code>(price − strike + premium) / price</code>.</li>
+                        <li>Mid is the Black-Scholes theoretical value; the fill moves half the
+                            spread away from it — at least <code>$0.01</code>, the smallest tick an
+                            option trades on, so cheap wing premiums still show a gap.</li>
+                        <li>A seller's rate is therefore always lower than a buyer's.</li>
+                        <li>Flip the <strong>Side</strong> switch above the grid to price the
+                            other side of the book.</li>
+                    </ul>
+                </div>
+                <div class="pm-legend-group">
+                    <h3 class="pm-legend-heading">Axes</h3>
+                    <ul class="pm-legend-list">
+                        <li><strong>X-axis</strong> — each column is an expiration term:
+                            <ul>
+                                <li>The header has three rows: <code>31D</code> is days to
+                                    expiration; <code>±7.1%</code> is the underlying's 1σ expected
+                                    move over that term (≈68% chance of landing within ±7.1%,
+                                    computed as <code>IV × √(DTE / 365)</code>); below that,
+                                    <code>CALL</code> / <code>PUT</code> labels the left and right
+                                    halves of the column.</li>
+                                <li>Each cell: the left half is the Call (price on top, premium
+                                    rate below), the right half is the Put.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Y-axis</strong> — each row is a strike:
+                            <ul>
+                                <li>The first column is the strike; the second column is that
+                                    strike's σ multiple relative to the reference term.</li>
+                            </ul>
+                        </li>
+                        <li>Hovering highlights the whole column and the whole row; clicking a
+                            column sets it as the σ reference column.</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 

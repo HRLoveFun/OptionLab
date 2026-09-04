@@ -297,12 +297,10 @@ def simulate_expiry(
 # ---------------------------------------------------------------------------
 # Expiration-calendar generation (Premium Matrix columns)
 # ---------------------------------------------------------------------------
-# US single-stock / ETF options list standard expirations on the **third
-# Friday** of every month. When that Friday is an exchange holiday the
+# US single-stock / ETF options carry a *daily* (0DTE-style, every business
+# day) series for the short end, plus a *weekly* listed series on every
+# Friday for the longer maturities. When a Friday is an exchange holiday the
 # expiration rolls back to the previous business day (usually Thursday).
-# January's third Friday is the long-dated LEAPS month; 3/6/9/12 third
-# Fridays are the quarterly expirations. On top of those, liquid underlyings
-# carry a *daily* (0DTE-style, every business day) series.
 #
 # The project otherwise ignores exchange holidays (see data_pipeline/cleaning
 # for the "B" frequency), but the listed-expiration rules *require* them, so
@@ -390,14 +388,24 @@ def _adjust_to_business_day(d: dt.date, holidays: set[dt.date], forward: bool) -
 
 
 def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle):
-    dte = (d - ref).days
+    # +1: a listed expiration is a *whole* day out, so the same-day column reads
+    # 1D rather than 0D. Dates themselves are untouched (Fridays stay Fridays).
+    dte = (d - ref).days + 1
     return {
         "date": d.isoformat(),
         "dte": dte,
         "label": f"{d.isoformat()} ({dte}D)",
         "kind": kind,         # "standard" | "daily"
-        "cycle": cycle,       # "monthly" | "quarterly" | "leaps" | None
+        "cycle": cycle,       # "weekly" | None
     }
+
+
+def _next_friday(d: dt.date) -> dt.date:
+    """First Friday (weekday 4) strictly after ``d`` (no holiday handling)."""
+    friday = d + dt.timedelta(days=1)
+    while friday.weekday() != 4:
+        friday += dt.timedelta(days=1)
+    return friday
 
 
 def generate_expiry_calendar(
@@ -408,22 +416,21 @@ def generate_expiry_calendar(
 ) -> list[dict]:
     """Build upcoming option expirations for a Premium Matrix.
 
-    Returns the next ``n_standard`` *standard listed* expirations (the
-    third-Friday monthly series; January tagged ``"leaps"``, 3/6/9/12 tagged
-    ``"quarterly"``, the rest ``"monthly"``) plus the next ``n_daily``
-    *daily* (0DTE-style, every business day) expirations from
-    ``reference_date`` (inclusive of ``reference_date`` itself when it is a
-    business day).
+    Returns the next ``n_daily`` *daily* (0DTE-style, every business day)
+    expirations from ``reference_date`` (inclusive when it is a business day),
+    plus the next ``n_standard`` *weekly listed* expirations — every Friday
+    strictly after the last daily day, each tagged ``cycle="weekly"``.
 
     Each entry is ``{"date", "dte", "label", "kind", "cycle"}`` and is sorted
     by date ascending with duplicate dates de-duplicated (a ``standard`` entry
     wins over a ``daily`` one on collision). ``dte`` is calendar days vs
-    ``reference_date``; ``dte == 0`` means a same-day (0DTE) expiration.
+    ``reference_date`` **plus one** (``(date - ref).days + 1``), so a same-day
+    expiration reads ``1D`` rather than ``0D``.
 
     ``reference_date`` may be a ``date`` or an ISO ``"YYYY-MM-DD"`` string.
     ``holidays`` is an optional ``set[date]``; when omitted (or empty) no
     holiday adjustment is applied — only weekends are skipped. Pass NYSE
-    holiday dates to enable the third-Friday roll-back behaviour.
+    holiday dates to enable the Friday roll-back behaviour.
 
     Pure / deterministic — no network, no external state.
     """
@@ -445,22 +452,10 @@ def generate_expiry_calendar(
     # expirations.
     holidays = set(holidays) if holidays else set()
 
-    # --- standard listed expirations: 3rd Friday, strictly after ref --------
-    standard: list[dict] = []
-    y, m = ref.year, ref.month
-    guard = 0
-    while len(standard) < n_standard and guard < 200:
-        guard += 1
-        exp = _adjust_to_business_day(_nth_weekday(y, m, 4, 3), holidays, forward=False)
-        if exp > ref:
-            cycle = "leaps" if m == 1 else ("quarterly" if m in (3, 6, 9, 12) else "monthly")
-            standard.append(_make_entry(exp, ref, "standard", cycle))
-        m += 1
-        if m > 12:
-            m = 1
-            y += 1
-
     # --- daily (0DTE-style) expirations: next n_daily business days ----------
+    # Built FIRST so the weekly standard series can start strictly after the
+    # last daily day — the short end stays a clean run of consecutive business
+    # days with no overlap against the weekly Fridays.
     daily: list[dict] = []
     d = _adjust_to_business_day(ref, holidays, forward=True)
     guard = 0
@@ -468,6 +463,24 @@ def generate_expiry_calendar(
         guard += 1
         daily.append(_make_entry(d, ref, "daily", None))
         d = _adjust_to_business_day(d + dt.timedelta(days=1), holidays, forward=True)
+
+    # --- standard listed expirations: every Friday AFTER the last daily day --
+    # Weekly expirations (cycle "weekly") only beyond the daily range, so the
+    # two series never share a column. (The legacy monthly third-Friday ladder
+    # has been retired in favour of a continuous weekly ladder.)
+    standard: list[dict] = []
+    last_daily = dt.date.fromisoformat(daily[-1]["date"]) if daily else ref
+    cur = last_daily
+    guard = 0
+    while len(standard) < n_standard and guard < 600:
+        guard += 1
+        cur = _next_friday(cur)
+        eff = _adjust_to_business_day(cur, holidays, forward=False)
+        # A holiday Friday that rolls back into the daily range is dropped
+        # (the daily entry wins the de-dupe anyway), and the ladder continues
+        # with the next Friday.
+        if eff > last_daily:
+            standard.append(_make_entry(eff, ref, "standard", "weekly"))
 
     # --- merge + dedupe (standard wins on date collision) --------------------
     by_date: dict[str, dict] = {}

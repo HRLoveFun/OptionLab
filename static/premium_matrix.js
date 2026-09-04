@@ -50,8 +50,9 @@
     const SIDES = ['buy', 'sell'];
     // Mirrors the min / max on #pm-spread. There is no percentage floor: the
     // engine floors the spread's DOLLAR effect at one cent (MIN_SPREAD_ABS),
-    // so a zero spread still leaves the two fill sides one tick apart.
-    const SPREAD_MIN_PCT = 0;
+    // so even the 1% minimum still leaves the two fill sides one tick apart on
+    // cheap wing premiums where 1% of the mid is below a penny.
+    const SPREAD_MIN_PCT = 1;
     const SPREAD_MAX_PCT = 100;
 
     function isNarrow() {
@@ -79,8 +80,9 @@
 
     /* -- inputs --------------------------------------------------------- */
     // The input is clamped on read, so a blank or oversized spread can never
-    // reach the engine. Zero is legal: the engine floors the spread's dollar
-    // effect at one cent, so both fill sides still differ by a tick.
+    // reach the engine. The minimum is 1% (not zero): below that the engine
+    // floors the spread's dollar effect at one cent, so both fill sides still
+    // differ by a tick.
     function clampSpread(raw) {
         const v = parseFloat(raw);
         if (!isFinite(v)) return SPREAD_MIN_PCT;

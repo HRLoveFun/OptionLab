@@ -29,11 +29,12 @@ def test_expiry_calendar_with_ref_and_counts(client):
     assert resp.status_code == 200
     body = resp.get_json()
     assert body["reference_date"] == "2026-09-04"
-    # 3 standard + 2 daily, de-duplicated on overlap.
+    # 3 weekly standard + 2 daily, de-duplicated on overlap.
     assert len(body["expirations"]) >= 5
     standards = [e for e in body["expirations"] if e["kind"] == "standard"]
-    assert standards[0]["date"] == "2026-09-18"
-    assert standards[0]["cycle"] == "quarterly"
+    # Daily covers 09-04 and 09-07, so the weekly ladder starts the next Friday.
+    assert standards[0]["date"] == "2026-09-11"
+    assert standards[0]["cycle"] == "weekly"
 
 
 def test_expiry_calendar_bad_ref(client):

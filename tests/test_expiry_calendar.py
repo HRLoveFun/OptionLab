@@ -1,9 +1,10 @@
 """Tests for core.options.simulation.expiry.generate_expiry_calendar.
 
 Uses real calendar expectations (no mocks): the reference date 2026-09-04 is a
-Friday. By default NO holiday adjustment is applied (only weekends are skipped),
-so third-Friday expirations are returned as-is; passing an explicit ``holidays``
-set re-enables the roll-back behaviour.
+Friday. The calendar returns ``n_daily`` consecutive business days (starting at
+``ref``) plus ``n_standard`` weekly Fridays strictly after the last daily day,
+each tagged ``cycle="weekly"``. DTE is ``(date - ref).days + 1``. Passing an
+explicit ``holidays`` set re-enables the Friday roll-back behaviour.
 """
 
 import datetime as dt
@@ -14,18 +15,18 @@ REF = dt.date(2026, 9, 4)  # Friday
 
 
 def test_returns_expected_count():
-    # 12 standard + 10 daily; with no holiday adjustment the daily series keeps
-    # 2026-09-07 (Labour Day Monday), so 9/18 only appears once (as standard).
+    # 12 weekly standard + 10 daily, with no date overlap (weekly starts after
+    # the last daily day), so 22 distinct columns.
     cal = generate_expiry_calendar(REF, n_standard=12, n_daily=10)
     assert len(cal) == 22
 
 
-def test_first_entry_is_reference_day_as_daily_0dte():
+def test_first_entry_is_reference_day_as_daily_1dte():
     cal = generate_expiry_calendar(REF, n_standard=12, n_daily=10)
     first = cal[0]
     assert first["date"] == "2026-09-04"
     assert first["kind"] == "daily"
-    assert first["dte"] == 0  # same-day (0DTE)
+    assert first["dte"] == 1  # DTE is +1, so the same-day column reads 1D
 
 
 def test_labor_day_included_by_default():
@@ -35,27 +36,24 @@ def test_labor_day_included_by_default():
     assert "2026-09-07" in dates
 
 
-def test_standard_third_fridays():
+def test_standard_weekly_fridays():
     cal = generate_expiry_calendar(REF, n_standard=12, n_daily=10)
     standards = [e for e in cal if e["kind"] == "standard"]
+    # Weekly Fridays strictly after the last daily day (2026-09-17).
     expected_dates = [
-        "2026-09-18", "2026-10-16", "2026-11-20", "2026-12-18",
-        "2027-01-15", "2027-02-19", "2027-03-19", "2027-04-16",
-        "2027-05-21", "2027-06-18", "2027-07-16", "2027-08-20",
+        "2026-09-18", "2026-09-25", "2026-10-02", "2026-10-09",
+        "2026-10-16", "2026-10-23", "2026-10-30", "2026-11-06",
+        "2026-11-13", "2026-11-20", "2026-11-27", "2026-12-04",
     ]
     assert [e["date"] for e in standards] == expected_dates
 
 
 def test_cycle_tags():
     cal = generate_expiry_calendar(REF, n_standard=12, n_daily=10)
-    by_date = {e["date"]: e for e in cal}
-    assert by_date["2027-01-15"]["cycle"] == "leaps"
-    assert by_date["2026-09-18"]["cycle"] == "quarterly"
-    assert by_date["2026-12-18"]["cycle"] == "quarterly"
-    assert by_date["2027-03-19"]["cycle"] == "quarterly"
-    assert by_date["2027-06-18"]["cycle"] == "quarterly"
-    assert by_date["2026-10-16"]["cycle"] == "monthly"
-    assert by_date["2027-02-19"]["cycle"] == "monthly"
+    standards = [e for e in cal if e["kind"] == "standard"]
+    # The weekly ladder tags every entry "weekly".
+    assert all(e["cycle"] == "weekly" for e in standards)
+    assert standards[0]["date"] == "2026-09-18"
 
 
 def test_sorted_and_unique():
@@ -70,15 +68,17 @@ def test_accepts_iso_string():
     assert cal[0]["date"] == "2026-09-04"
 
 
-def test_third_friday_rolls_back_on_injected_holiday():
-    # Force the September 3rd Friday (2026-09-18) to be a holiday and confirm the
-    # listed expiration rolls back to the prior business day (Thursday 09-17).
+def test_holiday_friday_dropped_from_weekly_ladder():
+    # Force the first weekly Friday (2026-09-18) to be a holiday. It rolls back
+    # to 09-17, which already sits inside the daily range, so it is excluded and
+    # the ladder starts the following Friday (09-25).
     cal = generate_expiry_calendar(
         REF, n_standard=12, n_daily=10, holidays={dt.date(2026, 9, 18)}
     )
     standards = [e for e in cal if e["kind"] == "standard"]
-    assert standards[0]["date"] == "2026-09-17"
-    assert standards[0]["dte"] == 13
+    assert standards[0]["date"] == "2026-09-25"
+    assert standards[0]["dte"] == 22
+    assert all(e["cycle"] == "weekly" for e in standards)
 
 
 def test_holidays_param_excludes_dates():
@@ -90,12 +90,15 @@ def test_holidays_param_excludes_dates():
     assert "2026-09-07" not in dates
 
 
-def test_injected_holiday_collision_keeps_standard():
-    # Standard 9/18 rolls back to 9/17, which also appears in the daily series
-    # -> de-duplicated with the standard entry winning.
+def test_holiday_friday_not_duplicated_with_daily():
+    # The holiday Friday 9/18 rolls back to 9/17, which already exists in the
+    # daily series; it is dropped from the weekly ladder so 9/17 appears once
+    # (as daily), not twice.
     cal = generate_expiry_calendar(
         REF, n_standard=12, n_daily=10, holidays={dt.date(2026, 9, 18)}
     )
     sept17 = [e for e in cal if e["date"] == "2026-09-17"]
     assert len(sept17) == 1
-    assert sept17[0]["kind"] == "standard"
+    assert sept17[0]["kind"] == "daily"
+    # And 9/18 itself is absent (it was a holiday, not a listed weekly Friday).
+    assert "2026-09-18" not in {e["date"] for e in cal}

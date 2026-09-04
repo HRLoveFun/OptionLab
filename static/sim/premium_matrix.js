@@ -36,12 +36,13 @@ export const MIN_IV_PCT = 0.1;
 export const MAX_IV_PCT = 500;
 export const MIN_R_PCT = -5;
 export const MAX_R_PCT = 50;
-export const MIN_SPREAD_PCT = 0;
+export const MIN_SPREAD_PCT = 1;
 export const MAX_SPREAD_PCT = 100;
-// Floor on the dollar effect of the spread, not on the spread input itself:
-// max(mid × spreadPct / 200, MIN_SPREAD_ABS). A 6% spread on a 5-cent premium
-// is 0.15 of a cent, which rounds to nothing and would make buy and sell print
-// the same number — one cent is the smallest real tick.
+// Bid-ask width as a percent of mid, range 1 - 100. Floor on the spread's
+// DOLLAR effect (not on the input): max(mid × spreadPct / 200, MIN_SPREAD_ABS).
+// A 6% spread on a 5-cent premium is 0.15 of a cent, which rounds to nothing
+// and would make buy and sell print the same number — one cent is the smallest
+// real tick.
 export const MIN_SPREAD_ABS = 0.01;
 export const REF_DTE_DEFAULT = 30;
 

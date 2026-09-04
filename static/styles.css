@@ -2383,16 +2383,42 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-axis-hint {
-    margin: .75rem 0 0;
-    padding-top: .6rem;
-    border-top: 1px solid var(--slate-100);
-    font-size: .75rem;
-    line-height: 1.5;
+/* Legend — bullet explanations below the matrix panel. */
+.pm-legend {
+    margin-top: 1rem;
+}
+
+.pm-legend-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.pm-legend-heading {
+    margin: 0 0 .5rem;
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.pm-legend-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: .8rem;
+    line-height: 1.55;
     color: var(--slate-500);
 }
 
-.pm-axis-hint code {
+.pm-legend-list > li {
+    margin-bottom: .4rem;
+}
+
+.pm-legend-list ul {
+    margin-top: .35rem;
+    padding-left: 1.1rem;
+}
+
+.pm-legend-list code {
     font-size: .72rem;
     color: var(--slate-700);
     background: var(--slate-50);
@@ -2400,7 +2426,7 @@ textarea:focus-visible,
     border-radius: var(--radius-sm);
 }
 
-.pm-axis-hint strong {
+.pm-legend-list strong {
     color: var(--slate-700);
 }
 
@@ -2416,6 +2442,9 @@ textarea:focus-visible,
 .pm-matrix-scroll {
     max-height: 70vh;
     overflow: auto;
+    /* Own stacking context so the sticky header + rails compose as one layer
+       with the body and never clip through it on scroll (the "穿模" guard). */
+    isolation: isolate;
     border: 1px solid var(--slate-200);
     border-radius: var(--radius-sm);
 }
@@ -2465,13 +2494,18 @@ textarea:focus-visible,
     text-align: right;
 }
 
-/* The two sticky left rails must agree on where column one ends: the sigma
-   rail is pinned to the MEASURED strike width, not to a hard-coded guess. */
-.pm-head-strike,
-.pm-head-sigma {
+/* The two top-left corner cells are doubly sticky (top + left). They MUST sit
+   above both the sticky header row (z-index 3, from `.pm-matrix thead th`) and
+   the sticky left rails (z-index 2). So the z-index here is written on a
+   selector that OUT-SPECIFIES `.pm-matrix thead th` (0,1,2): a bare
+   `.pm-head-strike` (0,1,0) loses to it and falls back to z-index 3, which is
+   exactly what let a scrolled DTE header paint over the corner — the "穿模"
+   clip on horizontal scroll (equal z-index + later DOM order wins). */
+.pm-matrix thead th.pm-head-strike,
+.pm-matrix thead th.pm-head-sigma {
     position: sticky;
     top: 0;
-    z-index: 4;
+    z-index: 5;
     text-align: right;
 }
 
@@ -2639,19 +2673,28 @@ textarea:focus-visible,
     background: var(--pm-col-hover);
 }
 
+/* The DTE header is a sticky TOP mask: it must stay opaque so a vertical
+   scroll never lets the row sliding underneath show through the crosshair.
+   The tint is layered over the opaque base (background-color) instead of
+   replacing it — otherwise the translucent fill reveals the content behind
+   it (the "穿模" clip when the matrix is scrolled). */
 .pm-matrix th.pm-head-dte.is-hover {
-    background: var(--pm-rail-hover);
+    background-color: var(--slate-50);
+    background-image: linear-gradient(var(--pm-rail-hover), var(--pm-rail-hover));
 }
 
 .pm-matrix tbody tr:hover {
     background: var(--pm-row-hover);
 }
 
-/* The rails are opaque (they have to mask the columns scrolling under them),
-   so they need their own hover tint. */
+/* The left rails are sticky LEFT masks: opaque so the columns scrolling
+   underneath never bleed through. Their hover tint is layered over the opaque
+   base (background-color) rather than replacing it — a translucent rail would
+   let the horizontally-scrolled data behind it show through (the "穿模" clip). */
 .pm-matrix tbody tr:hover th[scope="row"],
 .pm-matrix tbody tr:hover td.pm-sigma {
-    background: var(--pm-rail-hover);
+    background-color: var(--slate-50);
+    background-image: linear-gradient(var(--pm-rail-hover), var(--pm-rail-hover));
 }
 
 /* Switchable visibility — pure CSS, driven by data-show-* on the table. */
