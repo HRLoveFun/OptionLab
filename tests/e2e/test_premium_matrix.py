@@ -17,6 +17,8 @@ from playwright.sync_api import Page, expect
 
 _ACTIVE_RE = re.compile(r"\bactive\b")
 _HOVER_RE = re.compile(r"\bis-hover\b")
+# Persistent mark on the picked sigma-reference column (<col> + header <th>).
+_REF_RE = re.compile(r"\bis-ref\b")
 # Console errors that are environmental (missing CDN) rather than app bugs.
 _RESOURCE_ERR_RE = re.compile(r"Failed to load resource|net::ERR", re.IGNORECASE)
 # Sub-pixel layout noise: borders and zoom make exact equality impossible.
@@ -77,7 +79,9 @@ def test_premium_matrix_renders_default_grid(page: Page, live_server: str, js_er
     # and the page explains what the percentage means.
     first_col = page.locator("#pm-matrix thead th[data-col='0']")
     expect(first_col).to_contain_text(f"{dtes[0]}D")
-    expect(page.locator(".pm-legend-list")).to_contain_text("1σ")
+    # The legend card holds two lists, so scope to the card — a bare
+    # .pm-legend-list locator matches both and trips strict mode.
+    expect(page.locator(".pm-legend")).to_contain_text("1σ")
 
     # P1 hero + KPI strip are populated.
     expect(page.locator("#pm-hero-value")).to_contain_text("%", timeout=3000)
@@ -156,7 +160,10 @@ def test_premium_matrix_recomputes_on_input_change(page: Page, live_server: str,
     hero_call = call_kpi.inner_text()
     hero_put = page.locator("#pm-kpi-put").inner_text()
     hero_sigma = sigma_kpi.inner_text()
-    page.select_option("#pm-ref-dte", "0")
+    # The select is gone: the column HEADER is the control, and it keeps a
+    # persistent .is-ref mark so the picked column is never invisible.
+    page.locator("#pm-matrix th.pm-head-dte[data-col='0']").click()
+    expect(page.locator("#pm-matrix th.pm-head-dte[data-col='0']")).to_have_class(_REF_RE)
     expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[0]}D")
     expect(sigma_cell).not_to_have_text(before_rail)
     expect(call_kpi).to_have_text(hero_call)
@@ -363,11 +370,62 @@ def test_premium_matrix_crosshair_highlights_one_column(page: Page, live_server:
     expect(rail).to_have_text(before)
     expect(page.locator("#pm-head-sigma")).not_to_have_text(f"σ @{dtes[7]}D")
 
-    # Clicking is what changes the reference, and the select follows.
+    # Clicking a DATA cell is a read, not a selection — only the header picks.
+    # text_content, not inner_text: the header is uppercased by CSS ("Σ @…"),
+    # while to_have_text compares against the DOM text ("σ @…").
+    default_head = page.locator("#pm-head-sigma").text_content()
     page.locator("#pm-matrix tbody tr").nth(3).locator("td.pm-cell[data-col='7']").click()
+    expect(page.locator("#pm-head-sigma")).to_have_text(default_head)
+    expect(rail).to_have_text(before)
+
+    # Clicking the header is what changes the reference.
+    page.locator("#pm-matrix th.pm-head-dte[data-col='7']").click()
     expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[7]}D")
     expect(rail).not_to_have_text(before)
-    expect(page.locator("#pm-ref-dte")).to_have_value("7")
+    # The header (and its <col>) is the state readout now the select is gone.
+    expect(page.locator("#pm-matrix th.pm-head-dte[data-col='7']")).to_have_class(_REF_RE)
+    expect(page.locator("#pm-matrix col.pm-col-dte[data-col='7']")).to_have_class(_REF_RE)
+    expect(page.locator("#pm-matrix .is-ref")).to_have_count(2)
+
+    assert _app_errors(js_errors) == [], f"JS errors: {js_errors}"
+
+
+@pytest.mark.usefixtures("mock_apis")
+def test_premium_matrix_reference_is_keyboard_reachable(page: Page, live_server: str, js_errors: list[str]) -> None:
+    """The reference column still has a keyboard path without the select.
+
+    `#pm-ref-dte` used to be the only Tab-reachable control for the sigma
+    reference. Its replacement — the column header — therefore has to be
+    focusable, activatable by Enter / Space, and able to announce which column
+    is picked, or the removal would strand keyboard and screen-reader users.
+    """
+    _open_tab(page, live_server)
+
+    dtes = _dtes(page)
+    rail = page.locator("#pm-matrix tbody tr").first.locator("td.pm-sigma")
+    before = rail.inner_text()
+
+    head = page.locator("#pm-matrix th.pm-head-dte[data-col='2']")
+    expect(head).to_have_attribute("tabindex", "0")
+    head.focus()
+    expect(head).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[2]}D")
+    expect(rail).not_to_have_text(before)
+    expect(head).to_have_class(_REF_RE)
+    expect(head).to_have_attribute("aria-current", "true")
+
+    # Space activates the next header too — and must be swallowed, or it
+    # scrolls the grid out from under the user.
+    scroll_before = page.evaluate("() => document.getElementById('pm-matrix-body').scrollTop")
+    page.locator("#pm-matrix th.pm-head-dte[data-col='3']").focus()
+    page.keyboard.press("Space")
+    expect(page.locator("#pm-head-sigma")).to_have_text(f"σ @{dtes[3]}D")
+    assert page.evaluate("() => document.getElementById('pm-matrix-body').scrollTop") == scroll_before
+
+    # The mark follows the reference instead of accumulating.
+    expect(page.locator("#pm-matrix .is-ref")).to_have_count(2)
+    assert head.get_attribute("aria-current") is None
 
     assert _app_errors(js_errors) == [], f"JS errors: {js_errors}"
 
@@ -395,6 +453,15 @@ def test_premium_matrix_masks_stay_opaque_under_crosshair(page: Page, live_serve
         "el => getComputedStyle(el).backgroundColor"
     )
     assert _alpha(head_bg) == 1.0, f"header mask not opaque: {head_bg}"
+
+    # The persistent .is-ref mark is one more tint on the same sticky mask, so
+    # it has to be opaque too — the select it replaced is gone, and a
+    # translucent reference fill would show the rows scrolling behind it.
+    page.locator("#pm-matrix th.pm-head-dte[data-col='7']").click()
+    ref_bg = page.locator("#pm-matrix th.pm-head-dte[data-col='7']").evaluate(
+        "el => getComputedStyle(el).backgroundColor"
+    )
+    assert _alpha(ref_bg) == 1.0, f"reference header mask not opaque: {ref_bg}"
 
     # Row hover → the left strike + sigma rails get the rail tint.
     strike = page.locator("#pm-matrix tbody tr").nth(3).locator("th[scope='row']")

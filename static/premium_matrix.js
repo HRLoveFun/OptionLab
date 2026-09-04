@@ -20,7 +20,10 @@
  *     JS writes the real strike-column width into --pm-sigma-left, so the
  *     sigma rail can never drift when a long strike stretches column one
  *   - hovering a column only highlights it (the y axis); it never rewrites
- *     values. Clicking a column promotes it to the sigma reference.
+ *     values. Clicking a column HEADER (or pressing Enter on it) promotes it
+ *     to the sigma reference. The header is the only control left, so it has
+ *     to be focusable AND has to carry the state: `.is-ref` on the <col> and
+ *     the <th> is the sole readout of which column the rail is computed for.
  */
 (function () {
     'use strict';
@@ -298,9 +301,15 @@
         data.columns.forEach(function (col, i) {
             const datePart = col.date ? col.date.slice(5) : '';
             out += '<th scope="col" data-col="' + i + '" class="pm-head-dte"'
+                // Focusable on purpose: the header is the ONLY sigma-reference
+                // control, so with the select gone it has to be reachable by
+                // Tab and activatable by Enter / Space (handled in wire()).
+                // No aria-label — it would mask the DTE / 1σ text the cell
+                // already announces; the action lives in `title` instead.
+                + ' tabindex="0"'
                 + ' title="' + col.dte + ' 天后到期 · 1σ 波动 ' + fmtPct(col.sigma_pct, 2)
                 + (col.date ? ' · ' + col.date + (col.cycle ? ' (' + col.cycle + ')' : '') : '')
-                + '">'
+                + ' · 点击或按回车设为 σ 参考列">'
                 + '<span class="pm-head-main">' + col.dte + 'D</span>'
                 + '<span class="pm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
                 + '<span class="pm-head-date">' + datePart + '</span>'
@@ -350,6 +359,7 @@
             host.innerHTML = buildTableHtml();
             applyToggles();
             renderSigmaHeader();
+            renderRefHighlight();
             syncRailOffset();
             observeRail();
         });
@@ -399,6 +409,12 @@
         if (head) head.classList.add('is-hover');
     }
 
+    // A column HEADER is the sigma-reference control; a data cell is not.
+    function headerFrom(node) {
+        if (!node || !node.closest) return null;
+        return node.closest('th.pm-head-dte[data-col]');
+    }
+
     function clearHoverCol() {
         const table = el('pm-matrix');
         if (!table || hoverCol === null) return;
@@ -409,20 +425,19 @@
         hoverCol = null;
     }
 
-    // Promote a column to the sigma reference. Explicit only (click or the
-    // select) — hovering must never rewrite numbers the user is reading.
-    function setRefCol(idx, syncSelect) {
+    // Promote a column to the sigma reference. Explicit only (click or Enter)
+    // — hovering must never rewrite numbers the user is reading. With the
+    // `#pm-ref-dte` select gone there is no second channel to keep in sync, so
+    // the only bookkeeping left is the `.is-ref` readout.
+    function setRefCol(idx) {
         if (!data) return;
         const next = Math.min(Math.max(Number(idx) || 0, 0), data.columns.length - 1);
         if (next === refCol) return;
         refCol = next;
+        renderRefHighlight();
         // The hero band stays pinned to the 30D reference column, so changing
         // the row-header sigma reference must NOT re-render it.
         renderSigmaColumn();
-        if (syncSelect) {
-            const sel = el('pm-ref-dte');
-            if (sel) sel.value = String(next);
-        }
     }
 
     function renderSigmaHeader() {
@@ -443,13 +458,25 @@
         }
     }
 
-    function renderRefSelect() {
-        const sel = el('pm-ref-dte');
-        if (!sel || !data) return;
-        sel.innerHTML = data.columns.map(function (col, i) {
-            return '<option value="' + i + '"' + (i === refCol ? ' selected' : '') + '>'
-                + col.dte + 'D</option>';
-        }).join('');
+    // State readout for the reference column, written to the <col> and the
+    // header <th> only — never to the 41 × 18 data cells, so moving the
+    // reference costs a handful of class writes instead of a re-render. The
+    // <th> also carries aria-current: it is the control, not just a label, so
+    // a screen reader has to be able to tell which column is currently picked.
+    function renderRefHighlight() {
+        const table = el('pm-matrix');
+        if (!table || !data) return;
+        const cols = table.querySelectorAll('col.pm-col-dte');
+        for (let i = 0; i < cols.length; i++) {
+            cols[i].classList.toggle('is-ref', Number(cols[i].dataset.col) === refCol);
+        }
+        const heads = table.querySelectorAll('th.pm-head-dte');
+        for (let i = 0; i < heads.length; i++) {
+            const on = Number(heads[i].dataset.col) === refCol;
+            heads[i].classList.toggle('is-ref', on);
+            if (on) heads[i].setAttribute('aria-current', 'true');
+            else heads[i].removeAttribute('aria-current');
+        }
     }
 
     // The hero band (ATM premium rate, 1σ move, ATM call, ATM put) is computed
@@ -493,7 +520,6 @@
     }
 
     function renderAll() {
-        renderRefSelect();
         renderHero();
         renderTable();
     }
@@ -572,15 +598,11 @@
         const runBtn = document.querySelector('[data-action="pm-run"]');
         if (runBtn) runBtn.addEventListener('click', run);
 
-        const refSel = el('pm-ref-dte');
-        if (refSel) {
-            refSel.addEventListener('change', function () {
-                setRefCol(Number(refSel.value) || 0, false);
-            });
-        }
-
-        // Crosshair only: hover / focus highlights a column, and a click is
-        // what promotes it to the sigma reference. Values never move on hover.
+        // Hover / focus is the crosshair only — it highlights a column and
+        // never rewrites a value. Promoting a column to the sigma reference is
+        // explicit: a click or Enter on its HEADER. Data cells are excluded on
+        // purpose — clicking one while reading the grid used to silently
+        // re-scale the whole sigma rail.
         const host = el('pm-matrix-body');
         if (host) {
             host.addEventListener('mouseover', function (ev) {
@@ -597,9 +619,19 @@
                 setHoverCol(Number(target.dataset.col) || 0);
             });
             host.addEventListener('click', function (ev) {
-                const target = ev.target.closest ? ev.target.closest('[data-col]') : null;
+                const target = headerFrom(ev.target);
                 if (!target) return;
-                setRefCol(Number(target.dataset.col) || 0, true);
+                setRefCol(Number(target.dataset.col) || 0);
+            });
+            // Enter / Space on a focused header — the keyboard's only way to
+            // move the reference now that the select is gone. Space has to be
+            // swallowed, or it scrolls the matrix out from under the user.
+            host.addEventListener('keydown', function (ev) {
+                if (ev.key !== 'Enter' && ev.key !== ' ' && ev.key !== 'Spacebar') return;
+                const target = headerFrom(ev.target);
+                if (!target) return;
+                ev.preventDefault();
+                setRefCol(Number(target.dataset.col) || 0);
             });
         }
 

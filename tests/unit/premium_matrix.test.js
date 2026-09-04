@@ -164,18 +164,29 @@ describe('premium_matrix.js (DOM layer)', () => {
     it('re-scales the sigma rail when the reference expiry changes', async () => {
         await window.loadPremiumMatrix();
         await flush();
-        const rail = document.querySelector('td.pm-sigma');
+        const table = document.getElementById('pm-matrix');
+        const rail = table.querySelector('td.pm-sigma');
         const atThirtyOne = rail.textContent;
 
-        const select = document.getElementById('pm-ref-dte');
-        expect(select.options.length).toBe(18);
-        select.value = '0';
-        select.dispatchEvent(new window.Event('change', { bubbles: true }));
+        // Default reference is the column closest to 30D (31D here). The select
+        // is gone, so the header carries the state: .is-ref on the <col> and
+        // the <th>, plus aria-current on the control itself.
+        expect(table.querySelector('col.pm-col-dte.is-ref').dataset.col).toBe('6');
+        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('6');
+        expect(table.querySelector('th.pm-head-dte.is-ref').getAttribute('aria-current')).toBe('true');
+        expect(table.querySelectorAll('.is-ref')).toHaveLength(2);
+
+        table.querySelector('th.pm-head-dte[data-col="0"]')
+            .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 
         expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
         expect(rail.textContent).not.toBe(atThirtyOne);
         // 1 DTE is a much smaller σ move, so the same strike is further out.
         expect(Math.abs(parseFloat(rail.textContent))).toBeGreaterThan(Math.abs(parseFloat(atThirtyOne)));
+        // The highlight moves with the reference — exactly one column is ever marked.
+        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('0');
+        expect(table.querySelector('col.pm-col-dte.is-ref').dataset.col).toBe('0');
+        expect(table.querySelectorAll('.is-ref')).toHaveLength(2);
     });
 
     it('labels every expiration column with a CALL / PUT pair that mirrors the cell', async () => {
@@ -239,7 +250,7 @@ describe('premium_matrix.js (DOM layer)', () => {
         expect(table.querySelectorAll('.is-hover')).toHaveLength(0);
     });
 
-    it('clicking a column promotes it to the sigma reference', async () => {
+    it('clicking a column header promotes it to the sigma reference', async () => {
         await window.loadPremiumMatrix();
         await flush();
         const table = document.getElementById('pm-matrix');
@@ -250,9 +261,48 @@ describe('premium_matrix.js (DOM layer)', () => {
 
         expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
         expect(table.querySelector('td.pm-sigma').textContent).not.toBe(railBefore);
-        // The select follows, so the control never contradicts the rail.
-        expect(document.getElementById('pm-ref-dte').value).toBe('0');
+        // The header IS the readout now, so it can never contradict the rail.
+        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('0');
         expect(window.premiumMatrixDebug().refCol).toBe(0);
+    });
+
+    it('moves the sigma reference from the keyboard (Enter / Space)', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
+        const table = document.getElementById('pm-matrix');
+        // The header is the only control left, so it has to be tabbable.
+        expect(table.querySelector('th.pm-head-dte').getAttribute('tabindex')).toBe('0');
+
+        table.querySelector('th.pm-head-dte[data-col="0"]')
+            .dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @1D');
+        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('0');
+
+        // Space activates too — and is swallowed, or it scrolls the grid away.
+        const space = new window.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+        table.querySelector('th.pm-head-dte[data-col="1"]').dispatchEvent(space);
+        expect(space.defaultPrevented).toBe(true);
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @6D');
+
+        // Any other key is not an activation.
+        table.querySelector('th.pm-head-dte[data-col="2"]')
+            .dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        expect(document.getElementById('pm-head-sigma').textContent).toBe('σ @6D');
+    });
+
+    it('leaves the reference alone when a data cell is clicked', async () => {
+        await window.loadPremiumMatrix();
+        await flush();
+        const table = document.getElementById('pm-matrix');
+        const headBefore = document.getElementById('pm-head-sigma').textContent;
+
+        // Clicking a cell is a read, not a selection: only the header picks.
+        table.querySelector('tbody tr td.pm-cell[data-col="0"]')
+            .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('pm-head-sigma').textContent).toBe(headBefore);
+        expect(table.querySelector('th.pm-head-dte.is-ref').dataset.col).toBe('6');
+        expect(window.premiumMatrixDebug().refCol).toBe(6);
     });
 
     it('reports invalid inputs in Chinese and falls back to idle without a price', async () => {

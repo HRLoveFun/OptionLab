@@ -116,6 +116,9 @@
     --pm-col-hover: rgba(59, 130, 246, .12);
     --pm-rail-hover: rgba(59, 130, 246, .16);
     --pm-atm-bg: rgba(59, 130, 246, .08);
+    /* The picked sigma-reference column — stronger than the hover tints so
+       the persistent state still reads through a hovered row. */
+    --pm-col-ref: rgba(59, 130, 246, .18);
 }
 
 html {
@@ -2353,30 +2356,6 @@ textarea:focus-visible,
     flex-wrap: wrap;
 }
 
-.pm-field-inline {
-    display: flex;
-    flex-direction: column;
-    gap: .25rem;
-}
-
-.pm-field-inline label {
-    font-size: .68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--slate-500);
-}
-
-.pm-field-inline select {
-    padding: .35rem .5rem;
-    border: 1px solid var(--slate-200);
-    border-radius: var(--radius-sm);
-    background: #fff;
-    color: var(--slate-900);
-    font-size: .8rem;
-    font-variant-numeric: tabular-nums;
-}
-
 .pm-hint {
     max-width: 24rem;
     font-size: .75rem;
@@ -2545,10 +2524,20 @@ textarea:focus-visible,
    .pm-head-pair uses the exact same flex rules as .pm-cell and the header
    <th> is padding-free (like the data <td>), so the CALL / PUT labels line up
    with the halves they name. Keep these two blocks in sync. */
+/* The header is the sigma-reference control (click / Enter), so it advertises
+   itself as clickable and shows a focus ring when tabbed to. */
 .pm-matrix th.pm-head-dte {
     padding: 0;
     text-align: center;
     vertical-align: bottom;
+    cursor: pointer;
+}
+
+.pm-matrix th.pm-head-dte:focus-visible {
+    outline: 2px solid var(--blue);
+    /* Negative offset: the cell is a sticky mask at the matrix edge, so an
+       outset ring would be clipped by the scroll container. */
+    outline-offset: -2px;
 }
 
 .pm-head-main {
@@ -2663,6 +2652,26 @@ textarea:focus-visible,
     background: var(--pm-atm-bg);
 }
 
+/* ── Sigma reference column ───────────────────────────────────────────────
+   The `#pm-ref-dte` select is gone, so the grid itself has to show which
+   column the sigma rail is computed against: a translucent tint on the <col>
+   plus a solid top bar on the sticky header. The header is a TOP mask, so its
+   tint follows the crosshair rule — opaque `background-color` with the tint
+   layered on top through `background-image`; a translucent `background` would
+   let a scrolled row show through (the "穿模" clip).
+   Both rules sit ABOVE the crosshair block on purpose: same specificity, later
+   rule wins, so hovering a column still reads as a hover even when it is the
+   reference. The bar is a box-shadow, which neither rule touches. */
+.pm-matrix col.pm-col-dte.is-ref {
+    background: var(--pm-col-ref);
+}
+
+.pm-matrix th.pm-head-dte.is-ref {
+    background-color: var(--slate-50);
+    background-image: linear-gradient(var(--pm-col-ref), var(--pm-col-ref));
+    box-shadow: inset 0 2px 0 var(--blue);
+}
+
 /* ── Crosshair ────────────────────────────────────────────────────────────
    Table backgrounds paint in this order (back to front): table → column
    groups → columns → row groups → rows → cells. So the column tint sits
@@ -2768,6 +2777,7 @@ textarea:focus-visible,
     --pm-col-hover: rgba(212, 175, 55, .15);
     --pm-rail-hover: rgba(212, 175, 55, .20);
     --pm-atm-bg: rgba(212, 175, 55, .10);
+    --pm-col-ref: rgba(212, 175, 55, .22);
 
     /* Notice fallbacks consumed by var(--bg-info, …) etc. */
     --bg-info: rgba(168, 85, 247, .12);
@@ -2817,8 +2827,7 @@ textarea:focus-visible,
 .sim-scenario-number,
 .sim-matrix th[scope="col"],
 .sim-matrix th[scope="row"],
-.sim-detail th,
-.pm-field-inline select {
+.sim-detail th {
     background: #141414;
 }
 

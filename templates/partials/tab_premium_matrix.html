@@ -96,14 +96,12 @@
         <div class="content-card">
             <div class="pm-matrix-toolbar">
                 <div class="pm-matrix-toolbar__left">
-                    <div class="pm-field-inline">
-                        <label for="pm-ref-dte">Sigma reference</label>
-                        <select id="pm-ref-dte" aria-label="Expiry column used for the row-header sigma multiple"></select>
-                    </div>
                     <p class="pm-hint">
                         Row header shows the strike and its sigma multiple for the
-                        selected column. Hover a column to highlight it, click it to
-                        make it the reference.
+                        <strong>reference column</strong> — the one whose header
+                        carries the gold bar. Hover a column to highlight it;
+                        click its header (or focus it and press Enter) to make it
+                        the reference.
                     </p>
                 </div>
                 <div class="pm-matrix-toolbar__right" role="group" aria-label="Matrix switches">
@@ -171,11 +169,15 @@
                         <li><strong>Y-axis</strong> — each row is a strike:
                             <ul>
                                 <li>The first column is the strike; the second column is that
-                                    strike's σ multiple relative to the reference term.</li>
+                                    strike's σ multiple relative to the reference term —
+                                    the column marked with a bar above its header.</li>
                             </ul>
                         </li>
-                        <li>Hovering highlights the whole column and the whole row; clicking a
-                            column sets it as the σ reference column.</li>
+                        <li>Hovering highlights the whole column and the whole row;
+                            clicking a column <strong>header</strong> (or pressing
+                            Enter on it) makes it the σ reference, and it keeps the
+                            bar until another one is picked. Clicking a data cell
+                            only highlights — it never moves the reference.</li>
                     </ul>
                 </div>
             </div>
