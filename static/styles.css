@@ -2298,6 +2298,241 @@ textarea:focus-visible,
     }
 }
 
+/* ── Premium matrix: strikes down the rows, expiries across the columns ──
+   Cell anatomy: <td.pm-cell> is a flex row holding one .pm-half per side
+   (call then put); each half stacks the price above the premium rate. The
+   four toolbar switches only flip data-show-* attributes on the table, so
+   hiding a value costs one attribute write — no recompute, no re-render. */
+.pm-matrix-toolbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: .75rem;
+}
+
+.pm-matrix-toolbar__left {
+    display: flex;
+    align-items: flex-end;
+    gap: .85rem;
+    flex-wrap: wrap;
+}
+
+.pm-matrix-toolbar__right {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: wrap;
+}
+
+.pm-field-inline {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.pm-field-inline label {
+    font-size: .68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.pm-field-inline select {
+    padding: .35rem .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--slate-900);
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.pm-hint {
+    max-width: 24rem;
+    font-size: .75rem;
+    color: var(--slate-500);
+}
+
+.pm-empty-hint {
+    margin-top: .75rem;
+    padding: .5rem .75rem;
+    border-radius: var(--radius-sm);
+    background: var(--blue-light);
+    color: var(--blue-dark);
+    font-size: .8rem;
+}
+
+.pm-matrix-scroll {
+    max-height: 70vh;
+    overflow: auto;
+    padding: .25rem 0 .5rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+}
+
+.pm-matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .74rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.pm-caption {
+    caption-side: top;
+    padding: .45rem .7rem;
+    text-align: left;
+    font-size: .72rem;
+    color: var(--slate-500);
+}
+
+.pm-matrix th,
+.pm-matrix td {
+    padding: .3rem .55rem;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.pm-matrix thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    font-size: .68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--slate-500);
+    text-align: right;
+}
+
+.pm-head-strike,
+.pm-head-sigma {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    text-align: right;
+}
+
+.pm-head-strike {
+    left: 0;
+}
+
+.pm-head-sigma {
+    left: 4.4rem;
+}
+
+.pm-matrix tbody th[scope="row"] {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    min-width: 4.4rem;
+    background: var(--slate-50);
+    text-align: right;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.pm-matrix td.pm-sigma {
+    position: sticky;
+    left: 4.4rem;
+    z-index: 2;
+    min-width: 4.4rem;
+    background: var(--slate-50);
+    text-align: right;
+    font-weight: 500;
+    color: var(--slate-500);
+}
+
+.pm-matrix td.pm-cell {
+    /* The cell background bleeds through the 1px gap as the divider. */
+    padding: 0;
+    background: var(--slate-100);
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.pm-cell {
+    display: flex;
+    align-items: stretch;
+    gap: 1px;
+}
+
+.pm-half {
+    flex: 1 1 0;
+    min-width: 4.6rem;
+    padding: .26rem .45rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .05rem;
+    background: var(--slate-50);
+}
+
+.pm-half--call {
+    border-left: 2px solid var(--blue-muted);
+}
+
+.pm-half--put {
+    border-left: 2px solid var(--slate-200);
+}
+
+.pm-val {
+    display: block;
+    line-height: 1.3;
+}
+
+.pm-val--price {
+    font-weight: 600;
+    color: var(--slate-900);
+}
+
+.pm-val--rate {
+    font-size: .68rem;
+    color: var(--slate-500);
+}
+
+.pm-row-atm th[scope="row"],
+.pm-row-atm td.pm-sigma {
+    box-shadow: inset 2px 0 0 var(--blue);
+    color: var(--blue-dark);
+}
+
+.pm-row-atm .pm-half {
+    background: var(--blue-light);
+}
+
+.pm-matrix tbody tr:hover .pm-half {
+    filter: brightness(.97);
+}
+
+/* Switchable visibility — pure CSS, driven by data-show-* on the table. */
+.pm-matrix[data-show-price="0"] .pm-val--price,
+.pm-matrix[data-show-premium="0"] .pm-val--rate,
+.pm-matrix[data-show-call="0"] .pm-half--call,
+.pm-matrix[data-show-put="0"] .pm-half--put {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    .pm-hint {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 720px) {
+    /* Narrow screens keep the strike column and drop the sigma rail. */
+    .pm-head-sigma,
+    .pm-matrix td.pm-sigma {
+        display: none;
+    }
+
+    .pm-matrix-scroll {
+        max-height: 60vh;
+    }
+}
+
 
 /* ============================================================
    Onyx Theme — minimalist black with gold + purple accents.
@@ -2381,7 +2616,8 @@ textarea:focus-visible,
 .sim-scenario-number,
 .sim-matrix th[scope="col"],
 .sim-matrix th[scope="row"],
-.sim-detail th {
+.sim-detail th,
+.pm-field-inline select {
     background: #141414;
 }
 

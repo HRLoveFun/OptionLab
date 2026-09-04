@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.sqlite
+*.sqlite-*
+.env
+node_modules
+tests
+static/market_data.sqlite
+deploy
+site
+archive

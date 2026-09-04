@@ -1,0 +1,20 @@
+[Unit]
+Description=OptionLab Flask dashboard (Oracle Always-Free)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=optionlab
+Group=optionlab
+WorkingDirectory=/opt/optionlab
+# All runtime config lives in /opt/optionlab/.env (see deploy/.env.oracle.example)
+EnvironmentFile=/opt/optionlab/.env
+# workers=2/threads=4 mirrors the production gunicorn line in CODEBUDDY.md.
+# --timeout 120 keeps slow matplotlib/yfinance renders from being killed.
+ExecStart=/opt/optionlab/.venv/bin/gunicorn app:app --bind 0.0.0.0:%i --workers 2 --threads 4 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

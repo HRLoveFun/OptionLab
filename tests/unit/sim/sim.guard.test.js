@@ -20,7 +20,15 @@ describe('static/sim is I/O-free (Pages-safe)', () => {
   const files = readdirSync(simDir).filter((f) => f.endsWith('.js'));
   it('has the expected modules', () => {
     expect(files.sort()).toEqual(
-      ['analyze.js', 'black_scholes.js', 'grid.js', 'norm.js', 'payoff.js', 'stats.js'].sort(),
+      [
+        'analyze.js',
+        'black_scholes.js',
+        'grid.js',
+        'norm.js',
+        'payoff.js',
+        'premium_matrix.js',
+        'stats.js',
+      ].sort(),
     );
   });
 
