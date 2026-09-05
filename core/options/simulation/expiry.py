@@ -46,8 +46,11 @@ _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # against that clock, in that timezone, regardless of the server's local time.
 _ET = ZoneInfo("America/New_York")
 
-# CONSTRAINT: a column with under an hour to the close has no meaningful time
-# value left to price — the JS engine (MIN_DTE / T_MIN) drops it as well.
+# Floor on DTE, not a cut-off: a column with under an hour to the close has no
+# meaningful time value left to price, so its DTE is RAISED to one hour (the
+# value BS is still willing to price — see the JS engine's MIN_DTE / T_MIN)
+# instead of being dropped. Only an already-expired column (remaining time
+# <= 0) is removed outright.
 _MIN_HORIZON_DAYS = 1 / 24
 
 
@@ -397,10 +400,21 @@ def _adjust_to_business_day(d: dt.date, holidays: set[dt.date], forward: bool) -
 
 
 def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle, frac: float):
-    # Fractional DTE: whole calendar days plus the fraction of the current day
-    # still left before the 16:00 ET close. Dates themselves are untouched
-    # (Fridays stay Fridays).
-    dte = round((d - ref).days + frac, 6)
+    """Build one calendar entry, or ``None`` when that expiration has passed.
+
+    ``dte`` is the fractional calendar time left before the 16:00 ET close —
+    whole days plus the intraday remainder — **floored at**
+    ``_MIN_HORIZON_DAYS`` (one hour) so a column with less than an hour left
+    still prices. A non-positive remaining time means the expiration has
+    already run out, so the entry is expired and dropped. Dates themselves
+    are untouched (Fridays stay Fridays).
+    """
+    raw = (d - ref).days + frac
+    if raw <= 0:
+        return None
+    # Round first, then floor, so the floor lands on exactly 1/24 — the same
+    # value the JS engine clamps to (MIN_DTE) instead of a rounded-off 0.041667.
+    dte = max(round(raw, 6), _MIN_HORIZON_DAYS)
     return {
         "date": d.isoformat(),
         "dte": dte,
@@ -455,8 +469,10 @@ def generate_expiry_calendar(
       to ``<= 0`` — it is **expired** and removed, and the daily series rolls
       forward to the next business day (future columns keep the exact
       fractional remaining time, e.g. Friday 18:00 → Monday ``2.917D``);
-    - any column with less than one hour left is dropped as unpriceable
-      (``_MIN_HORIZON_DAYS``, mirrored by the JS engine's ``MIN_DTE``).
+    - any column with less than one hour left is **floored at one hour**
+      (``_MIN_HORIZON_DAYS``, mirrored by the JS engine's ``MIN_DTE``) so the
+      short end stays continuous; only an expired column (``dte <= 0``) goes
+      away.
 
     ``reference_date`` may be a ``date`` or an ISO ``"YYYY-MM-DD"`` string.
     ``now`` is an optional ``datetime`` (naive values are assumed ET) used to
@@ -505,9 +521,10 @@ def generate_expiry_calendar(
     while len(daily) < n_daily and guard < 400:
         guard += 1
         entry = _make_entry(d, ref, "daily", None, frac)
-        # Expired (dte <= 0 — the ref day at/after the close) or sub-hour
-        # columns are dropped; the series rolls on to the next business day.
-        if entry["dte"] >= _MIN_HORIZON_DAYS:
+        # Expired (dte <= 0 — the ref day at/after the close); anything else is
+        # floored at one hour inside _make_entry, so the series just rolls on to
+        # the next business day to backfill the column count.
+        if entry is not None:
             daily.append(entry)
         d = _adjust_to_business_day(d + dt.timedelta(days=1), holidays, forward=True)
 
@@ -527,7 +544,9 @@ def generate_expiry_calendar(
         # (the daily entry wins the de-dupe anyway), and the ladder continues
         # with the next Friday.
         if eff > last_daily:
-            standard.append(_make_entry(eff, ref, "standard", "weekly", frac))
+            entry = _make_entry(eff, ref, "standard", "weekly", frac)
+            if entry is not None:
+                standard.append(entry)
 
     # --- merge + dedupe (standard wins on date collision) --------------------
     by_date: dict[str, dict] = {}

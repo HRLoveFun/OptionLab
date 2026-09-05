@@ -66,10 +66,28 @@ def test_after_close_drops_expired_same_day_column():
     assert standards[0]["date"] == "2026-09-25"
 
 
-def test_sub_hour_column_dropped():
-    # At 15:30 ET less than one hour is left — unpriceable, column removed.
+def test_sub_hour_column_floored_to_one_hour():
+    # At 15:30 ET only 30 minutes are left: 0.5/24 = 0.0208 days. The column is
+    # kept (not dropped) with its DTE raised to the one-hour floor.
     cal = generate_expiry_calendar(REF, n_standard=12, n_daily=10, now=NOW_LATE)
+    first = cal[0]
+    assert first["date"] == "2026-09-04"
+    assert first["kind"] == "daily"
+    assert first["dte"] == pytest.approx(1 / 24)
+    assert first["label"] == "2026-09-04 (0.04D)"
+    # Every later column keeps its own (larger) fractional DTE.
+    assert [e["dte"] for e in cal[1:11]] == pytest.approx(
+        [3.020833, 4.020833, 5.020833, 6.020833, 7.020833,
+         10.020833, 11.020833, 12.020833, 13.020833, 14.020833]
+    )
+
+
+def test_exactly_at_close_is_expired():
+    # The instant the market closes the same-day expiration is gone: dte == 0.
+    now = dt.datetime(2026, 9, 4, 16, 0, tzinfo=ET)
+    cal = generate_expiry_calendar(REF, n_standard=12, n_daily=10, now=now)
     assert "2026-09-04" not in {e["date"] for e in cal}
+    assert cal[0]["date"] == "2026-09-07"
 
 
 def test_labor_day_included_by_default():

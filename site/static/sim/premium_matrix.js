@@ -76,10 +76,14 @@ export function normalizeDtes(values) {
   const out = [];
   const seen = new Set();
   for (const v of raw) {
-    // DTE is fractional (intraday remainder to the 16:00 ET close) — keep the
-    // float, only the one-hour floor and the 3650-day cap apply.
-    const d = Number(v);
-    if (!Number.isFinite(d) || d < MIN_DTE || d > MAX_DTE || seen.has(d)) continue;
+    // DTE is fractional (intraday remainder to the 16:00 ET close). A value
+    // under the one-hour floor is RAISED to it (the column is still worth
+    // showing — the calendar floors it too); only a non-positive DTE, i.e. an
+    // expiration that has already run out, is dropped.
+    const rawDte = Number(v);
+    if (!Number.isFinite(rawDte) || rawDte <= 0 || rawDte > MAX_DTE) continue;
+    const d = Math.max(rawDte, MIN_DTE);
+    if (seen.has(d)) continue;
     seen.add(d);
     out.push(d);
   }

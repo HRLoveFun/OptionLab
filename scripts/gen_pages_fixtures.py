@@ -46,7 +46,11 @@ def _fmt_dte(dte: float) -> str:
 
 
 def _make_entry(d: dt.date, ref: dt.date, kind: str, cycle, frac: float):
-    dte = round((d - ref).days + frac, 6)
+    # Mirror of core: fractional DTE floored at one hour, expired (<= 0) -> None.
+    raw = (d - ref).days + frac
+    if raw <= 0:
+        return None
+    dte = max(round(raw, 6), 1 / 24)
     return {
         "date": d.isoformat(),
         "dte": dte,
@@ -76,7 +80,7 @@ def gen_calendar() -> dict:
     while len(daily) < 10 and guard < 400:
         guard += 1
         entry = _make_entry(d, ref, "daily", None, frac)
-        if entry["dte"] >= 1 / 24:  # mirror of core _MIN_HORIZON_DAYS
+        if entry is not None:
             daily.append(entry)
         d = _adjust_to_business_day(d + dt.timedelta(days=1), forward=True)
     standard: list[dict] = []
@@ -88,7 +92,9 @@ def gen_calendar() -> dict:
         cur = _next_friday(cur)
         eff = _adjust_to_business_day(cur, forward=False)
         if eff > last_daily:
-            standard.append(_make_entry(eff, ref, "standard", "weekly", frac))
+            entry = _make_entry(eff, ref, "standard", "weekly", frac)
+            if entry is not None:
+                standard.append(entry)
     by_date: dict[str, dict] = {}
     for entry in standard + daily:
         by_date.setdefault(entry["date"], entry)
