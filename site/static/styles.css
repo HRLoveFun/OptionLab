@@ -2693,12 +2693,25 @@ textarea:focus-visible,
     background-image: linear-gradient(var(--opm-rail-hover), var(--opm-rail-hover));
 }
 
-/* Switchable visibility — pure CSS, driven by data-show-* on the table. */
+/* Switchable visibility — pure CSS, driven by data-show-* on the table.
+   price / premium stack vertically inside one half, so hiding one with
+   display:none lets the other float up to fill its place. call / put sit
+   side by side as two flex halves, so they MUST use visibility:hidden
+   instead: that keeps the hidden half's box reserved, so the visible half
+   stays pinned in its own column instead of expanding into the now-empty
+   half — which is what shoved its right-aligned number into the other
+   column. Header halves hide the same way so the CALL / PUT labels track
+   their data. */
 .opm-matrix[data-show-price="0"] .opm-val--price,
-.opm-matrix[data-show-premium="0"] .opm-val--rate,
-.opm-matrix[data-show-call="0"] .opm-half--call,
-.opm-matrix[data-show-put="0"] .opm-half--put {
+.opm-matrix[data-show-premium="0"] .opm-val--rate {
     display: none;
+}
+
+.opm-matrix[data-show-call="0"] .opm-half--call,
+.opm-matrix[data-show-put="0"] .opm-half--put,
+.opm-matrix[data-show-call="0"] .opm-head-half--call,
+.opm-matrix[data-show-put="0"] .opm-head-half--put {
+    visibility: hidden;
 }
 
 @media (max-width: 720px) {
