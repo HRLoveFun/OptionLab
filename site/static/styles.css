@@ -2694,17 +2694,15 @@ textarea:focus-visible,
 }
 
 /* Switchable visibility — pure CSS, driven by data-show-* on the table.
-   price / premium stack vertically inside one half, so hiding one with
-   display:none lets the other float up to fill its place. call / put sit
-   side by side as two flex halves, so they MUST use visibility:hidden
-   instead: that keeps the hidden half's box reserved, so the visible half
-   stays pinned in its own column instead of expanding into the now-empty
-   half — which is what shoved its right-aligned number into the other
-   column. Header halves hide the same way so the CALL / PUT labels track
-   their data. */
+   All four switches use visibility:hidden (NOT display:none): that keeps the
+   hidden value's box reserved, so the remaining numbers stay pinned in their
+   own fixed positions instead of collapsing into the empty space. price /
+   premium stack vertically inside one half, while call / put sit side by side
+   as two flex halves — both cases reserve their box. Header halves hide the
+   same way so the CALL / PUT labels track their data. */
 .opm-matrix[data-show-price="0"] .opm-val--price,
 .opm-matrix[data-show-premium="0"] .opm-val--rate {
-    display: none;
+    visibility: hidden;
 }
 
 .opm-matrix[data-show-call="0"] .opm-half--call,
