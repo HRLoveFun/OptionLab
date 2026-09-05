@@ -63,7 +63,9 @@ def test_yfinance_throttle_passes_with_call(tmp_path: Path) -> None:
 
 def test_yfinance_session_kwarg_flagged(tmp_path: Path) -> None:
     f = tmp_path / "bad.py"
-    f.write_text("import yfinance as yf\nimport requests\nyf_throttle()\nyf.download('SPY', session=requests.Session())\n")
+    f.write_text(
+        "import yfinance as yf\nimport requests\nyf_throttle()\nyf.download('SPY', session=requests.Session())\n"
+    )
     _, viols = _run([f])
     assert any(v["rule"] == "yfinance-session-kwarg" for v in viols)
 
@@ -96,9 +98,6 @@ def test_module_docstring_flagged_for_core(tmp_path: Path, monkeypatch) -> None:
 
 def test_suppression_comment_works(tmp_path: Path) -> None:
     f = tmp_path / "x.py"
-    f.write_text(
-        "import yfinance as yf\n"
-        "yf.download('SPY')  # doc-guard: allow=yfinance-throttle\n"
-    )
+    f.write_text("import yfinance as yf\nyf.download('SPY')  # doc-guard: allow=yfinance-throttle\n")
     _, viols = _run([f])
     assert not any(v["rule"] == "yfinance-throttle" for v in viols), viols

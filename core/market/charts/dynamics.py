@@ -51,18 +51,49 @@ def render_dynamics(
             high_proj = high_proj_full.reindex(osc_high_valid.index)
             low_proj = low_proj_full.reindex(osc_low_valid.index)
 
-            ax.scatter(t_idx, returns_valid.values, color="tab:orange", s=25, marker="o", label="Returns", alpha=0.8, zorder=3)
-            ax.scatter(t_idx, osc_high_valid.values, s=40, marker="s", facecolors="none", edgecolors="purple",
-                       linewidths=1.4, label="Osc_high", alpha=0.9, zorder=4)
-            ax.scatter(t_idx, osc_low_valid.values, s=40, marker="s", facecolors="none", edgecolors="blue",
-                       linewidths=1.4, label="Osc_low", alpha=0.9, zorder=4)
+            ax.scatter(
+                t_idx, returns_valid.values, color="tab:orange", s=25, marker="o", label="Returns", alpha=0.8, zorder=3
+            )
+            ax.scatter(
+                t_idx,
+                osc_high_valid.values,
+                s=40,
+                marker="s",
+                facecolors="none",
+                edgecolors="purple",
+                linewidths=1.4,
+                label="Osc_high",
+                alpha=0.9,
+                zorder=4,
+            )
+            ax.scatter(
+                t_idx,
+                osc_low_valid.values,
+                s=40,
+                marker="s",
+                facecolors="none",
+                edgecolors="blue",
+                linewidths=1.4,
+                label="Osc_low",
+                alpha=0.9,
+                zorder=4,
+            )
 
             if high_proj is not None and not high_proj.empty:
                 last = high_proj.iloc[-1]
                 label = f"High Proj ({risk_threshold}%)"
                 if last is not None and np.isfinite(last):
                     label += f" *{last:.2f}"
-                ax.plot(t_idx, high_proj.to_numpy(), color="darkgreen", linewidth=2.0, linestyle="--", label=label, alpha=0.8, zorder=3)
+                ax.plot(
+                    t_idx,
+                    high_proj.to_numpy(),
+                    color="darkgreen",
+                    linewidth=2.0,
+                    linestyle="--",
+                    label=label,
+                    alpha=0.8,
+                    zorder=3,
+                )
 
             if low_proj is not None and not low_proj.empty:
                 last = low_proj.iloc[-1]
@@ -70,7 +101,16 @@ def render_dynamics(
                 label = f"Low Proj ({low_threshold}%)"
                 if last is not None and np.isfinite(last):
                     label += f" *{last:.2f}"
-                ax.plot(t_idx, low_proj.to_numpy(), color="darkred", linewidth=2.0, linestyle="--", label=label, alpha=0.8, zorder=3)
+                ax.plot(
+                    t_idx,
+                    low_proj.to_numpy(),
+                    color="darkred",
+                    linewidth=2.0,
+                    linestyle="--",
+                    label=label,
+                    alpha=0.8,
+                    zorder=3,
+                )
 
             ax.axhline(y=0, color="gray", linestyle="-", linewidth=1, alpha=0.3)
             ax.set_xlabel("Index", fontsize=11)
@@ -100,6 +140,6 @@ def _rolling_projections(series: pd.Series, rolling_window: int, risk_threshold:
         if i < rolling_window:
             projections.append(np.nan)
         else:
-            historical_window = series.iloc[i - rolling_window:i]
+            historical_window = series.iloc[i - rolling_window : i]
             projections.append(historical_window.quantile(percentile))
     return pd.Series(projections, index=series.index)

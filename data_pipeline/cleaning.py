@@ -1,4 +1,5 @@
 """Data cleaning utilities for raw market price data."""
+
 import datetime as dt
 import logging
 

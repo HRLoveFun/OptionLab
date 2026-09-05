@@ -15,10 +15,10 @@ from __future__ import annotations
 import datetime as dt
 import math
 from dataclasses import asdict, dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class VolRegime(str, Enum):
+class VolRegime(StrEnum):
     LOW = "LOW_VOL"
     MID = "MID_VOL"
     HIGH = "HIGH_VOL"
@@ -26,7 +26,7 @@ class VolRegime(str, Enum):
     UNKNOWN = "UNKNOWN_VOL"
 
 
-class DirRegime(str, Enum):
+class DirRegime(StrEnum):
     UP = "UP_TREND"
     DOWN = "DOWN_TREND"
     CHOP = "CHOP"

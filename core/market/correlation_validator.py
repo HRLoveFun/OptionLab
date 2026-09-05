@@ -89,9 +89,7 @@ class CorrelationValidator:
             return series
         try:
             end_ts = (
-                pd.Timestamp(self.user_end_date)
-                if self._user_provided_end
-                else compute_effective_end(self.frequency)
+                pd.Timestamp(self.user_end_date) if self._user_provided_end else compute_effective_end(self.frequency)
             )
             return apply_horizon(series, self.user_start_date, end_ts.date(), self._user_provided_end, self.frequency)
         except Exception:

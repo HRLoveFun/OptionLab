@@ -93,6 +93,7 @@ def run_benchmark(tickers: list[str]) -> float:
             resp = urlopen(req, timeout=30)
         except Exception as e:
             from urllib.error import HTTPError
+
             if isinstance(e, HTTPError):
                 logger.error("POST / -> %s body=%s", e.code, e.read()[:500])
             raise
@@ -110,7 +111,7 @@ def run_benchmark(tickers: list[str]) -> float:
                 raise RuntimeError("Could not locate job_id in skeleton response")
             start = idx + len(marker)
             end = start
-            while end < len(body) and body[end] not in ('&', '"', "'", " "):
+            while end < len(body) and body[end] not in ("&", '"', "'", " "):
                 end += 1
             job_id = body[start:end]
         else:
@@ -143,10 +144,15 @@ def run_benchmark(tickers: list[str]) -> float:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tickers", default=",".join(DEFAULT_TICKERS),
-                        help="Comma-separated tickers (default: %(default)s)")
-    parser.add_argument("--target", type=float, default=TARGET_SECONDS,
-                        help="Pass/fail wall-clock threshold in seconds (default: %(default).1f)")
+    parser.add_argument(
+        "--tickers", default=",".join(DEFAULT_TICKERS), help="Comma-separated tickers (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--target",
+        type=float,
+        default=TARGET_SECONDS,
+        help="Pass/fail wall-clock threshold in seconds (default: %(default).1f)",
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -157,9 +163,11 @@ def main() -> int:
     print(f"Benchmarking {len(tickers)} tickers: {tickers}")
     elapsed = run_benchmark(tickers)
     status = "PASS" if elapsed < args.target else "FAIL"
-    print(f"\n[{status}] total={elapsed:.2f}s  target<{args.target:.1f}s  "
-          f"({len(tickers)} tickers x {len(RENDER_KINDS)} kinds = "
-          f"{len(tickers) * len(RENDER_KINDS)} fragments)")
+    print(
+        f"\n[{status}] total={elapsed:.2f}s  target<{args.target:.1f}s  "
+        f"({len(tickers)} tickers x {len(RENDER_KINDS)} kinds = "
+        f"{len(tickers) * len(RENDER_KINDS)} fragments)"
+    )
     return 0 if elapsed < args.target else 1
 
 

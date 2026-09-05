@@ -27,10 +27,22 @@ def render_iv_smile(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry
 
         with new_figure((10, 5)) as fig:
             ax = fig.subplots()
-            ax.plot(calls["strike"], calls["impliedVolatility"] * 100, color="tab:blue",
-                    linestyle="--", linewidth=1.8, label="Calls IV")
-            ax.plot(puts["strike"], puts["impliedVolatility"] * 100, color="tab:orange",
-                    linestyle="-", linewidth=1.8, label="Puts IV")
+            ax.plot(
+                calls["strike"],
+                calls["impliedVolatility"] * 100,
+                color="tab:blue",
+                linestyle="--",
+                linewidth=1.8,
+                label="Calls IV",
+            )
+            ax.plot(
+                puts["strike"],
+                puts["impliedVolatility"] * 100,
+                color="tab:orange",
+                linestyle="-",
+                linewidth=1.8,
+                label="Puts IV",
+            )
             ax.axvline(atm, color="grey", linestyle=":", linewidth=1.2, label=f"ATM ~{atm:.0f}")
             ax.axvline(spot, color="black", linestyle="-", linewidth=1, alpha=0.5, label=f"Spot {spot:.2f}")
             ax.set_xlabel("Strike")

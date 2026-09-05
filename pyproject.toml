@@ -25,6 +25,10 @@ filterwarnings = [
 target-version = "py312"
 line-length = 120
 src = ["core", "services", "data_pipeline", "utils"]
+# Formatting style changes between ruff minor releases, so an unpinned local
+# ruff silently disagrees with CI. Keep this in sync with the pinned version in
+# .github/workflows/ci.yml.
+required-version = ">=0.16.5,<0.17"
 
 [tool.ruff.lint]
 select = [

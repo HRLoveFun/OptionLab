@@ -46,6 +46,7 @@ def _log_dq(source: str, error_class: str, message: str, *, ticker: str | None =
     except Exception:  # noqa: BLE001
         pass
 
+
 # Standard option-chain numeric columns we always coerce.
 _OPT_NUMERIC_COLS = (
     "strike",
@@ -180,9 +181,7 @@ def fetch_option_chain(ticker: str) -> dict[str, Any]:
             with consecutive_empty_lock:
                 consecutive_empty["n"] += 1
                 if consecutive_empty["n"] == 1:
-                    logger.warning(
-                        "fetch_option_chain: %s exp=%s returned no data (rate-limited?)", ticker, exp
-                    )
+                    logger.warning("fetch_option_chain: %s exp=%s returned no data (rate-limited?)", ticker, exp)
                 if consecutive_empty["n"] >= EMPTY_FAIL_FAST:
                     consecutive_empty["abort"] = True
             return exp, None
@@ -231,13 +230,12 @@ def _fetch_option_chain_serial(
             if opt is None or opt.calls is None or opt.puts is None:
                 consecutive_empty += 1
                 if consecutive_empty == 1:
-                    logger.warning(
-                        "fetch_option_chain: %s exp=%s returned no data (rate-limited?)", ticker, exp
-                    )
+                    logger.warning("fetch_option_chain: %s exp=%s returned no data (rate-limited?)", ticker, exp)
                 if consecutive_empty >= empty_fail_fast:
                     logger.warning(
                         "fetch_option_chain: %s aborting after %d empty expiries (likely rate-limited)",
-                        ticker, consecutive_empty,
+                        ticker,
+                        consecutive_empty,
                     )
                     break
                 continue

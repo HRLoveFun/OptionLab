@@ -47,19 +47,37 @@ def render_projection(
 def _plot_projection_points(ax, x_values: np.ndarray, proj_df: pd.DataFrame):
     close_mask = ~proj_df["Close"].isna()
     if close_mask.any():
-        ax.scatter(x_values[close_mask], proj_df["Close"][close_mask], label="Close", color="green", s=50, marker="o", zorder=3)
+        ax.scatter(
+            x_values[close_mask], proj_df["Close"][close_mask], label="Close", color="green", s=50, marker="o", zorder=3
+        )
 
     high_mask = ~proj_df["High"].isna()
     if high_mask.any():
-        ax.scatter(x_values[high_mask], proj_df["High"][high_mask], label="High", color="purple", s=50, marker="^", zorder=3)
-        ax.plot(x_values[high_mask], proj_df["High"][high_mask], color="purple", linewidth=1.5, alpha=0.8,
-                solid_capstyle="round", label="_nolegend_")
+        ax.scatter(
+            x_values[high_mask], proj_df["High"][high_mask], label="High", color="purple", s=50, marker="^", zorder=3
+        )
+        ax.plot(
+            x_values[high_mask],
+            proj_df["High"][high_mask],
+            color="purple",
+            linewidth=1.5,
+            alpha=0.8,
+            solid_capstyle="round",
+            label="_nolegend_",
+        )
 
     low_mask = ~proj_df["Low"].isna()
     if low_mask.any():
         ax.scatter(x_values[low_mask], proj_df["Low"][low_mask], label="Low", color="blue", s=50, marker="v", zorder=3)
-        ax.plot(x_values[low_mask], proj_df["Low"][low_mask], color="blue", linewidth=1.5, alpha=0.8,
-                solid_capstyle="round", label="_nolegend_")
+        ax.plot(
+            x_values[low_mask],
+            proj_df["Low"][low_mask],
+            color="blue",
+            linewidth=1.5,
+            alpha=0.8,
+            solid_capstyle="round",
+            label="_nolegend_",
+        )
 
     for col, color, label in [
         ("iHigh", "red", "Proj High (Current)"),
@@ -69,8 +87,16 @@ def _plot_projection_points(ax, x_values: np.ndarray, proj_df: pd.DataFrame):
     ]:
         mask = ~proj_df[col].isna()
         if mask.any():
-            ax.scatter(x_values[mask], proj_df[col][mask], label=label, facecolors="none", edgecolors=color,
-                       s=80, linewidth=2, zorder=3)
+            ax.scatter(
+                x_values[mask],
+                proj_df[col][mask],
+                label=label,
+                facecolors="none",
+                edgecolors=color,
+                s=80,
+                linewidth=2,
+                zorder=3,
+            )
 
 
 def _format_projection_axes(ax, proj_df, percentile, proj_volatility, bias_text, oos_acc, n_train, n_valid):
@@ -89,6 +115,13 @@ def _format_projection_axes(ax, proj_df, percentile, proj_volatility, bias_text,
         f"OOS Hit Rate: {oos_txt}\n"
         f"Train/Valid: {n_train or '?'}/{n_valid or '?'} periods"
     )
-    ax.text(0.02, 0.98, param_text, transform=ax.transAxes, fontsize=12, verticalalignment="top",
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8))
+    ax.text(
+        0.02,
+        0.98,
+        param_text,
+        transform=ax.transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+    )
     ax.legend(fontsize=12, loc="upper right")

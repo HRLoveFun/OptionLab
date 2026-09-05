@@ -141,10 +141,7 @@ class TestOptionChainRouteFutuFormat:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(
-    reason="Futu integration was archived; OptionsChainAnalyzer no longer "
-    "delegates to a Futu provider."
-)
+@pytest.mark.skip(reason="Futu integration was archived; OptionsChainAnalyzer no longer delegates to a Futu provider.")
 class TestOptionsChainAnalyzerFutuInit:
     """OptionsChainAnalyzer must convert yahoo tickers to futu format."""
 

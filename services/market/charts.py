@@ -17,7 +17,8 @@ import json
 import logging
 import threading
 from collections import OrderedDict
-from typing import Any, Callable, Hashable, Optional
+from collections.abc import Callable, Hashable
+from typing import Any
 
 import matplotlib.pyplot as plt
 
@@ -27,13 +28,13 @@ logger = logging.getLogger(__name__)
 # Bounded so a long-running process can't grow unbounded. Each entry is
 # a base64 PNG (~50–500 kB), so 64 entries ≈ 32 MB worst-case.
 _CACHE_MAX_ENTRIES = 64
-_cache: "OrderedDict[Hashable, str]" = OrderedDict()
+_cache: OrderedDict[Hashable, str] = OrderedDict()
 _cache_lock = threading.Lock()
 _cache_hits = 0
 _cache_misses = 0
 
 
-def _cache_get(key: Hashable) -> Optional[str]:
+def _cache_get(key: Hashable) -> str | None:
     global _cache_hits, _cache_misses
     with _cache_lock:
         if key in _cache:
@@ -92,15 +93,13 @@ def cached_chart(key_fn: Callable[..., Hashable]) -> Callable:
     ``(ticker, features_hash(...))``. Cache hits skip the wrapped function.
     """
 
-    def _decorator(func: Callable[..., Optional[str]]) -> Callable[..., Optional[str]]:
+    def _decorator(func: Callable[..., str | None]) -> Callable[..., str | None]:
         @functools.wraps(func)
         def _wrapper(*args, **kwargs):
             try:
                 key = key_fn(*args, **kwargs)
             except Exception:
-                logger.warning(
-                    "cached_chart key_fn raised; bypassing cache for %s", func.__name__
-                )
+                logger.warning("cached_chart key_fn raised; bypassing cache for %s", func.__name__)
                 return func(*args, **kwargs)
             cached = _cache_get(key)
             if cached is not None:
@@ -144,7 +143,7 @@ class ChartService:
             return None
 
     @staticmethod
-    def generate_cached(key: Hashable, builder: Callable[[], Any]) -> Optional[str]:
+    def generate_cached(key: Hashable, builder: Callable[[], Any]) -> str | None:
         """Return cached base64 for ``key`` or build → encode → cache.
 
         ``builder`` is invoked only on cache miss and must return a matplotlib

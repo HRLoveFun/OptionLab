@@ -250,5 +250,3 @@ def test_ensure_history_noop_when_db_populated(monkeypatch):
 
     svc._ensure_history("SPY")
     assert called == []
-
-

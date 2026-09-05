@@ -30,7 +30,8 @@ import os
 import threading
 import time
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +117,7 @@ def get_job(job_id: str) -> _JobEntry | None:
     return entry
 
 
-def compute_or_get(
-    job_id: str, ticker: str, kind: str, compute_fn: Callable[[dict], Any]
-) -> Any:
+def compute_or_get(job_id: str, ticker: str, kind: str, compute_fn: Callable[[dict], Any]) -> Any:
     """Memoised compute under a per-(ticker, kind) single-flight lock.
 
     Raises:
@@ -148,7 +147,10 @@ def compute_or_get(
         entry.results[key] = result
         logger.info(
             "JobCache computed job=%s ticker=%s kind=%s in %.2fs",
-            job_id[:8], ticker, kind, elapsed,
+            job_id[:8],
+            ticker,
+            kind,
+            elapsed,
         )
         return result
 

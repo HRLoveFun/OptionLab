@@ -33,17 +33,17 @@ def per_ticker_summary() -> list[dict[str, Any]]:
         ticker, rows, latest, earliest, null_close, null_volume = row
         stale = (latest or "") < threshold
         out.append(
-                {
-                    "ticker": ticker,
-                    "rows": int(rows or 0),
-                    "earliest_date": earliest,
-                    "latest_date": latest,
-                    "last_business_day": last_bday,
-                    "stale": bool(stale),
-                    "null_close": int(null_close or 0),
-                    "null_volume": int(null_volume or 0),
-                }
-            )
+            {
+                "ticker": ticker,
+                "rows": int(rows or 0),
+                "earliest_date": earliest,
+                "latest_date": latest,
+                "last_business_day": last_bday,
+                "stale": bool(stale),
+                "null_close": int(null_close or 0),
+                "null_volume": int(null_volume or 0),
+            }
+        )
     return out
 
 

@@ -12,7 +12,8 @@ by the guardrail.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import pandas as pd
 
@@ -95,9 +96,7 @@ def fetch_market_review_latest_dates(tickers: list[str]) -> dict[str, str | None
     out: dict[str, str | None] = {}
     with get_conn() as conn:
         for t in tickers:
-            row = conn.execute(
-                "SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)
-            ).fetchone()
+            row = conn.execute("SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)).fetchone()
             out[t] = row[0] if row and row[0] else None
     return out
 

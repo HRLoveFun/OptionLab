@@ -64,11 +64,8 @@ def ensure_range(ticker: str, start: dt.date, end: dt.date) -> bool:
         event.set()
 
 
-def _ensure_range_impl(
-    ticker: str, start: dt.date, end: dt.date, now: float, was_sentinel: bool = False
-) -> bool:
+def _ensure_range_impl(ticker: str, start: dt.date, end: dt.date, now: float, was_sentinel: bool = False) -> bool:
     """Internal: actual backfill. Caller must hold the in-flight slot."""
-    import time as _time
 
     import data_pipeline.cleaning as _cl
     import data_pipeline.downloader as _dl
@@ -104,7 +101,9 @@ def _ensure_range_impl(
         logger.debug(
             "ensure_range: %s start=%s far before existing_min=%s; "
             "treating DB coverage as authoritative (skip backfill)",
-            ticker, start, existing_min,
+            ticker,
+            start,
+            existing_min,
         )
         with _ensure_range_lock:
             _ensure_range_memo[ticker] = (now, start, end)
@@ -115,7 +114,11 @@ def _ensure_range_impl(
     try:
         logger.info(
             "ensure_range: backfilling %s [%s .. %s] (existing=%s..%s)",
-            ticker, fetch_start, fetch_end, existing_min, existing_max,
+            ticker,
+            fetch_start,
+            fetch_end,
+            existing_min,
+            existing_max,
         )
         chunk_end = fetch_end
         chunk_size = max(MAX_AUTO_BACKFILL_DAYS - 1, 30)
@@ -123,7 +126,9 @@ def _ensure_range_impl(
             chunk_start = max(fetch_start, chunk_end - dt.timedelta(days=chunk_size))
             dl = _dl.upsert_raw_prices(ticker, chunk_start, chunk_end)
             if not dl.ok:
-                logger.warning("ensure_range download failed for %s chunk %s..%s: %s", ticker, chunk_start, chunk_end, dl.error)
+                logger.warning(
+                    "ensure_range download failed for %s chunk %s..%s: %s", ticker, chunk_start, chunk_end, dl.error
+                )
                 with _ensure_range_lock:
                     _ensure_range_memo[ticker] = (now, start, end)
                 return False
@@ -143,6 +148,7 @@ def _ensure_range_impl(
                 _ensure_range_memo[ticker] = (now, start, end)
             return False
         from . import _globals as _g
+
         _g._cache_invalidate(ticker)
         with _ensure_range_lock:
             _ensure_range_memo[ticker] = (now, start, end)

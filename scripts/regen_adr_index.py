@@ -36,9 +36,7 @@ def render(entries: list[tuple[str, str, str, str]]) -> str:
         prefix = head.split(marker, 1)[0] + marker + "\n\n"
     else:
         prefix = (
-            "# Architecture Decision Records\n\n"
-            "Auto-generated index. Edit ADR files, not this table.\n\n"
-            "## Index\n\n"
+            "# Architecture Decision Records\n\nAuto-generated index. Edit ADR files, not this table.\n\n## Index\n\n"
         )
     lines = ["| ID | Title | Status |", "|----|-------|--------|"]
     for nnnn, title, status, fname in entries:

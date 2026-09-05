@@ -27,6 +27,7 @@ RISK_FREE_RATE: float = 0.05
 
 def _dte(expiry_str: str) -> int:
     import datetime as dt
+
     today = dt.date.today()
     exp = dt.datetime.strptime(expiry_str, "%Y-%m-%d").date()
     return max(0, (exp - today).days)

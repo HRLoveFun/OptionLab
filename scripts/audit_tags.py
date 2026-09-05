@@ -43,7 +43,9 @@ def _tag_above(lines: list[str], idx: int) -> bool:
 
 
 def collect() -> dict:
-    by_tag: dict[str, int] = {t: 0 for t in ("WHY", "CONSTRAINT", "TRADEOFF", "INVARIANT", "DOMAIN", "HACK", "WORKAROUND")}
+    by_tag: dict[str, int] = {
+        t: 0 for t in ("WHY", "CONSTRAINT", "TRADEOFF", "INVARIANT", "DOMAIN", "HACK", "WORKAROUND")
+    }
     uncovered_constants: list[str] = []
     files_scanned = 0
     for path in _scan_dirs():
@@ -106,7 +108,10 @@ def main() -> int:
         print("audit_tags: REGRESSION — new uncovered constants:", file=sys.stderr)
         for it in new_items:
             print(f"  + {it}", file=sys.stderr)
-        print("\nFix by adding a # DOMAIN: / # CONSTRAINT: comment above each, or run --update-baseline if intentional.", file=sys.stderr)
+        print(
+            "\nFix by adding a # DOMAIN: / # CONSTRAINT: comment above each, or run --update-baseline if intentional.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

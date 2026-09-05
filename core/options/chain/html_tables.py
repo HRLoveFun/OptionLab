@@ -49,15 +49,17 @@ def expected_move_table(chain: dict, expiries: list, spot: float) -> str | None:
             em_pct = em / spot * 100
             upper = spot + em
             lower = spot - em
-            rows.append({
-                "Expiry": exp,
-                "DTE": dte,
-                "ATM Straddle": f"${em:.2f}",
-                "Exp Move": f"${em:.2f}",
-                "Exp Move %": f"{em_pct:.2f}%",
-                "Upper Bound": f"{upper:.2f}",
-                "Lower Bound": f"{lower:.2f}",
-            })
+            rows.append(
+                {
+                    "Expiry": exp,
+                    "DTE": dte,
+                    "ATM Straddle": f"${em:.2f}",
+                    "Exp Move": f"${em:.2f}",
+                    "Exp Move %": f"{em_pct:.2f}%",
+                    "Upper Bound": f"{upper:.2f}",
+                    "Lower Bound": f"{lower:.2f}",
+                }
+            )
         if not rows:
             return "<p>No expected move data available.</p>"
         df = pd.DataFrame(rows)

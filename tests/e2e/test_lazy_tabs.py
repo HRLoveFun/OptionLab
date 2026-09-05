@@ -10,9 +10,7 @@ from __future__ import annotations
 from playwright.sync_api import Page, expect
 
 
-def test_option_chain_lazy_loads_on_activation(
-    page: Page, live_server: str, mock_apis, js_errors: list[str]
-) -> None:
+def test_option_chain_lazy_loads_on_activation(page: Page, live_server: str, mock_apis, js_errors: list[str]) -> None:
     """Switching to Option Chain tab triggers `/api/option_chain` and renders rows."""
     api_calls: list[str] = []
     page.on("request", lambda req: api_calls.append(req.url) if "/api/option_chain" in req.url else None)
@@ -62,9 +60,7 @@ def test_option_chain_handles_api_error_gracefully(
     page.click('[data-action="oc-reload"]')
 
     # The error banner (role=alert) should display the failure.
-    err_banner = page.locator(
-        "#tab-option-chain .panel-banner--error[role='alert']"
-    )
+    err_banner = page.locator("#tab-option-chain .panel-banner--error[role='alert']")
     expect(err_banner).to_be_visible(timeout=4_000)
 
     # Critical: no uncaught JS exception should bubble up.

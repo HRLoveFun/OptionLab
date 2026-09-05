@@ -2,7 +2,6 @@
 
 from data_pipeline.db import init_db
 
-from . import _globals as _g
 from . import _query as _q
 from . import _range as _r
 from . import _update as _u

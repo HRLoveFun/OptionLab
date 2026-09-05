@@ -81,10 +81,11 @@ class TestRenderRoutes:
             "services.market.analysis.AnalysisService.generate_assessment_slice",
             "services.options.chain.OptionsChainService.generate_options_chain_analysis",
         ]
-        with patch(slice_targets[0], return_value={}), patch(
-            slice_targets[1], return_value={}
-        ), patch(slice_targets[2], return_value={}), patch(
-            slice_targets[3], return_value={}
+        with (
+            patch(slice_targets[0], return_value={}),
+            patch(slice_targets[1], return_value={}),
+            patch(slice_targets[2], return_value={}),
+            patch(slice_targets[3], return_value={}),
         ):
             resp = client.get(f"/render/{kind}?ticker=AAPL")
         # Bootstrap path must NOT return the old 400 missing-job error.
@@ -97,10 +98,11 @@ class TestRenderRoutes:
             "services.market.analysis.AnalysisService.generate_assessment_slice",
             "services.options.chain.OptionsChainService.generate_options_chain_analysis",
         ]
-        with patch(slice_targets[0], return_value={}), patch(
-            slice_targets[1], return_value={}
-        ), patch(slice_targets[2], return_value={}), patch(
-            slice_targets[3], return_value={}
+        with (
+            patch(slice_targets[0], return_value={}),
+            patch(slice_targets[1], return_value={}),
+            patch(slice_targets[2], return_value={}),
+            patch(slice_targets[3], return_value={}),
         ):
             resp = client.get("/render/market_review")
         # Even without ?ticker=, fallback fills in DEFAULT_TICKER.

@@ -71,9 +71,7 @@ def _generate_assessment(analyzer, form_data):
                     if matrix is not None:
                         max_loss_per_contract = float(matrix["PnL"].min())
 
-            strategy_type = (
-                "credit" if (max_loss_per_contract is not None and max_loss_per_contract < 0) else "debit"
-            )
+            strategy_type = "credit" if (max_loss_per_contract is not None and max_loss_per_contract < 0) else "debit"
             ps_result = calculate_position_size(
                 float(account_size), float(max_risk_pct), max_loss_per_contract, strategy_type
             )

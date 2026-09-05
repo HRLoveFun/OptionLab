@@ -75,8 +75,15 @@ def short_strangle(k_call: float, k_put: float, p_call: float, p_put: float, **k
 
 
 def iron_condor(
-    k_put_long: float, k_put_short: float, k_call_short: float, k_call_long: float,
-    p_put_long: float, p_put_short: float, p_call_short: float, p_call_long: float, **kw
+    k_put_long: float,
+    k_put_short: float,
+    k_call_short: float,
+    k_call_long: float,
+    p_put_long: float,
+    p_put_short: float,
+    p_call_short: float,
+    p_call_long: float,
+    **kw,
 ) -> list[Leg]:
     if not (k_put_long < k_put_short < k_call_short < k_call_long):
         raise ValueError("iron_condor: strikes must be ordered k_put_long < k_put_short < k_call_short < k_call_long")
@@ -88,7 +95,9 @@ def iron_condor(
     ]
 
 
-def long_butterfly(k_low: float, k_mid: float, k_high: float, p_low: float, p_mid: float, p_high: float, **kw) -> list[Leg]:
+def long_butterfly(
+    k_low: float, k_mid: float, k_high: float, p_low: float, p_mid: float, p_high: float, **kw
+) -> list[Leg]:
     if not (k_low < k_mid < k_high):
         raise ValueError("long_butterfly: strikes must be ordered k_low < k_mid < k_high")
     return [
@@ -99,8 +108,14 @@ def long_butterfly(k_low: float, k_mid: float, k_high: float, p_low: float, p_mi
 
 
 def calendar_spread(
-    strike: float, option_type: str, p_short: float, p_long: float, dte_short: int, dte_long: int,
-    iv_short: float = 0.25, iv_long: float = 0.25,
+    strike: float,
+    option_type: str,
+    p_short: float,
+    p_long: float,
+    dte_short: int,
+    dte_long: int,
+    iv_short: float = 0.25,
+    iv_long: float = 0.25,
 ) -> list[Leg]:
     if dte_long <= dte_short:
         raise ValueError("calendar_spread: dte_long must be > dte_short")

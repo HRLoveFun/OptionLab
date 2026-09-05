@@ -55,6 +55,7 @@ def test_download(mock_dl):
     result = upsert_raw_prices("NVDA")
     assert result.ok  # Always passes — never tests empty case
 
+
 # AFTER: mock at DB level to test what happens when download actually fails
 @patch("data_pipeline.downloader._download_yf", return_value=pd.DataFrame())
 def test_download_empty(mock_dl):
@@ -76,8 +77,11 @@ def test_full_pipeline_with_nan_data(tmp_path, monkeypatch):
     init_db()
 
     # Seed NaN-only filler rows (simulates failed download)
-    upsert_many("raw_prices", ["ticker", "date", "open", "high", "low", "close"],
-                [("NVDA", "2026-03-28", None, None, None, None)])
+    upsert_many(
+        "raw_prices",
+        ["ticker", "date", "open", "high", "low", "close"],
+        [("NVDA", "2026-03-28", None, None, None, None)],
+    )
 
     # Run cleaning — should NOT propagate NaN rows
     result = clean_range("NVDA", dt.date(2026, 3, 28), dt.date(2026, 3, 28))
@@ -93,6 +97,7 @@ def test_full_pipeline_with_nan_data(tmp_path, monkeypatch):
 ```python
 from hypothesis import given, strategies as st
 
+
 @given(
     close=st.one_of(st.floats(min_value=0.01, max_value=10000), st.just(float("nan")), st.just(0.0)),
     volume=st.one_of(st.integers(min_value=0, max_value=10**9), st.just(0)),
@@ -101,6 +106,7 @@ from hypothesis import given, strategies as st
 def test_greeks_never_crash(close, volume, sigma):
     """Greeks computation should never raise — returns NaN for invalid inputs."""
     from core.options_greeks import calc_greeks
+
     result = calc_greeks(S=close, K=100, T=0.25, r=0.05, sigma=sigma)
     # Should return dict, never raise
     assert isinstance(result, dict)

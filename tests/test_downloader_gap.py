@@ -40,10 +40,7 @@ def _reset_state():
 
 
 def _seed_rows(ticker: str, dates: list[dt.date]) -> None:
-    rows = [
-        (ticker, d.isoformat(), 100.0, 101.0, 99.0, 100.5, 100.5, 1_000_000, "test")
-        for d in dates
-    ]
+    rows = [(ticker, d.isoformat(), 100.0, 101.0, 99.0, 100.5, 100.5, 1_000_000, "test") for d in dates]
     upsert_many(
         "raw_prices",
         ["ticker", "date", "open", "high", "low", "close", "adj_close", "volume", "provider"],
@@ -118,8 +115,9 @@ class TestUpsertRawPricesGapAware:
         start = dt.date(2024, 1, 1)
         end = dt.date(2024, 1, 12)
         # Seed only first 2 and last 2 business days; leave a gap in the middle.
-        _seed_rows("NVDA_REGRESSION", [dt.date(2024, 1, 1), dt.date(2024, 1, 2),
-                                        dt.date(2024, 1, 11), dt.date(2024, 1, 12)])
+        _seed_rows(
+            "NVDA_REGRESSION", [dt.date(2024, 1, 1), dt.date(2024, 1, 2), dt.date(2024, 1, 11), dt.date(2024, 1, 12)]
+        )
 
         # Mock yfinance to return rows for the gap so the upsert succeeds.
         gap_dates = [d.date() for d in pd.bdate_range(dt.date(2024, 1, 3), dt.date(2024, 1, 10))]

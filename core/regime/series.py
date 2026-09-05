@@ -33,9 +33,7 @@ SMA_WINDOW = 20
 SLOPE_LOOKBACK = 5
 
 
-def label_regime(
-    as_of: dt.date, vix_series: pd.Series | None, spy_close: pd.Series | None
-) -> RegimeLabel:
+def label_regime(as_of: dt.date, vix_series: pd.Series | None, spy_close: pd.Series | None) -> RegimeLabel:
     notes: list[str] = []
     vix_val: float | None = None
     if vix_series is not None and not vix_series.empty:
@@ -71,16 +69,25 @@ def label_regime(
 
     dir_regime, slope, close_vs_sma = classify_direction(close_today, sma_today, sma_ref)
     return RegimeLabel(
-        date=as_of, vol_regime=vol_regime, dir_regime=dir_regime,
-        vix_value=vix_val, sma_20=sma_today, sma_slope_5d=slope,
-        close_vs_sma_pct=close_vs_sma, notes=";".join(notes),
+        date=as_of,
+        vol_regime=vol_regime,
+        dir_regime=dir_regime,
+        vix_value=vix_val,
+        sma_20=sma_today,
+        sma_slope_5d=slope,
+        close_vs_sma_pct=close_vs_sma,
+        notes=";".join(notes),
     )
 
 
 def label_series(vix_series: pd.Series, spy_close: pd.Series) -> pd.DataFrame:
     expected_cols = [
-        "vol_regime", "dir_regime", "vix_value", "sma_20",
-        "sma_slope_5d", "close_vs_sma_pct",
+        "vol_regime",
+        "dir_regime",
+        "vix_value",
+        "sma_20",
+        "sma_slope_5d",
+        "close_vs_sma_pct",
     ]
     empty = pd.DataFrame(columns=expected_cols)
     empty.index.name = "date"
@@ -100,15 +107,17 @@ def label_series(vix_series: pd.Series, spy_close: pd.Series) -> pd.DataFrame:
     for ts in c.index:
         vol = classify_vol(v.loc[ts] if ts in v.index else None)
         direction, _, _ = classify_direction(c.loc[ts], sma.loc[ts], sma_ref.loc[ts])
-        rows.append({
-            "date": ts,
-            "vol_regime": vol.value,
-            "dir_regime": direction.value,
-            "vix_value": float(v.loc[ts]) if ts in v.index else None,
-            "sma_20": float(sma.loc[ts]) if pd.notna(sma.loc[ts]) else None,
-            "sma_slope_5d": float(slope.loc[ts]) if pd.notna(slope.loc[ts]) else None,
-            "close_vs_sma_pct": float(close_vs.loc[ts]) if pd.notna(close_vs.loc[ts]) else None,
-        })
+        rows.append(
+            {
+                "date": ts,
+                "vol_regime": vol.value,
+                "dir_regime": direction.value,
+                "vix_value": float(v.loc[ts]) if ts in v.index else None,
+                "sma_20": float(sma.loc[ts]) if pd.notna(sma.loc[ts]) else None,
+                "sma_slope_5d": float(slope.loc[ts]) if pd.notna(slope.loc[ts]) else None,
+                "close_vs_sma_pct": float(close_vs.loc[ts]) if pd.notna(close_vs.loc[ts]) else None,
+            }
+        )
     df = pd.DataFrame(rows).set_index("date")
     return df
 
@@ -122,11 +131,13 @@ def regime_transitions(df: pd.DataFrame) -> list[dict]:
         vol = row.get("vol_regime")
         direction = row.get("dir_regime")
         if prev_vol is not None and (vol != prev_vol or direction != prev_dir):
-            out.append({
-                "date": pd.Timestamp(ts).date().isoformat(),
-                "from": f"{prev_vol}|{prev_dir}",
-                "to": f"{vol}|{direction}",
-            })
+            out.append(
+                {
+                    "date": pd.Timestamp(ts).date().isoformat(),
+                    "from": f"{prev_vol}|{prev_dir}",
+                    "to": f"{vol}|{direction}",
+                }
+            )
         prev_vol, prev_dir = vol, direction
     return out
 
@@ -134,16 +145,18 @@ def regime_transitions(df: pd.DataFrame) -> list[dict]:
 def coverage_report(df: pd.DataFrame) -> dict:
     if df is None or df.empty:
         return {
-            "vol_regimes_observed": [], "dir_regimes_observed": [],
-            "unique_composite_regimes": 0, "regime_transitions": [],
-            "days_with_unknown": 0, "charter_exit_condition_met": False,
+            "vol_regimes_observed": [],
+            "dir_regimes_observed": [],
+            "unique_composite_regimes": 0,
+            "regime_transitions": [],
+            "days_with_unknown": 0,
+            "charter_exit_condition_met": False,
         }
     vols = sorted(set(df["vol_regime"].dropna().astype(str)))
     dirs = sorted(set(df["dir_regime"].dropna().astype(str)))
-    composites = set(zip(df["vol_regime"].astype(str), df["dir_regime"].astype(str)))
-    unknown_mask = (
-        df["vol_regime"].astype(str).str.startswith("UNKNOWN")
-        | df["dir_regime"].astype(str).str.startswith("UNKNOWN")
+    composites = set(zip(df["vol_regime"].astype(str), df["dir_regime"].astype(str), strict=True))
+    unknown_mask = df["vol_regime"].astype(str).str.startswith("UNKNOWN") | df["dir_regime"].astype(str).str.startswith(
+        "UNKNOWN"
     )
     return {
         "vol_regimes_observed": vols,

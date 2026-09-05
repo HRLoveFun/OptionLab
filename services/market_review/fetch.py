@@ -72,9 +72,7 @@ def fetch_market_data(instrument: str, start_date=None, end_date=None):
     )
 
     latest_map = fetch_market_review_latest_dates(all_tickers)
-    tickers_needing_download = [
-        t for t in all_tickers if latest_map.get(t) is None or latest_map[t] < today_str
-    ]
+    tickers_needing_download = [t for t in all_tickers if latest_map.get(t) is None or latest_map[t] < today_str]
 
     if tickers_needing_download:
         try:

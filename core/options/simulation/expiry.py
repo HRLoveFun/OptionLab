@@ -216,9 +216,7 @@ def simulate_expiry(
         premium_rows.append(np.asarray(g["bs_price"], dtype=float))
         delta_rows.append(np.asarray(g["delta"], dtype=float))
 
-    intrinsic_at = (
-        (lambda p, k: np.maximum(p - k, 0.0)) if is_call else (lambda p, k: np.maximum(k - p, 0.0))
-    )
+    intrinsic_at = (lambda p, k: np.maximum(p - k, 0.0)) if is_call else (lambda p, k: np.maximum(k - p, 0.0))
 
     results: list[dict] = []
     for i, K in enumerate(KS.tolist()):
@@ -240,11 +238,7 @@ def simulate_expiry(
             # Breakeven solves intrinsic(S_T) == premium — independent of side.
             breakeven = K + premium if is_call else K - premium
 
-            pop_long = (
-                _prob_above(S, breakeven, T, r, iv)
-                if is_call
-                else 1.0 - _prob_above(S, breakeven, T, r, iv)
-            )
+            pop_long = _prob_above(S, breakeven, T, r, iv) if is_call else 1.0 - _prob_above(S, breakeven, T, r, iv)
             pop = pop_long if side == "long" else 1.0 - pop_long
 
             if is_call:

@@ -27,7 +27,17 @@ def _git_changed_since_last_drift_pr() -> list[Path]:
     try:
         # Default: look at last 2 weeks of changes
         out = subprocess.check_output(
-            ["git", "log", "--since=2.weeks", "--name-only", "--pretty=format:", "--", "core", "data_pipeline", "services"],
+            [
+                "git",
+                "log",
+                "--since=2.weeks",
+                "--name-only",
+                "--pretty=format:",
+                "--",
+                "core",
+                "data_pipeline",
+                "services",
+            ],
             cwd=REPO_ROOT,
             text=True,
         )
@@ -83,7 +93,11 @@ def _candidates_missing_module_docstring(files: list[Path]) -> list[dict]:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(getattr(tree.body[0], "value", None), ast.Constant):
+        if (
+            tree.body
+            and isinstance(tree.body[0], ast.Expr)
+            and isinstance(getattr(tree.body[0], "value", None), ast.Constant)
+        ):
             continue
         out.append(
             {

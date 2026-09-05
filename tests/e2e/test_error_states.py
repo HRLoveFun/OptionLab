@@ -25,17 +25,13 @@ def test_option_chain_500_renders_error_banner(
 
     # Activate the Option Chain tab.
     page.click('.tab-btn[data-tab="tab-option-chain"]')
-    expect(page.locator("#tab-option-chain")).to_have_class(
-        __import__("re").compile(r"\bactive\b"), timeout=2_000
-    )
+    expect(page.locator("#tab-option-chain")).to_have_class(__import__("re").compile(r"\bactive\b"), timeout=2_000)
 
     # Click the reload button to trigger the request.
     page.click('[data-action="oc-reload"]')
 
     # The error banner should appear with role=alert.
-    err_banner = page.locator(
-        "#tab-option-chain .panel-banner--error[role='alert']"
-    )
+    err_banner = page.locator("#tab-option-chain .panel-banner--error[role='alert']")
     expect(err_banner).to_be_visible(timeout=5_000)
     # Ensure the error message text propagated from the response body or a
     # generic fallback — both are acceptable, but *something* must render.

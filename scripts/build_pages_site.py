@@ -24,7 +24,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import copy
 import datetime as dt
 import json
 import re
@@ -72,6 +71,7 @@ BANNER_HTML = """    <!-- PAGES DEMO BANNER (build-injected; not part of the Fla
 # --------------------------------------------------------------------------
 # snapshot refresh (local, full deps)
 # --------------------------------------------------------------------------
+
 
 def _assert_jsonable(obj, path="root"):
     """Snapshot must survive a JSON round-trip (no DataFrames, datetimes…)."""
@@ -121,7 +121,6 @@ def refresh_snapshot(ticker: str = DEMO_TICKER) -> dict:
 
     logging.basicConfig(level=logging.WARNING)
     from services.market.analysis import AnalysisService
-    from services.market.facade import MarketService
     from services.options.chain import OptionsChainService
 
     form = _demo_form_data(ticker)
@@ -153,7 +152,7 @@ def refresh_snapshot(ticker: str = DEMO_TICKER) -> dict:
     snapshot = {
         "meta": {
             "ticker": ticker,
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
             "live_option_chain": chain_live,
         },
         "index": {k: v for k, v in form.items() if not k.startswith("parsed_")},
@@ -177,8 +176,12 @@ def _refresh_api_fixtures(ticker: str) -> None:
     mrts = {"status": "ok", **MarketService.market_review_timeseries(ticker)}
     data_through = max(mrts.get("dates") or ["?"])
     (FIXTURES_DIR / "market_review_ts.nvda.json").write_text(
-        json.dumps({**mrts, "sample_note": f"NVDA snapshot for GitHub Pages demo (data through {data_through})."},
-                   ensure_ascii=False), encoding="utf-8")
+        json.dumps(
+            {**mrts, "sample_note": f"NVDA snapshot for GitHub Pages demo (data through {data_through})."},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
     # -- option_chain: live filtered records (same producer as the route);
     #    keep the committed synthetic file when Yahoo is unreachable.
@@ -189,9 +192,16 @@ def _refresh_api_fixtures(ticker: str) -> None:
         live = OptionsChainService.fetch_records_filtered(ticker)
         if live.get("expirations"):
             (FIXTURES_DIR / "option_chain.nvda.json").write_text(
-                json.dumps({**live, "ticker": ticker,
-                            "sample_note": f"NVDA chain snapshot for GitHub Pages demo ({live['expirations'][0]}…)."},
-                           ensure_ascii=False), encoding="utf-8")
+                json.dumps(
+                    {
+                        **live,
+                        "ticker": ticker,
+                        "sample_note": f"NVDA chain snapshot for GitHub Pages demo ({live['expirations'][0]}…).",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
             print(f"[snapshot]   live chain: spot {live.get('spot')}, {len(live['expirations'])} expiries")
         else:
             print("[snapshot]   live chain empty; keeping committed fixture")
@@ -224,7 +234,8 @@ def _refresh_api_fixtures(ticker: str) -> None:
         "sample_note": "Persisted regime_log snapshot for GitHub Pages demo.",
     }
     (FIXTURES_DIR / "regime_current.json").write_text(
-        json.dumps(current, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        json.dumps(current, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
 
     import pandas as pd
 
@@ -234,15 +245,17 @@ def _refresh_api_fixtures(ticker: str) -> None:
     history = {
         "status": "ok",
         "rows": [
-            {k: r[k] for k in ("date", "vol_regime", "dir_regime", "vix_value", "sma_20",
-                               "sma_slope_5d", "close_vs_sma_pct") if k in r}
+            {
+                k: r[k]
+                for k in ("date", "vol_regime", "dir_regime", "vix_value", "sma_20", "sma_slope_5d", "close_vs_sma_pct")
+                if k in r
+            }
             for r in log_rows
         ],
         "coverage": coverage_report(df),
         "source": "log",
     }
-    (FIXTURES_DIR / "regime_history.json").write_text(
-        json.dumps(history, ensure_ascii=False), encoding="utf-8")
+    (FIXTURES_DIR / "regime_history.json").write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
 
     # -- validate_tickers: NVDA + benchmark tickers, latest closes from DB
     print("[snapshot] validate_tickers fixture …")
@@ -251,20 +264,27 @@ def _refresh_api_fixtures(ticker: str) -> None:
     results = {}
     for t in tickers:
         row = conn.execute(
-            "SELECT close FROM market_review_prices WHERE ticker=? ORDER BY date DESC LIMIT 1", (t,)).fetchone()
+            "SELECT close FROM market_review_prices WHERE ticker=? ORDER BY date DESC LIMIT 1", (t,)
+        ).fetchone()
         price = round(float(row[0]), 2) if row and row[0] is not None else None
         results[t] = {"valid": price is not None, "price": price, "message": "demo snapshot"}
     conn.close()
     (FIXTURES_DIR / "validate_tickers.json").write_text(
-        json.dumps({"status": "ok", "results": results,
-                    "sample_note": "Demo validation snapshot (NVDA + benchmarks)."},
-                   ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        json.dumps(
+            {"status": "ok", "results": results, "sample_note": "Demo validation snapshot (NVDA + benchmarks)."},
+            ensure_ascii=False,
+            indent=1,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     print(f"[snapshot] fixtures done ({len(results)} tickers)")
 
 
 # --------------------------------------------------------------------------
 # assemble (CI-safe: jinja2 only)
 # --------------------------------------------------------------------------
+
 
 def _jinja_env():
     from jinja2 import Environment, FileSystemLoader
@@ -315,15 +335,14 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
     except Exception:
         data_through = snapshot.get("meta", {}).get("generated_at", "?")[:10]
 
-    context = {**index_vars, "ticker": ticker, "tickers": [ticker], "tickers_raw": ticker,
-               "streaming_mode": False}
+    context = {**index_vars, "ticker": ticker, "tickers": [ticker], "tickers_raw": ticker, "streaming_mode": False}
     for kind in ("market_review", "statistical", "assessment", "options_chain"):
         context.update(slices.get(kind) or {})
 
     html = _jinja_env().get_template("index.html").render(**context)
 
     # -- Pages adaptations (only delta vs the Flask app) --
-    html = re.sub(r'    <!-- Probe: Alpine mounts x-data.*?\n', "", html, flags=re.DOTALL)  # orphan comment
+    html = re.sub(r"    <!-- Probe: Alpine mounts x-data.*?\n", "", html, flags=re.DOTALL)  # orphan comment
     html = re.sub(r'<div id="scaffold-probe".*?</div>\s*', "", html, flags=re.DOTALL)  # dev probe: no backend
     html = html.replace('"/static/', '"./static/').replace("'/static/", "'./static/")
     banner = BANNER_HTML.format(ticker=ticker, data_through=data_through)
@@ -340,14 +359,23 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
     # Demo ships in the "post-analysis" state: ticker input prefilled so all
     # auto-load tab handlers (option chain / odds / sim) work on first click,
     # exactly like the Flask app after submitting the form.
-    html = html.replace('id="ticker" name="ticker" value=""',
-                        f'id="ticker" name="ticker" value="{ticker}"', 1)
+    html = html.replace('id="ticker" name="ticker" value=""', f'id="ticker" name="ticker" value="{ticker}"', 1)
     # -- sanity: identical-UI invariants --
     assert 'hx-get="/render/' not in html, "streaming placeholders leaked into static build"
     assert '"/static/' not in html and "'/static/" not in html, "absolute /static/ paths break the /OptionLab/ subpath"
-    for tab_id in ("tab-parameter", "tab-market-review", "tab-statistical-analysis",
-                   "tab-market-assessment", "tab-option-chain", "tab-options-chain",
-                   "tab-odds", "tab-regime", "tab-simulation", "tab-option-pricing-matrix", "tab-config"):
+    for tab_id in (
+        "tab-parameter",
+        "tab-market-review",
+        "tab-statistical-analysis",
+        "tab-market-assessment",
+        "tab-option-chain",
+        "tab-options-chain",
+        "tab-odds",
+        "tab-regime",
+        "tab-simulation",
+        "tab-option-pricing-matrix",
+        "tab-config",
+    ):
         assert f'id="{tab_id}"' in html, f"missing tab body: {tab_id}"
     assert "./pages-shim.js" in html and "pages-demo-banner" in html
 
@@ -358,8 +386,7 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
     dest_static = out_dir / "static"
     if dest_static.exists():
         shutil.rmtree(dest_static)
-    shutil.copytree(STATIC_DIR, dest_static,
-                    ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
+    shutil.copytree(STATIC_DIR, dest_static, ignore=shutil.ignore_patterns("__pycache__", ".DS_Store"))
 
     # Drop pre-convergence leftovers (replaced by redirects / site/static).
     for stale_js in (out_dir / "sim").glob("*.js"):
@@ -381,8 +408,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Build the Pages mirror of the Flask app.")
     ap.add_argument("--out", default=str(SITE_DIR), help="output dir (default: site/)")
     ap.add_argument("--ticker", default=DEMO_TICKER)
-    ap.add_argument("--refresh-snapshot", action="store_true",
-                    help="recompute snapshot.json + live fixtures (needs full deps + DB)")
+    ap.add_argument(
+        "--refresh-snapshot", action="store_true", help="recompute snapshot.json + live fixtures (needs full deps + DB)"
+    )
     args = ap.parse_args(argv)
 
     if args.refresh_snapshot:

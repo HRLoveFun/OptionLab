@@ -34,7 +34,9 @@ def render_skew(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry: st
         merged = pd.merge_asof(
             puts2.sort_values("strike")[["strike", "moneyness", "impliedVolatility"]],
             calls.sort_values("strike")[["strike", "impliedVolatility"]],
-            on="strike", suffixes=("_put", "_call"), direction="nearest",
+            on="strike",
+            suffixes=("_put", "_call"),
+            direction="nearest",
         )
         merged["rr"] = (merged["impliedVolatility_put"] - merged["impliedVolatility_call"]) * 100
 
@@ -47,8 +49,13 @@ def render_skew(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry: st
             ax1.set_title(f"Skew Analysis — {expiry}")
             ax1.grid(alpha=0.3)
 
-            ax2.bar(merged["moneyness"], merged["rr"],
-                    color=["red" if v > 0 else "green" for v in merged["rr"]], width=0.005, alpha=0.8)
+            ax2.bar(
+                merged["moneyness"],
+                merged["rr"],
+                color=["red" if v > 0 else "green" for v in merged["rr"]],
+                width=0.005,
+                alpha=0.8,
+            )
             ax2.axhline(0, color="grey", linestyle="--", linewidth=1)
             ax2.set_xlabel("Moneyness (Strike / Spot)")
             ax2.set_ylabel("Risk Reversal (Put IV − Call IV) %")
@@ -56,8 +63,16 @@ def render_skew(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry: st
 
             s25 = skew_25d(puts, calls, spot)
             if s25 is not None:
-                ax2.text(0.02, 0.95, f"25Δ Skew: {s25 * 100:.2f}%",
-                         transform=ax2.transAxes, fontsize=9, va="top", color="darkred", fontweight="bold")
+                ax2.text(
+                    0.02,
+                    0.95,
+                    f"25Δ Skew: {s25 * 100:.2f}%",
+                    transform=ax2.transAxes,
+                    fontsize=9,
+                    va="top",
+                    color="darkred",
+                    fontweight="bold",
+                )
             return encode_figure(fig)
     except Exception as e:
         logger.error("render_skew failed: %s", e)

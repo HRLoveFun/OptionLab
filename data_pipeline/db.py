@@ -225,12 +225,8 @@ def init_db(db_path: str | None = None):
         )
         """
     )
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS idx_dq_ts ON data_quality_log(ts)"
-    )
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS idx_dq_ticker ON data_quality_log(ticker)"
-    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dq_ts ON data_quality_log(ts)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dq_ticker ON data_quality_log(ticker)")
     # Tracked strategies — user-saved multi-leg positions for P&L tracking.
     # ``legs_json`` stores the full Leg list at entry; ``entry_meta_json``
     # captures snapshots needed for P&L attribution (spot, IV per leg, total
@@ -255,9 +251,7 @@ def init_db(db_path: str | None = None):
         )
         """
     )
-    cur.execute(
-        "CREATE INDEX IF NOT EXISTS idx_tracked_status ON tracked_strategies(status)"
-    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tracked_status ON tracked_strategies(status)")
     conn.commit()
 
 

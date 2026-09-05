@@ -105,7 +105,8 @@ def from_futu_ticker(futu_ticker: str) -> tuple[str, str]:
 - 推荐模式（手动 close）：
   ```python
   from futu import *
-  quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
+
+  quote_ctx = OpenQuoteContext(host="127.0.0.1", port=11111)
   # ... 使用 quote_ctx 调用各种查询 ...
   quote_ctx.close()  # 使用完毕后务必关闭
   ```
@@ -151,13 +152,14 @@ def from_futu_ticker(futu_ticker: str) -> tuple[str, str]:
 
 ```python
 from futu import *
-quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, data = quote_ctx.get_option_expiration_date(code='HK.00700')
+
+quote_ctx = OpenQuoteContext(host="127.0.0.1", port=11111)
+ret, data = quote_ctx.get_option_expiration_date(code="HK.00700")
 if ret == RET_OK:
     print(data)
-    print(data['strike_time'].values.tolist())
+    print(data["strike_time"].values.tolist())
 else:
-    print('error:', data)
+    print("error:", data)
 quote_ctx.close()
 ```
 
@@ -257,26 +259,27 @@ quote_ctx.close()
 ```python
 from futu import *
 import time
-quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-ret1, data1 = quote_ctx.get_option_expiration_date(code='HK.00700')
+
+quote_ctx = OpenQuoteContext(host="127.0.0.1", port=11111)
+ret1, data1 = quote_ctx.get_option_expiration_date(code="HK.00700")
 
 filter1 = OptionDataFilter()
 filter1.delta_min = 0
 filter1.delta_max = 0.1
 
 if ret1 == RET_OK:
-    expiration_date_list = data1['strike_time'].values.tolist()
+    expiration_date_list = data1["strike_time"].values.tolist()
     for date in expiration_date_list:
-        ret2, data2 = quote_ctx.get_option_chain(code='HK.00700', start=date, end=date, data_filter=filter1)
+        ret2, data2 = quote_ctx.get_option_chain(code="HK.00700", start=date, end=date, data_filter=filter1)
         if ret2 == RET_OK:
             print(data2)
-            print(data2['code'][0])
-            print(data2['code'].values.tolist())
+            print(data2["code"][0])
+            print(data2["code"].values.tolist())
         else:
-            print('error:', data2)
+            print("error:", data2)
         time.sleep(3)  # 注意频率限制
 else:
-    print('error:', data1)
+    print("error:", data1)
 quote_ctx.close()
 ```
 
@@ -380,14 +383,15 @@ quote_ctx.close()
 
 ```python
 from futu import *
-quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, data = quote_ctx.get_market_snapshot(['HK.00700', 'US.AAPL'])
+
+quote_ctx = OpenQuoteContext(host="127.0.0.1", port=11111)
+ret, data = quote_ctx.get_market_snapshot(["HK.00700", "US.AAPL"])
 if ret == RET_OK:
     print(data)
-    print(data['code'][0])
-    print(data['code'].values.tolist())
+    print(data["code"][0])
+    print(data["code"].values.tolist())
 else:
-    print('error:', data)
+    print("error:", data)
 quote_ctx.close()
 ```
 

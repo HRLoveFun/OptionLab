@@ -183,9 +183,7 @@ def _build_projection_dataframe(
             if all_weekdays.tz is None:
                 all_weekdays = all_weekdays.tz_localize(daily_bars.index.tz)
 
-        proj_df = pd.DataFrame(
-            index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow", "iHigh1", "iLow1"]
-        )
+        proj_df = pd.DataFrame(index=all_weekdays, columns=["Close", "High", "Low", "iHigh", "iLow", "iHigh1", "iLow1"])
 
         historical_period = daily_bars.loc[date_last_close:date_last]
         for date in historical_period.index:
@@ -206,7 +204,13 @@ def _build_projection_dataframe(
 
 
 def _fill_projection_band(
-    proj_df: pd.DataFrame, start_date: pd.Timestamp, end_date: pd.Timestamp, proj_high: float, proj_low: float, high_col: str, low_col: str
+    proj_df: pd.DataFrame,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    proj_high: float,
+    proj_low: float,
+    high_col: str,
+    low_col: str,
 ) -> None:
     """Fill projection band columns with sqrt-interpolated values."""
     try:

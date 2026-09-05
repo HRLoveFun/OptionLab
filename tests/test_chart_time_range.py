@@ -55,23 +55,18 @@ def _run_single_case(test_case: dict) -> None:
         end_date=test_case["end"],
     )
 
-    assert analyzer.is_data_valid(), (
-        f"{test_case['description']}: No valid data returned"
-    )
+    assert analyzer.is_data_valid(), f"{test_case['description']}: No valid data returned"
 
     df = analyzer.features_df
     num_points = len(df)
     expected_min = test_case["expected_min_points"]
 
     assert num_points >= expected_min, (
-        f"{test_case['description']}: Only {num_points} points "
-        f"(expected at least {expected_min})"
+        f"{test_case['description']}: Only {num_points} points (expected at least {expected_min})"
     )
 
     osc_std = df["Oscillation"].std()
-    assert osc_std >= 0.1, (
-        f"{test_case['description']}: Oscillation std={osc_std:.4f} too low"
-    )
+    assert osc_std >= 0.1, f"{test_case['description']}: Oscillation std={osc_std:.4f} too low"
 
     assert analyzer.generate_scatter_plots("Oscillation"), "Scatter plot failed"
     assert analyzer.generate_high_low_scatter(), "HL scatter failed"

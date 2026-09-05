@@ -40,8 +40,17 @@ def render_iv_term_structure(dates: list[str], atm_ivs: list[float], spot: float
             slope = atm_ivs[-1] - atm_ivs[0]
             label = "Contango (Normal)" if slope >= 0 else "Backwardation (Inverted)"
             color = "green" if slope >= 0 else "red"
-            ax.text(0.98, 0.95, label, transform=ax.transAxes, ha="right", va="top",
-                    color=color, fontsize=9, fontweight="bold")
+            ax.text(
+                0.98,
+                0.95,
+                label,
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                color=color,
+                fontsize=9,
+                fontweight="bold",
+            )
             return encode_figure(fig)
     except Exception as e:
         logger.error("render_iv_term_structure failed: %s", e)

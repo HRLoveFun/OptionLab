@@ -15,7 +15,7 @@ Dependencies DOWNWARD:
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
@@ -58,8 +58,18 @@ def render_scatter_osc(
 
 def _create_scatter_fig(x: pd.Series, y: pd.Series, label_indices: Iterable | None = None):
     with new_figure((10, 8)) as fig:
-        gs = GridSpec(2, 2, width_ratios=(3, 1), height_ratios=(1, 3),
-                      left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.05, hspace=0.05)
+        gs = GridSpec(
+            2,
+            2,
+            width_ratios=(3, 1),
+            height_ratios=(1, 3),
+            left=0.05,
+            right=0.95,
+            bottom=0.05,
+            top=0.95,
+            wspace=0.05,
+            hspace=0.05,
+        )
         ax = fig.add_subplot(gs[1, 0])
         ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
         ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
@@ -102,19 +112,58 @@ def _add_highlight_labels(ax, x: pd.Series, y: pd.Series, label_indices):
         recent_only = [idx for idx in recent_indices if indices_to_label is None or idx not in indices_to_label]
 
         if top_only:
-            ax.scatter([x.loc[i] for i in top_only], [y.loc[i] for i in top_only], color="red", s=80, zorder=4, alpha=0.8, edgecolors="darkred", linewidths=0.8)
+            ax.scatter(
+                [x.loc[i] for i in top_only],
+                [y.loc[i] for i in top_only],
+                color="red",
+                s=80,
+                zorder=4,
+                alpha=0.8,
+                edgecolors="darkred",
+                linewidths=0.8,
+            )
         if recent_only:
-            ax.scatter([x.loc[i] for i in recent_only], [y.loc[i] for i in recent_only], color="blue", s=80, zorder=4, alpha=0.8, edgecolors="darkblue", linewidths=0.8)
+            ax.scatter(
+                [x.loc[i] for i in recent_only],
+                [y.loc[i] for i in recent_only],
+                color="blue",
+                s=80,
+                zorder=4,
+                alpha=0.8,
+                edgecolors="darkblue",
+                linewidths=0.8,
+            )
         if both:
-            ax.scatter([x.loc[i] for i in both], [y.loc[i] for i in both], color="purple", s=80, zorder=5, alpha=0.8, edgecolors="indigo", linewidths=0.8)
+            ax.scatter(
+                [x.loc[i] for i in both],
+                [y.loc[i] for i in both],
+                color="purple",
+                s=80,
+                zorder=5,
+                alpha=0.8,
+                edgecolors="indigo",
+                linewidths=0.8,
+            )
 
         if indices_to_label:
             for idx in indices_to_label:
-                ax.annotate(f"{idx.strftime('%y%b')}", xy=(x.loc[idx], y.loc[idx]),
-                            xytext=(5, -5), textcoords="offset points", fontsize=6, color="red")
+                ax.annotate(
+                    f"{idx.strftime('%y%b')}",
+                    xy=(x.loc[idx], y.loc[idx]),
+                    xytext=(5, -5),
+                    textcoords="offset points",
+                    fontsize=6,
+                    color="red",
+                )
         for idx in recent_indices:
-            ax.annotate(f"{idx.strftime('%b')}", xy=(x.loc[idx], y.loc[idx]),
-                        xytext=(5, 5), textcoords="offset points", fontsize=6, color="blue")
+            ax.annotate(
+                f"{idx.strftime('%b')}",
+                xy=(x.loc[idx], y.loc[idx]),
+                xytext=(5, 5),
+                textcoords="offset points",
+                fontsize=6,
+                color="blue",
+            )
     except Exception as e:
         logger.warning("Failed to add labels: %s", e)
 
@@ -136,14 +185,28 @@ def _add_percentile_texts(ax_histx, ax_histy, x: pd.Series, y: pd.Series):
         if len(x) > 0:
             latest_x = x.iloc[-1]
             x_pct = float(((x <= latest_x).sum() / len(x)) * 100.0)
-            ax_histx.text(0.98, 0.90, f"Osc Percentile: {x_pct:.1f}%",
-                          transform=ax_histx.transAxes, ha="right", va="top", fontsize=9,
-                          bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+            ax_histx.text(
+                0.98,
+                0.90,
+                f"Osc Percentile: {x_pct:.1f}%",
+                transform=ax_histx.transAxes,
+                ha="right",
+                va="top",
+                fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+            )
         if len(y) > 0:
             latest_y = y.iloc[-1]
             y_pct = float(((y <= latest_y).sum() / len(y)) * 100.0)
-            ax_histy.text(0.05, 0.98, f"Ret Percentile: {y_pct:.1f}%",
-                          transform=ax_histy.transAxes, ha="left", va="top", fontsize=9,
-                          bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+            ax_histy.text(
+                0.05,
+                0.98,
+                f"Ret Percentile: {y_pct:.1f}%",
+                transform=ax_histy.transAxes,
+                ha="left",
+                va="top",
+                fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+            )
     except Exception as e:
         logger.warning("Failed to add percentile labels: %s", e)

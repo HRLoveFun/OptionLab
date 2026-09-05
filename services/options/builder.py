@@ -276,11 +276,7 @@ def build_from_chain(
 
     analytics = strategies_mod.analyze_strategy(legs, float(spot or legs[0].strike))
 
-    avg_iv_pct = (
-        sum(d["iv_pct"] for d in leg_diagnostics) / len(leg_diagnostics)
-        if leg_diagnostics
-        else None
-    )
+    avg_iv_pct = sum(d["iv_pct"] for d in leg_diagnostics) / len(leg_diagnostics) if leg_diagnostics else None
 
     return {
         "status": "ok",

@@ -69,9 +69,7 @@ class TestCooldown:
         assert result is True
         assert mock_dl.call_count == 2
 
-    @patch(
-        "data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(ok=False, error="download_failed")
-    )
+    @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(ok=False, error="download_failed"))
     def test_failed_pipeline_clears_cooldown(self, mock_dl):
         """If download fails, cooldown should NOT prevent retry (since we return False, not raise)."""
         init_db()
@@ -213,9 +211,7 @@ class TestEnsureRangeInflightDedup:
         results = []
 
         def call():
-            results.append(
-                DataService.ensure_range("DEDUPTEST", dt.date(2024, 1, 1), dt.date(2024, 6, 1))
-            )
+            results.append(DataService.ensure_range("DEDUPTEST", dt.date(2024, 1, 1), dt.date(2024, 6, 1)))
 
         threads = [threading.Thread(target=call) for _ in range(4)]
         for t in threads:
@@ -242,9 +238,10 @@ class TestEnsureRangeInflightDedup:
         import datetime as dt
 
         DataService._ensure_range_memo.clear()
-        with patch("data_pipeline.db.fetch_df") as mock_fetch_df, patch(
-            "data_pipeline.downloader.upsert_raw_prices"
-        ) as mock_dl:
+        with (
+            patch("data_pipeline.db.fetch_df") as mock_fetch_df,
+            patch("data_pipeline.downloader.upsert_raw_prices") as mock_dl,
+        ):
             # DB has 2021-01-01 .. today coverage already.
             mock_fetch_df.return_value = pd.DataFrame(
                 {
@@ -253,9 +250,7 @@ class TestEnsureRangeInflightDedup:
                     "n": [1000],
                 }
             )
-            ok = DataService.ensure_range(
-                "SENTINELTEST", dt.date(1900, 1, 1), dt.date.today()
-            )
+            ok = DataService.ensure_range("SENTINELTEST", dt.date(1900, 1, 1), dt.date.today())
             assert ok is True
             assert mock_dl.call_count == 0, "must NOT walk yfinance back to 1990"
 
@@ -263,9 +258,7 @@ class TestEnsureRangeInflightDedup:
     @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
     @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     @patch("data_pipeline.db.fetch_df")
-    def test_explicit_multiyear_request_does_backfill(
-        self, mock_fetch_df, mock_dl, mock_cl, mock_pr
-    ):
+    def test_explicit_multiyear_request_does_backfill(self, mock_fetch_df, mock_dl, mock_cl, mock_pr):
         """Regression for the 'NVDA only has 30 days, user asked for 5
         years, sentinel short-circuit silently lied' bug. A user-explicit
         multi-year request must trigger backfill even when DB has only a
@@ -282,22 +275,17 @@ class TestEnsureRangeInflightDedup:
                 "n": [22],
             }
         )
-        ok = DataService.ensure_range(
-            "EXPLICITTEST", dt.date(2021, 3, 1), dt.date(2026, 3, 1)
-        )
+        ok = DataService.ensure_range("EXPLICITTEST", dt.date(2021, 3, 1), dt.date(2026, 3, 1))
         assert ok is True
         assert mock_dl.call_count > 0, (
-            "user-explicit 5-year range must trigger backfill — "
-            "sentinel short-circuit must NOT apply here"
+            "user-explicit 5-year range must trigger backfill — sentinel short-circuit must NOT apply here"
         )
 
     @patch("data_pipeline.processing.process_frequencies", return_value=PipelineResult(rows=5))
     @patch("data_pipeline.cleaning.clean_range", return_value=PipelineResult(rows=5))
     @patch("data_pipeline.downloader.upsert_raw_prices", return_value=PipelineResult(rows=5))
     @patch("data_pipeline.db.fetch_df")
-    def test_sentinel_with_thin_db_still_backfills(
-        self, mock_fetch_df, mock_dl, mock_cl, mock_pr
-    ):
+    def test_sentinel_with_thin_db_still_backfills(self, mock_fetch_df, mock_dl, mock_cl, mock_pr):
         """Regression: sentinel start (PriceDynamic uses 1900-01-01 always)
         but DB has only ~1 month of recent data MUST backfill. The sentinel
         short-circuit only applies when DB itself spans a meaningful horizon
@@ -315,9 +303,7 @@ class TestEnsureRangeInflightDedup:
                 "n": [22],
             }
         )
-        ok = DataService.ensure_range(
-            "THINSENTINELTEST", dt.date(1900, 1, 1), dt.date.today()
-        )
+        ok = DataService.ensure_range("THINSENTINELTEST", dt.date(1900, 1, 1), dt.date.today())
         assert ok is True
         assert mock_dl.call_count > 0, (
             "sentinel short-circuit must NOT fire when DB span < 1y; "

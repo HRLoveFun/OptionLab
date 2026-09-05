@@ -35,12 +35,22 @@ def render_option_pnl(matrix_df, current_price, option_data=None) -> str | None:
                 label=f"Current Price: ${current_price:.2f}",
             )
             ax.fill_between(
-                matrix_df.index, matrix_df["PnL"], 0,
-                where=(matrix_df["PnL"] > 0), color="green", alpha=0.3, label="Profit",
+                matrix_df.index,
+                matrix_df["PnL"],
+                0,
+                where=(matrix_df["PnL"] > 0),
+                color="green",
+                alpha=0.3,
+                label="Profit",
             )
             ax.fill_between(
-                matrix_df.index, matrix_df["PnL"], 0,
-                where=(matrix_df["PnL"] < 0), color="red", alpha=0.3, label="Loss",
+                matrix_df.index,
+                matrix_df["PnL"],
+                0,
+                where=(matrix_df["PnL"] < 0),
+                color="red",
+                alpha=0.3,
+                label="Loss",
             )
             ax.set_xlabel("Stock Price ($)", fontsize=12)
             ax.set_ylabel("P&L ($)", fontsize=12)
@@ -57,8 +67,12 @@ def render_option_pnl(matrix_df, current_price, option_data=None) -> str | None:
                 if len(breakeven_points) > 1:
                     stats_text += f", ${breakeven_points[1]:.0f}"
             ax.text(
-                0.02, 0.98, stats_text,
-                transform=ax.transAxes, fontsize=12, verticalalignment="top",
+                0.02,
+                0.98,
+                stats_text,
+                transform=ax.transAxes,
+                fontsize=12,
+                verticalalignment="top",
                 bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
             )
 
@@ -70,14 +84,16 @@ def render_option_pnl(matrix_df, current_price, option_data=None) -> str | None:
                     positions = []
                     for opt in option_data:
                         if opt.get("dte") and opt.get("iv"):
-                            positions.append({
-                                "type": opt["option_type"],
-                                "strike": float(opt["strike"]),
-                                "dte": int(opt["dte"]),
-                                "iv": float(opt["iv"]),
-                                "qty": int(opt["quantity"]),
-                                "premium": float(opt["premium"]),
-                            })
+                            positions.append(
+                                {
+                                    "type": opt["option_type"],
+                                    "strike": float(opt["strike"]),
+                                    "dte": int(opt["dte"]),
+                                    "iv": float(opt["iv"]),
+                                    "qty": int(opt["quantity"]),
+                                    "premium": float(opt["premium"]),
+                                }
+                            )
                     if positions:
                         totals, _ = portfolio_greeks_table(positions, float(current_price))
                         greeks_text = (
@@ -87,9 +103,14 @@ def render_option_pnl(matrix_df, current_price, option_data=None) -> str | None:
                             f"Vega/1%:   {totals['vega']:+.2f}"
                         )
                         ax.text(
-                            0.98, 0.98, greeks_text,
-                            transform=ax.transAxes, fontsize=10, verticalalignment="top",
-                            horizontalalignment="right", family="monospace",
+                            0.98,
+                            0.98,
+                            greeks_text,
+                            transform=ax.transAxes,
+                            fontsize=10,
+                            verticalalignment="top",
+                            horizontalalignment="right",
+                            family="monospace",
                             bbox=dict(boxstyle="round", facecolor="lightyellow", alpha=0.8),
                         )
             except Exception as e:

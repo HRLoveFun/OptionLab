@@ -99,8 +99,6 @@ def list_positions(status: str | None = "open") -> list[dict[str, Any]]:
         "id ticker template expiry entry_date entry_spot entry_net_premium "
         "qty legs_json entry_meta_json status notes closed_date closed_value"
     ).split()
-    where = "WHERE status = ?" if status else ""
-    params = (status,) if status else ()
     rows = select_tracked_strategies(cols, status)
     out: list[dict[str, Any]] = []
     for r in rows:
@@ -112,9 +110,7 @@ def list_positions(status: str | None = "open") -> list[dict[str, Any]]:
 
 
 def close_position(position_id: int, closed_value: float) -> dict[str, Any]:
-    rowcount = update_tracked_strategy_closed(
-        position_id, date.today().isoformat(), float(closed_value)
-    )
+    rowcount = update_tracked_strategy_closed(position_id, date.today().isoformat(), float(closed_value))
     if rowcount == 0:
         raise ApiError(f"position {position_id} not found", code="not_found", status=404)
     return {"status": "ok", "id": position_id}

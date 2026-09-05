@@ -265,9 +265,7 @@ class OptionsChainService:
         result = OptionsChainService.fetch_records(ticker)
         if not result.get("expirations"):
             return result
-        return filter_option_chain(
-            result, max_dte, moneyness_low, moneyness_high, max_contracts
-        )
+        return filter_option_chain(result, max_dte, moneyness_low, moneyness_high, max_contracts)
 
     # ------------------------------------------------------------------
     # Client-side chart payloads (used by /api/options_chart/*)
@@ -292,12 +290,10 @@ class OptionsChainService:
             "expiry": exp,
             "spot": round(analyzer.spot, 2),
             "calls": [
-                {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
-                for r in calls.itertuples()
+                {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100} for r in calls.itertuples()
             ],
             "puts": [
-                {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100}
-                for r in puts.itertuples()
+                {"strike": float(r.strike), "iv_pct": float(r.impliedVolatility) * 100} for r in puts.itertuples()
             ],
         }
 
@@ -341,4 +337,3 @@ class OptionsChainService:
             chain=analyzer.chain,
             expiries=analyzer.expiries,
         )
-

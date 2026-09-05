@@ -16,7 +16,7 @@ def _seed(ticker: str, dates: list[str], close_vals: list[float | None]) -> None
         conn.executemany(
             "INSERT OR REPLACE INTO raw_prices (ticker,date,open,high,low,close,adj_close,volume) "
             "VALUES (?,?,?,?,?,?,?,?)",
-            [(ticker, d, 1.0, 1.0, 1.0, c, c, 100.0) for d, c in zip(dates, close_vals)],
+            [(ticker, d, 1.0, 1.0, 1.0, c, c, 100.0) for d, c in zip(dates, close_vals, strict=True)],
         )
         conn.commit()
 

@@ -5,6 +5,7 @@ Context:
   routes must not import ``core/`` directly (ADR 0001); this module is the
   designated orchestration point even when the wrapping is shallow.
 """
+
 import datetime as dt
 import logging
 
@@ -58,7 +59,6 @@ class MarketService:
         except Exception as e:
             logger.warning("fetch_spot failed for %s: %s", ticker, e)
             return None
-
 
     @staticmethod
     def market_review_timeseries(ticker, start_date=None):

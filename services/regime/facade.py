@@ -71,6 +71,7 @@ def _ensure_history(ticker: str) -> None:
     if _count_clean_rows(ticker) < MIN_TRADING_ROWS:
         _bootstrap_history(ticker)
 
+
 # Re-export at module level so test monkey-patches targeting
 # ``services.regime.facade._xxx`` keep working: the helpers now live in
 # ``services.regime.ops``, and patching the re-bound name here is what the
@@ -127,9 +128,7 @@ class RegimeService:
         prev = _previous_log_row(dt.date.fromisoformat(date_str))
         regime_changed = 0
         if prev is not None:
-            if (prev.get("vol_regime") != label["vol_regime"]) or (
-                prev.get("dir_regime") != label["dir_regime"]
-            ):
+            if (prev.get("vol_regime") != label["vol_regime"]) or (prev.get("dir_regime") != label["dir_regime"]):
                 regime_changed = 1
 
         row = {
@@ -180,9 +179,7 @@ class RegimeService:
                     "vix_value": None if pd.isna(r["vix_value"]) else float(r["vix_value"]),
                     "sma_20": None if pd.isna(r["sma_20"]) else float(r["sma_20"]),
                     "sma_slope_5d": None if pd.isna(r["sma_slope_5d"]) else float(r["sma_slope_5d"]),
-                    "close_vs_sma_pct": None
-                    if pd.isna(r["close_vs_sma_pct"])
-                    else float(r["close_vs_sma_pct"]),
+                    "close_vs_sma_pct": None if pd.isna(r["close_vs_sma_pct"]) else float(r["close_vs_sma_pct"]),
                     "regime_changed_from_previous": 1 if d in change_dates else 0,
                     "fetch_timestamp": now_iso,
                     "notes": "",
@@ -228,9 +225,7 @@ class RegimeService:
                     "dir_regime": r.get("dir_regime"),
                     "vix_value": None if pd.isna(r.get("vix_value")) else float(r.get("vix_value")),
                     "sma_20": None if pd.isna(r.get("sma_20")) else float(r.get("sma_20")),
-                    "sma_slope_5d": None
-                    if pd.isna(r.get("sma_slope_5d"))
-                    else float(r.get("sma_slope_5d")),
+                    "sma_slope_5d": None if pd.isna(r.get("sma_slope_5d")) else float(r.get("sma_slope_5d")),
                     "close_vs_sma_pct": None
                     if pd.isna(r.get("close_vs_sma_pct"))
                     else float(r.get("close_vs_sma_pct")),

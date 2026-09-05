@@ -25,9 +25,7 @@ def _app_errors(js_errors: list[str]) -> list[str]:
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_simulation_open_input_render(
-    page: Page, live_server: str, js_errors: list[str]
-) -> None:
+def test_simulation_open_input_render(page: Page, live_server: str, js_errors: list[str]) -> None:
     """Open tab → enter spot/strikes/IVs/expiries → Simulate → charts/matrix render."""
     page.goto(live_server, wait_until="domcontentloaded")
 
@@ -61,9 +59,7 @@ def test_simulation_open_input_render(
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_simulation_dual_iv_unlinked(
-    page: Page, live_server: str, js_errors: list[str]
-) -> None:
+def test_simulation_dual_iv_unlinked(page: Page, live_server: str, js_errors: list[str]) -> None:
     """Unlinking forward vol must not break rendering (Decision B dual-IV path)."""
     page.goto(live_server, wait_until="domcontentloaded")
     page.locator('.tab-btn[data-tab="tab-simulation"]').click()

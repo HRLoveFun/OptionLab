@@ -47,8 +47,7 @@ def calculate_volatility(
             window = VOLATILITY_WINDOWS.get(frequency, 21)
 
         logger.debug(
-            "calculate_volatility input: len=%d, first=%s, last=%s, min=%.4f, max=%.4f, "
-            "freq=%s, window=%d",
+            "calculate_volatility input: len=%d, first=%s, last=%s, min=%.4f, max=%.4f, freq=%s, window=%d",
             len(daily_close),
             daily_close.index[0],
             daily_close.index[-1],

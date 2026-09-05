@@ -71,11 +71,14 @@ def build_review(instrument, data, returns, display_names):
     tuples = list(zip(*arrays, strict=False))
     multi_index = pd.MultiIndex.from_tuples(tuples, names=["Metric", "Period"])
     col_map = {
-        ("Return", "1M"): "Return (1M)", ("Return", "1Q"): "Return (1Q)",
+        ("Return", "1M"): "Return (1M)",
+        ("Return", "1Q"): "Return (1Q)",
         ("Return", "YTD"): "Return (YTD)",
-        ("Volatility", "1M"): "Volatility (1M)", ("Volatility", "1Q"): "Volatility (1Q)",
+        ("Volatility", "1M"): "Volatility (1M)",
+        ("Volatility", "1Q"): "Volatility (1Q)",
         ("Volatility", "YTD"): "Volatility (YTD)",
-        ("Correlation", "1M"): "Correlation (1M)", ("Correlation", "1Q"): "Correlation (1Q)",
+        ("Correlation", "1M"): "Correlation (1M)",
+        ("Correlation", "1Q"): "Correlation (1Q)",
         ("Correlation", "YTD"): "Correlation (YTD)",
         ("Last Close", ""): "Last Close",
     }

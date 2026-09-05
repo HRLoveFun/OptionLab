@@ -71,9 +71,7 @@ def test_create_and_list_position():
             "entry_spot": 400.0,
             "entry_net_premium": 500.0,
             "qty": 1,
-            "legs": [
-                {"side": "long", "option_type": "call", "strike": 400, "premium": 5.0, "dte": 30, "iv": 0.25}
-            ],
+            "legs": [{"side": "long", "option_type": "call", "strike": 400, "premium": 5.0, "dte": 30, "iv": 0.25}],
         }
     )
     assert res["status"] == "ok" and res["id"]
@@ -102,9 +100,7 @@ def test_portfolio_snapshot_uses_mocked_spots(monkeypatch):
             "entry_spot": 250.0,
             "entry_net_premium": 700.0,
             "qty": 1,
-            "legs": [
-                {"side": "long", "option_type": "call", "strike": 250, "premium": 7.0, "dte": 30, "iv": 0.4}
-            ],
+            "legs": [{"side": "long", "option_type": "call", "strike": 250, "premium": 7.0, "dte": 30, "iv": 0.4}],
         }
     )
     monkeypatch.setattr(ps, "fetch_spots_bulk", lambda ts: {"TSLA": 270.0})

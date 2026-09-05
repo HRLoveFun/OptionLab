@@ -18,8 +18,15 @@ from core.regime.series import (
 )
 
 __all__ = [
-    "VolRegime", "DirRegime", "RegimeLabel",
-    "classify_vol", "classify_direction", "label_regime",
-    "label_series", "regime_transitions", "coverage_report",
-    "SMA_WINDOW", "SLOPE_LOOKBACK",
+    "VolRegime",
+    "DirRegime",
+    "RegimeLabel",
+    "classify_vol",
+    "classify_direction",
+    "label_regime",
+    "label_series",
+    "regime_transitions",
+    "coverage_report",
+    "SMA_WINDOW",
+    "SLOPE_LOOKBACK",
 ]

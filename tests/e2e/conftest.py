@@ -188,14 +188,13 @@ def yf_stub() -> Iterator[None]:
 
     def fake_download(tickers, start=None, end=None, **kwargs):  # noqa: ARG001
         if isinstance(tickers, str):
-            return _synthetic_ohlcv(tickers, start or dt.date.today() - dt.timedelta(days=30),
-                                    end or dt.date.today())
+            return _synthetic_ohlcv(tickers, start or dt.date.today() - dt.timedelta(days=30), end or dt.date.today())
         # multi-ticker: return concatenated MultiIndex frame
         import pandas as pd
+
         frames = {}
         for t in tickers:
-            frames[t] = _synthetic_ohlcv(t, start or dt.date.today() - dt.timedelta(days=30),
-                                         end or dt.date.today())
+            frames[t] = _synthetic_ohlcv(t, start or dt.date.today() - dt.timedelta(days=30), end or dt.date.today())
         return pd.concat(frames, axis=1)
 
     fake_ticker = MagicMock(side_effect=lambda sym: _make_fake_ticker(sym))
@@ -223,6 +222,7 @@ def seed_test_data(_e2e_db: str, yf_stub: None) -> Iterator[None]:
     """
     try:
         from data_pipeline.data_ops import DataService
+
         # `manual_update` will route to the synthetic fixture for TEST_*
         DataService.manual_update("TEST_AAPL", days=120)
     except Exception:
@@ -302,12 +302,44 @@ FAKE_OPTION_CHAIN: dict[str, Any] = {
     "chain": {
         "2026-05-15": {
             "calls": [
-                {"strike": 5000, "bid": 50.0, "ask": 52.0, "last": 51.0, "iv": 0.18, "volume": 100, "open_interest": 500},
-                {"strike": 5050, "bid": 30.0, "ask": 32.0, "last": 31.0, "iv": 0.19, "volume": 80,  "open_interest": 400},
+                {
+                    "strike": 5000,
+                    "bid": 50.0,
+                    "ask": 52.0,
+                    "last": 51.0,
+                    "iv": 0.18,
+                    "volume": 100,
+                    "open_interest": 500,
+                },
+                {
+                    "strike": 5050,
+                    "bid": 30.0,
+                    "ask": 32.0,
+                    "last": 31.0,
+                    "iv": 0.19,
+                    "volume": 80,
+                    "open_interest": 400,
+                },
             ],
             "puts": [
-                {"strike": 5000, "bid": 48.0, "ask": 50.0, "last": 49.0, "iv": 0.20, "volume": 90,  "open_interest": 450},
-                {"strike": 4950, "bid": 28.0, "ask": 30.0, "last": 29.0, "iv": 0.21, "volume": 70,  "open_interest": 350},
+                {
+                    "strike": 5000,
+                    "bid": 48.0,
+                    "ask": 50.0,
+                    "last": 49.0,
+                    "iv": 0.20,
+                    "volume": 90,
+                    "open_interest": 450,
+                },
+                {
+                    "strike": 4950,
+                    "bid": 28.0,
+                    "ask": 30.0,
+                    "last": 29.0,
+                    "iv": 0.21,
+                    "volume": 70,
+                    "open_interest": 350,
+                },
             ],
         }
     },

@@ -39,7 +39,10 @@ def manual_update(ticker: str, days: int = 7) -> bool:
         if gaps and min(gaps) < start:
             logger.info(
                 "Gap detected for %s at %s; expanding update range to %s..%s",
-                ticker, min(gaps), min(gaps), end,
+                ticker,
+                min(gaps),
+                min(gaps),
+                end,
             )
             start = min(gaps)
 

@@ -45,8 +45,12 @@ def portfolio_greeks_table(positions: list, spot: float, r: float = 0.05) -> tup
             sign = 1 if is_long else -1
             T = max(pos["dte"], 1) / 365
             g = greeks_vectorized(
-                S=float(spot), K=float(pos["strike"]), T=T, r=r,
-                sigma=float(pos["iv"]), option_type="call" if is_call else "put",
+                S=float(spot),
+                K=float(pos["strike"]),
+                T=T,
+                r=r,
+                sigma=float(pos["iv"]),
+                option_type="call" if is_call else "put",
             )
             qty = int(pos["qty"]) * sign
             totals["delta"] += _get_val(g, "delta") * qty
@@ -54,17 +58,19 @@ def portfolio_greeks_table(positions: list, spot: float, r: float = 0.05) -> tup
             totals["theta"] += _get_val(g, "theta") * qty
             totals["vega"] += _get_val(g, "vega") * qty
             totals["net_premium"] += float(pos["premium"]) * int(pos["qty"]) * (-sign)
-            rows.append({
-                "Leg": pos["type"],
-                "Strike": pos["strike"],
-                "DTE": pos["dte"],
-                "IV": f"{pos['iv'] * 100:.1f}%",
-                "Qty": qty,
-                "Delta": f"{_get_val(g, 'delta') * qty:+.3f}",
-                "Gamma": f"{_get_val(g, 'gamma') * qty:+.5f}",
-                "Theta/d": f"{_get_val(g, 'theta') * qty:+.2f}",
-                "Vega/1%": f"{_get_val(g, 'vega') * qty:+.2f}",
-            })
+            rows.append(
+                {
+                    "Leg": pos["type"],
+                    "Strike": pos["strike"],
+                    "DTE": pos["dte"],
+                    "IV": f"{pos['iv'] * 100:.1f}%",
+                    "Qty": qty,
+                    "Delta": f"{_get_val(g, 'delta') * qty:+.3f}",
+                    "Gamma": f"{_get_val(g, 'gamma') * qty:+.5f}",
+                    "Theta/d": f"{_get_val(g, 'theta') * qty:+.2f}",
+                    "Vega/1%": f"{_get_val(g, 'vega') * qty:+.2f}",
+                }
+            )
         except (KeyError, ValueError, TypeError) as e:
             logger.warning("Skipping leg %s due to error: %s", pos, e)
     return totals, pd.DataFrame(rows)
@@ -89,8 +95,12 @@ def theta_decay_path(positions: list, spot: float, r: float = 0.05) -> tuple:
             dte_remain = np.maximum(pos["dte"] - days, 0)
             T_arr = np.maximum(dte_remain / 365, _T_MIN)
             g = greeks_vectorized(
-                S=float(spot), K=float(pos["strike"]), T=T_arr, r=r,
-                sigma=float(pos["iv"]), option_type="call" if is_call else "put",
+                S=float(spot),
+                K=float(pos["strike"]),
+                T=T_arr,
+                r=r,
+                sigma=float(pos["iv"]),
+                option_type="call" if is_call else "put",
             )
             theta_series = np.where(np.isfinite(g["theta"]), g["theta"] * qty, 0.0)
             total_theta += theta_series

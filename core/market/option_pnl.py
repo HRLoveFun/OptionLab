@@ -59,7 +59,9 @@ def build_option_matrix(option_data: list, current_price: float) -> pd.DataFrame
         return None
 
 
-def single_option_pnl(prices: np.ndarray, option_type: str, strike: float, quantity: float, premium: float) -> np.ndarray:
+def single_option_pnl(
+    prices: np.ndarray, option_type: str, strike: float, quantity: float, premium: float
+) -> np.ndarray:
     """Per-share P&L for a single option leg."""
     if option_type == "SC":
         return np.where(prices > strike, (premium - (prices - strike)) * quantity, premium * quantity)

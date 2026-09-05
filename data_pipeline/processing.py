@@ -5,6 +5,7 @@ Context:
   ``processed_prices``. Pure pandas; no I/O outside the DB helpers in
   ``data_pipeline.db``.
 """
+
 import datetime as dt
 import logging
 

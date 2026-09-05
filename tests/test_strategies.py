@@ -42,9 +42,16 @@ def test_bull_call_spread_bounded_both_sides():
 
 def test_iron_condor_two_breakevens_credit():
     legs = S.iron_condor(
-        k_put_long=90, k_put_short=95, k_call_short=110, k_call_long=115,
-        p_put_long=0.5, p_put_short=1.5, p_call_short=1.5, p_call_long=0.5,
-        dte=30, iv=0.25,
+        k_put_long=90,
+        k_put_short=95,
+        k_call_short=110,
+        k_call_long=115,
+        p_put_long=0.5,
+        p_put_short=1.5,
+        p_call_short=1.5,
+        p_call_long=0.5,
+        dte=30,
+        iv=0.25,
     )
     res = S.analyze_strategy(legs, spot=100, n_points=1001)
     # Net credit = (1.5+1.5) - (0.5+0.5) = 2.0
@@ -86,17 +93,25 @@ def test_factory_validation():
         S.bull_call_spread(k_long=110, k_short=100, p_long=3, p_short=1)
     with pytest.raises(ValueError):
         S.iron_condor(
-            k_put_long=100, k_put_short=90, k_call_short=110, k_call_long=120,
-            p_put_long=0.5, p_put_short=1.5, p_call_short=1.5, p_call_long=0.5,
+            k_put_long=100,
+            k_put_short=90,
+            k_call_short=110,
+            k_call_long=120,
+            p_put_long=0.5,
+            p_put_short=1.5,
+            p_call_short=1.5,
+            p_call_long=0.5,
         )
 
 
 def test_service_analyze_happy_path():
-    res = analyze({
-        "strategy": "bull_call_spread",
-        "spot": 105,
-        "params": {"k_long": 100, "k_short": 110, "p_long": 3, "p_short": 1, "dte": 30, "iv": 0.25},
-    })
+    res = analyze(
+        {
+            "strategy": "bull_call_spread",
+            "spot": 105,
+            "params": {"k_long": 100, "k_short": 110, "p_long": 3, "p_short": 1, "dte": 30, "iv": 0.25},
+        }
+    )
     assert res["status"] == "ok"
     assert res["strategy"] == "bull_call_spread"
     assert "pnl" in res and "prices" in res

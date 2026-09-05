@@ -94,17 +94,14 @@ def analyze(payload: dict) -> dict:
                 for p in sig.parameters.values()
                 if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
             ]
-            missing = [
-                p["name"] for p in expected if p["required"] and p["name"] not in params
-            ]
+            missing = [p["name"] for p in expected if p["required"] and p["name"] not in params]
         except (TypeError, ValueError):
             expected, missing = [], []
         return {
             "status": "error",
             "code": "missing_params",
             "message": (
-                f"strategy '{strategy_name}' is missing required parameters: "
-                f"{', '.join(missing) if missing else exc}"
+                f"strategy '{strategy_name}' is missing required parameters: {', '.join(missing) if missing else exc}"
             ),
             "expected_params": expected,
             "missing": missing,

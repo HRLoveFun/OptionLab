@@ -21,9 +21,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def _filter_expirations_by_dte(
-    expirations: list[str], max_dte: int, today: dt.date | None = None
-) -> list[str]:
+def _filter_expirations_by_dte(expirations: list[str], max_dte: int, today: dt.date | None = None) -> list[str]:
     """Return expiration strings whose DTE is within [0, max_dte]."""
     today = today or dt.datetime.now().date()
     filtered: list[str] = []
@@ -60,14 +58,10 @@ def filter_by_moneyness(
         exp_data = chain_data[exp]
 
         filtered_calls = [
-            r
-            for r in exp_data.get("calls", [])
-            if r.get("strike") and low_strike <= r["strike"] <= high_strike
+            r for r in exp_data.get("calls", []) if r.get("strike") and low_strike <= r["strike"] <= high_strike
         ]
         filtered_puts = [
-            r
-            for r in exp_data.get("puts", [])
-            if r.get("strike") and low_strike <= r["strike"] <= high_strike
+            r for r in exp_data.get("puts", []) if r.get("strike") and low_strike <= r["strike"] <= high_strike
         ]
 
         if filtered_calls or filtered_puts:
@@ -109,9 +103,7 @@ def filter_option_chain(
         }
 
     # Step 2: Filter by moneyness range
-    filtered_chain, total_count = filter_by_moneyness(
-        chain, filtered_exps, spot, moneyness_low, moneyness_high
-    )
+    filtered_chain, total_count = filter_by_moneyness(chain, filtered_exps, spot, moneyness_low, moneyness_high)
 
     # Step 3: If over max_contracts, progressively narrow moneyness
     if total_count > max_contracts:
@@ -121,9 +113,7 @@ def filter_option_chain(
         while total_count > max_contracts and (m_high - m_low) > 0.1:
             m_low += step
             m_high -= step
-            filtered_chain, total_count = filter_by_moneyness(
-                chain, filtered_exps, spot, m_low, m_high
-            )
+            filtered_chain, total_count = filter_by_moneyness(chain, filtered_exps, spot, m_low, m_high)
             logger.info(
                 "Narrowed moneyness to [%.2f, %.2f], contracts: %d",
                 m_low,

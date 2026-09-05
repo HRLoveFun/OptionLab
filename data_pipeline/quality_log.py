@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from data_pipeline.db import get_conn
@@ -46,12 +46,11 @@ def log_failure(
         Optional structured payload (serialised as JSON).
     """
     try:
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         payload = json.dumps(details, default=str) if details else None
         with get_conn() as conn:
             conn.execute(
-                "INSERT INTO data_quality_log (ts, ticker, source, error_class, message, details) "
-                "VALUES (?,?,?,?,?,?)",
+                "INSERT INTO data_quality_log (ts, ticker, source, error_class, message, details) VALUES (?,?,?,?,?,?)",
                 (ts, ticker, source, error_class, message, payload),
             )
             conn.commit()
@@ -61,8 +60,8 @@ def log_failure(
 
 def recent_failures(hours: int = 24, limit: int = 100) -> list[dict[str, Any]]:
     """Return the most recent failure rows, newest first."""
-    cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
-    cutoff_iso = datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()
+    cutoff = datetime.now(UTC).timestamp() - hours * 3600
+    cutoff_iso = datetime.fromtimestamp(cutoff, tz=UTC).isoformat()
     with get_conn() as conn:
         cur = conn.execute(
             "SELECT ts, ticker, source, error_class, message FROM data_quality_log "
@@ -84,12 +83,11 @@ def recent_failures(hours: int = 24, limit: int = 100) -> list[dict[str, Any]]:
 
 def failure_counts(hours: int = 24) -> dict[str, int]:
     """Aggregate counts by ``error_class`` over a time window."""
-    cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
-    cutoff_iso = datetime.fromtimestamp(cutoff, tz=timezone.utc).isoformat()
+    cutoff = datetime.now(UTC).timestamp() - hours * 3600
+    cutoff_iso = datetime.fromtimestamp(cutoff, tz=UTC).isoformat()
     with get_conn() as conn:
         cur = conn.execute(
-            "SELECT error_class, COUNT(*) FROM data_quality_log "
-            "WHERE ts >= ? GROUP BY error_class",
+            "SELECT error_class, COUNT(*) FROM data_quality_log WHERE ts >= ? GROUP BY error_class",
             (cutoff_iso,),
         )
         return {row[0]: int(row[1]) for row in cur.fetchall()}

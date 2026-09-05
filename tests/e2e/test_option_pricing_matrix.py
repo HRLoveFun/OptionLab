@@ -212,7 +212,9 @@ def test_option_pricing_matrix_header_lines_up_with_cells(page: Page, live_serve
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_option_pricing_matrix_sticky_rails_stay_in_register(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_option_pricing_matrix_sticky_rails_stay_in_register(
+    page: Page, live_server: str, js_errors: list[str]
+) -> None:
     """The sticky sigma rail is pinned to the measured strike column.
 
     `width` is only a hint under auto table layout, so a long strike can
@@ -355,7 +357,9 @@ def test_option_pricing_matrix_spread_floor_is_one_tick(page: Page, live_server:
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_option_pricing_matrix_crosshair_highlights_one_column(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_option_pricing_matrix_crosshair_highlights_one_column(
+    page: Page, live_server: str, js_errors: list[str]
+) -> None:
     """Hovering pins the x axis; it never rewrites the numbers on screen."""
     _open_tab(page, live_server)
 
@@ -383,7 +387,9 @@ def test_option_pricing_matrix_crosshair_highlights_one_column(page: Page, live_
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_option_pricing_matrix_reference_is_keyboard_reachable(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_option_pricing_matrix_reference_is_keyboard_reachable(
+    page: Page, live_server: str, js_errors: list[str]
+) -> None:
     """The reference column still has a keyboard path without the select.
 
     `#opm-ref-dte` used to be the only Tab-reachable control for the sigma
@@ -433,7 +439,9 @@ def test_option_pricing_matrix_reference_is_keyboard_reachable(page: Page, live_
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_option_pricing_matrix_masks_stay_opaque_under_crosshair(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_option_pricing_matrix_masks_stay_opaque_under_crosshair(
+    page: Page, live_server: str, js_errors: list[str]
+) -> None:
     """Sticky header and left rails stay opaque while highlighted.
 
     They are masking layers: with the matrix scrolled, a translucent fill lets
@@ -477,7 +485,9 @@ def test_option_pricing_matrix_masks_stay_opaque_under_crosshair(page: Page, liv
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_option_pricing_matrix_corner_stays_on_top_while_scrolled(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_option_pricing_matrix_corner_stays_on_top_while_scrolled(
+    page: Page, live_server: str, js_errors: list[str]
+) -> None:
     """The top-left corner never lets a scrolled DTE header paint over it.
 
     The strike + σ header cells are doubly sticky (top + left) and must out-rank
@@ -492,8 +502,7 @@ def test_option_pricing_matrix_corner_stays_on_top_while_scrolled(page: Page, li
 
     def topmost_at_corner(left: int, top: int) -> str:
         page.evaluate(
-            "([l, t]) => { const s = document.getElementById('opm-matrix-body');"
-            " s.scrollLeft = l; s.scrollTop = t; }",
+            "([l, t]) => { const s = document.getElementById('opm-matrix-body'); s.scrollLeft = l; s.scrollTop = t; }",
             [left, top],
         )
         page.wait_for_timeout(80)
@@ -509,8 +518,6 @@ def test_option_pricing_matrix_corner_stays_on_top_while_scrolled(page: Page, li
     # Enough top scroll that the caption has cleared and the header is pinned.
     for label, left, top in (("horizontal", 600, 40), ("both", 600, 300), ("vertical", 0, 300)):
         cls = topmost_at_corner(left, top)
-        assert "opm-head-strike" in cls or "opm-head-sigma" in cls, (
-            f"{label}: top-left corner shows '{cls}' (clip!)"
-        )
+        assert "opm-head-strike" in cls or "opm-head-sigma" in cls, f"{label}: top-left corner shows '{cls}' (clip!)"
 
     assert _app_errors(js_errors) == [], f"JS errors: {js_errors}"

@@ -65,9 +65,11 @@ def test_simulate_expiry_premium_matches_black_scholes():
         np.full(len(STRIKES), 0.2),
         "call",
     )["bs_price"]
-    for cell, exp in zip(res["results"][0]["cells"], expected):
+    # One result row per strike; each row holds one cell per IV (here: a single IV).
+    for row, exp in zip(res["results"], expected, strict=True):
+        assert len(row["cells"]) == 1
         # Premium is rounded to 4 dp in the payload; allow for that.
-        assert cell["premium"] == pytest.approx(exp, abs=1e-3)
+        assert row["cells"][0]["premium"] == pytest.approx(exp, abs=1e-3)
 
 
 def test_simulate_expiry_put_call_parity():
@@ -113,7 +115,7 @@ def test_simulate_expiry_short_mirrors_long():
     assert lc["premium"] == sc["premium"]
     assert lc["pop"] + sc["pop"] == pytest.approx(1.0)
     # P&L curves are exact negatives.
-    for a, b in zip(lc["pnl"], sc["pnl"]):
+    for a, b in zip(lc["pnl"], sc["pnl"], strict=True):
         assert a == pytest.approx(-b, abs=1e-6)
     assert lc["max_profit"] is None  # long call: unbounded
     assert sc["max_loss"] is None  # short call: unbounded

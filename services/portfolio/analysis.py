@@ -95,10 +95,18 @@ def _plot_theta_decay(greeks_positions, spot):
 
 
 _OPT_TYPE_ALIASES = {
-    "lc": "LC", "long_call": "LC", "buy_call": "LC",
-    "sc": "SC", "short_call": "SC", "sell_call": "SC",
-    "lp": "LP", "long_put": "LP", "buy_put": "LP",
-    "sp": "SP", "short_put": "SP", "sell_put": "SP",
+    "lc": "LC",
+    "long_call": "LC",
+    "buy_call": "LC",
+    "sc": "SC",
+    "short_call": "SC",
+    "sell_call": "SC",
+    "lp": "LP",
+    "long_put": "LP",
+    "buy_put": "LP",
+    "sp": "SP",
+    "short_put": "SP",
+    "sell_put": "SP",
 }
 
 
@@ -144,10 +152,7 @@ def _normalize_position(pos: dict) -> dict:
     required = ("ticker", "option_type", "strike", "quantity", "price")
     missing = [k for k in required if k not in out or out[k] in (None, "")]
     if missing:
-        raise ValueError(
-            f"position missing required fields: {missing}. "
-            f"Got keys: {sorted(out.keys())}"
-        )
+        raise ValueError(f"position missing required fields: {missing}. Got keys: {sorted(out.keys())}")
     return out
 
 
