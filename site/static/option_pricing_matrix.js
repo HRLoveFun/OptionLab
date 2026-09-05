@@ -164,36 +164,109 @@
         return res;
     }
 
+    // Mirror of core.options.simulation.expiry_calendar._make_entry, but
+    // evaluated against the REAL current instant (America/New_York) instead of a
+    // frozen fixture reference_date. This is what keeps the matrix LIVE on the
+    // static GitHub Pages site: the committed fixture only contributes the
+    // absolute expiration `date` plus `kind` / `cycle`; `dte` and `label` are
+    // recomputed from now, and anything already past the 16:00 ET close is
+    // dropped (expired), exactly like the server path.
+    //
+    // `reference_date` is, by definition, the date part of the real `now` in ET —
+    // it is NEVER rolled back to the last business day, because doing so would
+    // wrongly resurrect an already-expired same-day column (its `raw` would be
+    // positive again). So on a Saturday it is the Saturday itself, and the
+    // prior Friday's expiration correctly falls out of the grid.
+    const _MIN_HORIZON_DAYS = 1 / 24; // one hour — matches core._MIN_HORIZON_DAYS
+
+    // Break a Date into America/New_York calendar parts without external libs.
+    function _etParts(date) {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        }).formatToParts(date);
+        const get = (t) => parts.find((p) => p.type === t).value;
+        return {
+            year: +get('year'),
+            month: +get('month'),
+            day: +get('day'),
+            hour: +get('hour') % 24, // some engines emit '24' for midnight
+            minute: +get('minute'),
+            second: +get('second'),
+        };
+    }
+
+    function _fmtDte(dte) {
+        return String(Math.round(dte * 100) / 100);
+    }
+
+    // Returns the recomputed expirations array, or null when the source is
+    // unusable or every expiration has already expired.
+    function _recomputeCalendar(resp) {
+        if (!resp || resp.status !== 'ok' || !Array.isArray(resp.expirations)) return null;
+        const now = new Date();
+        const et = _etParts(now);
+        // Whole calendar-day delta between the expiration DATE and the reference
+        // DATE (both at midnight) — the intraday remainder lives in `frac`,
+        // mirroring core's `(date - ref_date).days + frac`.
+        const refMidnight = Date.UTC(et.year, et.month - 1, et.day);
+        const frac = (16 * 3600 - (et.hour * 3600 + et.minute * 60 + et.second)) / 86400;
+        const out = [];
+        for (const e of resp.expirations) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(e.date || '');
+            if (!m) continue;
+            const expMidnight = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+            const days = Math.round((expMidnight - refMidnight) / 86400000);
+            const raw = days + frac;
+            if (raw <= 0) continue; // expired — drop, like core
+            const dte = Math.max(Math.round(raw * 1e6) / 1e6, _MIN_HORIZON_DAYS);
+            out.push({
+                date: e.date,
+                dte,
+                label: `${e.date} (${_fmtDte(dte)}D)`,
+                kind: e.kind ?? null,
+                cycle: e.cycle ?? null,
+            });
+        }
+        return out.length ? out : null;
+    }
+
     // Fetch the standard + daily expiry calendar from the API and use it as the
     // matrix columns. On GitHub Pages (no backend) falls back to the committed
     // fixture so the panel stays fully interactive with sample columns.
     async function loadCalendar() {
         const params = new URLSearchParams({ standard: '12', daily: '10' });
+        // Live backend: the API computes DTE server-side from the real current
+        // instant, so its `dte` values are authoritative — pass them through
+        // untouched. Recomputing client-side here would only risk client/server
+        // timezone drift, and the live app already tracks "today" correctly.
         if (window.api && typeof window.api.get === 'function') {
             try {
                 const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'opm-calendar' });
-                if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
+                if (resp && resp.status === 'ok' && Array.isArray(resp.expirations) && resp.expirations.length) {
                     return resp.expirations;
                 }
             } catch (_) { /* fall through to fixture */ }
         }
+        // No backend (GitHub Pages) or API failure: fall back to the committed
+        // fixture and recompute DTE live from the real current instant, keeping
+        // only the fixture's absolute `date` / `kind` / `cycle`. This is what
+        // keeps "today" tracking the actual date instead of the frozen fixture.
+        let resp = null;
         if (window.PagesSample && typeof window.PagesSample.getJSON === 'function') {
-            const resp = await window.PagesSample.getJSON([
+            resp = await window.PagesSample.getJSON([
                 '/api/expiry_calendar?' + params.toString(),
                 window.PagesSample.fixture('expiry_calendar.json'),
                 '../fixtures/expiry_calendar.json',
             ]);
-            if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
-                return resp.expirations;
-            }
         } else {
             try {
-                const resp = await fetch('../fixtures/expiry_calendar.json').then((r) => r.json());
-                if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
-                    return resp.expirations;
-                }
+                resp = await fetch('../fixtures/expiry_calendar.json').then((r) => r.json());
             } catch (_) { /* fall through to error */ }
         }
+        const exps = _recomputeCalendar(resp);
+        if (exps) return exps;
         throw new Error('api unavailable');
     }
 

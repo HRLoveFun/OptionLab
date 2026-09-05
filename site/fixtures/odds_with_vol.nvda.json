@@ -23,59 +23,59 @@
     },
     {
       "expiry": "2026-09-09",
-      "dte": 5,
-      "iv": 0.3217,
-      "p_itm_call": 0.0219,
-      "p_itm_put": 0.9781,
-      "expected_move": 0.0376
+      "dte": 4,
+      "iv": 0.3213,
+      "p_itm_call": 0.02,
+      "p_itm_put": 0.98,
+      "expected_move": 0.0336
     },
     {
       "expiry": "2026-09-11",
-      "dte": 7,
-      "iv": 0.3223,
-      "p_itm_call": 0.0968,
-      "p_itm_put": 0.9032,
-      "expected_move": 0.0446
+      "dte": 6,
+      "iv": 0.322,
+      "p_itm_call": 0.064,
+      "p_itm_put": 0.936,
+      "expected_move": 0.0413
     },
     {
       "expiry": "2026-09-18",
-      "dte": 14,
-      "iv": 0.3247,
-      "p_itm_call": 0.2169,
-      "p_itm_put": 0.7831,
-      "expected_move": 0.0636
+      "dte": 13,
+      "iv": 0.3243,
+      "p_itm_call": 0.2059,
+      "p_itm_put": 0.7941,
+      "expected_move": 0.0612
     },
     {
       "expiry": "2026-09-25",
-      "dte": 21,
-      "iv": 0.327,
-      "p_itm_call": 0.2705,
-      "p_itm_put": 0.7295,
-      "expected_move": 0.0784
+      "dte": 20,
+      "iv": 0.3267,
+      "p_itm_call": 0.2646,
+      "p_itm_put": 0.7354,
+      "expected_move": 0.0765
     },
     {
       "expiry": "2026-10-02",
-      "dte": 28,
-      "iv": 0.3293,
-      "p_itm_call": 0.3027,
-      "p_itm_put": 0.6973,
-      "expected_move": 0.0912
+      "dte": 27,
+      "iv": 0.329,
+      "p_itm_call": 0.2988,
+      "p_itm_put": 0.7012,
+      "expected_move": 0.0895
     },
     {
       "expiry": "2026-10-09",
-      "dte": 35,
-      "iv": 0.3317,
-      "p_itm_call": 0.3247,
-      "p_itm_put": 0.6753,
-      "expected_move": 0.1027
+      "dte": 34,
+      "iv": 0.3313,
+      "p_itm_call": 0.322,
+      "p_itm_put": 0.678,
+      "expected_move": 0.1011
     },
     {
       "expiry": "2026-10-16",
-      "dte": 42,
-      "iv": 0.334,
-      "p_itm_call": 0.3411,
-      "p_itm_put": 0.6589,
-      "expected_move": 0.1133
+      "dte": 41,
+      "iv": 0.3337,
+      "p_itm_call": 0.339,
+      "p_itm_put": 0.661,
+      "expected_move": 0.1118
     }
   ],
   "sample": true,

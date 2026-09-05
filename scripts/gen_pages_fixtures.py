@@ -18,10 +18,15 @@ from zoneinfo import ZoneInfo
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "site" / "fixtures"
-REF_DATE = "2026-09-04"
-# Fixed wall clock (10:00 ET, mid-session) so the intraday DTE fraction
-# (16:00 ET close minus now) is deterministic in the committed fixture.
-REF_NOW = dt.datetime(2026, 9, 4, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+# Runtime "as-of" instant in America/New_York. The committed fixtures are
+# regenerated on every Pages deploy (see .github/workflows/pages.yml), so the
+# expiration calendar always starts from the REAL current date instead of a
+# frozen snapshot. REF_NOW carries the live wall clock so the intraday DTE
+# fraction (16:00 ET close minus now) tracks the moment of generation; the
+# frontend additionally recomputes DTE from the visitor's clock, so the
+# displayed "today" column stays live even if a deploy is delayed.
+REF_NOW = dt.datetime.now(ZoneInfo("America/New_York"))
+REF_DATE = REF_NOW.date().isoformat()
 TICKER = "NVDA"
 SPOT = 182.45
 
@@ -113,7 +118,7 @@ def gen_odds(target_pct: float = 10.0) -> dict:
     """
     chain = json.loads((OUT_DIR / "option_chain.nvda.json").read_text(encoding="utf-8"))
     spot = chain["spot"]
-    today = dt.date.today()
+    today = REF_NOW.date()
     rows = []
     for exp in chain["expirations"]:
         d = max((dt.date.fromisoformat(exp) - today).days, 1)

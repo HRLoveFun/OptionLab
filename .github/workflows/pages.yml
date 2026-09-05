@@ -15,6 +15,7 @@ on:
       - 'site/fixtures/**'
       - 'site/pages-shim.js'
       - 'scripts/build_pages_site.py'
+      - 'scripts/gen_pages_fixtures.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -41,6 +42,13 @@ jobs:
       # snapshot + verbatim static/ copy. No network, no DB, no matplotlib.
       # Refresh the snapshot locally via:
       #   python scripts/build_pages_site.py --refresh-snapshot
+      - name: Refresh deterministic fixtures (latest expiry calendar)
+        # Regenerates site/fixtures/expiry_calendar.json with the REAL current
+        # date so every deploy ships a non-stale calendar (stdlib only, no
+        # network). The frontend additionally recomputes DTE from the visitor's
+        # clock, but a fresh date list keeps the columns valid long-term.
+        run: python scripts/gen_pages_fixtures.py
+
       - name: Assemble site
         run: |
           pip install jinja2
