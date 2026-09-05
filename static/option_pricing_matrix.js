@@ -1,7 +1,7 @@
-/* Premium matrix tab — strike × DTE grid of option prices and premium rates.
+/* Option pricing matrix tab — strike × DTE grid of option prices and premium rates.
  *
  * DOM layer only: reads the four inputs, asks the pure engine
- * (static/sim/premium_matrix.js, exposed as window.PremiumMatrix) for the grid,
+ * (static/sim/option_pricing_matrix.js, exposed as window.OptionPricingMatrix) for the grid,
  * and renders one <table>. No math lives here and no network is touched —
  * the panel is a hypothetical-input calculator.
  *
@@ -13,11 +13,11 @@
  *   - the fill-side switch (buy at ask / sell at bid) is mutually exclusive
  *     and DOES recompute: it changes the price basis of every cell
  *   - a DTE header cell is built from the SAME two halves as a data cell
- *     (.pm-head-pair mirrors .pm-cell), and the header <th> / data <td> are
+ *     (.opm-head-pair mirrors .opm-cell), and the header <th> / data <td> are
  *     both padding-free — that is what keeps the call / put sub-columns
  *     pixel-aligned with the numbers they label (the x axis)
  *   - the two sticky left rails share one measured width: after every render
- *     JS writes the real strike-column width into --pm-sigma-left, so the
+ *     JS writes the real strike-column width into --opm-sigma-left, so the
  *     sigma rail can never drift when a long strike stretches column one
  *   - hovering a column only highlights it (the y axis); it never rewrites
  *     values. Clicking anywhere in a column — data cell or header — promotes
@@ -29,7 +29,7 @@
 (function () {
     'use strict';
 
-    const PANEL = 'premium_matrix';
+    const PANEL = 'option_pricing_matrix';
     const DEBOUNCE_MS = 150;
     // Must stay in sync with the (max-width: 720px) block in styles.css, which
     // drops the sigma rail on narrow screens.
@@ -44,7 +44,7 @@
     let debounceTimer = null;
     let rafPending = false;
     let resizeRaf = false;
-    let railObserver = null;   // keeps --pm-sigma-left in step with column one
+    let railObserver = null;   // keeps --opm-sigma-left in step with column one
 
     const el = (id) => document.getElementById(id);
 
@@ -52,7 +52,7 @@
     // Fill side is a two-way switch (buy at ask / sell at bid), not a select:
     // it reprices the whole grid, so it lives in the panel toolbar.
     const SIDES = ['buy', 'sell'];
-    // Mirrors the min / max on #pm-spread. There is no percentage floor: the
+    // Mirrors the min / max on #opm-spread. There is no percentage floor: the
     // engine floors the spread's DOLLAR effect at one cent (MIN_SPREAD_ABS),
     // so even the 1% minimum still leaves the two fill sides one tick apart on
     // cheap wing premiums where 1% of the mid is below a penny.
@@ -101,16 +101,16 @@
     }
 
     function readSide() {
-        const pressed = document.querySelector('[data-pm-side][aria-pressed="true"]');
-        return pressed && pressed.getAttribute('data-pm-side') === 'sell' ? 'sell' : 'buy';
+        const pressed = document.querySelector('[data-opm-side][aria-pressed="true"]');
+        return pressed && pressed.getAttribute('data-opm-side') === 'sell' ? 'sell' : 'buy';
     }
 
     function readInputs() {
         return {
-            spot: parseFloat((el('pm-price') || {}).value),
-            ivPct: parseFloat((el('pm-iv') || {}).value),
-            rPct: parseFloat((el('pm-rate') || {}).value),
-            spreadPct: clampSpread((el('pm-spread') || {}).value),
+            spot: parseFloat((el('opm-price') || {}).value),
+            ivPct: parseFloat((el('opm-iv') || {}).value),
+            rPct: parseFloat((el('opm-rate') || {}).value),
+            spreadPct: clampSpread((el('opm-spread') || {}).value),
             perspective: readSide(),
         };
     }
@@ -118,7 +118,7 @@
     // Typing "0" (or clearing the field) is normalised on blur, not per
     // keystroke — rewriting the value mid-typing would fight the user.
     function normaliseSpreadInput() {
-        const input = el('pm-spread');
+        const input = el('opm-spread');
         if (!input) return;
         input.addEventListener('change', function () {
             if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
@@ -135,13 +135,13 @@
         if (/rPct/i.test(raw)) return '无风险利率需在 -5% ~ 50% 之间。';
         if (/DTE/i.test(raw)) return '至少需要一个剩余 1 小时 ~ 3650 天之间的到期期限。';
         if (/ladder|widen/i.test(raw)) return '当前价格下行权价过密，请提高标的价格。';
-        return '溢价率矩阵计算失败：' + raw;
+        return '期权定价矩阵计算失败：' + raw;
     }
 
     /* -- run ------------------------------------------------------------ */
     function compute(expirations) {
-        const engine = window.PremiumMatrix;
-        if (!engine || typeof engine.buildPremiumMatrix !== 'function') {
+        const engine = window.OptionPricingMatrix;
+        if (!engine || typeof engine.buildOptionPricingMatrix !== 'function') {
             throw new Error('engine unavailable');
         }
         const p = readInputs();
@@ -158,9 +158,9 @@
             perspective: p.perspective,
         };
         if (expirations) payload.expirations = expirations;
-        const res = engine.buildPremiumMatrix(payload);
+        const res = engine.buildOptionPricingMatrix(payload);
         const ms = ((window.performance && performance.now) ? performance.now() : Date.now()) - started;
-        console.info(`[premium_matrix] ${res.rows.length}×${res.columns.length} grid built in ${ms.toFixed(2)}ms`);
+        console.info(`[option_pricing_matrix] ${res.rows.length}×${res.columns.length} grid built in ${ms.toFixed(2)}ms`);
         return res;
     }
 
@@ -171,7 +171,7 @@
         const params = new URLSearchParams({ standard: '12', daily: '10' });
         if (window.api && typeof window.api.get === 'function') {
             try {
-                const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'pm-calendar' });
+                const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'opm-calendar' });
                 if (resp && resp.status === 'ok' && Array.isArray(resp.expirations)) {
                     return resp.expirations;
                 }
@@ -224,7 +224,7 @@
 
     function run() {
         if (!ensureSpot()) return;
-        window.appState.panels.set(PANEL, 'loading', { message: '正在计算溢价率矩阵…' });
+        window.appState.panels.set(PANEL, 'loading', { message: '正在计算期权定价矩阵…' });
         loadCalendarThenRun();
     }
 
@@ -238,7 +238,7 @@
         try {
             finishRun(compute(calendar));
         } catch (err) {
-            console.error('[premium_matrix] build failed:', err);
+            console.error('[option_pricing_matrix] build failed:', err);
             window.appState.panels.set(PANEL, 'error', { message: chineseMessage(err) });
         }
     }
@@ -249,7 +249,7 @@
             calendar = expirations;
             finishRun(compute(expirations));
         } catch (err) {
-            console.error('[premium_matrix] calendar load failed:', err);
+            console.error('[option_pricing_matrix] calendar load failed:', err);
             window.appState.panels.set(PANEL, 'error', { message: chineseMessage(err) });
         }
     }
@@ -269,8 +269,8 @@
     // `display: flex` on a table cell removes it from the table's column
     // layout, which stacks every data column on top of the first one.
     function cellMarkup(cell, j) {
-        return '<td class="pm-cell" data-col="' + j + '">'
-            + '<span class="pm-pair">'
+        return '<td class="opm-cell" data-col="' + j + '">'
+            + '<span class="opm-pair">'
             + halfMarkup(Object.assign({ kind: 'call' }, cell.call))
             + halfMarkup(Object.assign({ kind: 'put' }, cell.put))
             + '</span>'
@@ -278,9 +278,9 @@
     }
 
     function halfMarkup(side) {
-        return '<span class="pm-half pm-half--' + side.kind + '">'
-            + '<span class="pm-val pm-val--price">' + fmt(side.fill) + '</span>'
-            + '<span class="pm-val pm-val--rate">' + fmtPct(side.premium_rate) + '</span>'
+        return '<span class="opm-half opm-half--' + side.kind + '">'
+            + '<span class="opm-val opm-val--price">' + fmt(side.fill) + '</span>'
+            + '<span class="opm-val opm-val--rate">' + fmtPct(side.premium_rate) + '</span>'
             + '</span>';
     }
 
@@ -290,25 +290,25 @@
     // the sigma rail has to drop its <col> too — otherwise every highlight
     // would land one column to the right.
     function buildColgroupHtml() {
-        let out = '<colgroup><col class="pm-col-rail">';
-        if (!narrow) out += '<col class="pm-col-rail">';
+        let out = '<colgroup><col class="opm-col-rail">';
+        if (!narrow) out += '<col class="opm-col-rail">';
         data.columns.forEach(function (col, i) {
-            out += '<col class="pm-col-dte" data-col="' + i + '">';
+            out += '<col class="opm-col-dte" data-col="' + i + '">';
         });
         return out + '</colgroup>';
     }
 
     // The header mirrors the data cell exactly: a DTE caption centred over the
     // whole column, then a CALL / PUT pair laid out by the same flex rules as
-    // .pm-cell, so each label sits over the half it describes.
+    // .opm-cell, so each label sits over the half it describes.
     function buildHeadHtml() {
         let out = '<thead><tr>'
-            + '<th scope="col" class="pm-head-strike">Strike</th>'
-            + '<th scope="col" class="pm-head-sigma" id="pm-head-sigma">σ</th>';
+            + '<th scope="col" class="opm-head-strike">Strike</th>'
+            + '<th scope="col" class="opm-head-sigma" id="opm-head-sigma">σ</th>';
 
         data.columns.forEach(function (col, i) {
             const datePart = col.date ? col.date.slice(5) : '';
-            out += '<th scope="col" data-col="' + i + '" class="pm-head-dte"'
+            out += '<th scope="col" data-col="' + i + '" class="opm-head-dte"'
                 // Focusable on purpose: the header anchors the keyboard walk —
                 // Tab here, then Enter / Space to pick, ArrowLeft / ArrowRight
                 // to step along the date axis (handled in wire()). No
@@ -318,12 +318,12 @@
                 + ' title="' + fmtDte(col.dte) + ' 天后到期 · 1σ 波动 ' + fmtPct(col.sigma_pct, 2)
                 + (col.date ? ' · ' + col.date + (col.cycle ? ' (' + col.cycle + ')' : '') : '')
                 + ' · 点击设为 σ 参考列，左右键切换">'
-                + '<span class="pm-head-main">' + fmtDte(col.dte) + 'D</span>'
-                + '<span class="pm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
-                + '<span class="pm-head-date">' + datePart + '</span>'
-                + '<span class="pm-head-pair">'
-                + '<span class="pm-head-half pm-head-half--call">Call</span>'
-                + '<span class="pm-head-half pm-head-half--put">Put</span>'
+                + '<span class="opm-head-main">' + fmtDte(col.dte) + 'D</span>'
+                + '<span class="opm-head-sub">±' + fmtPct(col.sigma_pct, 1) + '</span>'
+                + '<span class="opm-head-date">' + datePart + '</span>'
+                + '<span class="opm-head-pair">'
+                + '<span class="opm-head-half opm-head-half--call">Call</span>'
+                + '<span class="opm-head-half opm-head-half--put">Put</span>'
                 + '</span>'
                 + '</th>';
         });
@@ -335,19 +335,19 @@
 
         const body = ['<tbody>'];
         data.rows.forEach(function (row, i) {
-            const atm = i === data.atm_index ? ' pm-row-atm' : '';
+            const atm = i === data.atm_index ? ' opm-row-atm' : '';
             const cells = row.cells.map(cellMarkup).join('');
-            body.push('<tr class="pm-row' + atm + '" data-strike="' + row.strike + '">'
-                + '<th scope="row" class="pm-strike">' + row.strike.toFixed(decimals) + '</th>'
-                + '<td class="pm-sigma" data-row="' + i + '">' + fmtSigma(row.cells[refCol].sigma_mult) + '</td>'
+            body.push('<tr class="opm-row' + atm + '" data-strike="' + row.strike + '">'
+                + '<th scope="row" class="opm-strike">' + row.strike.toFixed(decimals) + '</th>'
+                + '<td class="opm-sigma" data-row="' + i + '">' + fmtSigma(row.cells[refCol].sigma_mult) + '</td>'
                 + cells
                 + '</tr>');
         });
         body.push('</tbody>');
 
-        return '<table class="pm-matrix" id="pm-matrix"'
+        return '<table class="opm-matrix" id="opm-matrix"'
             + ' data-show-price="1" data-show-premium="1" data-show-call="1" data-show-put="1">'
-            + '<caption class="pm-caption">Premium matrix — call / put price and premium rate '
+            + '<caption class="opm-caption">Option pricing matrix — call / put price and premium rate '
             + 'by strike (rows) and days to expiration (columns). Each expiration column is '
             + 'split into a CALL half and a PUT half.</caption>'
             + buildColgroupHtml()
@@ -357,7 +357,7 @@
     }
 
     function renderTable() {
-        const host = el('pm-matrix-body');
+        const host = el('opm-matrix-body');
         if (!host) return;
         if (rafPending) return;
         rafPending = true;
@@ -373,17 +373,17 @@
         });
     }
 
-    // The sigma rail is sticky at `left: var(--pm-sigma-left)`. auto table
+    // The sigma rail is sticky at `left: var(--opm-sigma-left)`. auto table
     // layout only treats `width` as a suggestion, so a strike like "9876543"
     // can stretch column one past the hard-coded 4.4rem and slide the rail out
     // of register with its own header. Measuring the real width closes that gap.
     function syncRailOffset() {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table) return;
         const strike = table.querySelector('tbody th[scope="row"]');
         if (!strike) return;
         const width = strike.getBoundingClientRect().width || strike.offsetWidth || 0;
-        if (width > 0) table.style.setProperty('--pm-sigma-left', Math.round(width) + 'px');
+        if (width > 0) table.style.setProperty('--opm-sigma-left', Math.round(width) + 'px');
     }
 
     // The panel is `display: none` until the panel state flips to 'loaded', so
@@ -391,7 +391,7 @@
     // the offset lands as soon as it is laid out — and re-lands on font swap,
     // zoom, or a strike long enough to widen column one.
     function observeRail() {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table) return;
         if (railObserver) { railObserver.disconnect(); railObserver = null; }
         if (typeof ResizeObserver === 'undefined') return;
@@ -404,15 +404,15 @@
     // Crosshair: highlight exactly one column (the x axis). Rows are already
     // highlighted by :hover in CSS, so together they pin down the cell.
     function setHoverCol(idx) {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table) return;
         const next = (idx === null || !isFinite(idx)) ? null : Number(idx);
         if (next === hoverCol) return;
         clearHoverCol();
         hoverCol = next;
         if (hoverCol === null) return;
-        const col = table.querySelector('col.pm-col-dte[data-col="' + hoverCol + '"]');
-        const head = table.querySelector('th.pm-head-dte[data-col="' + hoverCol + '"]');
+        const col = table.querySelector('col.opm-col-dte[data-col="' + hoverCol + '"]');
+        const head = table.querySelector('th.opm-head-dte[data-col="' + hoverCol + '"]');
         if (col) col.classList.add('is-hover');
         if (head) head.classList.add('is-hover');
     }
@@ -428,17 +428,17 @@
     // new header so the next press keeps walking (and the focusin crosshair
     // follows it).
     function focusHeader(idx) {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table) return;
-        const head = table.querySelector('th.pm-head-dte[data-col="' + idx + '"]');
+        const head = table.querySelector('th.opm-head-dte[data-col="' + idx + '"]');
         if (head) head.focus();
     }
 
     function clearHoverCol() {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table || hoverCol === null) return;
-        const col = table.querySelector('col.pm-col-dte[data-col="' + hoverCol + '"]');
-        const head = table.querySelector('th.pm-head-dte[data-col="' + hoverCol + '"]');
+        const col = table.querySelector('col.opm-col-dte[data-col="' + hoverCol + '"]');
+        const head = table.querySelector('th.opm-head-dte[data-col="' + hoverCol + '"]');
         if (col) col.classList.remove('is-hover');
         if (head) head.classList.remove('is-hover');
         hoverCol = null;
@@ -446,7 +446,7 @@
 
     // Promote a column to the sigma reference. Explicit only (click or Enter)
     // — hovering must never rewrite numbers the user is reading. With the
-    // `#pm-ref-dte` select gone there is no second channel to keep in sync, so
+    // `#opm-ref-dte` select gone there is no second channel to keep in sync, so
     // the only bookkeeping left is the `.is-ref` readout.
     function setRefCol(idx) {
         if (!data) return;
@@ -460,16 +460,16 @@
     }
 
     function renderSigmaHeader() {
-        const head = el('pm-head-sigma');
+        const head = el('opm-head-sigma');
         if (head) head.textContent = 'σ @' + fmtDte(data.columns[refCol].dte) + 'D';
     }
 
     // Only the 41 row-header cells change when the reference column moves.
     function renderSigmaColumn() {
-        const host = el('pm-matrix');
+        const host = el('opm-matrix');
         if (!host || !data) return;
         renderSigmaHeader();
-        const cells = host.querySelectorAll('td.pm-sigma');
+        const cells = host.querySelectorAll('td.opm-sigma');
         for (let i = 0; i < cells.length; i++) {
             const rowIdx = Number(cells[i].dataset.row);
             const row = data.rows[rowIdx];
@@ -483,13 +483,13 @@
     // <th> also carries aria-current: it is the control, not just a label, so
     // a screen reader has to be able to tell which column is currently picked.
     function renderRefHighlight() {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table || !data) return;
-        const cols = table.querySelectorAll('col.pm-col-dte');
+        const cols = table.querySelectorAll('col.opm-col-dte');
         for (let i = 0; i < cols.length; i++) {
             cols[i].classList.toggle('is-ref', Number(cols[i].dataset.col) === refCol);
         }
-        const heads = table.querySelectorAll('th.pm-head-dte');
+        const heads = table.querySelectorAll('th.opm-head-dte');
         for (let i = 0; i < heads.length; i++) {
             const on = Number(heads[i].dataset.col) === refCol;
             heads[i].classList.toggle('is-ref', on);
@@ -511,26 +511,26 @@
         const col = data.columns[refIdx];
         const dteTag = fmtDte(col.dte) + 'D';
 
-        setText('pm-hero-label', 'ATM premium rate · ' + dteTag);
-        setText('pm-kpi-sigma-label', '1σ move · ' + dteTag);
-        setText('pm-kpi-call-label', 'ATM call · ' + dteTag);
-        setText('pm-kpi-put-label', 'ATM put · ' + dteTag);
+        setText('opm-hero-label', 'ATM premium rate · ' + dteTag);
+        setText('opm-kpi-sigma-label', '1σ move · ' + dteTag);
+        setText('opm-kpi-call-label', 'ATM call · ' + dteTag);
+        setText('opm-kpi-put-label', 'ATM put · ' + dteTag);
 
-        const heroValue = el('pm-hero-value');
+        const heroValue = el('opm-hero-value');
         if (heroValue) heroValue.textContent = fmtPct(cell.call.premium_rate);
-        const heroSub = el('pm-hero-sub');
+        const heroSub = el('opm-hero-sub');
         if (heroSub) {
             heroSub.textContent = 'ATM ' + row.strike.toFixed(data.decimals)
                 + ' · put ' + fmtPct(cell.put.premium_rate);
         }
 
-        setText('pm-kpi-sigma', fmt(col.sigma_move));
-        setText('pm-kpi-sigma-sub', fmtPct(col.sigma_pct, 2) + ' of ' + fmt(data.spot));
-        setText('pm-kpi-call', fmt(cell.call.fill));
-        setText('pm-kpi-call-sub', 'mid ' + fmt(cell.call.mid) + ' · ' + fmtPct(cell.call.premium_rate));
-        setText('pm-kpi-put', fmt(cell.put.fill));
-        setText('pm-kpi-put-sub', 'mid ' + fmt(cell.put.mid) + ' · ' + fmtPct(cell.put.premium_rate));
-        setText('pm-kpi-grid', data.rows.length + ' × ' + data.columns.length);
+        setText('opm-kpi-sigma', fmt(col.sigma_move));
+        setText('opm-kpi-sigma-sub', fmtPct(col.sigma_pct, 2) + ' of ' + fmt(data.spot));
+        setText('opm-kpi-call', fmt(cell.call.fill));
+        setText('opm-kpi-call-sub', 'mid ' + fmt(cell.call.mid) + ' · ' + fmtPct(cell.call.premium_rate));
+        setText('opm-kpi-put', fmt(cell.put.fill));
+        setText('opm-kpi-put-sub', 'mid ' + fmt(cell.put.mid) + ' · ' + fmtPct(cell.put.premium_rate));
+        setText('opm-kpi-grid', data.rows.length + ' × ' + data.columns.length);
     }
 
     function setText(id, text) {
@@ -547,7 +547,7 @@
     function toggleState() {
         const out = {};
         TOGGLES.forEach(function (name) {
-            const btn = document.querySelector('[data-pm-toggle="' + name + '"]');
+            const btn = document.querySelector('[data-opm-toggle="' + name + '"]');
             out[name] = btn ? btn.getAttribute('aria-pressed') !== 'false' : true;
         });
         return out;
@@ -555,20 +555,20 @@
 
     // Pure CSS visibility: one attribute per switch, no re-render.
     function applyToggles() {
-        const table = el('pm-matrix');
+        const table = el('opm-matrix');
         if (!table) return;
         const state = toggleState();
         TOGGLES.forEach(function (name) {
             table.setAttribute('data-show-' + name, state[name] ? '1' : '0');
         });
         const nothingVisible = (!state.price && !state.premium) || (!state.call && !state.put);
-        const hint = el('pm-all-hidden');
+        const hint = el('opm-all-hidden');
         if (hint) hint.hidden = !nothingVisible;
     }
 
     function wireToggles() {
         TOGGLES.forEach(function (name) {
-            const btn = document.querySelector('[data-pm-toggle="' + name + '"]');
+            const btn = document.querySelector('[data-opm-toggle="' + name + '"]');
             if (!btn) return;
             btn.addEventListener('click', function () {
                 const on = btn.getAttribute('aria-pressed') === 'true';
@@ -585,12 +585,12 @@
     // free). Unlike the four visibility toggles this one is NOT CSS-only.
     function wireSide() {
         SIDES.forEach(function (name) {
-            const btn = document.querySelector('[data-pm-side="' + name + '"]');
+            const btn = document.querySelector('[data-opm-side="' + name + '"]');
             if (!btn) return;
             btn.addEventListener('click', function () {
                 if (btn.getAttribute('aria-pressed') === 'true') return;
                 SIDES.forEach(function (other) {
-                    const node = document.querySelector('[data-pm-side="' + other + '"]');
+                    const node = document.querySelector('[data-opm-side="' + other + '"]');
                     if (!node) return;
                     const on = other === name;
                     node.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -607,21 +607,21 @@
         wired = true;
         narrow = isNarrow();
 
-        ['pm-price', 'pm-iv', 'pm-rate', 'pm-spread'].forEach(function (id) {
+        ['opm-price', 'opm-iv', 'opm-rate', 'opm-spread'].forEach(function (id) {
             const node = el(id);
             if (node) node.addEventListener('input', scheduleRun);
         });
         normaliseSpreadInput();
         wireSide();
 
-        const runBtn = document.querySelector('[data-action="pm-run"]');
+        const runBtn = document.querySelector('[data-action="opm-run"]');
         if (runBtn) runBtn.addEventListener('click', run);
 
         // Hover / focus is the crosshair only — it highlights a column and
         // never rewrites a value. Picking a column is explicit: a click
         // anywhere in it (cell or header), Enter / Space on a header, or the
         // arrow keys walking the date axis from a focused header.
-        const host = el('pm-matrix-body');
+        const host = el('opm-matrix-body');
         if (host) {
             host.addEventListener('mouseover', function (ev) {
                 const target = ev.target.closest ? ev.target.closest('[data-col]') : null;
@@ -646,7 +646,7 @@
                 // time, clamped at the edges, with roving focus so repeated
                 // presses keep walking the date axis.
                 if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
-                    if (!data || !ev.target.closest || !ev.target.closest('th.pm-head-dte')) return;
+                    if (!data || !ev.target.closest || !ev.target.closest('th.opm-head-dte')) return;
                     ev.preventDefault();
                     const step = ev.key === 'ArrowLeft' ? -1 : 1;
                     const next = Math.min(Math.max(refCol + step, 0), data.columns.length - 1);
@@ -683,12 +683,12 @@
     }
 
     /* -- entry point ----------------------------------------------------- */
-    window.loadPremiumMatrix = function loadPremiumMatrix() {
+    window.loadOptionPricingMatrix = function loadOptionPricingMatrix() {
         wire();
         if (!data) run();
     };
 
-    window.premiumMatrixDebug = function premiumMatrixDebug() {
-        return { data, refCol, hoverCol, side: readSide(), spreadPct: clampSpread((el('pm-spread') || {}).value) };
+    window.optionPricingMatrixDebug = function optionPricingMatrixDebug() {
+        return { data, refCol, hoverCol, side: readSide(), spreadPct: clampSpread((el('opm-spread') || {}).value) };
     };
 })();

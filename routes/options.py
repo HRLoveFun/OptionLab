@@ -233,7 +233,7 @@ def simulate_expiry_route():
 
 @bp.route("/api/expiry_calendar", methods=["GET"])
 def expiry_calendar_route():
-    """List standard listed + daily expirations for the Premium Matrix columns.
+    """List standard listed + daily expirations for the Option Pricing Matrix columns.
 
     Query params: ref (default today in US/Eastern, 'YYYY-MM-DD'),
                    standard (default 12), daily (default 10).

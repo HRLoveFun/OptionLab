@@ -1,4 +1,4 @@
-// premium_matrix.js — premium-rate matrix engine (strikes × DTE).
+// option_pricing_matrix.js — option-pricing matrix engine (strikes × DTE).
 //
 // Pure, zero I/O (Pages-safe): no network, no DOM, no market data. Every cell
 // is priced with Black–Scholes from caller-supplied inputs — the panel is a
@@ -213,7 +213,7 @@ function _bsCallFast(S, K, T, r, sigma, lnSK, sqrtT, disc) {
 
 /* -- matrix assembly -------------------------------------------------- */
 
-export function buildPremiumMatrix(opts) {
+export function buildOptionPricingMatrix(opts) {
   const {
     spot,
     ivPct = 25,
@@ -351,8 +351,8 @@ export function buildPremiumMatrix(opts) {
 
 // Expose for the dashboard tab (classic script) and the standalone Pages site.
 if (typeof window !== 'undefined') {
-  window.PremiumMatrix = {
-    buildPremiumMatrix,
+  window.OptionPricingMatrix = {
+    buildOptionPricingMatrix,
     buildStrikeLadder,
     normalizeDtes,
     sigmaMove,

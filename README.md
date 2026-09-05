@@ -15,9 +15,9 @@ management on top of Chart.js / Alpine.js.
   Bollinger signals, cross-ticker market review, regime labelling.
 - Options: live chain analytics (IV smile/skew, OI profile, expected move,
   max pain, term structure), vectorised Black–Scholes Greeks, multi-leg
-  strategy analysis, expiry simulation and a client-side premium matrix.
+  strategy analysis, expiry simulation and a client-side option pricing matrix.
 - Portfolio: tracked positions with live P&L and portfolio-level Greeks.
-- Fully client-side tabs (Simulation, Premium Matrix) also run standalone
+- Fully client-side tabs (Simulation, Option Pricing Matrix) also run standalone
   on GitHub Pages with zero backend.
 
 ---
@@ -226,7 +226,7 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
   live in [`templates/partials/fragments/`](templates/partials/fragments/).
 - [`static/main.js`](static/main.js) bootstraps the form and tab manager;
   per-tab logic lives in `market_review.js`, `option-chain.js`,
-  `position.js`, `premium_matrix.js`, `regime.js`, `simulation.js`.
+  `position.js`, `option_pricing_matrix.js`, `regime.js`, `simulation.js`.
 - [`static/api.js`](static/api.js) is the only `fetch` wrapper — it owns
   abort handling and error normalisation. Components must not call `fetch`
   directly.
@@ -281,9 +281,9 @@ Repo-maintenance helpers, all standalone:
 `/api/v1/<path>` is an alias for every `/api/<path>` route (rewriting
 middleware in `app.py`).
 
-> **Simulation and Premium Matrix tabs** are purely client-side
-> (`static/sim/` + `static/features/simulation.js`, `static/premium_matrix.js`).
-> They perform Black–Scholes pricing, expiry-payoff math and premium-matrix
+> **Simulation and Option Pricing Matrix tabs** are purely client-side
+> (`static/sim/` + `static/features/simulation.js`, `static/option_pricing_matrix.js`).
+> They perform Black–Scholes pricing, expiry-payoff math and option-pricing-matrix
 > evaluation in the browser and need **no** HTTP endpoint, so they also run
 > standalone on GitHub Pages.
 

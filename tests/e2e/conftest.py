@@ -245,6 +245,13 @@ def _free_port() -> int:
 def live_server(_e2e_db: str) -> Iterator[str]:
     """Start the Flask app in a background thread, yield its base URL."""
     # Import app *after* MARKET_DB_PATH is set so init_db() targets the temp DB.
+    # RATE_LIMIT_DISABLED has to be set before that import too: app.py installs
+    # the in-house throttle (120 req/min per client IP) at import time, and the
+    # whole e2e session shares one bucket across ~35 tests plus the periodic
+    # /health/status poll. Left enabled the suite trips 429s and fails on
+    # request volume rather than on behaviour — every other test module disables
+    # it for the same reason (see tests/test_portfolio.py).
+    os.environ["RATE_LIMIT_DISABLED"] = "1"
     from app import app as flask_app
     from werkzeug.serving import make_server
 
@@ -335,13 +342,13 @@ FAKE_REGIME_HISTORY: dict[str, Any] = {
 }
 
 
-# Premium Matrix columns are now driven by /api/expiry_calendar (standard +
+# Option Pricing Matrix columns are now driven by /api/expiry_calendar (standard +
 # daily listings). The e2e suite only exercises the render pipeline, not the
 # calendar maths (covered by tests/test_expiry_calendar*.py), so we return a
 # stable 18-run DTE ladder carrying the same metadata shape the real endpoint
 # emits.
 _TODAY = dt.date.today()
-_PREMIUM_MATRIX_DTES = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86]
+_OPTION_PRICING_MATRIX_DTES = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86]
 FAKE_EXPIRY_CALENDAR: dict[str, Any] = {
     "status": "ok",
     "reference_date": _TODAY.isoformat(),
@@ -353,7 +360,7 @@ FAKE_EXPIRY_CALENDAR: dict[str, Any] = {
             "kind": "standard",
             "cycle": "monthly",
         }
-        for d in _PREMIUM_MATRIX_DTES
+        for d in _OPTION_PRICING_MATRIX_DTES
     ],
 }
 

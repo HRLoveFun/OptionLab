@@ -46,7 +46,7 @@ DEMO_TICKER = "NVDA"
 # Showcase slugs map to the same tabs; summary has no single-ticker home.
 REDIRECTS = {
     "sim/index.html": ("tab-simulation", "Simulation"),
-    "premium-matrix/index.html": ("tab-premium-matrix", "Premium Matrix"),
+    "option-pricing-matrix/index.html": ("tab-option-pricing-matrix", "Option Pricing Matrix"),
     "option-chain/index.html": ("tab-option-chain", "Option Chain"),
     "odds/index.html": ("tab-odds", "Expiry Odds"),
     "market-review/index.html": ("tab-market-review", "Market Review"),
@@ -347,7 +347,7 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
     assert '"/static/' not in html and "'/static/" not in html, "absolute /static/ paths break the /OptionLab/ subpath"
     for tab_id in ("tab-parameter", "tab-market-review", "tab-statistical-analysis",
                    "tab-market-assessment", "tab-option-chain", "tab-options-chain",
-                   "tab-odds", "tab-regime", "tab-simulation", "tab-premium-matrix", "tab-config"):
+                   "tab-odds", "tab-regime", "tab-simulation", "tab-option-pricing-matrix", "tab-config"):
         assert f'id="{tab_id}"' in html, f"missing tab body: {tab_id}"
     assert "./pages-shim.js" in html and "pages-demo-banner" in html
 

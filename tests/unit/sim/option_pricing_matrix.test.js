@@ -1,4 +1,4 @@
-// premium_matrix.test.js — premium-rate matrix engine.
+// option_pricing_matrix.test.js — premium-rate matrix engine.
 //
 // No mocked data: every assertion either checks a closed-form identity
 // (put–call parity, the premium-rate definitions, the σ geometry) or compares
@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 
 import { bsGreeks } from '../../../static/sim/black_scholes.js';
 import {
-  buildPremiumMatrix,
+  buildOptionPricingMatrix,
   buildStrikeLadder,
   fillPrice,
   normalizeDtes,
@@ -17,7 +17,7 @@ import {
   sigmaMultiple,
   MIN_SPREAD_ABS,
   MIN_SPREAD_PCT,
-} from '../../../static/sim/premium_matrix.js';
+} from '../../../static/sim/option_pricing_matrix.js';
 
 const SPOT = 100;
 const IV = 25;
@@ -28,7 +28,7 @@ const RF = 3;
 const LADDER_DTES = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56, 61, 66, 71, 76, 81, 86];
 
 function matrix(overrides) {
-  return buildPremiumMatrix({ spot: SPOT, ivPct: IV, rPct: RF, spreadPct: 0, dtes: LADDER_DTES, ...overrides });
+  return buildOptionPricingMatrix({ spot: SPOT, ivPct: IV, rPct: RF, spreadPct: 0, dtes: LADDER_DTES, ...overrides });
 }
 
 function sortedUniqueGap(values) {
@@ -128,7 +128,7 @@ describe('fillPrice / premiumRate', () => {
   });
 });
 
-describe('buildPremiumMatrix — pricing', () => {
+describe('buildOptionPricingMatrix — pricing', () => {
   it('matches bsGreeks for every cell (parity path off)', () => {
     const m = matrix({ putViaParity: false });
     const r = RF / 100;
@@ -186,9 +186,9 @@ describe('buildPremiumMatrix — pricing', () => {
   });
 });
 
-describe('buildPremiumMatrix — structure', () => {
+describe('buildOptionPricingMatrix — structure', () => {
   it('requires expiration columns when none are supplied', () => {
-    expect(() => buildPremiumMatrix({ spot: SPOT, ivPct: IV, rPct: RF })).toThrow(/DTE/);
+    expect(() => buildOptionPricingMatrix({ spot: SPOT, ivPct: IV, rPct: RF })).toThrow(/DTE/);
   });
 
   it('lays out 18 DTE columns and one cell per column', () => {
@@ -228,7 +228,7 @@ describe('buildPremiumMatrix — structure', () => {
   });
 });
 
-describe('buildPremiumMatrix — shape of the rates', () => {
+describe('buildOptionPricingMatrix — shape of the rates', () => {
   it('call rate rises with strike, put rate falls with strike (OTM side)', () => {
     const m = matrix();
     const col = m.ref_column_index;
@@ -314,7 +314,7 @@ describe('buildPremiumMatrix — shape of the rates', () => {
   });
 });
 
-describe('buildPremiumMatrix — inputs and boundaries', () => {
+describe('buildOptionPricingMatrix — inputs and boundaries', () => {
   it('normalises DTE tokens', () => {
     expect(normalizeDtes('30, 7, 30, 0, 9999, abc')).toEqual([7, 30]);
     expect(normalizeDtes([5, 5, 10])).toEqual([5, 10]);
@@ -329,7 +329,7 @@ describe('buildPremiumMatrix — inputs and boundaries', () => {
   });
 
   it('prices the extreme corners of the allowed input space', () => {
-    const m = buildPremiumMatrix({
+    const m = buildOptionPricingMatrix({
       spot: 100, ivPct: 0.1, rPct: -5, spreadPct: 100, perspective: 'sell', dtes: [1, 3650],
     });
     expect(m.columns).toHaveLength(2);

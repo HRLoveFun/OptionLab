@@ -1,4 +1,4 @@
-"""Tests for core.options.simulation.expiry.generate_expiry_calendar.
+"""Tests for core.options.simulation.expiry_calendar.generate_expiry_calendar.
 
 Uses real calendar expectations (no mocks). The reference date 2026-09-04 is a
 Friday (America/New_York). ``now`` is injected so the intraday DTE fraction is
@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from core.options.simulation.expiry import generate_expiry_calendar
+from core.options.simulation.expiry_calendar import generate_expiry_calendar
 
 REF = dt.date(2026, 9, 4)  # Friday
 ET = ZoneInfo("America/New_York")

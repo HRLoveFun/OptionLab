@@ -264,7 +264,7 @@ def generate_expiry_calendar_service(
     n_daily: int = 10,
     holidays=None,
 ) -> dict:
-    """Validate inputs and build the expiry calendar for the Premium Matrix.
+    """Validate inputs and build the expiry calendar for the Option Pricing Matrix.
 
     Delegates the pure maths to
     :func:`core.options.simulation.generate_expiry_calendar`.

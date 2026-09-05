@@ -10,15 +10,16 @@ Contracts:
   - parse_expiries(values, ...)   -> list[dict]
   - generate_expiry_calendar(...) -> list[dict]
 Dependencies UPWARD:
-  - core.options.simulation.expiry
+  - core.options.simulation.expiry (payoff maths)
+  - core.options.simulation.expiry_calendar (listed expirations)
 Dependencies DOWNWARD:
   - services.options.simulation, routes.options, tests
 """
 
 from core.options.simulation.expiry import (
-    generate_expiry_calendar,
     parse_expiries,
     simulate_expiry,
 )
+from core.options.simulation.expiry_calendar import generate_expiry_calendar
 
 __all__ = ["parse_expiries", "simulate_expiry", "generate_expiry_calendar"]

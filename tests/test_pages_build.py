@@ -21,7 +21,7 @@ def test_assemble_matches_flask_partials(tmp_path):
     # every tab body from templates/index.html must survive the static render
     for tab_id in ("tab-parameter", "tab-market-review", "tab-statistical-analysis",
                    "tab-market-assessment", "tab-option-chain", "tab-options-chain",
-                   "tab-odds", "tab-regime", "tab-simulation", "tab-premium-matrix",
+                   "tab-odds", "tab-regime", "tab-simulation", "tab-option-pricing-matrix",
                    "tab-config"):
         assert f'id="{tab_id}"' in html, tab_id
 

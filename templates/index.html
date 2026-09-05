@@ -17,7 +17,7 @@
     <script src="{{ url_for('static', filename='api.js') }}"></script>
     <!-- Simulation engine: pure client-side math (ES module, no backend) -->
     <script type="module" src="{{ url_for('static', filename='sim/grid.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='sim/premium_matrix.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='sim/option_pricing_matrix.js') }}"></script>
 </head>
 <body>
 
@@ -134,8 +134,8 @@
                 <button class="tab-btn" data-tab="tab-simulation">
                     <span>Simulation</span>
                 </button>
-                <button class="tab-btn" data-tab="tab-premium-matrix">
-                    <span>Premium Matrix</span>
+                <button class="tab-btn" data-tab="tab-option-pricing-matrix">
+                    <span>Option Pricing Matrix</span>
                 </button>
 
                 <div class="tab-section-label">System</div>
@@ -182,8 +182,8 @@
             <!-- Tab: Simulation -->
             {% include 'partials/tab_simulation.html' %}
 
-            <!-- Tab: Premium Matrix -->
-            {% include 'partials/tab_premium_matrix.html' %}
+            <!-- Tab: Option Pricing Matrix -->
+            {% include 'partials/tab_option_pricing_matrix.html' %}
 
             <!-- Tab: Config -->
             {% include 'partials/tab_config.html' %}
@@ -221,7 +221,7 @@
     <script src="{{ url_for('static', filename='market_review_chart.js') }}"></script>
     <script src="{{ url_for('static', filename='regime.js') }}"></script>
     <script src="{{ url_for('static', filename='simulation.js') }}"></script>
-    <script src="{{ url_for('static', filename='premium_matrix.js') }}"></script>
+    <script src="{{ url_for('static', filename='option_pricing_matrix.js') }}"></script>
     <script>
         document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -254,9 +254,9 @@
                 if (target === 'tab-simulation' && !window.appState.tabFlags.isLoaded('simulation')) {
                     if (typeof loadSimulationTab === 'function') { loadSimulationTab(); window.appState.tabFlags.markLoaded('simulation'); }
                 }
-                // Auto-load Premium Matrix on tab switch (pure client-side, no market data)
-                if (target === 'tab-premium-matrix' && !window.appState.tabFlags.isLoaded('premium_matrix')) {
-                    if (typeof loadPremiumMatrix === 'function') { loadPremiumMatrix(); window.appState.tabFlags.markLoaded('premium_matrix'); }
+                // Auto-load Option Pricing Matrix on tab switch (pure client-side, no market data)
+                if (target === 'tab-option-pricing-matrix' && !window.appState.tabFlags.isLoaded('option_pricing_matrix')) {
+                    if (typeof loadOptionPricingMatrix === 'function') { loadOptionPricingMatrix(); window.appState.tabFlags.markLoaded('option_pricing_matrix'); }
                 }
             });
         });

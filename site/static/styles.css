@@ -109,16 +109,16 @@
     --shadow-md: 0 4px 16px rgb(0 0 0 / .10);
     /* raised */
 
-    /* Premium matrix crosshair — translucent on purpose: a row tint and a
-       column tint have to stack, not hide one another (see the pm-matrix
+    /* Option pricing matrix crosshair — translucent on purpose: a row tint and a
+       column tint have to stack, not hide one another (see the opm-matrix
        block for the paint order that makes that work). */
-    --pm-row-hover: rgba(59, 130, 246, .07);
-    --pm-col-hover: rgba(59, 130, 246, .12);
-    --pm-rail-hover: rgba(59, 130, 246, .16);
-    --pm-atm-bg: rgba(59, 130, 246, .08);
+    --opm-row-hover: rgba(59, 130, 246, .07);
+    --opm-col-hover: rgba(59, 130, 246, .12);
+    --opm-rail-hover: rgba(59, 130, 246, .16);
+    --opm-atm-bg: rgba(59, 130, 246, .08);
     /* The picked sigma-reference column — stronger than the hover tints so
        the persistent state still reads through a hovered row. */
-    --pm-col-ref: rgba(59, 130, 246, .18);
+    --opm-col-ref: rgba(59, 130, 246, .18);
 }
 
 html {
@@ -2309,15 +2309,15 @@ textarea:focus-visible,
     }
 }
 
-/* ── Premium matrix: strikes down the rows, expiries across the columns ──
-   Cell anatomy: <td.pm-cell> is a flex row holding one .pm-half per side
+/* ── Option pricing matrix: strikes down the rows, expiries across the columns ──
+   Cell anatomy: <td.opm-cell> is a flex row holding one .opm-half per side
    (call then put); each half stacks the price above the premium rate. The
    four toolbar switches only flip data-show-* attributes on the table, so
    hiding a value costs one attribute write — no recompute, no re-render.
    The fill-side switch is the exception: it sits with the other matrix
    switches but reprices the grid, because it changes the price basis, not
    the layout — hence the divider that sets it apart. */
-.pm-fill-side {
+.opm-fill-side {
     display: inline-flex;
     align-items: center;
     gap: .4rem;
@@ -2326,7 +2326,7 @@ textarea:focus-visible,
     border-left: 1px solid var(--slate-200);
 }
 
-.pm-fill-side__label {
+.opm-fill-side__label {
     font-size: .72rem;
     font-weight: 600;
     letter-spacing: .02em;
@@ -2334,7 +2334,7 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-matrix-toolbar {
+.opm-matrix-toolbar {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -2343,31 +2343,31 @@ textarea:focus-visible,
     margin-bottom: .75rem;
 }
 
-.pm-matrix-toolbar__right {
+.opm-matrix-toolbar__right {
     display: flex;
     gap: .35rem;
     flex-wrap: wrap;
 }
 
 /* Legend — bullet explanations below the matrix panel. */
-.pm-legend {
+.opm-legend {
     margin-top: 1rem;
 }
 
-.pm-legend-groups {
+.opm-legend-groups {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
 }
 
-.pm-legend-heading {
+.opm-legend-heading {
     margin: 0 0 .5rem;
     font-size: .85rem;
     font-weight: 600;
     color: var(--slate-700);
 }
 
-.pm-legend-list {
+.opm-legend-list {
     margin: 0;
     padding-left: 1.1rem;
     font-size: .8rem;
@@ -2375,16 +2375,16 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-legend-list > li {
+.opm-legend-list > li {
     margin-bottom: .4rem;
 }
 
-.pm-legend-list ul {
+.opm-legend-list ul {
     margin-top: .35rem;
     padding-left: 1.1rem;
 }
 
-.pm-legend-list code {
+.opm-legend-list code {
     font-size: .72rem;
     color: var(--slate-700);
     background: var(--slate-50);
@@ -2392,11 +2392,11 @@ textarea:focus-visible,
     border-radius: var(--radius-sm);
 }
 
-.pm-legend-list strong {
+.opm-legend-list strong {
     color: var(--slate-700);
 }
 
-.pm-empty-hint {
+.opm-empty-hint {
     margin-top: .75rem;
     padding: .5rem .75rem;
     border-radius: var(--radius-sm);
@@ -2405,7 +2405,7 @@ textarea:focus-visible,
     font-size: .8rem;
 }
 
-.pm-matrix-scroll {
+.opm-matrix-scroll {
     max-height: 70vh;
     overflow: auto;
     /* Own stacking context so the sticky header + rails compose as one layer
@@ -2415,7 +2415,7 @@ textarea:focus-visible,
     border-radius: var(--radius-sm);
 }
 
-.pm-matrix {
+.opm-matrix {
     border-collapse: separate;
     border-spacing: 0;
     font-size: .74rem;
@@ -2424,15 +2424,15 @@ textarea:focus-visible,
     /* One source of truth for the geometry shared by the data halves and the
        header halves, so a sub-column can never drift from the numbers it
        labels. */
-    --pm-half-min: 4.6rem;
-    --pm-strike-w: 4.4rem;
-    --pm-sigma-w: 4.6rem;
-    /* Rewritten by static/premium_matrix.js with the measured width of the
+    --opm-half-min: 4.6rem;
+    --opm-strike-w: 4.4rem;
+    --opm-sigma-w: 4.6rem;
+    /* Rewritten by static/option_pricing_matrix.js with the measured width of the
        strike column; the rem value is only the pre-layout fallback. */
-    --pm-sigma-left: 4.4rem;
+    --opm-sigma-left: 4.4rem;
 }
 
-.pm-caption {
+.opm-caption {
     caption-side: top;
     padding: .45rem .7rem;
     text-align: left;
@@ -2440,13 +2440,13 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-matrix th,
-.pm-matrix td {
+.opm-matrix th,
+.opm-matrix td {
     padding: .3rem .55rem;
     border-bottom: 1px solid var(--slate-100);
 }
 
-.pm-matrix thead th {
+.opm-matrix thead th {
     position: sticky;
     top: 0;
     z-index: 3;
@@ -2461,46 +2461,46 @@ textarea:focus-visible,
 }
 
 /* The two top-left corner cells are doubly sticky (top + left). They MUST sit
-   above both the sticky header row (z-index 3, from `.pm-matrix thead th`) and
+   above both the sticky header row (z-index 3, from `.opm-matrix thead th`) and
    the sticky left rails (z-index 2). So the z-index here is written on a
-   selector that OUT-SPECIFIES `.pm-matrix thead th` (0,1,2): a bare
-   `.pm-head-strike` (0,1,0) loses to it and falls back to z-index 3, which is
+   selector that OUT-SPECIFIES `.opm-matrix thead th` (0,1,2): a bare
+   `.opm-head-strike` (0,1,0) loses to it and falls back to z-index 3, which is
    exactly what let a scrolled DTE header paint over the corner — the "穿模"
    clip on horizontal scroll (equal z-index + later DOM order wins). */
-.pm-matrix thead th.pm-head-strike,
-.pm-matrix thead th.pm-head-sigma {
+.opm-matrix thead th.opm-head-strike,
+.opm-matrix thead th.opm-head-sigma {
     position: sticky;
     top: 0;
     z-index: 5;
     text-align: right;
 }
 
-.pm-head-strike {
+.opm-head-strike {
     left: 0;
-    width: var(--pm-strike-w);
+    width: var(--opm-strike-w);
 }
 
-.pm-head-sigma {
-    left: var(--pm-sigma-left);
-    width: var(--pm-sigma-w);
+.opm-head-sigma {
+    left: var(--opm-sigma-left);
+    width: var(--opm-sigma-w);
 }
 
-.pm-matrix tbody th[scope="row"] {
+.opm-matrix tbody th[scope="row"] {
     position: sticky;
     left: 0;
     z-index: 2;
-    width: var(--pm-strike-w);
+    width: var(--opm-strike-w);
     background: var(--slate-50);
     text-align: right;
     font-weight: 600;
     color: var(--slate-700);
 }
 
-.pm-matrix td.pm-sigma {
+.opm-matrix td.opm-sigma {
     position: sticky;
-    left: var(--pm-sigma-left);
+    left: var(--opm-sigma-left);
     z-index: 2;
-    width: var(--pm-sigma-w);
+    width: var(--opm-sigma-w);
     background: var(--slate-50);
     text-align: right;
     font-weight: 500;
@@ -2508,26 +2508,26 @@ textarea:focus-visible,
 }
 
 /* DTE header — mirrors the data cell one-for-one.
-   .pm-head-pair uses the exact same flex rules as .pm-cell and the header
+   .opm-head-pair uses the exact same flex rules as .opm-cell and the header
    <th> is padding-free (like the data <td>), so the CALL / PUT labels line up
    with the halves they name. Keep these two blocks in sync. */
 /* The header is the sigma-reference control (click / Enter), so it advertises
    itself as clickable and shows a focus ring when tabbed to. */
-.pm-matrix th.pm-head-dte {
+.opm-matrix th.opm-head-dte {
     padding: 0;
     text-align: center;
     vertical-align: bottom;
     cursor: pointer;
 }
 
-.pm-matrix th.pm-head-dte:focus-visible {
+.opm-matrix th.opm-head-dte:focus-visible {
     outline: 2px solid var(--blue);
     /* Negative offset: the cell is a sticky mask at the matrix edge, so an
        outset ring would be clipped by the scroll container. */
     outline-offset: -2px;
 }
 
-.pm-head-main {
+.opm-head-main {
     display: block;
     padding: .2rem .4rem 0;
     font-size: .74rem;
@@ -2536,7 +2536,7 @@ textarea:focus-visible,
     color: var(--slate-700);
 }
 
-.pm-head-sub {
+.opm-head-sub {
     display: block;
     padding: 0 .4rem .14rem;
     font-size: .64rem;
@@ -2545,7 +2545,7 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-head-date {
+.opm-head-date {
     display: block;
     padding: 0 .4rem .14rem;
     font-size: .64rem;
@@ -2554,14 +2554,14 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-head-pair {
+.opm-head-pair {
     display: flex;
     border-top: 1px solid var(--slate-200);
 }
 
-.pm-head-half {
+.opm-head-half {
     flex: 1 1 0;
-    min-width: var(--pm-half-min);
+    min-width: var(--opm-half-min);
     padding: .12rem .45rem .16rem;
     border-left: 2px solid transparent;
     text-align: right;
@@ -2571,23 +2571,23 @@ textarea:focus-visible,
     color: var(--slate-500);
 }
 
-.pm-head-half--call {
+.opm-head-half--call {
     border-left-color: var(--blue-muted);
 }
 
-.pm-head-half--put {
+.opm-head-half--put {
     border-left-color: var(--slate-200);
 }
 
-.pm-matrix td.pm-cell {
+.opm-matrix td.opm-cell {
     padding: 0;
     border-bottom: 1px solid var(--slate-100);
 }
 
 /* The flex container is a span inside the <td>, never the <td> itself — a
    flex <td> stops being a table cell and every column collapses onto the
-   first one. .pm-head-pair is its exact counterpart in the header. */
-.pm-pair {
+   first one. .opm-head-pair is its exact counterpart in the header. */
+.opm-pair {
     display: flex;
     align-items: stretch;
 }
@@ -2595,9 +2595,9 @@ textarea:focus-visible,
 /* No background here: the cell layer paints above the <col> layer, so an
    opaque fill would hide the crosshair. The put half's 2px left border is
    the call | put divider. */
-.pm-half {
+.opm-half {
     flex: 1 1 0;
-    min-width: var(--pm-half-min);
+    min-width: var(--opm-half-min);
     padding: .26rem .45rem;
     display: flex;
     flex-direction: column;
@@ -2606,41 +2606,41 @@ textarea:focus-visible,
     border-left: 2px solid transparent;
 }
 
-.pm-half--call {
+.opm-half--call {
     border-left-color: var(--blue-muted);
 }
 
-.pm-half--put {
+.opm-half--put {
     border-left-color: var(--slate-200);
 }
 
-.pm-val {
+.opm-val {
     display: block;
     line-height: 1.3;
 }
 
-.pm-val--price {
+.opm-val--price {
     font-weight: 600;
     color: var(--slate-900);
 }
 
-.pm-val--rate {
+.opm-val--rate {
     font-size: .68rem;
     color: var(--slate-500);
 }
 
-.pm-row-atm th[scope="row"],
-.pm-row-atm td.pm-sigma {
+.opm-row-atm th[scope="row"],
+.opm-row-atm td.opm-sigma {
     box-shadow: inset 2px 0 0 var(--blue);
     color: var(--blue-dark);
 }
 
-.pm-row-atm .pm-half {
-    background: var(--pm-atm-bg);
+.opm-row-atm .opm-half {
+    background: var(--opm-atm-bg);
 }
 
 /* ── Sigma reference column ───────────────────────────────────────────────
-   The `#pm-ref-dte` select is gone, so the grid itself has to show which
+   The `#opm-ref-dte` select is gone, so the grid itself has to show which
    column the sigma rail is computed against: a translucent tint on the <col>
    plus a solid top bar on the sticky header. The header is a TOP mask, so its
    tint follows the crosshair rule — opaque `background-color` with the tint
@@ -2649,13 +2649,13 @@ textarea:focus-visible,
    Both rules sit ABOVE the crosshair block on purpose: same specificity, later
    rule wins, so hovering a column still reads as a hover even when it is the
    reference. The bar is a box-shadow, which neither rule touches. */
-.pm-matrix col.pm-col-dte.is-ref {
-    background: var(--pm-col-ref);
+.opm-matrix col.opm-col-dte.is-ref {
+    background: var(--opm-col-ref);
 }
 
-.pm-matrix th.pm-head-dte.is-ref {
+.opm-matrix th.opm-head-dte.is-ref {
     background-color: var(--slate-50);
-    background-image: linear-gradient(var(--pm-col-ref), var(--pm-col-ref));
+    background-image: linear-gradient(var(--opm-col-ref), var(--opm-col-ref));
     box-shadow: inset 0 2px 0 var(--blue);
 }
 
@@ -2665,8 +2665,8 @@ textarea:focus-visible,
    under the row tint and the cell tint — every layer above is translucent,
    which is what lets a hovered row and a hovered column stack visibly
    instead of one erasing the other. */
-.pm-matrix col.pm-col-dte.is-hover {
-    background: var(--pm-col-hover);
+.opm-matrix col.opm-col-dte.is-hover {
+    background: var(--opm-col-hover);
 }
 
 /* The DTE header is a sticky TOP mask: it must stay opaque so a vertical
@@ -2674,45 +2674,45 @@ textarea:focus-visible,
    The tint is layered over the opaque base (background-color) instead of
    replacing it — otherwise the translucent fill reveals the content behind
    it (the "穿模" clip when the matrix is scrolled). */
-.pm-matrix th.pm-head-dte.is-hover {
+.opm-matrix th.opm-head-dte.is-hover {
     background-color: var(--slate-50);
-    background-image: linear-gradient(var(--pm-rail-hover), var(--pm-rail-hover));
+    background-image: linear-gradient(var(--opm-rail-hover), var(--opm-rail-hover));
 }
 
-.pm-matrix tbody tr:hover {
-    background: var(--pm-row-hover);
+.opm-matrix tbody tr:hover {
+    background: var(--opm-row-hover);
 }
 
 /* The left rails are sticky LEFT masks: opaque so the columns scrolling
    underneath never bleed through. Their hover tint is layered over the opaque
    base (background-color) rather than replacing it — a translucent rail would
    let the horizontally-scrolled data behind it show through (the "穿模" clip). */
-.pm-matrix tbody tr:hover th[scope="row"],
-.pm-matrix tbody tr:hover td.pm-sigma {
+.opm-matrix tbody tr:hover th[scope="row"],
+.opm-matrix tbody tr:hover td.opm-sigma {
     background-color: var(--slate-50);
-    background-image: linear-gradient(var(--pm-rail-hover), var(--pm-rail-hover));
+    background-image: linear-gradient(var(--opm-rail-hover), var(--opm-rail-hover));
 }
 
 /* Switchable visibility — pure CSS, driven by data-show-* on the table. */
-.pm-matrix[data-show-price="0"] .pm-val--price,
-.pm-matrix[data-show-premium="0"] .pm-val--rate,
-.pm-matrix[data-show-call="0"] .pm-half--call,
-.pm-matrix[data-show-put="0"] .pm-half--put {
+.opm-matrix[data-show-price="0"] .opm-val--price,
+.opm-matrix[data-show-premium="0"] .opm-val--rate,
+.opm-matrix[data-show-call="0"] .opm-half--call,
+.opm-matrix[data-show-put="0"] .opm-half--put {
     display: none;
 }
 
 @media (max-width: 720px) {
     /* Narrow screens keep the strike column and drop the sigma rail.
-       COUPLED: static/premium_matrix.js watches this exact breakpoint and
+       COUPLED: static/option_pricing_matrix.js watches this exact breakpoint and
        drops the matching <col>, because <col> maps to columns by position —
        change one without the other and the crosshair highlights the wrong
        column. */
-    .pm-head-sigma,
-    .pm-matrix td.pm-sigma {
+    .opm-head-sigma,
+    .opm-matrix td.opm-sigma {
         display: none;
     }
 
-    .pm-matrix-scroll {
+    .opm-matrix-scroll {
         max-height: 60vh;
     }
 }
@@ -2752,13 +2752,13 @@ textarea:focus-visible,
     --purple-deep: #7c3aed;
     --regime-mid-vol: #a855f7;
 
-    /* Premium matrix crosshair — gold, still translucent so row and column
-       tints stack (see the pm-matrix block for the paint order). */
-    --pm-row-hover: rgba(212, 175, 55, .08);
-    --pm-col-hover: rgba(212, 175, 55, .15);
-    --pm-rail-hover: rgba(212, 175, 55, .20);
-    --pm-atm-bg: rgba(212, 175, 55, .10);
-    --pm-col-ref: rgba(212, 175, 55, .22);
+    /* Option pricing matrix crosshair — gold, still translucent so row and column
+       tints stack (see the opm-matrix block for the paint order). */
+    --opm-row-hover: rgba(212, 175, 55, .08);
+    --opm-col-hover: rgba(212, 175, 55, .15);
+    --opm-rail-hover: rgba(212, 175, 55, .20);
+    --opm-atm-bg: rgba(212, 175, 55, .10);
+    --opm-col-ref: rgba(212, 175, 55, .22);
 
     /* Notice fallbacks consumed by var(--bg-info, …) etc. */
     --bg-info: rgba(168, 85, 247, .12);
@@ -2920,89 +2920,89 @@ textarea:focus-visible,
 }
 
 /* ============================================================
-   Premium Matrix — section separation between major panel areas.
-   Scoped to #tab-premium-matrix so no other tab is affected.
+   Option Pricing Matrix — section separation between major panel areas.
+   Scoped to #tab-option-pricing-matrix so no other tab is affected.
    Goal: each stacked area (toolbar / inputs / hero+KPIs / matrix /
    legend) reads as its own block, and the toolbar-vs-grid boundary
    inside the matrix card is unmistakable — in both light and dark
    themes (tokens resolve per theme: --slate-300 is the strong
    hairline, --slate-200 the inner divider).
    ============================================================ */
-#tab-premium-matrix > .toolbar {
+#tab-option-pricing-matrix > .toolbar {
     padding-bottom: .75rem;
     border-bottom: 1px solid var(--slate-300);
     margin-bottom: 1.25rem;
 }
 
-#tab-premium-matrix .content-card {
+#tab-option-pricing-matrix .content-card {
     border: 1px solid var(--slate-300);
     margin-bottom: 1.25rem;
 }
 
-#tab-premium-matrix .content-card > .content-card-title {
+#tab-option-pricing-matrix .content-card > .content-card-title {
     border-bottom: 1px solid var(--slate-300);
 }
 
 /* Hero + KPI strip sits between two cards: keep its vertical rhythm
    in step with the cards above and below it. */
-#tab-premium-matrix .sim-hero-row {
+#tab-option-pricing-matrix .sim-hero-row {
     margin: 1.25rem 0;
 }
 
-#tab-premium-matrix .metric-hero {
+#tab-option-pricing-matrix .metric-hero {
     border: 1px solid var(--blue-muted);
     box-shadow: var(--shadow);
 }
 
-#tab-premium-matrix .kpi-card {
+#tab-option-pricing-matrix .kpi-card {
     border-color: var(--slate-300);
 }
 
 /* Matrix card internals: padded toolbar, a full-width divider, then
    an inset scroll box so controls / grid never touch or merge. */
-#tab-premium-matrix .pm-matrix-toolbar {
+#tab-option-pricing-matrix .opm-matrix-toolbar {
     margin: 0;
     padding: 1rem 1.25rem .9rem;
     border-bottom: 1px solid var(--slate-300);
 }
 
-#tab-premium-matrix .pm-matrix-scroll {
+#tab-option-pricing-matrix .opm-matrix-scroll {
     margin: 1rem 1.25rem 1.25rem;
     border: 1px solid var(--slate-300);
 }
 
-#tab-premium-matrix .pm-empty-hint {
+#tab-option-pricing-matrix .opm-empty-hint {
     margin: 0 1.25rem 1.25rem;
 }
 
 /* Legend card internals: pad the body and rule the two groups apart. */
-#tab-premium-matrix .pm-legend {
+#tab-option-pricing-matrix .opm-legend {
     margin-top: 0;
 }
 
-#tab-premium-matrix .pm-legend-groups {
+#tab-option-pricing-matrix .opm-legend-groups {
     padding: 1rem 1.25rem 1.25rem;
 }
 
-#tab-premium-matrix .pm-legend-group + .pm-legend-group {
+#tab-option-pricing-matrix .opm-legend-group + .opm-legend-group {
     padding-top: 1rem;
     border-top: 1px solid var(--slate-200);
 }
 
 @media (max-width: 720px) {
-    #tab-premium-matrix .pm-matrix-toolbar {
+    #tab-option-pricing-matrix .opm-matrix-toolbar {
         padding: .85rem .85rem .75rem;
     }
 
-    #tab-premium-matrix .pm-matrix-scroll {
+    #tab-option-pricing-matrix .opm-matrix-scroll {
         margin: .75rem .85rem .85rem;
     }
 
-    #tab-premium-matrix .pm-empty-hint {
+    #tab-option-pricing-matrix .opm-empty-hint {
         margin: 0 .85rem .85rem;
     }
 
-    #tab-premium-matrix .pm-legend-groups {
+    #tab-option-pricing-matrix .opm-legend-groups {
         padding: .85rem .85rem 1rem;
     }
 }

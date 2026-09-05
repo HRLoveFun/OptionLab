@@ -31,7 +31,7 @@ def _norm_cdf(x: float) -> float:
 
 
 def _adjust_to_business_day(d: dt.date, forward: bool) -> dt.date:
-    # Mirror of core.options.simulation.expiry._adjust_to_business_day with
+    # Mirror of core.options.simulation.expiry_calendar._adjust_to_business_day with
     # holidays=frozenset() (fixtures use no holiday adjustment — weekends only).
     step = dt.timedelta(days=1 if forward else -1)
     guard = 0
@@ -68,7 +68,7 @@ def _next_friday(d: dt.date) -> dt.date:
 
 
 def gen_calendar() -> dict:
-    # Stdlib-only mirror of core.options.simulation.expiry.generate_expiry_calendar
+    # Stdlib-only mirror of core.options.simulation.expiry_calendar.generate_expiry_calendar
     # (ref, n_standard=12, n_daily=10, holidays=None). Kept dependency-free so
     # the Pages workflow runs without numpy/scipy. Parity is covered by
     # tests/test_pages_fixtures.py.

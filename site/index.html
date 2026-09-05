@@ -18,7 +18,7 @@
     <script src="./static/api.js"></script>
     <!-- Simulation engine: pure client-side math (ES module, no backend) -->
     <script type="module" src="./static/sim/grid.js"></script>
-    <script type="module" src="./static/sim/premium_matrix.js"></script>
+    <script type="module" src="./static/sim/option_pricing_matrix.js"></script>
     <script src="./pages-shim.js"></script>
 </head>
 <body>
@@ -141,8 +141,8 @@
                 <button class="tab-btn" data-tab="tab-simulation">
                     <span>Simulation</span>
                 </button>
-                <button class="tab-btn" data-tab="tab-premium-matrix">
-                    <span>Premium Matrix</span>
+                <button class="tab-btn" data-tab="tab-option-pricing-matrix">
+                    <span>Option Pricing Matrix</span>
                 </button>
 
                 <div class="tab-section-label">System</div>
@@ -1584,14 +1584,14 @@
     </div>
 </div>
 
-            <!-- Tab: Premium Matrix -->
-            <div class="tab-content" id="tab-premium-matrix" x-data="panelState('premium_matrix')"
-     role="region" aria-labelledby="pm-heading">
+            <!-- Tab: Option Pricing Matrix -->
+            <div class="tab-content" id="tab-option-pricing-matrix" x-data="panelState('option_pricing_matrix')"
+     role="region" aria-labelledby="opm-heading">
     <div class="toolbar">
         <div class="panel-header" style="margin:0;">
-            <h2 id="pm-heading">Premium Matrix</h2>
+            <h2 id="opm-heading">Option Pricing Matrix</h2>
             <p class="panel-desc">
-                A hypothetical premium-rate grid: strikes down the rows, days to
+                A hypothetical option-pricing grid: strikes down the rows, days to
                 expiration across the columns, every cell showing the Black-Scholes
                 price and the premium rate — the move the underlying must make to
                 reach breakeven. No market data is loaded; every number below is
@@ -1599,8 +1599,8 @@
             </p>
         </div>
         <div class="toolbar-actions">
-            <button type="button" class="btn-primary" data-action="pm-run"
-                    aria-label="Recalculate the premium matrix"
+            <button type="button" class="btn-primary" data-action="opm-run"
+                    aria-label="Recalculate the option pricing matrix"
                     :disabled="phase === 'loading'">
                 <template x-if="phase !== 'loading'"><span>Recalculate</span></template>
                 <template x-if="phase === 'loading'"><span>Calculating…</span></template>
@@ -1613,23 +1613,23 @@
         <div class="content-card-title">Hypothetical Inputs</div>
         <div class="form-grid">
             <div class="form-group">
-                <label for="pm-price">Price</label>
-                <input type="number" id="pm-price" value="100" step="0.01" min="0.01">
+                <label for="opm-price">Price</label>
+                <input type="number" id="opm-price" value="100" step="0.01" min="0.01">
                 <span class="field-hint">Underlying spot used for every strike.</span>
             </div>
             <div class="form-group">
-                <label for="pm-iv">Implied vol %</label>
-                <input type="number" id="pm-iv" value="25" step="0.1" min="0.1" max="500">
+                <label for="opm-iv">Implied vol %</label>
+                <input type="number" id="opm-iv" value="25" step="0.1" min="0.1" max="500">
                 <span class="field-hint">Annualised, 0.1 - 500.</span>
             </div>
             <div class="form-group">
-                <label for="pm-rate">Risk-free %</label>
-                <input type="number" id="pm-rate" value="3" step="0.1" min="-5" max="50">
+                <label for="opm-rate">Risk-free %</label>
+                <input type="number" id="opm-rate" value="3" step="0.1" min="-5" max="50">
                 <span class="field-hint">Annualised, -5 - 50.</span>
             </div>
             <div class="form-group">
-                <label for="pm-spread">Bid-Ask Spread %</label>
-                <input type="number" id="pm-spread" value="2" step="0.5" min="1" max="100">
+                <label for="opm-spread">Bid-Ask Spread %</label>
+                <input type="number" id="opm-spread" value="2" step="0.5" min="1" max="100">
                 <span class="field-hint">1 - 100, floored at $0.01 a side.</span>
             </div>
         </div>
@@ -1638,10 +1638,10 @@
     <!-- Loading banner — P2 four-state machine -->
     <div class="panel-banner panel-banner--loading" role="status" aria-live="polite"
          x-show="phase === 'loading'" x-cloak>
-        <span x-text="message || 'Computing the premium matrix...'"></span>
+        <span x-text="message || 'Computing the option pricing matrix...'"></span>
     </div>
 
-    <!-- Error banner (message is rendered in Chinese by static/premium_matrix.js) -->
+    <!-- Error banner (message is rendered in Chinese by static/option_pricing_matrix.js) -->
     <div class="panel-banner panel-banner--error" role="alert" aria-live="assertive"
          x-show="phase === 'error'" x-cloak>
         <span x-text="message"></span>
@@ -1651,54 +1651,54 @@
     <div x-show="phase === 'loaded'" x-cloak aria-live="polite">
         <!-- P1 — primary metric: ATM premium rate at the reference maturity. -->
         <div class="sim-hero-row">
-            <div class="metric-hero" id="pm-hero">
-                <div class="metric-hero__label" id="pm-hero-label">ATM premium rate</div>
-                <div class="metric-hero__value" id="pm-hero-value">—</div>
-                <div class="metric-hero__sub" id="pm-hero-sub">—</div>
+            <div class="metric-hero" id="opm-hero">
+                <div class="metric-hero__label" id="opm-hero-label">ATM premium rate</div>
+                <div class="metric-hero__value" id="opm-hero-value">—</div>
+                <div class="metric-hero__sub" id="opm-hero-sub">—</div>
             </div>
-            <section class="kpi-strip sim-kpi-strip" aria-label="Premium matrix key metrics">
+            <section class="kpi-strip sim-kpi-strip" aria-label="Option pricing matrix key metrics">
                 <div class="kpi-card">
-                    <span class="kpi-card__label" id="pm-kpi-sigma-label">1σ move</span>
-                    <span class="kpi-card__value" id="pm-kpi-sigma">—</span>
-                    <span class="kpi-card__sub" id="pm-kpi-sigma-sub">—</span>
+                    <span class="kpi-card__label" id="opm-kpi-sigma-label">1σ move</span>
+                    <span class="kpi-card__value" id="opm-kpi-sigma">—</span>
+                    <span class="kpi-card__sub" id="opm-kpi-sigma-sub">—</span>
                 </div>
                 <div class="kpi-card">
-                    <span class="kpi-card__label" id="pm-kpi-call-label">ATM call</span>
-                    <span class="kpi-card__value" id="pm-kpi-call">—</span>
-                    <span class="kpi-card__sub" id="pm-kpi-call-sub">—</span>
+                    <span class="kpi-card__label" id="opm-kpi-call-label">ATM call</span>
+                    <span class="kpi-card__value" id="opm-kpi-call">—</span>
+                    <span class="kpi-card__sub" id="opm-kpi-call-sub">—</span>
                 </div>
                 <div class="kpi-card">
-                    <span class="kpi-card__label" id="pm-kpi-put-label">ATM put</span>
-                    <span class="kpi-card__value" id="pm-kpi-put">—</span>
-                    <span class="kpi-card__sub" id="pm-kpi-put-sub">—</span>
+                    <span class="kpi-card__label" id="opm-kpi-put-label">ATM put</span>
+                    <span class="kpi-card__value" id="opm-kpi-put">—</span>
+                    <span class="kpi-card__sub" id="opm-kpi-put-sub">—</span>
                 </div>
                 <div class="kpi-card">
                     <span class="kpi-card__label">Grid</span>
-                    <span class="kpi-card__value" id="pm-kpi-grid">—</span>
-                    <span class="kpi-card__sub" id="pm-kpi-grid-sub">strikes × expiries</span>
+                    <span class="kpi-card__value" id="opm-kpi-grid">—</span>
+                    <span class="kpi-card__sub" id="opm-kpi-grid-sub">strikes × expiries</span>
                 </div>
             </section>
         </div>
 
         <div class="content-card">
-            <div class="pm-matrix-toolbar">
-                <div class="pm-matrix-toolbar__right" role="group" aria-label="Matrix switches">
-                    <button type="button" class="btn-toggle active" data-pm-toggle="price"
+            <div class="opm-matrix-toolbar">
+                <div class="opm-matrix-toolbar__right" role="group" aria-label="Matrix switches">
+                    <button type="button" class="btn-toggle active" data-opm-toggle="price"
                             aria-pressed="true">Price</button>
-                    <button type="button" class="btn-toggle active" data-pm-toggle="premium"
+                    <button type="button" class="btn-toggle active" data-opm-toggle="premium"
                             aria-pressed="true">Prem. rate</button>
-                    <button type="button" class="btn-toggle active" data-pm-toggle="call"
+                    <button type="button" class="btn-toggle active" data-opm-toggle="call"
                             aria-pressed="true">Call</button>
-                    <button type="button" class="btn-toggle active" data-pm-toggle="put"
+                    <button type="button" class="btn-toggle active" data-opm-toggle="put"
                             aria-pressed="true">Put</button>
-                    <div class="pm-fill-side" role="group" aria-label="Side">
-                        <span class="pm-fill-side__label" id="pm-fill-side-label">Side</span>
-                        <div class="btn-group" aria-labelledby="pm-fill-side-label">
-                            <button type="button" class="btn-toggle active" data-pm-side="buy" aria-pressed="true"
+                    <div class="opm-fill-side" role="group" aria-label="Side">
+                        <span class="opm-fill-side__label" id="opm-fill-side-label">Side</span>
+                        <div class="btn-group" aria-labelledby="opm-fill-side-label">
+                            <button type="button" class="btn-toggle active" data-opm-side="buy" aria-pressed="true"
                                     title="Buy at ask — fill = mid + max(mid × spread/200, $0.01)">
                                 Buy at ask
                             </button>
-                            <button type="button" class="btn-toggle" data-pm-side="sell" aria-pressed="false"
+                            <button type="button" class="btn-toggle" data-opm-side="sell" aria-pressed="false"
                                     title="Sell at bid — fill = mid − max(mid × spread/200, $0.01)">
                                 Sell at bid
                             </button>
@@ -1706,19 +1706,19 @@
                     </div>
                 </div>
             </div>
-            <div class="pm-matrix-scroll" id="pm-matrix-body"></div>
-            <p class="pm-empty-hint" id="pm-all-hidden" role="status" hidden>
+            <div class="opm-matrix-scroll" id="opm-matrix-body"></div>
+            <p class="opm-empty-hint" id="opm-all-hidden" role="status" hidden>
                 请至少打开一个数值开关（Price / Prem. rate）和一个方向开关（Call / Put）。
             </p>
         </div>
 
         <!-- Legend — bullet explanations below the matrix panel -->
-        <div class="content-card pm-legend">
+        <div class="content-card opm-legend">
             <div class="content-card-title">How to read the matrix</div>
-            <div class="pm-legend-groups">
-                <div class="pm-legend-group">
-                    <h3 class="pm-legend-heading">Premium rate &amp; pricing</h3>
-                    <ul class="pm-legend-list">
+            <div class="opm-legend-groups">
+                <div class="opm-legend-group">
+                    <h3 class="opm-legend-heading">Premium rate &amp; pricing</h3>
+                    <ul class="opm-legend-list">
                         <li>Premium rate — call: <code>(strike + premium − price) / price</code>;
                             put: <code>(price − strike + premium) / price</code>.</li>
                         <li>Mid is the Black-Scholes theoretical value; the fill moves half the
@@ -1729,9 +1729,9 @@
                             other side of the book.</li>
                     </ul>
                 </div>
-                <div class="pm-legend-group">
-                    <h3 class="pm-legend-heading">Axes</h3>
-                    <ul class="pm-legend-list">
+                <div class="opm-legend-group">
+                    <h3 class="opm-legend-heading">Axes</h3>
+                    <ul class="opm-legend-list">
                         <li><strong>X-axis</strong> — each column is an expiration term:
                             <ul>
                                 <li>The header has three rows: <code>31D</code> is days to
@@ -1765,7 +1765,7 @@
     <!-- Empty / idle -->
     <div class="empty-state" role="status" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
         <p x-show="phase === 'idle'">
-            设置上方四个输入后点击 <strong>Recalculate</strong>，即可生成溢价率矩阵。
+            设置上方四个输入后点击 <strong>Recalculate</strong>，即可生成期权定价矩阵。
         </p>
         <p x-show="phase === 'empty'" x-text="message || '当前输入下没有可用的行权价。'"></p>
     </div>
@@ -1860,7 +1860,7 @@
     <script src="./static/market_review_chart.js"></script>
     <script src="./static/regime.js"></script>
     <script src="./static/simulation.js"></script>
-    <script src="./static/premium_matrix.js"></script>
+    <script src="./static/option_pricing_matrix.js"></script>
     <script>
         document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -1893,9 +1893,9 @@
                 if (target === 'tab-simulation' && !window.appState.tabFlags.isLoaded('simulation')) {
                     if (typeof loadSimulationTab === 'function') { loadSimulationTab(); window.appState.tabFlags.markLoaded('simulation'); }
                 }
-                // Auto-load Premium Matrix on tab switch (pure client-side, no market data)
-                if (target === 'tab-premium-matrix' && !window.appState.tabFlags.isLoaded('premium_matrix')) {
-                    if (typeof loadPremiumMatrix === 'function') { loadPremiumMatrix(); window.appState.tabFlags.markLoaded('premium_matrix'); }
+                // Auto-load Option Pricing Matrix on tab switch (pure client-side, no market data)
+                if (target === 'tab-option-pricing-matrix' && !window.appState.tabFlags.isLoaded('option_pricing_matrix')) {
+                    if (typeof loadOptionPricingMatrix === 'function') { loadOptionPricingMatrix(); window.appState.tabFlags.markLoaded('option_pricing_matrix'); }
                 }
             });
         });

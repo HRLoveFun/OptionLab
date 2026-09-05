@@ -1,4 +1,4 @@
-"""Tests for GET /api/expiry_calendar (Premium Matrix column source)."""
+"""Tests for GET /api/expiry_calendar (Option Pricing Matrix column source)."""
 
 import os
 

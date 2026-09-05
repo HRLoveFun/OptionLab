@@ -26,7 +26,7 @@ describe('static/sim is I/O-free (Pages-safe)', () => {
         'grid.js',
         'norm.js',
         'payoff.js',
-        'premium_matrix.js',
+        'option_pricing_matrix.js',
         'stats.js',
       ].sort(),
     );

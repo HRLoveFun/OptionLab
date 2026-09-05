@@ -5,7 +5,7 @@ import importlib.util
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from core.options.simulation.expiry import generate_expiry_calendar
+from core.options.simulation.expiry_calendar import generate_expiry_calendar
 
 # Same fixed wall clock as gen_pages_fixtures.REF_NOW — the intraday DTE
 # fraction must be pinned on BOTH sides of the parity comparison.

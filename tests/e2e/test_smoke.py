@@ -19,7 +19,7 @@ TAB_IDS = [
     "tab-odds",
     "tab-regime",
     "tab-simulation",
-    "tab-premium-matrix",
+    "tab-option-pricing-matrix",
     "tab-config",
 ]
 
