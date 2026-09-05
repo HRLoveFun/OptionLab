@@ -233,26 +233,32 @@
     }
 
     // Fetch the standard + daily expiry calendar from the API and use it as the
-    // matrix columns. On GitHub Pages (no backend) falls back to the committed
-    // fixture so the panel stays fully interactive with sample columns.
+    // matrix columns. On GitHub Pages (no backend) the pages-shim answers
+    // /api/expiry_calendar with the SAME committed fixture, so we must recompute
+    // DTE live instead of trusting that payload.
     async function loadCalendar() {
         const params = new URLSearchParams({ standard: '12', daily: '10' });
-        // Live backend: the API computes DTE server-side from the real current
-        // instant, so its `dte` values are authoritative — pass them through
-        // untouched. Recomputing client-side here would only risk client/server
-        // timezone drift, and the live app already tracks "today" correctly.
+        // On the live Flask app the API computes DTE server-side from the real
+        // current instant, so its `dte` is authoritative — pass it through.
+        // On the static Pages demo the shim (pages-shim.js) intercepts the same
+        // endpoint and returns the frozen fixture, so we recompute DTE from the
+        // visitor's real clock (America/New_York), keeping only each entry's
+        // absolute `date` / `kind` / `cycle`. The shim flags itself with
+        // window.PAGES_DEMO, which is never set by the real backend.
+        const liveDemo = !!window.PAGES_DEMO;
+
         if (window.api && typeof window.api.get === 'function') {
             try {
                 const resp = await window.api.get('/api/expiry_calendar?' + params.toString(), { key: 'opm-calendar' });
                 if (resp && resp.status === 'ok' && Array.isArray(resp.expirations) && resp.expirations.length) {
-                    return resp.expirations;
+                    if (!liveDemo) return resp.expirations; // trust the live server
+                    const rec = _recomputeCalendar(resp);     // stale fixture on Pages
+                    if (rec) return rec;
                 }
             } catch (_) { /* fall through to fixture */ }
         }
-        // No backend (GitHub Pages) or API failure: fall back to the committed
-        // fixture and recompute DTE live from the real current instant, keeping
-        // only the fixture's absolute `date` / `kind` / `cycle`. This is what
-        // keeps "today" tracking the actual date instead of the frozen fixture.
+        // Static fixture fallback (also reached on Pages when the shim is absent,
+        // or when the api payload had no live expirations left).
         let resp = null;
         if (window.PagesSample && typeof window.PagesSample.getJSON === 'function') {
             resp = await window.PagesSample.getJSON([
@@ -263,7 +269,7 @@
         } else {
             try {
                 resp = await fetch('../fixtures/expiry_calendar.json').then((r) => r.json());
-            } catch (_) { /* fall through to error */ }
+            } catch (_) { /* give up */ }
         }
         const exps = _recomputeCalendar(resp);
         if (exps) return exps;
