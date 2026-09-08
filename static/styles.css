@@ -102,6 +102,8 @@
     /* hero containers */
     --sidebar-w: 220px;
     /* left navigation width */
+    --sidebar-rail-w: 14px;
+    /* collapse handle width = collapsed sidebar width */
     --header-h: 60px;
     /* sticky top header height */
     --shadow: 0 1px 4px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04);
@@ -232,6 +234,72 @@ body {
     flex-shrink: 0;
     position: sticky;
     top: calc(var(--header-h) + 1.5rem);
+    display: flex;
+    align-items: stretch;
+    gap: .5rem;
+}
+
+/* ── Sidebar collapse rail ──────────────────────────────────────────
+   Collapsing hides .sidebar-body and leaves only .sidebar-rail: a single
+   vertical line painted in --blue, which resolves to the theme accent
+   (gold under the Onyx layer). The rail is the toggle in both states, so
+   the collapsed nav has no separate "expand" button to discover.       */
+.sidebar-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sidebar-rail {
+    flex: 0 0 var(--sidebar-rail-w);
+    width: var(--sidebar-rail-w);
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    border-radius: 999px;
+}
+
+.sidebar-rail::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 1px;
+    background: var(--blue);
+    opacity: .3;
+    transition: opacity .15s, width .15s;
+}
+
+.sidebar-rail:hover::before,
+.sidebar-rail:focus-visible::before {
+    opacity: 1;
+    width: 3px;
+}
+
+.sidebar[data-collapsed="true"] {
+    width: var(--sidebar-rail-w);
+    /* The rail is an empty button, so with the nav gone it has no intrinsic
+       height. Stretching to the row height makes the line run the full length
+       of the content beside it instead of collapsing to zero. */
+    align-self: stretch;
+}
+
+.sidebar[data-collapsed="true"] .sidebar-body {
+    display: none;
+}
+
+/* Collapsed: the line is the whole sidebar, so it goes fully opaque. */
+.sidebar[data-collapsed="true"] .sidebar-rail::before {
+    opacity: 1;
+}
+
+.sidebar-rail:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
 }
 
 .tab-nav {
@@ -896,6 +964,30 @@ body {
     .sidebar {
         width: 100%;
         position: static;
+    }
+
+    /* Below this breakpoint the nav is a horizontal strip, so the collapsed
+       state turns the rail on its side instead of standing it up. */
+    .sidebar[data-collapsed="true"] {
+        width: 100%;
+    }
+
+    .sidebar[data-collapsed="true"] .sidebar-rail {
+        flex: 0 0 auto;
+        width: 100%;
+        height: var(--sidebar-rail-w);
+    }
+
+    .sidebar[data-collapsed="true"] .sidebar-rail::before,
+    .sidebar[data-collapsed="true"] .sidebar-rail:hover::before,
+    .sidebar[data-collapsed="true"] .sidebar-rail:focus-visible::before {
+        top: 50%;
+        bottom: auto;
+        left: 0;
+        right: 0;
+        width: auto;
+        height: 2px;
+        transform: translateY(-50%);
     }
 
     .tab-nav {

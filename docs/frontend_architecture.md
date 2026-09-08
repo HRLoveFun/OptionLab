@@ -27,6 +27,7 @@ static/
 ├── utils.js                Shared helpers (parseTickers, formatters, …)
 ├── option-chain.js         Option chain T-view rendering + interaction
 ├── position.js             Cascade dropdowns for option positions
+├── sidebar.js              Collapsible nav panel (persisted in localStorage)
 ├── market_review.js        Market review tab logic
 ├── market_review_chart.js  Chart.js time-series renderer
 ├── regime.js               Regime panel
@@ -119,6 +120,21 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │               │                                         │
 └───────────────┴─────────────────────────────────────────┘
 ```
+
+### Collapsible Sidebar
+
+The sidebar toggles between two states via `data-collapsed` on `<aside class="sidebar">`:
+
+| State                | Markup                             | Visual                                        |
+| -------------------- | ---------------------------------- | --------------------------------------------- |
+| Expanded             | `data-collapsed="false"`           | full `.tab-nav` + a faint accent rail         |
+| Collapsed            | `data-collapsed="true"`            | `.sidebar-body` hidden — only a 2px vertical line in `var(--blue)` (gold under the Onyx layer) |
+
+`.sidebar-rail` is the toggle in **both** states, so a collapsed nav needs no
+separate expand button. State is persisted by `static/sidebar.js` under the
+`sidebarCollapsed` localStorage key, and the script is loaded right after the
+`<aside>` so the choice is applied before first paint. Below the 768px
+breakpoint the nav is horizontal, so the collapsed rail turns on its side.
 
 ### Tab Navigation
 

@@ -93,64 +93,79 @@
 
     <div class="app-body">
         <!-- Sidebar Tab Nav -->
-        <aside class="sidebar">
-            <nav class="tab-nav">
-                <div class="tab-section-label">Setup</div>
-                <button class="tab-btn {% if not streaming_mode %}active{% endif %}" data-tab="tab-parameter">
-                    <span>Parameter</span>
-                </button>
+        <aside class="sidebar" id="sidebar" data-collapsed="false">
+            <!-- Collapse handle. It is also the collapsed state itself: when
+                 .sidebar-body is hidden only this rail is left — a single
+                 vertical line in the active accent color. -->
+            <button type="button" class="sidebar-rail" id="sidebar-rail"
+                    aria-controls="sidebar-body" aria-expanded="true"
+                    title="Collapse navigation">
+                <span class="sr-only" id="sidebar-rail-label">Collapse navigation</span>
+            </button>
 
-                <div class="tab-section-label">Overview</div>
-                {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
-                <button class="tab-btn" data-tab="tab-summary">
-                    <span>Summary</span>
-                </button>
+            <div class="sidebar-body" id="sidebar-body">
+                <nav class="tab-nav">
+                    <div class="tab-section-label">Setup</div>
+                    <button class="tab-btn {% if not streaming_mode %}active{% endif %}" data-tab="tab-parameter">
+                        <span>Parameter</span>
+                    </button>
+
+                    <div class="tab-section-label">Overview</div>
+                    {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
+                    <button class="tab-btn" data-tab="tab-summary">
+                        <span>Summary</span>
+                    </button>
+                    {% endif %}
+                    <button class="tab-btn {% if market_review_table is defined and market_review_table %}active{% endif %}" data-tab="tab-market-review">
+                        <span>Market Review</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tab-statistical-analysis">
+                        <span>Statistical Analysis</span>
+                    </button>
+
+                    <div class="tab-section-label">Forecast</div>
+                    <button class="tab-btn" data-tab="tab-market-assessment">
+                        <span>Assessment &amp; Projections</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tab-regime">
+                        <span>Market Regime</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tab-odds">
+                        <span>Expiry Odds</span>
+                    </button>
+
+                    <div class="tab-section-label">Options</div>
+                    <button class="tab-btn" data-tab="tab-option-chain">
+                        <span>Option Chain</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tab-options-chain">
+                        <span>Volatility Analysis</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tab-simulation">
+                        <span>Simulation</span>
+                    </button>
+                    <button class="tab-btn" data-tab="tab-option-pricing-matrix">
+                        <span>Option Pricing Matrix</span>
+                    </button>
+
+                    <div class="tab-section-label">System</div>
+                    <button class="tab-btn" data-tab="tab-config">
+                        <span>Config</span>
+                    </button>
+                </nav>
+                {% if tickers is defined and tickers|length > 1 %}
+                <div class="ticker-tab-nav" id="ticker-tabs-nav">
+                    {% for t in tickers %}
+                    <button class="ticker-tab-btn {% if t == ticker %}active{% endif %}" data-ticker="{{ t }}" onclick="switchTickerContext('{{ t }}')">{{ t }}</button>
+                    {% endfor %}
+                </div>
                 {% endif %}
-                <button class="tab-btn {% if market_review_table is defined and market_review_table %}active{% endif %}" data-tab="tab-market-review">
-                    <span>Market Review</span>
-                </button>
-                <button class="tab-btn" data-tab="tab-statistical-analysis">
-                    <span>Statistical Analysis</span>
-                </button>
-
-                <div class="tab-section-label">Forecast</div>
-                <button class="tab-btn" data-tab="tab-market-assessment">
-                    <span>Assessment &amp; Projections</span>
-                </button>
-                <button class="tab-btn" data-tab="tab-regime">
-                    <span>Market Regime</span>
-                </button>
-                <button class="tab-btn" data-tab="tab-odds">
-                    <span>Expiry Odds</span>
-                </button>
-
-                <div class="tab-section-label">Options</div>
-                <button class="tab-btn" data-tab="tab-option-chain">
-                    <span>Option Chain</span>
-                </button>
-                <button class="tab-btn" data-tab="tab-options-chain">
-                    <span>Volatility Analysis</span>
-                </button>
-                <button class="tab-btn" data-tab="tab-simulation">
-                    <span>Simulation</span>
-                </button>
-                <button class="tab-btn" data-tab="tab-option-pricing-matrix">
-                    <span>Option Pricing Matrix</span>
-                </button>
-
-                <div class="tab-section-label">System</div>
-                <button class="tab-btn" data-tab="tab-config">
-                    <span>Config</span>
-                </button>
-            </nav>
-            {% if tickers is defined and tickers|length > 1 %}
-            <div class="ticker-tab-nav" id="ticker-tabs-nav">
-                {% for t in tickers %}
-                <button class="ticker-tab-btn {% if t == ticker %}active{% endif %}" data-ticker="{{ t }}" onclick="switchTickerContext('{{ t }}')">{{ t }}</button>
-                {% endfor %}
             </div>
-            {% endif %}
         </aside>
+        <!-- WHY: loaded here, not with the other scripts at the bottom, so the
+             persisted collapsed state is applied before the first paint and the
+             full nav never flashes for a user who left it collapsed. -->
+        <script src="{{ url_for('static', filename='sidebar.js') }}"></script>
 
         <!-- Main Panel -->
         <main class="main-panel">
