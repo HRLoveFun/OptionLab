@@ -270,7 +270,29 @@ def get_conn(db_path: str | None = None):
     yield conn
 
 
+_UPSERTABLE_TABLES = frozenset(
+    {
+        "raw_prices",
+        "clean_prices",
+        "processed_prices",
+        "market_review_prices",
+        "regime_log",
+        "data_quality_log",
+        "tracked_strategies",
+    }
+)
+
+
 def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db_path: str | None = None):
+    """Bulk-upsert *rows* into *table*.
+
+    CONSTRAINT: the table name is interpolated into SQL (values are still
+    parameterised), so it is validated against the known schema tables —
+    a typo or caller-supplied name fails fast instead of building a
+    malformed (or, with hostile input, malicious) statement.
+    """
+    if table not in _UPSERTABLE_TABLES:
+        raise ValueError(f"upsert_many: unknown table {table!r}; expected one of {sorted(_UPSERTABLE_TABLES)}")
     rows = list(rows)
     if not rows:
         return

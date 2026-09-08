@@ -133,7 +133,7 @@ def render_streaming_slice(kind: str) -> Any:
         return render_error_fragment(kind, "session expired", 200)
     except Exception as e:
         logger.error("/render/%s failed for ticker=%s: %s", kind, ticker, e, exc_info=True)
-        return render_error_fragment(kind, str(e), 500)
+        return render_error_fragment(kind, "分片渲染失败，请稍后重试", 500)
 
     # Build the template context. The fragment templates expect form-style
     # variables (frequency, start_time, etc.) so we merge job form_data with

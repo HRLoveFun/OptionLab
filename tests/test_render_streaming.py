@@ -133,7 +133,10 @@ class TestRenderRoutes:
             resp = client.get(f"/render/market_review?job={job_id}&ticker=AAPL")
         assert resp.status_code == 500
         html = resp.get_data(as_text=True)
-        assert "synthetic failure" in html or "error" in html.lower()
+        # The generic message must be shown; the internal exception text must
+        # NOT leak into the response (review 2026-09-08, P3 str(e) cleanup).
+        assert "分片渲染失败" in html
+        assert "synthetic failure" not in html
 
     def test_render_uses_jobcache_memoisation(self, client):
         """Two GETs for the same (job, ticker, kind) must invoke the slice once."""

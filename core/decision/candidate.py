@@ -15,6 +15,7 @@ import logging
 
 import numpy as np
 
+from core._shared.dates import dte
 from core.options.chain.analyzer import OptionsChainAnalyzer
 from core.options.greeks.black_scholes import greeks_vectorized
 
@@ -23,14 +24,6 @@ logger = logging.getLogger(__name__)
 CANDIDATE_DELTAS: list[float] = [-0.25, -0.40, -0.55, -0.70]
 CANDIDATE_DTES: list[int] = [21, 45, 60, 90]
 RISK_FREE_RATE: float = 0.05
-
-
-def _dte(expiry_str: str) -> int:
-    import datetime as dt
-
-    today = dt.date.today()
-    exp = dt.datetime.strptime(expiry_str, "%Y-%m-%d").date()
-    return max(0, (exp - today).days)
 
 
 def build_candidate_matrix(
@@ -49,14 +42,14 @@ def build_candidate_matrix(
         closest_exp = None
         closest_diff = float("inf")
         for exp in analyzer.expiries:
-            d = _dte(exp)
+            d = dte(exp)
             diff = abs(d - target_dte)
             if diff < closest_diff:
                 closest_diff = diff
                 closest_exp = exp
         if closest_exp is None or closest_exp not in analyzer.chain:
             continue
-        actual_dte = _dte(closest_exp)
+        actual_dte = dte(closest_exp)
         puts_df = analyzer.chain[closest_exp]["puts"]
         T = max(actual_dte, 1) / 365
         for target_delta in candidate_deltas:

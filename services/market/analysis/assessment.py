@@ -56,7 +56,7 @@ def _generate_assessment(analyzer, form_data):
             logger.info("No option data provided - skipping option analysis")
     except Exception as e:
         logger.error(f"Error generating assessment for {ticker}: {e}", exc_info=True)
-        results["assessment_error"] = str(e)
+        results["assessment_error"] = "评估图表生成失败，请稍后重试"
 
     # Position sizing
     try:

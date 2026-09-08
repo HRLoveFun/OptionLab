@@ -16,18 +16,11 @@ from __future__ import annotations
 
 import logging
 
+from core._shared.dates import dte
 from core.options.chain.analyzer import OptionsChainAnalyzer
 from core.options.chain.term_structure import atm_iv_for_expiry, iv_percentile, iv_rank
 
 logger = logging.getLogger(__name__)
-
-
-def _dte(expiry_str: str) -> int:
-    import datetime as dt
-
-    today = dt.date.today()
-    exp = dt.datetime.strptime(expiry_str, "%Y-%m-%d").date()
-    return max(0, (exp - today).days)
 
 
 def get_term_structure(analyzer: OptionsChainAnalyzer) -> dict[int, float]:
@@ -38,7 +31,7 @@ def get_term_structure(analyzer: OptionsChainAnalyzer) -> dict[int, float]:
         puts = analyzer.chain[exp]["puts"]
         atm_iv = atm_iv_for_expiry(puts, analyzer.spot)
         if atm_iv is not None:
-            ts[_dte(exp)] = atm_iv
+            ts[dte(exp)] = atm_iv
     return ts
 
 

@@ -144,5 +144,5 @@ def _generate_statistical_analysis(analyzer, form_data):
 
     except Exception as e:
         logger.error(f"Error generating statistical analysis for {ticker}: {e}", exc_info=True)
-        results["statistical_error"] = str(e)
+        results["statistical_error"] = "统计图表生成失败，请稍后重试"
     return results

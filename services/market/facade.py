@@ -44,7 +44,7 @@ class MarketService:
             return is_valid, message
         except Exception as e:
             logger.error(f"Error validating ticker {ticker}: {e}")
-            return False, f"error_validating_ticker: {str(e)}"
+            return False, "error_validating_ticker: 校验行情数据时出错，请稍后重试"
 
     @staticmethod
     def fetch_spot(ticker):

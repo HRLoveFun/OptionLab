@@ -54,7 +54,7 @@ class AnalysisService:
 
         except Exception as e:
             logger.error(f"Error generating complete analysis: {e}", exc_info=True)
-            return {"error": f"analysis_failed: {str(e)}"}
+            return {"error": "analysis_failed: 分析生成失败，请稍后重试"}
 
     @staticmethod
     def _build_analyzer_or_error(form_data):
@@ -80,7 +80,7 @@ class AnalysisService:
             return MarketService.generate_market_review(form_data) or {}
         except Exception as e:
             logger.error("market_review slice failed for %s: %s", form_data.get("ticker"), e, exc_info=True)
-            return {"error": f"market_review_failed: {e}"}
+            return {"error": "market_review_failed: Market Review 生成失败，请稍后重试"}
 
     @staticmethod
     def generate_statistical_slice(form_data: dict) -> dict:
@@ -95,7 +95,7 @@ class AnalysisService:
                 gc.collect()
         except Exception as e:
             logger.error("statistical slice failed for %s: %s", form_data.get("ticker"), e, exc_info=True)
-            return {"statistical_error": str(e)}
+            return {"statistical_error": "统计图表生成失败，请稍后重试"}
 
     @staticmethod
     def generate_assessment_slice(form_data: dict) -> dict:
@@ -110,7 +110,7 @@ class AnalysisService:
                 gc.collect()
         except Exception as e:
             logger.error("assessment slice failed for %s: %s", form_data.get("ticker"), e, exc_info=True)
-            return {"assessment_error": str(e)}
+            return {"assessment_error": "评估图表生成失败，请稍后重试"}
 
     @staticmethod
     def generate_options_chain_slice(form_data: dict) -> dict:
@@ -120,4 +120,4 @@ class AnalysisService:
             return OptionsChainService.generate_options_chain_analysis(ticker) or {}
         except Exception as e:
             logger.error("options_chain slice failed for %s: %s", ticker, e, exc_info=True)
-            return {"oc_error": str(e)}
+            return {"oc_error": "期权链分析生成失败，请稍后重试"}

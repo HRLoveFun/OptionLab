@@ -8,7 +8,8 @@ Contracts:
   - build_preload_payload(ticker) -> dict
   - expiry_df_to_records(df, expiry) -> list[dict]
 Dependencies UPWARD:
-  - core.options.chain.analyzer (OptionsChainAnalyzer, _dte)
+  - core._shared.dates (dte)
+  - core.options.chain.analyzer (OptionsChainAnalyzer)
   - data_pipeline.yf_client
 Dependencies DOWNWARD:
   - routes/options.py
@@ -22,7 +23,8 @@ from typing import Any
 
 import pandas as pd
 
-from core.options.chain.analyzer import OptionsChainAnalyzer, _dte
+from core._shared.dates import dte
+from core.options.chain.analyzer import OptionsChainAnalyzer
 from data_pipeline.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
@@ -58,7 +60,7 @@ def expiry_df_to_records(df: pd.DataFrame | None, expiry: str) -> list[dict[str,
                 "iv_pct": round(float(row.get("impliedVolatility", 0) or 0) * 100, 1),
                 "oi": int(row.get("openInterest", 0) or 0),
                 "volume": int(row.get("volume", 0) or 0),
-                "dte": _dte(expiry),
+                "dte": dte(expiry),
             }
         )
     return result

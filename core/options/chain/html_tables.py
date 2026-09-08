@@ -15,22 +15,15 @@ Dependencies DOWNWARD:
 
 from __future__ import annotations
 
-import datetime as dt
 import logging
 
 import pandas as pd
 
+from core._shared.dates import dte
 from core.options.chain.metrics import expected_move, max_pain, skew_25d
 from core.options.chain.term_structure import atm_iv_for_expiry
 
 logger = logging.getLogger(__name__)
-
-
-def _dte(expiry_str: str) -> int:
-    """Days to expiry from today."""
-    today = dt.date.today()
-    exp = dt.datetime.strptime(expiry_str, "%Y-%m-%d").date()
-    return max(0, (exp - today).days)
 
 
 def expected_move_table(chain: dict, expiries: list, spot: float) -> str | None:
@@ -42,7 +35,7 @@ def expected_move_table(chain: dict, expiries: list, spot: float) -> str | None:
                 continue
             calls = chain[exp]["calls"]
             puts = chain[exp]["puts"]
-            dte = _dte(exp)
+            days_to_expiry = dte(exp)
             em = expected_move(calls, puts, spot)
             if em is None:
                 continue
@@ -52,7 +45,7 @@ def expected_move_table(chain: dict, expiries: list, spot: float) -> str | None:
             rows.append(
                 {
                     "Expiry": exp,
-                    "DTE": dte,
+                    "DTE": days_to_expiry,
                     "ATM Straddle": f"${em:.2f}",
                     "Exp Move": f"${em:.2f}",
                     "Exp Move %": f"{em_pct:.2f}%",

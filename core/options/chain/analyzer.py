@@ -24,6 +24,7 @@ import math
 
 import numpy as np
 
+from core._shared.dates import dte
 from core.options.chain.html_tables import expected_move_table as _expected_move_table
 from core.options.chain.html_tables import key_metrics_table as _key_metrics_table
 from core.options.chain.liquidity import liquidity_score as _liquidity_score
@@ -41,13 +42,6 @@ logger = logging.getLogger(__name__)
 
 # Re-export for callers that do ``from core.options.chain.analyzer import liquidity_score``
 liquidity_score = _liquidity_score
-
-
-def _dte(expiry_str: str) -> int:
-    """Days to expiry from today."""
-    today = dt.date.today()
-    exp = dt.datetime.strptime(expiry_str, "%Y-%m-%d").date()
-    return max(0, (exp - today).days)
 
 
 def _norm_cdf(x: float) -> float:
@@ -92,8 +86,8 @@ def get_odds_with_vol_context(
     if atm_iv is None:
         return {"odds": [], "message": "no_atm_iv"}
 
-    dte = max(_dte(nearest), 1)
-    T = dte / 365
+    days_to_expiry = max(dte(nearest), 1)
+    T = days_to_expiry / 365
     sigma = atm_iv
     z = (target_pct / 100) / (sigma * (T**0.5))
     prob_touch = 2 * (1 - _norm_cdf(abs(z)))
@@ -103,7 +97,7 @@ def get_odds_with_vol_context(
         "target_pct": target_pct,
         "nearest_expiry": nearest,
         "atm_iv_pct": round(atm_iv * 100, 2),
-        "dte": dte,
+        "dte": days_to_expiry,
         "prob_touch": round(prob_touch, 4),
         "odds": [
             {
@@ -196,13 +190,13 @@ class OptionsChainAnalyzer:
             for exp in self.expiries:
                 if exp not in self.chain:
                     continue
-                dte = _dte(exp)
+                days_to_expiry = dte(exp)
                 puts = self.chain[exp]["puts"].dropna(subset=["impliedVolatility"])
                 for _, row in puts.iterrows():
                     moneyness = float(row["strike"]) / self.spot
                     iv = float(row["impliedVolatility"]) * 100
                     if 0.7 <= moneyness <= 1.3 and iv > 0:
-                        records.append({"moneyness": moneyness, "dte": dte, "iv": iv})
+                        records.append({"moneyness": moneyness, "dte": days_to_expiry, "iv": iv})
             return render_iv_surface(records, self.spot, self.ticker)
         except Exception as e:
             logger.error("plot_iv_surface failed: %s", e, exc_info=True)
