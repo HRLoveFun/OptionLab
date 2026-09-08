@@ -119,6 +119,10 @@
             </div>
             ${L.notes ? `<div class="muted" style="margin-top:.5rem;font-size:.8rem;">Notes: ${L.notes}</div>` : ''}
         `;
+        // CONSTRAINT: L.notes is machine-generated only (core/regime/series.py
+        // fixed tags like "vix_missing"); no human-input path exists, so the
+        // unescaped interpolation above is currently inert. If a manual notes
+        // feature is ever added, wrap it in escapeHtml() first.
     }
 
     function renderStrip(rows) {

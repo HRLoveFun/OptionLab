@@ -23,6 +23,18 @@ function enhanceMarketReviewTable() {
         return isNaN(v) ? null : v;
     }
 
+    // Wrap the cell's existing text into the styling div using DOM APIs —
+    // never re-parse cell text as HTML. textContent is already-decoded data;
+    // feeding it back through innerHTML would resurrect any markup the server
+    // had escaped (the old `td.innerHTML = ...${td.textContent}...` pattern).
+    function wrapCellInner(td) {
+        const inner = document.createElement('div');
+        inner.className = 'mr-cell-inner';
+        inner.textContent = td.textContent.trim();
+        td.textContent = '';
+        td.appendChild(inner);
+    }
+
     // Collect original text and build per-column stats BEFORE modifying DOM
     const cellVals = rows.map(r =>
         Array.from(r.cells).map(td => parseVal(td.textContent))
@@ -54,7 +66,7 @@ function enhanceMarketReviewTable() {
         Array.from(row.cells).forEach((td, ci) => {
             if (ci === 0) return;                         // row index (asset name)
             if (noBarsSet.has(ci)) {                      // no bar for Last Close
-                td.innerHTML = `<div class="mr-cell-inner">${td.textContent.trim()}</div>`;
+                wrapCellInner(td);
                 return;
             }
             const val = cellVals[ri][ci];
@@ -62,11 +74,12 @@ function enhanceMarketReviewTable() {
             const range = stat.max - stat.min;
 
             // Wrap existing text
-            const origText = td.textContent.trim();
-            td.innerHTML = `<div class="mr-cell-inner">${origText}</div>`;
+            wrapCellInner(td);
 
             if (val === null || range === 0) {
-                td.innerHTML += '<div class="mr-bar-wrap"></div>';
+                const emptyWrap = document.createElement('div');
+                emptyWrap.className = 'mr-bar-wrap';
+                td.appendChild(emptyWrap);
                 return;
             }
 
