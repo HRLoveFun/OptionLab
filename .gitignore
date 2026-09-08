@@ -1,6 +1,9 @@
 # OS
 .DS_Store
 
+# Per-task git worktrees (ADR 0009) — task checkouts live here, never in main workspace
+.worktrees/
+
 # Python
 __pycache__/
 *.pyc

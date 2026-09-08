@@ -1,0 +1,22 @@
+---
+description: 每个开发任务必须使用独立 Git worktree 隔离，禁止在主工作区直接开发
+alwaysApply: true
+enabled: true
+updatedAt: 2026-09-08T00:00:00.000Z
+provider:
+---
+
+# Git Worktree 隔离开发（ADR 0009）
+
+- 开始任何开发任务前，先用 `python scripts/worktree.py create <task-name>` 创建独立
+  worktree（分支 = 任务名，目录 = `.worktrees/<task-name>/`），所有代码修改只在该
+  worktree 内进行。
+- 主工作区始终保持 `main` 分支且干净，禁止在主工作区切分支开发或留下未提交改动。
+- 每个任务一分支一 worktree，不共享；worktree 内使用独立 `.venv` 与 `.env`，避免依赖
+  与配置互相干扰。
+- 并行任务的 dev server 必须使用不同 `PORT`；`MARKET_DB_PATH` 默认指向 worktree 内部，
+  多个进程不要同时对同一 DB 运行调度器。
+- 任务分支合并后，立即用 `python scripts/worktree.py remove <task-name>`（或 `clean`）
+  删除对应 worktree 与分支，保持 `.worktrees/` 整洁；脚本会拒绝删除有未提交改动或未
+  合并分支的 worktree。
+- 详细流程见 `docs/guides/GIT_WORKTREE_WORKFLOW.md`。

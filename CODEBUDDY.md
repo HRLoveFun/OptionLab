@@ -17,6 +17,16 @@ pre-commit install --hook-type pre-commit
 ```
 E2E deps are deliberately **not** in `requirements.txt`; install `pytest-playwright` + `playwright install chromium` only when needed.
 
+### Git worktrees (per-task development, ADR 0009)
+Every dev task runs in its own worktree under `.worktrees/<task-name>/` with a dedicated branch and its own `.venv`/`.env`; the main workspace stays on `main` and clean — **never edit task code outside the worktree**. Full create/switch/cleanup flow: `docs/guides/GIT_WORKTREE_WORKFLOW.md`.
+```bash
+python scripts/worktree.py create <task-name>   # branch + worktree + venv bootstrap
+python scripts/worktree.py list                 # all worktrees + dirty flags
+python scripts/worktree.py remove <task-name>   # guarded delete (refuses dirty/unmerged)
+python scripts/worktree.py clean                # sweep all merged worktrees + prune
+```
+Parallel tasks: use distinct `PORT` per worktree; `MARKET_DB_PATH` defaults inside the worktree (don't run two schedulers against one DB). Delete worktrees promptly after merge.
+
 ### Run the app
 ```bash
 python app.py                                              # dev server; PORT defaults to 5001

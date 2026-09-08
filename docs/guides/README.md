@@ -174,3 +174,7 @@ Netlify 配置已包含在 `netlify.toml`，使用 Python 3.11 构建。
 ## License
 
 MIT License. 如有问题请提交 GitHub Issue。
+
+## 开发流程
+
+- [GIT_WORKTREE_WORKFLOW.md](GIT_WORKTREE_WORKFLOW.md) — 每任务独立 Git worktree 的创建、切换与清理流程（ADR 0009）。
