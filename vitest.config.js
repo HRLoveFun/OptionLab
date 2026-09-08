@@ -9,12 +9,10 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'html', 'json-summary'],
-            include: [
-                'static/api.js',
-                'static/eventBus.js',
-                'static/utils.js',
-                'static/state/**/*.js',
-            ],
+            // Full static/ tree so the report is honest: untested tab entry
+            // files (option-chain.js, simulation.js, …) must show up as 0%
+            // instead of silently disappearing from the summary.
+            include: ['static/**/*.js'],
             reportsDirectory: 'coverage/js',
         },
     },
