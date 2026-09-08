@@ -89,6 +89,20 @@
   - [模式] 设计评审常见模式：写路径落入他人所有的数据根（所有权错位）→ 记入 architecture-checklist.md §1.5 数据所有权条目的示例
 - **已落地改动**：本次仅追加本记录；清单修改待用户确认
 
+### 2026-09-08 OptionLab 架构专项评审（第 3 轮，全库 + 架构聚焦）
+- **输入**：模式=<全库（架构聚焦，code-review + optionlab-arch-review 编排）>；范围=<8 维评分 + 前两轮整改复核>；语言=<Python + JavaScript（推断）>；框架=<Flask + HTMX + matplotlib + SQLite + yfinance（推断）>；变更类型=<全库健康度>
+- **覆盖度**（全库模式）：工具面=doc_guard（clean）+ arch_metrics --check（REGRESSION: dead_code 0→1）+ 纯度测试 9 通过 + ruff/format 全绿 + pytest 非 network 全过（仅 2 个 network 用例环境性失败）+ vitest 150/150；深审=data_pipeline/data_ops（_query/_range/_globals）、data_pipeline/db.py、services/market/dispatch.py、services/options/preload.py、services/market_review/fetch.py；抽样=static/{position,main,regime}.js innerHTML 插值点、ci.yml、build_pages_site.py
+- **发现统计**：P0 0 / P1 1 / P2 4 / P3 3；疑点 2
+- **问题类型分布**：一致性/构建产物漂移复发 ×1（c6f7927 只改 static 未同步 site，HEAD 上 CI diff 门禁必红）；可维护性/死代码 + 文档漂移 ×1（summary.py，即基线回归项）；可维护性/近重复函数 + 空结果 memo 残余 ×1（get_processed(_data)）；安全/缓存键无上限残余 ×1（_option_chain_cache）；安全/devDeps 漏洞 ×1（npm 11 项）；可维护性/str(e) 回显残留 ×1；安全/f-string SQL 防御深度 ×1；可维护性/私有符号跨包导入 ×1
+- **误报**：`_option_chain_cache` 初判为"无界缓存复发" → 实有 TTL 过期即删（get 时 pop），仅键集合无上限，降为键枚举残余问题；QE 频率缺口（第 2 轮遗漏③）经 grep 证实管道已全面支持 → 非问题
+- **遗漏**：无（本轮无后续暴露）
+- **分级偏差**：site 漂移第 2 轮定 P1（无门禁）→ 本轮仍 P1 但理由变为"HEAD 上已存在门禁必红"，修复成本更低；环境踩坑：.venv 不存在 + requirements pin numpy==1.26.2 无 3.13 wheel → 记为 P3 打包问题而非测试失败
+- **改进建议**：
+  - [模式] architecture-checklist 增补："pin 精确版本的上游库需核对其 wheel 覆盖的 Python 版本区间与 requires-python 声明的一致性"（本次由环境安装失败确证）
+  - [规则] 维持 devDeps 漏洞 P2 口径（第 4 次验证一致）
+  - [分级] "有 CI 门禁但 HEAD 已违反的不变量"与"无门禁"同级定 P1，理由字段区分
+- **已落地改动**：仅追加本记录
+
 ## 高频误报（滚动维护）
 
 > 累计出现 >=2 次的误报模式与规则收窄方向；已在清单中修复的移除。
