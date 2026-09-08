@@ -47,7 +47,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 | File | Content | Risk |
 |---|---|---|
-| `requirements.txt` (17) | 9 runtime deps, mostly `==` pinned; `flask>=3.1.3`, `gunicorn>=23.0.0` unbounded | medium — no lock/hash (P2-3) |
+| `requirements.txt` (17) | 9 runtime deps, all exact `==` pins (`flask==3.1.3`, `gunicorn==26.2.0`); Python 3.12 constraint documented in-file | low (no pip lock/hash, accepted for a 9-dep file) |
 | `pyproject.toml` (51) | pytest `addopts = "-x --tb=short -q"`; ruff `required-version >=0.16.5,<0.17`; `src = core/services/data_pipeline/utils` | low |
 | `package.json` + `package-lock.json` (3 235) | vitest / jsdom / coverage only — **no runtime npm dependency**; lockfile committed | low |
 | `vitest.config.js` (21) | runs `tests/unit/**`; coverage limited to `api.js` / `eventBus.js` / `utils.js` / `state/**` | coverage scope too narrow (P3-1) |
@@ -68,7 +68,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 | Item | State | Note |
 |---|---|---|
-| `market_data.sqlite` (11.7 MB) | git-ignored, lives in repo root | default `DB_PATH = os.getcwd()/market_data.sqlite` (`data_pipeline/db.py:27`) — P2-2 |
+| `market_data.sqlite` (11.7 MB) | git-ignored, still in repo root | code default is now `data/market_data.sqlite` (`data_pipeline/db.py:27`); the local `.env` overrides it back to the root file — move the file into `data/` whenever convenient |
 | `site/` | **inputs committed (9 files) · build output ignored** | tracked: `fixtures/` (7) · `snapshot/snapshot.json` · `pages-shim.js`; ignored: `index.html`, 5 feature + 6 showcase redirects, `static/**` (42 generated files) — see §5 P1-1 |
 | `archive/` (8 files · 1 070 lines) | committed | retired code still in tree — P3-3 |
 | `test.ipynb` (58 lines) | git-ignored | leftover scratch file — P2-2 |
@@ -121,12 +121,12 @@ OptionLab/
 |---|---|---|
 | ~~P1-1~~ | 严重 · **已整改 2026-09-08** | generated Pages mirror untracked + git-ignored (42 files) |
 | ~~P1-2~~ | 严重 · **已整改 2026-09-08** | `static/sidebar.js` committed (`7ef2a33`) + guard test added (`65c01f6`); the 8 favicon/webmanifest assets referenced by `templates/index.html:8-13` were committed by the same work stream, so the guard is green |
-| P2-1 | 建议 | Three parallel descriptions of the architecture (`README`, `CODEBUDDY.md`, `docs/`) |
-| P2-2 | 建议 | Root-level strays: `options_learning_charter_v1_2.md`, `market_data.sqlite`, `test.ipynb` |
-| P2-3 | 建议 | `requirements.txt` has unbounded ranges and no lock file |
-| P3-1 | 提示 | vitest coverage scope covers only 4 paths; ~4 000 lines of `static/` unmeasured |
-| P3-2 | 提示 | `np.trapz` deprecated (`core/strategies/prob_profit.py:41,44`) |
-| P3-3 | 提示 | `docs/reference/` empty dir (git cannot track it); `archive/` still in tree |
+| ~~P2-1~~ | 建议 · **已整改 2026-09-08** | `README`/`CODEBUDDY.md` architecture sections now point at `docs/` as the source of truth (policy note; content still summarized in place) |
+| ~~P2-2~~ | 建议 · **已整改 2026-09-08** | charter moved to `docs/options_learning_charter_v1_2.md`; default `DB_PATH` → `data/market_data.sqlite` (`db.py`, `scheduler.py`, `.env.example`); `test.ipynb` deleted. Local `.env` still points at the root file — move `market_data.sqlite` into `data/` whenever convenient |
+| ~~P2-3~~ | 建议 · **已整改 2026-09-08** | `flask==3.1.3`, `gunicorn==26.2.0` (exact pins, matching the verified install); pip-side lock file still absent — acceptable for a 9-dependency file |
+| ~~P3-1~~ | 提示 · **已整改 2026-09-08** | vitest `coverage.include` widened to `static/**/*.js` so untested tab files show as 0% instead of disappearing |
+| ~~P3-2~~ | 提示 · **已整改 2026-09-08** | `np.trapz` → `_trapz = getattr(np, "trapezoid", None) or np.trapz` shim in `core/strategies/prob_profit.py` (numpy 1.26 has no `trapezoid`, 2.x deprecates `trapz`) |
+| ~~P3-3~~ | 提示 · **已整改 2026-09-08** | empty `docs/reference/` removed; `archive/README.md` marks the tree read-only |
 
 ---
 
@@ -185,10 +185,10 @@ shim) or regenerable output.
 
 | Batch | Scope | Notes |
 |---|---|---|
-| B-A | P2-1 | Make `docs/` the single architecture source; `README` keeps quick-start + API; `CODEBUDDY.md` links instead of duplicating |
-| B-B | P2-2 | Move `options_learning_charter_v1_2.md` → `docs/`; default `MARKET_DB_PATH` → `data/market_data.sqlite`; delete `test.ipynb` |
-| B-C | P2-3 | Pin `flask` / `gunicorn` with `~=` or add `requirements.lock` |
-| B-D | P3-1/2/3 | Widen vitest `coverage.include`; `np.trapz` → `np.trapezoid`; decide on `docs/reference/` and `archive/` |
+| B-A | P2-1 | **done 2026-09-08** — source-of-truth notes added to both docs |
+| B-B | P2-2 | **done 2026-09-08** — charter moved, DB default under `data/`, `test.ipynb` deleted, `docs/reference/` removed |
+| B-C | P2-3 | **done 2026-09-08** — exact pins for `flask` / `gunicorn` |
+| B-D | P3-1/2/3 | **done 2026-09-08** — coverage scope widened, trapz shim, `archive/README.md` |
 
 ---
 

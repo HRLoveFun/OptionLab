@@ -89,6 +89,10 @@ python scripts/find_drift_candidates.py          # feeds scripts/draft_doc_updat
 
 ## Architecture
 
+> **Single source of truth**: `docs/architecture_review.md` (scorecard + debt
+> registry) and `docs/l0_architecture.md` (top-level skeleton). This section is
+> an AI-oriented summary — update `docs/` first, then mirror here.
+
 OptionLab is a single-process Flask dashboard for equity/options research. It pulls prices and option chains from **yfinance only**, caches them in **SQLite (WAL)**, and serves a **streaming HTMX + vanilla-JS** UI where nearly all charts are server-side matplotlib PNGs.
 
 ### Layered dependency flow (one-way, enforced)

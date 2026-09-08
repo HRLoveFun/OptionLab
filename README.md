@@ -24,6 +24,12 @@ management on top of Chart.js / Alpine.js.
 
 ## Architecture
 
+> **Single source of truth**: the standing architecture record lives in
+> [`docs/architecture_review.md`](docs/architecture_review.md) (scorecard +
+> debt registry) and [`docs/l0_architecture.md`](docs/l0_architecture.md)
+> (top-level skeleton). The diagram below is a summary kept for humans —
+> update `docs/` first, then this section.
+
 ```
 app.py                       Flask entry point — registers blueprints, middleware, scheduler
 └── routes/                  Thin HTTP routing layer (blueprints only, no business logic)
