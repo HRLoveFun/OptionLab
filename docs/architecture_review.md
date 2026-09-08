@@ -68,6 +68,7 @@ for the live list. State at registration:
 
 | Location | Concern | Trigger to act |
 |---|---|---|
+| `services/market/analysis/summary.py` (fan-in 0, tracked as `dead_code_candidates=1` in baseline) | `generate_summary_analysis` lost its caller when the streaming refactor removed the server-rendered `summary_data` template variable; the Summary tab button is gated off in `templates/index.html` and `summary_pending` in `routes/core.py` is vestigial | any request to ship the multi-ticker Summary tab ⇒ add a `summary` slice to `_RENDER_KIND_SLICES` (aggregates across the job's tickers, not per-ticker) ; otherwise delete the module + `partials/tab_summary.html` + the `summary_pending` flag in the same commit and reset the baseline |
 | `data_pipeline/yf_client.py` (391 lines, fan-in 11) | 9 lines below the 400-line god-file threshold; the throttle wrapper itself already lives in `utils/network.py::yf_throttle`, but each new yfinance endpoint (option greeks feeds, dividends/splits, etc.) grows the file | any edit that pushes it past 400 lines ⇒ extract the option-chain section (~150 lines, `fetch_option_chain` + `_fetch_option_chain_serial` + `_OPT_NUMERIC_COLS`) into `data_pipeline/yf_option_chain.py` in the same commit |
 
 ## 3. Guardrails (how the score is kept)

@@ -107,7 +107,7 @@ def index():
 
     except Exception as e:
         logger.error("Unexpected error in main route: %s", e, exc_info=True)
-        return render_template("index.html", error=f"An unexpected error occurred: {str(e)}. Please try again.")
+        return render_template("index.html", error="页面处理时发生意外错误，请重试。")
 
 
 # ── HTMX streaming render endpoints ──────────────────────────────────────────

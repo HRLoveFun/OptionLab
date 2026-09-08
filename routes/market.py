@@ -39,7 +39,7 @@ def signals_route():
     except Exception as e:
         logger.error("signals_route error: %s", e, exc_info=True)
         return (
-            jsonify({"status": "error", "code": "signals_failed", "message": str(e)}),
+            jsonify({"status": "error", "code": "signals_failed", "message": "信号计算失败，请稍后重试"}),
             500,
         )
 
@@ -65,6 +65,8 @@ def market_review_ts():
     except Exception as e:
         logger.error("market_review_ts error: %s", e, exc_info=True)
         return (
-            jsonify({"status": "error", "code": "market_review_failed", "message": str(e)}),
+            jsonify(
+                {"status": "error", "code": "market_review_failed", "message": "Market Review 数据获取失败，请稍后重试"}
+            ),
             500,
         )

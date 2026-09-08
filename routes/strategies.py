@@ -38,7 +38,7 @@ def analyze_strategy_route():
     except Exception as e:
         logger.error("analyze_strategy_route error: %s", e, exc_info=True)
         return (
-            jsonify({"status": "error", "code": "strategy_failed", "message": str(e)}),
+            jsonify({"status": "error", "code": "strategy_failed", "message": "策略分析失败，请稍后重试"}),
             500,
         )
 

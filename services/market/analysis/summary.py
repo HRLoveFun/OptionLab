@@ -1,4 +1,17 @@
-"""Cross-ticker summary generation for the 综合 tab."""
+"""Cross-ticker summary generation for the 综合 tab.
+
+PARKED (2026-09-08 review): ``generate_summary_analysis`` has no runtime
+caller — the streaming refactor moved every per-ticker slice through
+``services/market/dispatch.py::_RENDER_KIND_SLICES``, but the multi-ticker
+Summary tab was never migrated, so ``routes/core.py`` stopped passing
+``summary_data`` and the tab button is gated off in ``templates/index.html``.
+Kept as the intended implementation for that tab; tracked on the
+``docs/architecture_review.md`` §2 watch list with the
+``arch_baseline.json`` ``dead_code_candidates`` count at 1. Exit condition:
+either wire a summary slice into the dispatch funnel or delete this module
+together with ``tab_summary.html`` and the vestigial ``summary_pending`` flag
+in ``routes/core.py``.
+"""
 
 import logging
 
