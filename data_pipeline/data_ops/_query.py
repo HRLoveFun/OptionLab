@@ -124,25 +124,19 @@ def get_processed(
         "SELECT * FROM processed_prices WHERE ticker=? AND frequency=? AND date>=? AND date<=?",
         (ticker, frequency, start.isoformat(), end.isoformat()),
     )
-    _g._cache_set(cache_key, df)
+    # Never memoise an empty read: a not-yet-generated frequency/range would
+    # otherwise be pinned for _QUERY_CACHE_TTL and hide the data once the
+    # processing pass completes (mirrors the partial-read guard in
+    # get_cleaned_daily above).
+    if not df.empty:
+        _g._cache_set(cache_key, df)
     return df
 
 
 def get_processed_data(ticker: str, start: dt.date, end: dt.date, frequency: str = "W") -> pd.DataFrame:
-    """Get processed data including osc_high, osc_low, and other features."""
+    """Backward-compatible alias of :func:`get_processed` that swallows errors."""
     try:
-        cache_key = (ticker, "processed", frequency, str(start), str(end))
-        cached = _g._cache_get(cache_key)
-        if cached is not None:
-            return cached
-        _u.manual_update(ticker, days=7)
-        init_db()
-        df = fetch_df(
-            "SELECT * FROM processed_prices WHERE ticker=? AND frequency=? AND date>=? AND date<=?",
-            (ticker, frequency, start.isoformat(), end.isoformat()),
-        )
-        _g._cache_set(cache_key, df)
-        return df
+        return get_processed(ticker, frequency, start, end)
     except Exception as e:
         logger.error("Error fetching processed data: %s", e)
         return pd.DataFrame()

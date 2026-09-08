@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 _option_chain_cache: dict[str, Any] = {}
 CACHE_TTL_MINUTES = 15
 
+# CONSTRAINT: bound on the cache key space. Each payload is a full option
+# chain (up to MBs) and keys come from a public endpoint, so ticker
+# enumeration would otherwise grow memory without limit (mirrors
+# data_pipeline/data_ops/_globals.py::_cache_set).
+_OPTION_CHAIN_CACHE_MAX = 128
+
 
 def expiry_df_to_records(df: pd.DataFrame | None, expiry: str) -> list[dict[str, Any]]:
     """Convert a single-expiry DataFrame into JSON-safe record dicts."""
@@ -100,7 +106,17 @@ def get_cached(ticker: str) -> dict[str, Any] | None:
 
 
 def set_cached(ticker: str, payload: dict[str, Any]) -> None:
-    """Store payload in the in-memory cache."""
+    """Store payload in the in-memory cache (bounded key space)."""
+    if len(_option_chain_cache) >= _OPTION_CHAIN_CACHE_MAX:
+        now = dt.datetime.now()
+        expired = [
+            k for k, v in _option_chain_cache.items() if (now - v["ts"]).total_seconds() / 60 >= CACHE_TTL_MINUTES
+        ]
+        for k in expired:
+            del _option_chain_cache[k]
+        while len(_option_chain_cache) >= _OPTION_CHAIN_CACHE_MAX:
+            oldest = min(_option_chain_cache, key=lambda k: _option_chain_cache[k]["ts"])
+            del _option_chain_cache[oldest]
     _option_chain_cache[ticker] = {"ts": dt.datetime.now(), "data": payload}
 
 
