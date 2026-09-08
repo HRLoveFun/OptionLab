@@ -14,6 +14,11 @@ from __future__ import annotations
 import numpy as np
 from scipy.stats import norm
 
+# numpy 1.26 (our pin) only ships np.trapz; numpy 2.x renames it to
+# np.trapezoid and deprecates the old name. Resolve once so both major
+# versions work without DeprecationWarning noise on 2.x.
+_trapz = getattr(np, "trapezoid", None) or np.trapz
+
 
 def prob_profit(prices: np.ndarray, pnl: np.ndarray, spot: float, sigma: float, dte: int, r: float = 0.05) -> float:
     """Probability that P&L > 0 at expiration under BS lognormal assumption."""
@@ -38,8 +43,8 @@ def prob_profit(prices: np.ndarray, pnl: np.ndarray, spot: float, sigma: float, 
             prev = cur
             continue
         seg = np.arange(start, prev + 1)
-        prob += float(np.trapz(pdf[seg], prices[seg]))
+        prob += float(_trapz(pdf[seg], prices[seg]))
         start = prev = cur
     seg = np.arange(start, prev + 1)
-    prob += float(np.trapz(pdf[seg], prices[seg]))
+    prob += float(_trapz(pdf[seg], prices[seg]))
     return max(0.0, min(1.0, prob))
