@@ -4,6 +4,13 @@
         <div class="panel-header" style="margin:0;">
             <h2 id="oc-heading">Option Chain</h2>
             <p class="panel-desc">Live option chain from Yahoo Finance. Select a ticker and load chain data.</p>
+            <ul class="oc-legend" aria-label="Option chain colour and symbol legend">
+                <li><span class="oc-legend__swatch oc-legend__swatch--itm"></span><strong>Blue highlight</strong> — in-the-money side: calls when strike &lt; spot, puts when strike &gt; spot.</li>
+                <li><span class="oc-legend__swatch oc-legend__swatch--pos"></span><strong>Green Prem%</strong> — stock must rise to break even; <span class="oc-legend__swatch oc-legend__swatch--neg"></span><strong>red</strong> — stock must fall.</li>
+                <li><span class="oc-legend__swatch oc-legend__swatch--fair"></span><strong>Pale-yellow row</strong> — liquidity rated FAIR; <strong>dimmed strikethrough row</strong> — liquidity rated AVOID (worst of call/put side).</li>
+                <li><strong>Spot divider</strong> — amber row marking where the current spot price sits among the strikes.</li>
+                <li><strong>—</strong> — grey dash means no data for that cell.</li>
+            </ul>
         </div>
         <div class="toolbar-actions">
             <button type="button" class="btn-primary" data-action="oc-reload"

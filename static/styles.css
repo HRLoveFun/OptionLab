@@ -1567,6 +1567,51 @@ body {
     color: var(--slate-300);
 }
 
+/* Colour / symbol legend under the panel description */
+.oc-legend {
+    margin: .4rem 0 0;
+    padding-left: 1.15rem;
+    font-size: .78rem;
+    color: var(--slate-500);
+    list-style: disc;
+}
+
+.oc-legend li {
+    margin: .15rem 0;
+}
+
+.oc-legend strong {
+    color: var(--slate-700);
+    font-weight: 600;
+}
+
+.oc-legend__swatch {
+    display: inline-block;
+    width: .85em;
+    height: .85em;
+    border-radius: 3px;
+    vertical-align: -1px;
+    margin-right: .25rem;
+}
+
+.oc-legend__swatch--itm {
+    background: var(--blue-light);
+    border: 1px solid var(--blue-muted);
+}
+
+.oc-legend__swatch--pos {
+    background: #166534;
+}
+
+.oc-legend__swatch--neg {
+    background: var(--error);
+}
+
+.oc-legend__swatch--fair {
+    background: #fffbe6;
+    border: 1px solid var(--slate-200);
+}
+
 /* No-data message */
 .oc-no-data {
     padding: 1.5rem;
