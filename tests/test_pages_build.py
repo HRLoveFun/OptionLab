@@ -7,11 +7,15 @@ shim + banner injected, legacy redirects emitted.
 """
 
 import json
+import re
 from pathlib import Path
 
 from scripts.build_pages_site import REDIRECTS, assemble
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# url_for('static', filename='x.js') / url_for("static", filename="x.js")
+_STATIC_REF = re.compile(r"""url_for\(\s*['"]static['"]\s*,\s*filename\s*=\s*['"]([^'"]+)['"]""")
 
 
 def test_assemble_matches_flask_partials(tmp_path):
@@ -62,6 +66,26 @@ def test_assemble_matches_flask_partials(tmp_path):
     # legacy demo URLs redirect into the identical app tabs
     for rel in REDIRECTS:
         assert (tmp_path / "site" / rel).exists(), rel
+
+
+def test_template_static_references_exist():
+    """Every asset a template asks for must exist in ``static/``.
+
+    GUARD (L0 P1-2): ``templates/index.html`` once loaded ``sidebar.js`` while
+    the file was still untracked — clones, CI and the Pages build all got a
+    404 for it. Existence on disk is the cheap invariant; being *tracked* is
+    enforced by `git status` in review, not here.
+    """
+    templates = sorted((REPO_ROOT / "templates").rglob("*.html"))
+    assert templates, "no templates found under templates/"
+
+    refs: set[str] = set()
+    for tpl in templates:
+        refs.update(_STATIC_REF.findall(tpl.read_text(encoding="utf-8")))
+    assert refs, "no url_for('static', …) references found — templates or regex changed"
+
+    missing = sorted(ref for ref in refs if not (REPO_ROOT / "static" / ref).exists())
+    assert not missing, f"templates reference missing static assets: {missing}"
 
 
 def test_snapshot_schema():
