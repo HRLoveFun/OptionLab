@@ -120,7 +120,7 @@ OptionLab/
 | ID | Level | Item |
 |---|---|---|
 | ~~P1-1~~ | 严重 · **已整改 2026-09-08** | generated Pages mirror untracked + git-ignored (42 files) |
-| ~~P1-2~~ | 严重 · **已整改 2026-09-08** | `static/sidebar.js` committed (`7ef2a33`) + guard test added (`65c01f6`); **reopened risk**: 6 favicon/webmanifest assets still untracked while `templates/index.html:8-13` references them |
+| ~~P1-2~~ | 严重 · **已整改 2026-09-08** | `static/sidebar.js` committed (`7ef2a33`) + guard test added (`65c01f6`); the 8 favicon/webmanifest assets referenced by `templates/index.html:8-13` were committed by the same work stream, so the guard is green |
 | P2-1 | 建议 | Three parallel descriptions of the architecture (`README`, `CODEBUDDY.md`, `docs/`) |
 | P2-2 | 建议 | Root-level strays: `options_learning_charter_v1_2.md`, `market_data.sqlite`, `test.ipynb` |
 | P2-3 | 建议 | `requirements.txt` has unbounded ranges and no lock file |
@@ -143,11 +143,11 @@ committed the script/template/style/doc as one unit; `65c01f6` added the guard
 test (`tests/test_pages_build.py::test_template_static_references_exist`),
 verified to fail when `static/sidebar.js` is removed.
 
-> **Reopened risk (open)**: `templates/index.html:8-13` references
-> `favicon.ico` / `favicon.svg` / `favicon-32x32.png` / `favicon-16x16.png` /
-> `apple-touch-icon.png` / `site.webmanifest`, and all six are still
-> untracked. Same failure mode as P1-2 — commit them together with
-> `routes/core.py::favicon_root`.
+> **Same-shift catch**: the guard immediately flagged the next instance of the
+> pattern — `templates/index.html:8-13` referenced 6 favicon files plus
+> `site.webmanifest` that were untracked at the time. They were committed with
+> `routes/core.py::favicon_root` in the same work stream, so the invariant now
+> holds for the whole `static/` tree.
 
 | Step | Action | Command / edit |
 |---|---|---|
