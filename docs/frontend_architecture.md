@@ -124,14 +124,18 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 ### Peek Sidebar
 
 At rest the sidebar is only the rail — a 2px vertical line in `var(--blue)`
-(gold under the Onyx layer) whose length is the fixed `--sidebar-rail-h`, so it
-is identical whether the nav is showing or not.
+(gold under the Onyx layer). `.sidebar-body` keeps a **zero-width in-flow
+footprint**, so the sidebar's height is the nav panel's height and the rail
+(`align-self: stretch`) is always exactly as tall as the panel, sharing its
+vertical center — no matter what the nav contains. The nav itself is given a
+fixed `--sidebar-w` width and paints **over** `.main-panel` instead of
+reflowing it.
 
-| State   | Trigger                                  | Result                                                                     |
-| ------- | ---------------------------------------- | -------------------------------------------------------------------------- |
-| At rest | —                                        | `.sidebar-body` hidden; the layout column is only `--sidebar-rail-w` wide    |
-| Peek    | `.sidebar:hover` / `.sidebar:focus-within` | nav fades + slides in, absolutely positioned so it **overlays** `.main-panel` |
-| Pinned  | tap, `@media (hover: none)` only         | same panel, kept open — the touch fallback where hover does not exist        |
+| State   | Trigger                                    | Result                                                                        |
+| ------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| At rest | —                                          | nav `visibility: hidden`; the layout column is only `--sidebar-rail-w` wide     |
+| Peek    | `.sidebar:hover` / `.sidebar:has(:focus-visible)` | nav fades in, overlaying `.main-panel` content                        |
+| Pinned  | tap, `@media (hover: none)` only           | same panel, kept open — the touch fallback where hover does not exist          |
 
 Leaving the hover area closes the panel again; no state is persisted.
 `static/sidebar.js` only mirrors the open state onto `aria-expanded` and owns

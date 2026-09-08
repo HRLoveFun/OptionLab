@@ -103,9 +103,8 @@
     --sidebar-w: 220px;
     /* left navigation width */
     --sidebar-rail-w: 14px;
-    /* rail hit-area width = resting sidebar width */
-    --sidebar-rail-h: 320px;
-    /* rail length — fixed, identical open or closed */
+    /* rail hit-area width = resting sidebar width; rail height is derived
+       from the peek panel (stretch), not a fixed token */
     --header-h: 60px;
     /* sticky top header height */
     --shadow: 0 1px 4px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04);
@@ -231,27 +230,32 @@ body {
 }
 
 /* ── Sidebar ── */
-/* Resting state is rail-only: the nav is out of flow (see .sidebar-body) and
-   peeks in on hover / focus, so the layout column is as narrow as the rail.
-   z-index sits below the sticky header (200) but above .main-panel, which is
-   what lets the peek panel paint over the content. */
+/* Resting state is rail-only: the nav keeps a zero-width in-flow footprint
+   (see .sidebar-body) and peeks in on hover / focus, so the layout column is
+   as narrow as the rail. z-index sits below the sticky header (200) but above
+   .main-panel, which is what lets the peek panel paint over the content. */
 .sidebar {
     width: var(--sidebar-rail-w);
     flex-shrink: 0;
     position: sticky;
     top: calc(var(--header-h) + 1.5rem);
     z-index: 150;
+    display: flex;
+    align-items: stretch;
 }
 
 /* ── Sidebar rail ────────────────────────────────────────────────────
    The rail is the whole nav at rest: a single vertical line painted in
    --blue, which resolves to the theme accent (gold under the Onyx layer).
-   Its height is a fixed token — NOT stretch / not content-derived — so the
-   line keeps exactly the same length whether the nav is peeking out or not. */
+   The empty button has no intrinsic height, so it stretches to the flex
+   container — whose height IS the peek panel's, because the panel stays in
+   flow. Result: the line is exactly as tall as the nav, in both states, and
+   shares its vertical center. */
 .sidebar-rail {
     display: block;
+    flex: 0 0 var(--sidebar-rail-w);
     width: var(--sidebar-rail-w);
-    height: var(--sidebar-rail-h);
+    align-self: stretch;
     padding: 0;
     border: none;
     background: transparent;
@@ -286,23 +290,26 @@ body {
 }
 
 /* ── Sidebar peek panel ──────────────────────────────────────────────
-   Absolutely positioned so revealing it overlays the main panel instead of
-   reflowing it. visibility (not display) so the peek can fade/slide: it is
-   delayed on the way out and immediate on the way in. */
+   Stays IN FLOW at width 0 so it still sizes the sidebar's height (what the
+   rail stretches against), while the nav inside gets a fixed width and paints
+   over the main panel instead of reflowing it. visibility (not display) so
+   the peek can fade: it is delayed on the way out, immediate on the way in. */
 .sidebar-body {
-    position: absolute;
-    top: 0;
-    /* Flush against the rail — any gap here would be a dead zone the pointer
-       crosses between the line and the nav, which would close the panel. */
-    left: var(--sidebar-rail-w);
-    width: var(--sidebar-w);
-    max-height: calc(100vh - var(--header-h) - 3rem);
-    overflow-y: auto;
+    flex: 0 0 auto;
+    width: 0;
+    /* The nav sits flush against the rail — any gap here would be a dead zone
+       the pointer crosses between the line and the nav, closing the panel. */
+    overflow: visible;
     visibility: hidden;
     opacity: 0;
-    transform: translateX(-6px);
     pointer-events: none;
-    transition: opacity .15s ease, transform .15s ease, visibility 0s linear .15s;
+    transition: opacity .15s ease, visibility 0s linear .15s;
+}
+
+.sidebar-body > * {
+    /* Fixed width: the 0-width body would otherwise collapse the nav's
+       auto width and reflow (and balloon) its content. */
+    width: var(--sidebar-w);
 }
 
 /* :focus-visible, not :focus-within — clicking a tab leaves that button
@@ -313,14 +320,16 @@ body {
 .sidebar:has(:focus-visible) .sidebar-body {
     visibility: visible;
     opacity: 1;
-    transform: none;
     pointer-events: auto;
-    transition: opacity .15s ease, transform .15s ease, visibility 0s;
+    transition: opacity .15s ease, visibility 0s;
 }
 
-/* Elevated while peeking so it reads as floating above the content. */
+/* Elevated while peeking so it reads as floating above the content; the
+   height cap keeps a short viewport from cutting the panel off screen. */
 .sidebar-body .tab-nav {
     box-shadow: var(--shadow-md);
+    max-height: calc(100vh - var(--header-h) - 3rem);
+    overflow-y: auto;
 }
 
 /* Touch devices have no hover, so tapping the rail pins the panel instead.
@@ -330,9 +339,8 @@ body {
     .sidebar[data-pinned="true"] .sidebar-body {
         visibility: visible;
         opacity: 1;
-        transform: none;
         pointer-events: auto;
-        transition: opacity .15s ease, transform .15s ease, visibility 0s;
+        transition: opacity .15s ease, visibility 0s;
     }
 }
 
@@ -999,6 +1007,7 @@ body {
        disappears with it: a hover-peek panel has no meaning on a narrow
        screen, and hiding it is what keeps the nav reachable there. */
     .sidebar {
+        display: block;
         width: 100%;
         position: static;
         z-index: auto;
@@ -1009,17 +1018,19 @@ body {
     }
 
     .sidebar-body {
-        position: static;
         width: 100%;
-        max-height: none;
-        overflow: visible;
         visibility: visible;
         opacity: 1;
-        transform: none;
         pointer-events: auto;
     }
 
+    .sidebar-body > * {
+        width: 100%;
+    }
+
     .sidebar-body .tab-nav {
+        max-height: none;
+        overflow: visible;
         box-shadow: var(--shadow);
     }
 
