@@ -10,6 +10,7 @@ def test_option_chain_500_renders_error_banner(
     live_server: str,
     mock_apis,
     js_errors: list[str],
+    open_tab,
 ) -> None:
     # Force the option-chain endpoint to fail.
     mock_apis["/api/option_chain"] = (500, {"error": "Synthetic backend failure"})
@@ -17,14 +18,14 @@ def test_option_chain_500_renders_error_banner(
     page.goto(live_server, wait_until="domcontentloaded")
 
     # Activate parameter tab so #ticker becomes interactive.
-    page.click('.tab-btn[data-tab="tab-parameter"]')
+    open_tab("tab-parameter")
 
     # Provide a ticker so loadOptionChain has something to query.
     page.fill("#ticker", "TEST_AAPL")
     page.locator("#ticker").blur()
 
     # Activate the Option Chain tab.
-    page.click('.tab-btn[data-tab="tab-option-chain"]')
+    open_tab("tab-option-chain")
     expect(page.locator("#tab-option-chain")).to_have_class(__import__("re").compile(r"\bactive\b"), timeout=2_000)
 
     # Click the reload button to trigger the request.

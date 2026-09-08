@@ -45,12 +45,13 @@ def test_index_loads_without_js_errors(page: Page, live_server: str, mock_apis, 
     "tab_id",
     [tid for tid in TAB_IDS if tid != "tab-summary"],  # summary is hidden when single-ticker
 )
-def test_tab_switch_activates_panel(page: Page, live_server: str, mock_apis, js_errors: list[str], tab_id: str) -> None:
+def test_tab_switch_activates_panel(
+    page: Page, live_server: str, mock_apis, js_errors: list[str], open_tab, tab_id: str
+) -> None:
     """Clicking each sidebar tab activates the corresponding `.tab-content` panel."""
     page.goto(live_server, wait_until="networkidle")
 
-    button = page.locator(f'.tab-btn[data-tab="{tab_id}"]')
-    button.click()
+    open_tab(tab_id)
 
     panel = page.locator(f"#{tab_id}")
     expect(panel).to_have_class(_ACTIVE_RE, timeout=2000)

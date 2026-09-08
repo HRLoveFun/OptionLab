@@ -101,14 +101,14 @@
 
     <div class="app-body">
         <!-- Sidebar Tab Nav -->
-        <aside class="sidebar" id="sidebar" data-collapsed="false">
-            <!-- Collapse handle. It is also the collapsed state itself: when
-                 .sidebar-body is hidden only this rail is left — a single
-                 vertical line in the active accent color. -->
+        <aside class="sidebar" id="sidebar">
+            <!-- The rail is the nav at rest: a single vertical line in the
+                 active accent color. Hovering (or tabbing to) it peeks the
+                 nav out over the content; leaving it hides the nav again. -->
             <button type="button" class="sidebar-rail" id="sidebar-rail"
-                    aria-controls="sidebar-body" aria-expanded="true"
-                    title="Collapse navigation">
-                <span class="sr-only" id="sidebar-rail-label">Collapse navigation</span>
+                    aria-controls="sidebar-body" aria-expanded="false"
+                    title="Show navigation">
+                <span class="sr-only" id="sidebar-rail-label">Show navigation</span>
             </button>
 
             <div class="sidebar-body" id="sidebar-body">
@@ -171,8 +171,8 @@
             </div>
         </aside>
         <!-- WHY: loaded here, not with the other scripts at the bottom, so the
-             persisted collapsed state is applied before the first paint and the
-             full nav never flashes for a user who left it collapsed. -->
+             rail is wired up before the first paint and the nav can never be
+             left peeking open by a stale attribute. -->
         <script src="{{ url_for('static', filename='sidebar.js') }}"></script>
 
         <!-- Main Panel -->

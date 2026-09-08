@@ -47,7 +47,11 @@ def _mid(box: dict) -> float:
 
 def _open_tab(page: Page, live_server: str) -> None:
     page.goto(live_server, wait_until="domcontentloaded")
+    # Nav is hover-peek only: reveal it before the tab button can be clicked,
+    # then park the pointer clear so the panel does not overlay the matrix.
+    page.hover("#sidebar-rail")
     page.locator('.tab-btn[data-tab="tab-option-pricing-matrix"]').click()
+    page.mouse.move(2, 2)
     expect(page.locator("#tab-option-pricing-matrix")).to_have_class(_ACTIVE_RE, timeout=3000)
     expect(page.locator("#opm-matrix")).to_be_visible(timeout=5000)
 

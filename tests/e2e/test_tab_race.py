@@ -14,7 +14,9 @@ from __future__ import annotations
 from playwright.sync_api import Page, expect
 
 
-def test_rapid_tab_switching_no_js_errors(page: Page, live_server: str, mock_apis, js_errors: list[str]) -> None:
+def test_rapid_tab_switching_no_js_errors(
+    page: Page, live_server: str, mock_apis, js_errors: list[str], open_tab
+) -> None:
     """Rapidly switch through all major fetch-driven tabs; final tab wins."""
     page.goto(live_server, wait_until="networkidle")
 
@@ -26,7 +28,7 @@ def test_rapid_tab_switching_no_js_errors(page: Page, live_server: str, mock_api
     ]
     # Rapid clicks (no waits between).
     for tab_id in sequence:
-        page.locator(f'.tab-btn[data-tab="{tab_id}"]').click(no_wait_after=True)
+        open_tab(tab_id, no_wait_after=True)
 
     # Wait for the final panel to settle.
     final_id = sequence[-1]

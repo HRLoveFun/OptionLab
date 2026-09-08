@@ -28,11 +28,12 @@ def test_form_submit_renders_summary(
     yf_stub: None,
     seed_test_data: None,
     js_errors: list[str],
+    open_tab,
 ) -> None:
     """Submit the analysis form with a TEST_ ticker and assert the page
     re-renders with the ticker echoed back."""
     page.goto(live_server, wait_until="domcontentloaded")
-    page.click('.tab-btn[data-tab="tab-parameter"]')
+    open_tab("tab-parameter")
 
     page.fill("#ticker", "TEST_AAPL")
     page.fill("#start_time", _months_ago(3))

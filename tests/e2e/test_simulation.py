@@ -25,12 +25,14 @@ def _app_errors(js_errors: list[str]) -> list[str]:
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_simulation_open_input_render(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_simulation_open_input_render(
+    page: Page, live_server: str, js_errors: list[str], open_tab
+) -> None:
     """Open tab → enter spot/strikes/IVs/expiries → Simulate → charts/matrix render."""
     page.goto(live_server, wait_until="domcontentloaded")
 
     # 1) open the tab
-    page.locator('.tab-btn[data-tab="tab-simulation"]').click()
+    open_tab("tab-simulation")
     expect(page.locator("#tab-simulation")).to_have_class(_ACTIVE_RE, timeout=3000)
 
     # 2) input parameters (spot is required; the rest have defaults)
@@ -59,10 +61,12 @@ def test_simulation_open_input_render(page: Page, live_server: str, js_errors: l
 
 
 @pytest.mark.usefixtures("mock_apis")
-def test_simulation_dual_iv_unlinked(page: Page, live_server: str, js_errors: list[str]) -> None:
+def test_simulation_dual_iv_unlinked(
+    page: Page, live_server: str, js_errors: list[str], open_tab
+) -> None:
     """Unlinking forward vol must not break rendering (Decision B dual-IV path)."""
     page.goto(live_server, wait_until="domcontentloaded")
-    page.locator('.tab-btn[data-tab="tab-simulation"]').click()
+    open_tab("tab-simulation")
 
     page.fill("#sim-spot", "100")
     page.fill("#sim-strikes", "100")

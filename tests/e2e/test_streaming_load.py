@@ -46,6 +46,7 @@ def test_first_ticker_validation_under_5s(
     live_server: str,
     mock_apis,
     js_errors: list[str],
+    open_tab,
 ) -> None:
     """End-to-end: load page → enter a ticker → validation roundtrip < 5s.
 
@@ -53,7 +54,7 @@ def test_first_ticker_validation_under_5s(
     primarily measures DOM hydration + Alpine init + event-handler latency.
     """
     page.goto(live_server, wait_until="domcontentloaded")
-    page.click('.tab-btn[data-tab="tab-parameter"]')
+    open_tab("tab-parameter")
 
     t0 = time.monotonic()
     page.fill("#ticker", "TEST_AAPL")

@@ -1,59 +1,64 @@
-// sidebar.js — collapsible navigation panel.
+// sidebar.js — peek navigation.
 //
-// Two states, driven by a single data attribute on <aside class="sidebar">:
-//   data-collapsed="false" → full nav + rail (rail is a subtle accent line)
-//   data-collapsed="true"  → nav hidden, only the rail remains: one vertical
-//                            line in the theme accent (gold under Onyx)
-// The rail button is the toggle in both states, so a collapsed nav needs no
-// separate "expand" affordance. See .sidebar-rail in static/styles.css.
+// At rest the sidebar is only .sidebar-rail: one vertical line in the theme
+// accent (gold under Onyx). Hovering or focusing the sidebar reveals
+// .sidebar-body, which is absolutely positioned so it overlays the main panel
+// instead of reflowing it; leaving hides it again.
+//
+// CSS owns visibility (:hover / :focus-within) so the peek still works with
+// JS disabled. This module only mirrors the state onto ARIA, plus one thing
+// CSS cannot do: a tap-to-pin fallback for devices with no hover.
 
 (function () {
-    const STORAGE_KEY = 'sidebarCollapsed';
-
-    function readStored() {
-        try {
-            return localStorage.getItem(STORAGE_KEY) === '1';
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function writeStored(collapsed) {
-        try {
-            localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
-        } catch (e) {
-            /* storage unavailable (private mode) — state just won't persist */
-        }
-    }
-
     function init() {
         const sidebar = document.getElementById('sidebar');
         const rail = document.getElementById('sidebar-rail');
         const label = document.getElementById('sidebar-rail-label');
         if (!sidebar || !rail) return;
 
-        let collapsed = readStored();
+        // Pinned state is a touch-only affordance (see the (hover: none) block
+        // in styles.css), so it is ignored wherever hover is available.
+        const canHover = window.matchMedia('(hover: hover)').matches;
 
-        function apply() {
-            sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
-            rail.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-            const text = collapsed ? 'Expand navigation' : 'Collapse navigation';
+        function isOpen() {
+            // Mirrors the CSS triggers exactly: hover, keyboard focus
+            // (:focus-visible — a mouse click on a tab must not count), or the
+            // pinned flag on devices that have no hover at all.
+            return sidebar.matches(':hover')
+                || sidebar.querySelector(':focus-visible') !== null
+                || (!canHover && sidebar.dataset.pinned === 'true');
+        }
+
+        function sync() {
+            const open = isOpen();
+            rail.setAttribute('aria-expanded', open ? 'true' : 'false');
+            const text = open ? 'Hide navigation' : 'Show navigation';
             rail.title = text;
             if (label) label.textContent = text;
         }
 
+        // focusout fires before focus has settled on the next element, so the
+        // :focus-within check has to run after the move completes.
+        function syncSoon() {
+            setTimeout(sync, 0);
+        }
+
+        sidebar.addEventListener('mouseenter', sync);
+        sidebar.addEventListener('mouseleave', sync);
+        sidebar.addEventListener('focusin', sync);
+        sidebar.addEventListener('focusout', syncSoon);
+
         rail.addEventListener('click', function () {
-            collapsed = !collapsed;
-            apply();
-            writeStored(collapsed);
+            if (canHover) return;
+            sidebar.dataset.pinned = sidebar.dataset.pinned === 'true' ? 'false' : 'true';
+            sync();
         });
 
-        apply();
+        sync();
     }
 
     // The tag sits directly after the <aside>, so the document is already
-    // parsed far enough for getElementById; running synchronously here is what
-    // keeps a persisted collapsed nav from flashing open on load.
+    // parsed far enough for getElementById.
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

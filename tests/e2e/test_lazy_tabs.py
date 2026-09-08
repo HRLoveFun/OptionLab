@@ -10,7 +10,9 @@ from __future__ import annotations
 from playwright.sync_api import Page, expect
 
 
-def test_option_chain_lazy_loads_on_activation(page: Page, live_server: str, mock_apis, js_errors: list[str]) -> None:
+def test_option_chain_lazy_loads_on_activation(
+    page: Page, live_server: str, mock_apis, js_errors: list[str], open_tab
+) -> None:
     """Switching to Option Chain tab triggers `/api/option_chain` and renders rows."""
     api_calls: list[str] = []
     page.on("request", lambda req: api_calls.append(req.url) if "/api/option_chain" in req.url else None)
@@ -18,12 +20,12 @@ def test_option_chain_lazy_loads_on_activation(page: Page, live_server: str, moc
     page.goto(live_server, wait_until="networkidle")
 
     # Activate parameter tab and fill the ticker so loadOptionChain() fires.
-    page.click('.tab-btn[data-tab="tab-parameter"]')
+    open_tab("tab-parameter")
     page.fill("#ticker", "TEST_AAPL")
     page.locator("#ticker").blur()
 
     # Activate the option chain tab.
-    page.locator('.tab-btn[data-tab="tab-option-chain"]').click()
+    open_tab("tab-option-chain")
 
     # If lazy-load did not fire (e.g. tab handler pre-empted by other listeners),
     # fall back to clicking reload — both paths exercise the same code path.
@@ -43,7 +45,7 @@ def test_option_chain_lazy_loads_on_activation(page: Page, live_server: str, moc
 
 
 def test_option_chain_handles_api_error_gracefully(
-    page: Page, live_server: str, mock_apis, js_errors: list[str]
+    page: Page, live_server: str, mock_apis, js_errors: list[str], open_tab
 ) -> None:
     """If `/api/option_chain` returns 500, the UI must show an error message,
     not throw an uncaught exception."""
@@ -52,11 +54,11 @@ def test_option_chain_handles_api_error_gracefully(
     page.goto(live_server, wait_until="networkidle")
 
     # Activate parameter tab and provide a ticker so loadOptionChain() fires.
-    page.click('.tab-btn[data-tab="tab-parameter"]')
+    open_tab("tab-parameter")
     page.fill("#ticker", "TEST_AAPL")
     page.locator("#ticker").blur()
 
-    page.locator('.tab-btn[data-tab="tab-option-chain"]').click()
+    open_tab("tab-option-chain")
     page.click('[data-action="oc-reload"]')
 
     # The error banner (role=alert) should display the failure.

@@ -103,7 +103,9 @@
     --sidebar-w: 220px;
     /* left navigation width */
     --sidebar-rail-w: 14px;
-    /* collapse handle width = collapsed sidebar width */
+    /* rail hit-area width = resting sidebar width */
+    --sidebar-rail-h: 320px;
+    /* rail length — fixed, identical open or closed */
     --header-h: 60px;
     /* sticky top header height */
     --shadow: 0 1px 4px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04);
@@ -229,29 +231,27 @@ body {
 }
 
 /* ── Sidebar ── */
+/* Resting state is rail-only: the nav is out of flow (see .sidebar-body) and
+   peeks in on hover / focus, so the layout column is as narrow as the rail.
+   z-index sits below the sticky header (200) but above .main-panel, which is
+   what lets the peek panel paint over the content. */
 .sidebar {
-    width: var(--sidebar-w);
+    width: var(--sidebar-rail-w);
     flex-shrink: 0;
     position: sticky;
     top: calc(var(--header-h) + 1.5rem);
-    display: flex;
-    align-items: stretch;
-    gap: .5rem;
+    z-index: 150;
 }
 
-/* ── Sidebar collapse rail ──────────────────────────────────────────
-   Collapsing hides .sidebar-body and leaves only .sidebar-rail: a single
-   vertical line painted in --blue, which resolves to the theme accent
-   (gold under the Onyx layer). The rail is the toggle in both states, so
-   the collapsed nav has no separate "expand" button to discover.       */
-.sidebar-body {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
+/* ── Sidebar rail ────────────────────────────────────────────────────
+   The rail is the whole nav at rest: a single vertical line painted in
+   --blue, which resolves to the theme accent (gold under the Onyx layer).
+   Its height is a fixed token — NOT stretch / not content-derived — so the
+   line keeps exactly the same length whether the nav is peeking out or not. */
 .sidebar-rail {
-    flex: 0 0 var(--sidebar-rail-w);
+    display: block;
     width: var(--sidebar-rail-w);
+    height: var(--sidebar-rail-h);
     padding: 0;
     border: none;
     background: transparent;
@@ -270,7 +270,7 @@ body {
     transform: translateX(-50%);
     border-radius: 1px;
     background: var(--blue);
-    opacity: .3;
+    opacity: .55;
     transition: opacity .15s, width .15s;
 }
 
@@ -280,26 +280,60 @@ body {
     width: 3px;
 }
 
-.sidebar[data-collapsed="true"] {
-    width: var(--sidebar-rail-w);
-    /* The rail is an empty button, so with the nav gone it has no intrinsic
-       height. Stretching to the row height makes the line run the full length
-       of the content beside it instead of collapsing to zero. */
-    align-self: stretch;
-}
-
-.sidebar[data-collapsed="true"] .sidebar-body {
-    display: none;
-}
-
-/* Collapsed: the line is the whole sidebar, so it goes fully opaque. */
-.sidebar[data-collapsed="true"] .sidebar-rail::before {
-    opacity: 1;
-}
-
 .sidebar-rail:focus-visible {
     outline: 2px solid var(--blue);
     outline-offset: 2px;
+}
+
+/* ── Sidebar peek panel ──────────────────────────────────────────────
+   Absolutely positioned so revealing it overlays the main panel instead of
+   reflowing it. visibility (not display) so the peek can fade/slide: it is
+   delayed on the way out and immediate on the way in. */
+.sidebar-body {
+    position: absolute;
+    top: 0;
+    /* Flush against the rail — any gap here would be a dead zone the pointer
+       crosses between the line and the nav, which would close the panel. */
+    left: var(--sidebar-rail-w);
+    width: var(--sidebar-w);
+    max-height: calc(100vh - var(--header-h) - 3rem);
+    overflow-y: auto;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(-6px);
+    pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease, visibility 0s linear .15s;
+}
+
+/* :focus-visible, not :focus-within — clicking a tab leaves that button
+   focused, and :focus-within would then pin the panel open after the pointer
+   has already left. :focus-visible only matches keyboard focus, so the panel
+   follows the mouse on click and follows the caret on Tab. */
+.sidebar:hover .sidebar-body,
+.sidebar:has(:focus-visible) .sidebar-body {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition: opacity .15s ease, transform .15s ease, visibility 0s;
+}
+
+/* Elevated while peeking so it reads as floating above the content. */
+.sidebar-body .tab-nav {
+    box-shadow: var(--shadow-md);
+}
+
+/* Touch devices have no hover, so tapping the rail pins the panel instead.
+   Pinned state is honoured ONLY here — on a pointer device :hover already
+   covers it and a stray tap must not leave the nav stuck open. */
+@media (hover: none) {
+    .sidebar[data-pinned="true"] .sidebar-body {
+        visibility: visible;
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+        transition: opacity .15s ease, transform .15s ease, visibility 0s;
+    }
 }
 
 .tab-nav {
@@ -961,33 +995,32 @@ body {
         flex-direction: column;
     }
 
+    /* Below this breakpoint the nav is a horizontal strip again and the rail
+       disappears with it: a hover-peek panel has no meaning on a narrow
+       screen, and hiding it is what keeps the nav reachable there. */
     .sidebar {
         width: 100%;
         position: static;
+        z-index: auto;
     }
 
-    /* Below this breakpoint the nav is a horizontal strip, so the collapsed
-       state turns the rail on its side instead of standing it up. */
-    .sidebar[data-collapsed="true"] {
+    .sidebar-rail {
+        display: none;
+    }
+
+    .sidebar-body {
+        position: static;
         width: 100%;
+        max-height: none;
+        overflow: visible;
+        visibility: visible;
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
     }
 
-    .sidebar[data-collapsed="true"] .sidebar-rail {
-        flex: 0 0 auto;
-        width: 100%;
-        height: var(--sidebar-rail-w);
-    }
-
-    .sidebar[data-collapsed="true"] .sidebar-rail::before,
-    .sidebar[data-collapsed="true"] .sidebar-rail:hover::before,
-    .sidebar[data-collapsed="true"] .sidebar-rail:focus-visible::before {
-        top: 50%;
-        bottom: auto;
-        left: 0;
-        right: 0;
-        width: auto;
-        height: 2px;
-        transform: translateY(-50%);
+    .sidebar-body .tab-nav {
+        box-shadow: var(--shadow);
     }
 
     .tab-nav {

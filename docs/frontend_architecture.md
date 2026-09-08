@@ -121,20 +121,23 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 └───────────────┴─────────────────────────────────────────┘
 ```
 
-### Collapsible Sidebar
+### Peek Sidebar
 
-The sidebar toggles between two states via `data-collapsed` on `<aside class="sidebar">`:
+At rest the sidebar is only the rail — a 2px vertical line in `var(--blue)`
+(gold under the Onyx layer) whose length is the fixed `--sidebar-rail-h`, so it
+is identical whether the nav is showing or not.
 
-| State                | Markup                             | Visual                                        |
-| -------------------- | ---------------------------------- | --------------------------------------------- |
-| Expanded             | `data-collapsed="false"`           | full `.tab-nav` + a faint accent rail         |
-| Collapsed            | `data-collapsed="true"`            | `.sidebar-body` hidden — only a 2px vertical line in `var(--blue)` (gold under the Onyx layer) |
+| State   | Trigger                                  | Result                                                                     |
+| ------- | ---------------------------------------- | -------------------------------------------------------------------------- |
+| At rest | —                                        | `.sidebar-body` hidden; the layout column is only `--sidebar-rail-w` wide    |
+| Peek    | `.sidebar:hover` / `.sidebar:focus-within` | nav fades + slides in, absolutely positioned so it **overlays** `.main-panel` |
+| Pinned  | tap, `@media (hover: none)` only         | same panel, kept open — the touch fallback where hover does not exist        |
 
-`.sidebar-rail` is the toggle in **both** states, so a collapsed nav needs no
-separate expand button. State is persisted by `static/sidebar.js` under the
-`sidebarCollapsed` localStorage key, and the script is loaded right after the
-`<aside>` so the choice is applied before first paint. Below the 768px
-breakpoint the nav is horizontal, so the collapsed rail turns on its side.
+Leaving the hover area closes the panel again; no state is persisted.
+`static/sidebar.js` only mirrors the open state onto `aria-expanded` and owns
+the pinned flag — **CSS owns visibility**, so the peek still works with JS
+disabled. Below the 768px breakpoint the rail is removed and the nav renders
+inline as before, since a hover-peek panel is unusable at that width.
 
 ### Tab Navigation
 

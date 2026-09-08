@@ -293,6 +293,29 @@ def js_errors(page) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Sidebar navigation helper.
+#
+# WHY: the nav is a hover-peek panel now (see docs/frontend_architecture.md) —
+# at rest only the rail renders and the tab buttons are not visible, so
+# Playwright's actionability check would time out on a bare click. Tests have
+# to reveal the nav first, exactly like a user: hover the rail, then click.
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def open_tab(page):
+    """Peek the sidebar open and click one of its tab buttons."""
+
+    def _open(tab_id: str, **kwargs) -> None:
+        page.hover("#sidebar-rail")
+        page.locator(f'.tab-btn[data-tab="{tab_id}"]').click(**kwargs)
+        # Park the pointer clear of the sidebar. The peek panel overlays the
+        # main panel while it is open, so leaving the cursor parked on the nav
+        # would make every later main-panel click unhittable.
+        page.mouse.move(2, 2)
+
+    return _open
+
+
+# ---------------------------------------------------------------------------
 # Canned JSON responses for `/api/*` interception.
 # ---------------------------------------------------------------------------
 FAKE_OPTION_CHAIN: dict[str, Any] = {
@@ -348,6 +371,11 @@ FAKE_OPTION_CHAIN: dict[str, Any] = {
 
 
 FAKE_MARKET_REVIEW_TS: dict[str, Any] = {
+    # "status": "ok" is part of the real contract (routes/market.py). Without it
+    # market_review_chart.js treats the response as a failure and falls back to
+    # ../fixtures/market_review_ts.nvda.json, which 404s under the Flask app and
+    # shows up as a console error.
+    "status": "ok",
     "instrument": "^SPX",
     "dates": ["2026-01-01", "2026-02-01", "2026-03-01", "2026-04-01"],
     "assets": [

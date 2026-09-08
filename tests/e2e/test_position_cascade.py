@@ -16,9 +16,10 @@ def test_position_cascade_populates_dropdowns(
     live_server: str,
     yf_stub: None,
     js_errors: list[str],
+    open_tab,
 ) -> None:
     page.goto(live_server, wait_until="domcontentloaded")
-    page.click('.tab-btn[data-tab="tab-parameter"]')
+    open_tab("tab-parameter")
 
     # Provide a ticker so `getValidTickers()` picks it up.
     page.fill("#ticker", "TEST_AAPL")
