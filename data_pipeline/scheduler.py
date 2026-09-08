@@ -46,7 +46,7 @@ def acquire_scheduler_lock(lock_path: str | None = None):
 
     path = lock_path or os.environ.get("SCHED_LOCK_PATH")
     if not path:
-        db_path = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "market_data.sqlite"))
+        db_path = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "data", "market_data.sqlite"))
         path = f"{db_path}.scheduler.lock"
     Path(os.path.dirname(path) or ".").mkdir(parents=True, exist_ok=True)
     try:

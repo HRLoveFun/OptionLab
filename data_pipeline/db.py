@@ -24,7 +24,9 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "market_data.sqlite"))
+# Default lives under data/ so the DB family (sqlite + -wal/-shm/-journal and
+# the scheduler lock) stays out of the source root; MARKET_DB_PATH overrides.
+DB_PATH = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "data", "market_data.sqlite"))
 
 # ── Thread-local connection cache ───────────────────────────────────
 # CONSTRAINT: SQLite connections are not safe to share across threads.
