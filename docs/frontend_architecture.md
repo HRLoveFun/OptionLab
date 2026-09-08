@@ -31,7 +31,9 @@ static/
 ├── market_review.js        Market review tab logic
 ├── market_review_chart.js  Chart.js time-series renderer
 ├── regime.js               Regime panel
-├── styles.css              Component styles + design tokens
+├── theme.js                Light/Dark theme toggle (header button, persisted)
+├── styles.css              Component styles + design tokens (light base;
+│                           dark "Onyx" via :root:not([data-theme="light"]))
 ├── state/                  Reactive store + per-feature state machines
 │   ├── store.js               Tiny observable store
 │   ├── panelState.js          Four-phase async state per panel

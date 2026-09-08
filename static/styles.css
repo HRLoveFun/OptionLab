@@ -31,7 +31,12 @@
      3. If consumed from JS (e.g. Chart.js datasets), keep the
         token in the regime-* group so the contract stays clear.
    ============================================================ */
+/* Light Mode is the token base below; Dark ("Onyx") is applied via the
+   :root:not([data-theme="light"]) override layer at the bottom of this
+   file (see static/theme.js for the toggle contract). */
 :root {
+    color-scheme: light;
+
     /* Brand — primary blue used for accents, links, focus rings */
     --blue: #3b82f6;
     /* default accent */
@@ -215,6 +220,62 @@ body {
 .badge-meta {
     font-size: .7rem;
     color: var(--slate-300);
+}
+
+/* ── Header actions (ticker badge + theme toggle) ── */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    flex-shrink: 0;
+}
+
+/* Theme toggle — sits on the sticky header, which stays dark in BOTH
+   themes (light keeps the slate-900 header), so white-on-dark styling
+   works everywhere without theme-scoped overrides. */
+.theme-toggle {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid rgb(255 255 255 / .25);
+    background: rgb(255 255 255 / .08);
+    color: #fff;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+
+.theme-toggle:hover {
+    background: rgb(255 255 255 / .16);
+    border-color: rgb(255 255 255 / .45);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.theme-toggle svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+}
+
+/* Icon semantics: show the icon of the CURRENT theme
+   (dark → moon; light → sun). */
+.theme-toggle .theme-toggle__sun {
+    display: none;
+}
+
+[data-theme="light"] .theme-toggle .theme-toggle__sun {
+    display: block;
+}
+
+[data-theme="light"] .theme-toggle .theme-toggle__moon {
+    display: none;
 }
 
 /* ── App Body – sidebar + main ── */
@@ -2915,8 +2976,14 @@ textarea:focus-visible,
    Onyx Theme — minimalist black with gold + purple accents.
    Append-only override layer. Reassigns design tokens from the
    :root block at the top of this file; nothing above is edited.
+
+   Dark is the DEFAULT: this layer applies whenever <html> does
+   NOT carry data-theme="light" (covers no-JS visitors and the
+   pre-init script in index.html). Light Mode is simply the
+   un-overridden token base at the top of the file; toggling is
+   owned by static/theme.js.
    ============================================================ */
-:root {
+:root:not([data-theme="light"]) {
     color-scheme: dark;
 
     /* Brand → Gold (primary accent) */
@@ -2967,58 +3034,58 @@ textarea:focus-visible,
 }
 
 /* Header — onyx with a single gold hairline */
-.site-header {
+:root:not([data-theme="light"]) .site-header {
     background: #050505;
     box-shadow: 0 1px 0 rgba(212, 175, 55, .22);
 }
 
-.brand-icon {
+:root:not([data-theme="light"]) .brand-icon {
     background: transparent;
     color: var(--blue);
     border: 1px solid var(--blue-muted);
 }
 
-.badge-ticker {
+:root:not([data-theme="light"]) .badge-ticker {
     background: var(--blue);
     color: #0a0a0a;
 }
 
 /* All surfaces that were hardcoded #fff → onyx surface-1 */
-.tab-nav,
-.form-card,
-.meta-chip,
-.content-card,
-.empty-state,
-.oc-target-value,
-.oc-exp-btn,
-.oc-chain-wrapper,
-.oc-spot-row,
-.ticker-tab-btn,
-.btn-toggle,
-.summary-info,
-.kpi-card,
-.regime-hero__metric,
-.sim-scenario-number,
-.sim-matrix th[scope="col"],
-.sim-matrix th[scope="row"],
-.sim-detail th {
+:root:not([data-theme="light"]) .tab-nav,
+:root:not([data-theme="light"]) .form-card,
+:root:not([data-theme="light"]) .meta-chip,
+:root:not([data-theme="light"]) .content-card,
+:root:not([data-theme="light"]) .empty-state,
+:root:not([data-theme="light"]) .oc-target-value,
+:root:not([data-theme="light"]) .oc-exp-btn,
+:root:not([data-theme="light"]) .oc-chain-wrapper,
+:root:not([data-theme="light"]) .oc-spot-row,
+:root:not([data-theme="light"]) .ticker-tab-btn,
+:root:not([data-theme="light"]) .btn-toggle,
+:root:not([data-theme="light"]) .summary-info,
+:root:not([data-theme="light"]) .kpi-card,
+:root:not([data-theme="light"]) .regime-hero__metric,
+:root:not([data-theme="light"]) .sim-scenario-number,
+:root:not([data-theme="light"]) .sim-matrix th[scope="col"],
+:root:not([data-theme="light"]) .sim-matrix th[scope="row"],
+:root:not([data-theme="light"]) .sim-detail th {
     background: #141414;
 }
 
-.form-card,
-.tab-nav,
-.content-card,
-.kpi-card {
+:root:not([data-theme="light"]) .form-card,
+:root:not([data-theme="light"]) .tab-nav,
+:root:not([data-theme="light"]) .content-card,
+:root:not([data-theme="light"]) .kpi-card {
     border: 1px solid var(--slate-200);
 }
 
 /* Sidebar tabs — page bg is now near-black, so default hover on slate-100 disappears */
-.tab-btn:hover {
+:root:not([data-theme="light"]) .tab-btn:hover {
     background: rgba(255, 255, 255, .04);
     color: var(--slate-700);
 }
 
-.tab-btn.active {
+:root:not([data-theme="light"]) .tab-btn.active {
     background: var(--blue-light);
     color: var(--blue);
     box-shadow: inset 2px 0 0 var(--blue);
@@ -3039,76 +3106,76 @@ textarea:focus-visible,
 }
 
 /* Ticker chips → purple secondary accent */
-.ticker-tab-nav .ticker-tab-btn {
+:root:not([data-theme="light"]) .ticker-tab-nav .ticker-tab-btn {
     background: transparent;
     color: var(--slate-500);
     border: 1px solid var(--slate-200);
 }
 
-.ticker-tab-nav .ticker-tab-btn:hover {
+:root:not([data-theme="light"]) .ticker-tab-nav .ticker-tab-btn:hover {
     color: var(--purple);
     border-color: var(--purple);
 }
 
-.ticker-tab-nav .ticker-tab-btn.active {
+:root:not([data-theme="light"]) .ticker-tab-nav .ticker-tab-btn.active {
     background: rgba(168, 85, 247, .14);
     color: var(--purple);
     border-color: var(--purple);
 }
 
 /* Form controls — only focus styles need an override; default border/color flow from tokens */
-.form-group input:focus,
-.form-group select:focus,
-.options-table input:focus,
-.options-table select:focus,
-.oc-ticker-input:focus,
-.oc-target-input:focus,
-.pos-qty-input:focus,
-.pos-select:focus {
+:root:not([data-theme="light"]) .form-group input:focus,
+:root:not([data-theme="light"]) .form-group select:focus,
+:root:not([data-theme="light"]) .options-table input:focus,
+:root:not([data-theme="light"]) .options-table select:focus,
+:root:not([data-theme="light"]) .oc-ticker-input:focus,
+:root:not([data-theme="light"]) .oc-target-input:focus,
+:root:not([data-theme="light"]) .pos-qty-input:focus,
+:root:not([data-theme="light"]) .pos-select:focus {
     border-color: var(--blue);
     box-shadow: 0 0 0 3px rgba(212, 175, 55, .18);
 }
 
-.compact-range-input input:focus {
+:root:not([data-theme="light"]) .compact-range-input input:focus {
     background: var(--blue-light);
 }
 
 /* Primary CTA — gold needs dark text for AA contrast */
-.btn-primary {
+:root:not([data-theme="light"]) .btn-primary {
     background: var(--blue);
     color: #0a0a0a;
 }
 
-.btn-primary:hover {
+:root:not([data-theme="light"]) .btn-primary:hover {
     background: var(--blue-dark);
     box-shadow: 0 6px 18px rgba(212, 175, 55, .28);
 }
 
-.btn-primary:active {
+:root:not([data-theme="light"]) .btn-primary:active {
     background: var(--blue-dark);
 }
 
 /* Health banner — inline-styled in HTML, !important required to override */
-#health-banner {
+:root:not([data-theme="light"]) #health-banner {
     background: #2a1f08 !important;
     color: var(--warning) !important;
     border-bottom-color: rgba(251, 191, 36, .4) !important;
 }
 
-#health-banner a,
-#health-banner button {
+:root:not([data-theme="light"]) #health-banner a,
+:root:not([data-theme="light"]) #health-banner button {
     color: var(--warning) !important;
 }
 
 /* Validation pastel block was amber-on-cream; rebalance for dark */
-.validation-warning {
+:root:not([data-theme="light"]) .validation-warning {
     background: #2a1f08;
     border-color: rgba(251, 191, 36, .4);
     color: var(--warning);
 }
 
 /* Hero gradient at line 2024 used a literal #fff; restate in onyx */
-.regime-hero__primary {
+:root:not([data-theme="light"]) .regime-hero__primary {
     background: linear-gradient(135deg, #1a1a1a, #141414);
 }
 

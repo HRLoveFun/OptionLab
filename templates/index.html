@@ -12,6 +12,19 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
     <meta name="theme-color" content="#3b82f6">
+    <!-- Theme pre-init: MUST run before styles.css. Dark ("Onyx") is the
+         default; Light Mode is opt-in via <html data-theme="light">.
+         Applying the attribute here prevents a flash of the wrong theme.
+         See static/theme.js for the runtime toggle contract. -->
+    <script>
+        (function () {
+            var theme = 'dark';
+            try {
+                if (localStorage.getItem('theme') === 'light') theme = 'light';
+            } catch (e) { /* storage unavailable — keep dark */ }
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <!-- Font Awesome removed for clean UI -->
     <!-- Font: system Calibri stack (see --font in styles.css); no web-font CDN needed -->
@@ -90,12 +103,31 @@
                     <p class="subtitle">Options Strategy &amp; Market Analysis</p>
                 </div>
             </div>
-            {% if ticker %}
-            <div class="header-badge">
-                <span class="badge-ticker">{{ ticker }}</span>
-                <span class="badge-meta">{{ frequency_display or frequency }}, {{ side_bias or 'Natural' }}</span>
+            <div class="header-actions">
+                {% if ticker %}
+                <div class="header-badge">
+                    <span class="badge-ticker">{{ ticker }}</span>
+                    <span class="badge-meta">{{ frequency_display or frequency }}, {{ side_bias or 'Natural' }}</span>
+                </div>
+                {% endif %}
+                <!-- Theme toggle: persistent in the top-right on desktop and
+                     mobile (outside the conditional header-badge). Icons show
+                     the CURRENT theme (dark → moon, light → sun; CSS swaps
+                     them per theme), while the aria-label describes the
+                     action. -->
+                <button type="button" id="theme-toggle" class="theme-toggle"
+                        aria-label="Switch to light mode" title="Switch to light mode">
+                    <svg class="theme-toggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4"/>
+                        <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                    </svg>
+                    <svg class="theme-toggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
             </div>
-            {% endif %}
         </div>
     </header>
 
@@ -237,6 +269,7 @@
     <script src="{{ url_for('static', filename='state/tabFlagsState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/panelState.js') }}"></script>
     <script src="{{ url_for('static', filename='utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <script src="{{ url_for('static', filename='position.js') }}"></script>
     <script src="{{ url_for('static', filename='option-chain.js') }}"></script>
     <script src="{{ url_for('static', filename='market_review.js') }}"></script>
