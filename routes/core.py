@@ -3,6 +3,7 @@
 Routes:
   GET  /                    — main dashboard (form skeleton)
   POST /                    — form submission → streaming skeleton
+  GET  /favicon.ico         — static/favicon.ico (implicit browser/bot request)
   GET  /api/ping            — liveness probe
   GET  /api/_meta           — v1 route discovery
   GET  /render/<kind>       — HTMX streaming fragments
@@ -15,7 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from data_pipeline.job_cache import create_job
 from services.market.dispatch import render_streaming_slice
@@ -177,3 +178,13 @@ def validate_tickers_bulk():
         except Exception:
             results[raw_ticker] = {"valid": False, "price": None, "message": "validation error"}
     return jsonify({"status": "ok", "results": results})
+
+
+@bp.route("/favicon.ico", methods=["GET"])
+def favicon_root():
+    """Serve the real favicon at the root path browsers/feed readers
+    request implicitly. The `<link rel="icon">` in templates/index.html
+    already points at /static/favicon.ico; this is just to silence the
+    "/favicon.ico 404" noise in logs and e2e tests.
+    """
+    return current_app.send_static_file("favicon.ico")
