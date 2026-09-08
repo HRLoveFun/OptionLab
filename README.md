@@ -390,6 +390,11 @@ committed snapshot fixtures. `static/` and `templates/` are never forked.
   `static/` copied verbatim, legacy demo URLs kept as redirects), assembled by
   `scripts/build_pages_site.py` (CI-safe: plain Jinja2, no network/DB) and
   deployed by `.github/workflows/pages.yml`.
+- **Only the inputs are committed**: `site/fixtures/`, `site/snapshot/`,
+  `site/pages-shim.js`. The rendered `site/index.html`, the redirects and the
+  `site/static/` copy are build artefacts and are git-ignored — keeping them in
+  git used to create a shadow copy of `static/` that silently drifted (see
+  [`docs/l0_architecture.md`](docs/l0_architecture.md) §5).
 - The banner on the demo site states the snapshot ticker/date; the analysis
   form submit is intercepted with an explanation instead of navigating.
 

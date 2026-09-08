@@ -5,6 +5,12 @@ name: Deploy Frontend to GitHub Pages
 # committed data snapshot (site/snapshot/snapshot.json) using REAL static/*.
 # Only site/pages-shim.js is Pages-only code (demo fetch stub). static/* and
 # templates/* are never forked for Pages — one UI to learn.
+#
+# Everything this job writes under site/ (index.html, the feature/showcase
+# redirects, the verbatim site/static/ copy) is a BUILD ARTEFACT and is
+# git-ignored on purpose: the committed site/ tree holds only the sources —
+# site/fixtures/, site/snapshot/, site/pages-shim.js. See
+# docs/l0_architecture.md §5 (L0 P1-1).
 on:
   push:
     branches: [main]

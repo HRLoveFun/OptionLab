@@ -47,3 +47,16 @@ npm-debug.log*
 test-results/
 playwright-report/
 playwright/.cache/
+
+# GitHub Pages build output — regenerated on every deploy by
+# scripts/build_pages_site.py. Only site/fixtures/, site/snapshot/ and
+# site/pages-shim.js are hand-maintained sources; everything else here was a
+# committed shadow copy of static/ that drifted (see docs/l0_architecture.md §5).
+site/index.html
+site/static/
+site/market-review/index.html
+site/odds/index.html
+site/option-chain/index.html
+site/option-pricing-matrix/index.html
+site/sim/index.html
+site/showcase/*.html

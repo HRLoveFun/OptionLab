@@ -69,7 +69,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 | Item | State | Note |
 |---|---|---|
 | `market_data.sqlite` (11.7 MB) | git-ignored, lives in repo root | default `DB_PATH = os.getcwd()/market_data.sqlite` (`data_pipeline/db.py:27`) — P2-2 |
-| `site/` (52 files · 7 783 lines) | **committed** | `site/static/**` is a committed shadow copy of `static/` — P1-1 |
+| `site/` | **inputs committed (9 files) · build output ignored** | tracked: `fixtures/` (7) · `snapshot/snapshot.json` · `pages-shim.js`; ignored: `index.html`, 5 feature + 6 showcase redirects, `static/**` (42 generated files) — see §5 P1-1 |
 | `archive/` (8 files · 1 070 lines) | committed | retired code still in tree — P3-3 |
 | `test.ipynb` (58 lines) | git-ignored | leftover scratch file — P2-2 |
 | `coverage/` · `__pycache__` · `.pytest_cache` · `.ruff_cache` · `node_modules/` | git-ignored | fine |
@@ -119,8 +119,8 @@ OptionLab/
 
 | ID | Level | Item |
 |---|---|---|
-| P1-1 | 严重 | `site/static/**` is a committed shadow copy of `static/` and has already drifted (P1 §1) |
-| P1-2 | 严重 | `static/sidebar.js` is untracked but referenced by `templates/index.html:168` (P1 §2) |
+| ~~P1-1~~ | 严重 · **已整改 2026-09-08** | generated Pages mirror untracked + git-ignored (42 files) |
+| ~~P1-2~~ | 严重 · **已整改 2026-09-08** | `static/sidebar.js` committed (`7ef2a33`) + guard test added (`65c01f6`); **reopened risk**: 6 favicon/webmanifest assets still untracked while `templates/index.html:8-13` references them |
 | P2-1 | 建议 | Three parallel descriptions of the architecture (`README`, `CODEBUDDY.md`, `docs/`) |
 | P2-2 | 建议 | Root-level strays: `options_learning_charter_v1_2.md`, `market_data.sqlite`, `test.ipynb` |
 | P2-3 | 建议 | `requirements.txt` has unbounded ranges and no lock file |
@@ -138,6 +138,17 @@ shadow copy and the source disagree about a file that is not in git at all.
 
 ### P1-2 — bring the referenced-but-untracked frontend file into git
 
+**Status: done (2026-09-08)** — `7ef2a33 feat(frontend): 添加侧边栏折叠功能`
+committed the script/template/style/doc as one unit; `65c01f6` added the guard
+test (`tests/test_pages_build.py::test_template_static_references_exist`),
+verified to fail when `static/sidebar.js` is removed.
+
+> **Reopened risk (open)**: `templates/index.html:8-13` references
+> `favicon.ico` / `favicon.svg` / `favicon-32x32.png` / `favicon-16x16.png` /
+> `apple-touch-icon.png` / `site.webmanifest`, and all six are still
+> untracked. Same failure mode as P1-2 — commit them together with
+> `routes/core.py::favicon_root`.
+
 | Step | Action | Command / edit |
 |---|---|---|
 | B1 | Decide: finish or drop. `templates/index.html:168` already loads `sidebar.js` and `docs/frontend_architecture.md:134` documents it → keep it | — |
@@ -150,6 +161,11 @@ shadow copy and the source disagree about a file that is not in git at all.
 references a missing static asset.
 
 ### P1-1 — stop tracking the generated Pages mirror
+
+**Status: done (2026-09-08)** — forensics run first
+(`build_pages_site.py --out /tmp/ol_site_check` + `diff -rq`) proved 42
+generated files vs 10 sources; `.gitignore` now lists exactly those 42, and
+`git rm -r --cached` untracked them without touching the working tree.
 
 | Step | Action | Command / edit |
 |---|---|---|
