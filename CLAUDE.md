@@ -19,9 +19,10 @@ npm install                              # only for vitest JS tests
 cp .env.example .env                     # set YF_PROXY, MARKET_DB_PATH, AUTO_UPDATE_TICKERS
 pre-commit install
 ```
-`ruff`, `pytest-playwright`, and `APScheduler` are deliberately **not** in `requirements.txt` —
-install them only when needed (CI installs `ruff==0.16.5` in its own step; keep in sync with
-`required-version` in `pyproject.toml`).
+`ruff`, `pytest-playwright`, `APScheduler`, and `Pillow` are deliberately **not** in
+`requirements.txt` — install them only when needed (CI installs `ruff==0.16.5` in its own step;
+keep in sync with `required-version` in `pyproject.toml`). `Pillow` is only for
+`scripts/gen_favicons.py`, the one-shot regenerator of the raster favicon set.
 
 ### Run
 ```bash
