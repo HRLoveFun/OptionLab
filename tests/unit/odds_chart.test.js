@@ -58,16 +58,31 @@ loadScript('static/option-chain.js');
 // ── Fixture chain data ─────────────────────────────────────────────────────
 const SPOT = 100;
 
-function chainData({ putsPriced = true } = {}) {
+// Local ISO date `n` days from today, so _oddsDte() reads back ~n regardless
+// of when (or in which timezone) the suite runs. Built from local components,
+// not toISOString(), to avoid a UTC day-boundary shift.
+function isoInDays(n) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + n);
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// Three expirations at ~10, ~40, ~75 DTE.
+const DTES = [10, 40, 75];
+
+function chainData({ putsPriced = true, putAsk = 6, putBid = 3 } = {}) {
     const strikes = [80, 90, 95, 100, 105, 110, 120];
     const mkCalls = () => strikes.map((k) => ({ strike: k, ask: 6, bid: 5, lastPrice: 5.5 }));
     const mkPuts = () => strikes.map((k) => ({
         strike: k,
-        ask: putsPriced ? 6 : 0,
-        bid: putsPriced ? 5 : 0,
+        ask: putsPriced ? putAsk : 0,
+        bid: putsPriced ? putBid : 0,
         lastPrice: putsPriced ? 5.5 : 0,
     }));
-    const exps = ['2026-09-18', '2026-10-16'];
+    const exps = DTES.map(isoInDays);
     const chain = {};
     exps.forEach((e) => { chain[e] = { calls: mkCalls(), puts: mkPuts() }; });
     return { spot: SPOT, ticker: 'TEST', expirations: exps, chain };
@@ -79,6 +94,7 @@ function mount() {
 
 function seedAndRender(opts) {
     window.appState.oddsChain.setData(chainData(opts));
+    window.appState.panels.set('odds', 'loaded');   // mirrors loadOddsData()
     window._oddsRenderCharts();
     return FakeChart.instances[FakeChart.instances.length - 1];
 }
@@ -165,16 +181,100 @@ describe('Expiry Odds — combined Call/Put chart', () => {
         const legend = chart.options.plugins.legend;
 
         const labels = legend.labels.generateLabels(chart);
-        expect(labels).toHaveLength(2);                       // two expirations, not four
-        expect(labels.map((l) => l.text)).toEqual(['20260918', '20261016']);
+        expect(labels).toHaveLength(DTES.length);             // one per expiration, not two
+        expect(labels.map((l) => l.text)).toEqual(DTES.map((d) => isoInDays(d).replace(/-/g, '')));
 
         // Clicking the first legend entry hides both its Call and its Put curve.
         legend.onClick(null, labels[0], { chart });
-        const base = '20260918';
+        const base = labels[0].text;
         chart.data.datasets.forEach((ds, i) => {
             if (ds.label.replace(/ [CP]$/, '') === base) {
                 expect(chart.isDatasetVisible(i)).toBe(false);
             }
         });
+    });
+
+    // ── Long Put priced at the ask (bug fix) ──────────────────────────────
+    it('prices a long put at the ask, not the bid', () => {
+        // est. move 10% -> putTarget = 90. Strike 100 put: payoff = 100-90 = 10.
+        // odd at ask 6 = (10-6)/6 = 0.6667; at (wrong) bid 3 it would be 2.3333.
+        const chart = seedAndRender({ putAsk: 6, putBid: 3 });
+        const put = chart.data.datasets.find((d) => d.oddsGroup === 'put');
+        const at100 = put.data.find((pt) => pt.x === 100);
+        expect(at100.y).toBeCloseTo(0.6667, 3);
+    });
+
+    // ── est. move slider <-> number input ────────────────────────────────
+    it('two-way binds the est. move slider and number input', () => {
+        seedAndRender();
+        const range = document.getElementById('odds-target-range');
+        const num = document.getElementById('odds-target-pct');
+
+        range.value = '25';
+        range.dispatchEvent(new window.Event('input', { bubbles: true }));
+        expect(num.value).toBe('25');
+
+        num.value = '8';
+        num.dispatchEvent(new window.Event('input', { bubbles: true }));
+        expect(range.value).toBe('8');
+    });
+
+    it('moving the est. move slider re-targets and re-renders the chart', () => {
+        seedAndRender();
+        const before = FakeChart.instances.length;
+        const range = document.getElementById('odds-target-range');
+        range.value = '30';
+        range.dispatchEvent(new window.Event('input', { bubbles: true }));
+        // _oddsScheduleRender coalesces via requestAnimationFrame.
+        return new Promise((r) => window.requestAnimationFrame(r)).then(() => {
+            expect(FakeChart.instances.length).toBeGreaterThan(before);
+        });
+    });
+
+    // ── DTE window dual slider ───────────────────────────────────────────
+    it('the DTE window slider filters which expirations are drawn', async () => {
+        seedAndRender();                       // full 0–90 window: all 3 expirations
+        let chart = FakeChart.instances[FakeChart.instances.length - 1];
+        expect(new Set(chart.data.datasets.map((d) => d.label.replace(/ [CP]$/, ''))).size).toBe(3);
+
+        // Narrow to 0–50 DTE: the ~75-DTE expiration drops out.
+        const hi = document.getElementById('odds-dte-hi');
+        hi.value = '50';
+        hi.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await new Promise((r) => window.requestAnimationFrame(r));
+
+        chart = FakeChart.instances[FakeChart.instances.length - 1];
+        const bases = new Set(chart.data.datasets.map((d) => d.label.replace(/ [CP]$/, '')));
+        expect(bases.size).toBe(2);
+        expect(bases.has(isoInDays(75).replace(/-/g, ''))).toBe(false);
+
+        expect(document.getElementById('odds-dte-readout').textContent).toBe('0–50 days');
+    });
+
+    it('clamps the low thumb so it cannot pass the high thumb', () => {
+        seedAndRender();
+        const lo = document.getElementById('odds-dte-lo');
+        const hi = document.getElementById('odds-dte-hi');
+        hi.value = '30';
+        hi.dispatchEvent(new window.Event('input', { bubbles: true }));
+        lo.value = '60';                        // drag lo past hi
+        lo.dispatchEvent(new window.Event('input', { bubbles: true }));
+        expect(parseInt(lo.value, 10)).toBeLessThanOrEqual(parseInt(hi.value, 10));
+    });
+
+    it('keeps the panel loaded when the DTE window excludes everything', async () => {
+        seedAndRender();
+        const lo = document.getElementById('odds-dte-lo');
+        const hi = document.getElementById('odds-dte-hi');
+        // Window 85–90: no expiration falls in it (DTES max ~75).
+        lo.value = '85';
+        lo.dispatchEvent(new window.Event('input', { bubbles: true }));
+        hi.value = '90';
+        hi.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await new Promise((r) => window.requestAnimationFrame(r));
+
+        expect(window.appState.panels.get('odds').phase).toBe('loaded');
+        const chart = FakeChart.instances[FakeChart.instances.length - 1];
+        expect(chart.data.datasets).toHaveLength(0);
     });
 });

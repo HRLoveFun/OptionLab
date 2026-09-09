@@ -304,14 +304,48 @@ const ODDS_COLORS = [
     '#14b8a6', '#e11d48', '#a855f7', '#0ea5e9', '#d946ef',
 ];
 
+// Coalesce slider-driven re-renders into one per frame (a drag fires many
+// `input` events and _oddsRenderCharts rebuilds the whole chart).
+let _oddsRenderRaf = 0;
+function _oddsScheduleRender() {
+    if (!_oddsState().getData()) return;
+    if (_oddsRenderRaf) return;
+    _oddsRenderRaf = window.requestAnimationFrame(function () {
+        _oddsRenderRaf = 0;
+        _oddsRenderCharts();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const tgt = document.getElementById('odds-target-pct');
+    const tgtRange = document.getElementById('odds-target-range');
     if (tgt) {
         tgt.addEventListener('input', function () {
+            if (tgtRange) tgtRange.value = _oddsClampTarget(tgt.value);
             _oddsUpdateTargetDisplay();
             if (_oddsState().getData()) _oddsRenderCharts();
         });
     }
+    if (tgtRange) {
+        tgtRange.addEventListener('input', function () {
+            if (tgt) tgt.value = tgtRange.value;
+            _oddsUpdateTargetDisplay();
+            _oddsScheduleRender();
+        });
+    }
+
+    // Days-to-expiry window — dual-thumb slider, one-way link to the legend.
+    const dteLo = document.getElementById('odds-dte-lo');
+    const dteHi = document.getElementById('odds-dte-hi');
+    [dteLo, dteHi].forEach(function (sl) {
+        if (!sl) return;
+        sl.addEventListener('input', function () {
+            _oddsNormalizeDteSlider(sl === dteHi);
+            _oddsUpdateDteReadout();
+            _oddsScheduleRender();
+        });
+    });
+    _oddsUpdateDteReadout();
 
     // Call / Put group switches on the combined chart (top-left overlay).
     ['odds-toggle-call', 'odds-toggle-put'].forEach(function (id) {
@@ -326,6 +360,62 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+// est. move is capped at the slider's 0–50 range so the two stay in sync.
+function _oddsClampTarget(v) {
+    const n = parseFloat(v);
+    if (!isFinite(n)) return 0;
+    return Math.min(50, Math.max(0, n));
+}
+
+// Keep lo <= hi by clamping whichever thumb just crossed the other
+// (the thumb you are not dragging stays put).
+function _oddsNormalizeDteSlider(hiMoved) {
+    const lo = document.getElementById('odds-dte-lo');
+    const hi = document.getElementById('odds-dte-hi');
+    if (!lo || !hi) return;
+    const a = parseInt(lo.value, 10);
+    const b = parseInt(hi.value, 10);
+    if (a > b) {
+        if (hiMoved) hi.value = String(a);
+        else lo.value = String(b);
+    }
+}
+
+// Current [lo, hi] DTE window; defaults to "everything" when the slider is absent.
+function _oddsDteWindow() {
+    const lo = document.getElementById('odds-dte-lo');
+    const hi = document.getElementById('odds-dte-hi');
+    if (!lo || !hi) return [0, Infinity];
+    let a = parseInt(lo.value, 10);
+    let b = parseInt(hi.value, 10);
+    if (!isFinite(a)) a = 0;
+    if (!isFinite(b)) b = 0;
+    return a <= b ? [a, b] : [b, a];
+}
+
+function _oddsUpdateDteReadout() {
+    const out = document.getElementById('odds-dte-readout');
+    const fill = document.getElementById('odds-dte-fill');
+    const lo = document.getElementById('odds-dte-lo');
+    const hi = document.getElementById('odds-dte-hi');
+    if (!lo || !hi) return;
+    const [a, b] = _oddsDteWindow();
+    if (out) out.textContent = a + '–' + b + ' days';
+    if (fill) {
+        const span = (parseInt(hi.max, 10) || 90) - (parseInt(hi.min, 10) || 0) || 1;
+        fill.style.left = (100 * a / span) + '%';
+        fill.style.right = (100 * (span - b) / span) + '%';
+    }
+}
+
+// Whole days from local midnight today to the expiration date.
+function _oddsDte(expStr) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const exp = new Date(expStr + 'T00:00:00');
+    return Math.round((exp - today) / 86400000);
+}
 
 // Is the given curve group ('call' | 'put') currently switched on?
 // Reflects the switch's aria-pressed state; a disabled switch (empty group)
@@ -356,6 +446,8 @@ function _oddsApplyGroupVisibility() {
 function _oddsUpdateTargetDisplay() {
     const el = document.getElementById('odds-target-value');
     const estMove = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
+    const range = document.getElementById('odds-target-range');
+    if (range && document.activeElement !== range) range.value = String(_oddsClampTarget(estMove));
     const data = _oddsState().getData();
     const spot = data ? data.spot : null;
     if (!el) return;
@@ -390,7 +482,10 @@ function loadOddsData() {
     const cfgDte = document.getElementById('cfg-max-dte');
     const cfgMLow = document.getElementById('cfg-moneyness-low');
     const cfgMHigh = document.getElementById('cfg-moneyness-high');
-    if (cfgDte && cfgDte.value) params.set('max_dte', cfgDte.value);
+    // The Odds tab carries its own 0–90d expiry-window slider, so always pull
+    // at least 90 days of expirations regardless of the (lower) global Max DTE.
+    const oddsMaxDte = Math.max(90, parseInt((cfgDte && cfgDte.value) || '0', 10) || 0);
+    params.set('max_dte', String(oddsMaxDte));
     if (cfgMLow && cfgMLow.value) params.set('moneyness_low', cfgMLow.value);
     if (cfgMHigh && cfgMHigh.value) params.set('moneyness_high', cfgMHigh.value);
 
@@ -438,7 +533,9 @@ function _oddsRenderCharts() {
     const putDatasets = [];
     const callOn = _oddsGroupOn('call');
     const putOn = _oddsGroupOn('put');
+    const [dteLo, dteHi] = _oddsDteWindow();
     let allStrikes = new Set();
+    let anyRawData = false;   // any priced option at all, before the DTE filter
 
     exps.forEach((exp, idx) => {
         const ch = data.chain[exp];
@@ -447,8 +544,11 @@ function _oddsRenderCharts() {
         // Format legend as YYYYMMDD
         const legend = exp.replace(/-/g, '');
         const color = ODDS_COLORS[idx % ODDS_COLORS.length];
+        // Days-to-expiry window slider (one-way: legend follows, not vice versa)
+        const dte = _oddsDte(exp);
+        const inWindow = dte >= dteLo && dte <= dteHi;
 
-        // Calls – use ask price for long call
+        // Calls – use ask price (a long call is bought at the ask)
         const callPoints = [];
         (ch.calls || []).forEach(c => {
             if (c.strike == null) return;
@@ -459,7 +559,8 @@ function _oddsRenderCharts() {
             callPoints.push({ x: c.strike, y: parseFloat(odd.toFixed(4)) });
             allStrikes.add(c.strike);
         });
-        if (callPoints.length > 0) {
+        if (callPoints.length > 0) anyRawData = true;
+        if (callPoints.length > 0 && inWindow) {
             callPoints.sort((a, b) => a.x - b.x);
             callDatasets.push({
                 label: legend + ' C',
@@ -476,18 +577,20 @@ function _oddsRenderCharts() {
             });
         }
 
-        // Puts – use bid price for long put
+        // Puts – use ask price too (a long put is bought at the ask, same as
+        // the call; using bid understates cost and inflates the odd).
         const putPoints = [];
         (ch.puts || []).forEach(p => {
             if (p.strike == null) return;
-            const price = (p.bid != null && p.bid > 0) ? p.bid : p.lastPrice;
+            const price = (p.ask != null && p.ask > 0) ? p.ask : p.lastPrice;
             if (!price || price <= 0) return;
             const payoff = Math.max(p.strike - putTarget, 0);
             const odd = (payoff - price) / price;
             putPoints.push({ x: p.strike, y: parseFloat(odd.toFixed(4)) });
             allStrikes.add(p.strike);
         });
-        if (putPoints.length > 0) {
+        if (putPoints.length > 0) anyRawData = true;
+        if (putPoints.length > 0 && inWindow) {
             putPoints.sort((a, b) => a.x - b.x);
             putDatasets.push({
                 label: legend + ' P',
@@ -507,10 +610,13 @@ function _oddsRenderCharts() {
         }
     });
 
-    if (callDatasets.length === 0 && putDatasets.length === 0) {
+    if (!anyRawData) {
         _oddsPanel('empty', { message: 'No valid option data to compute odds.' });
         return;
     }
+    // callDatasets/putDatasets may still be empty here — that just means the
+    // DTE window slider filtered every expiration out. Render an empty chart
+    // (axes + sliders stay put) rather than tearing the panel down.
 
     // Spot vertical line plugin
     const spotLinePlugin = {
@@ -626,6 +732,7 @@ function _oddsRenderCharts() {
 
     // UI visibility is driven by appState.panels.set('odds', 'loaded') in
     // loadOddsData(); no display-toggle needed here.
+    _oddsUpdateDteReadout();
 
     // Module 4B: Load vol-context data
     _oddsLoadVolContext();

@@ -4,12 +4,6 @@
             <h2>Expiry Odds</h2>
             <p class="panel-desc">Profit odds per strike with implied volatility context.</p>
         </div>
-        <div class="oc-target-row">
-            <span class="oc-target-label">est. move</span>
-            <input type="number" id="odds-target-pct" class="oc-target-input" value="10" min="0" step="1" />
-            <span class="oc-target-unit">% &times; Spot</span>
-            <span id="odds-target-value" class="oc-target-value"></span>
-        </div>
         <div class="toolbar-actions">
             <button type="button" class="btn-primary" data-action="odds-reload"
                     :disabled="phase === 'loading'">
@@ -31,6 +25,33 @@
 
     <!-- Loaded content -->
     <div x-show="phase === 'loaded'" x-cloak>
+        <div class="odds-controls" role="group" aria-label="Odds chart controls">
+            <div class="odds-control">
+                <label class="odds-control__label" for="odds-target-pct">est. move
+                    <span class="label-unit">% &times; Spot</span></label>
+                <div class="odds-control__row">
+                    <input type="range" id="odds-target-range" class="odds-range__input" min="0" max="50" step="1"
+                           value="10" aria-label="Estimated move, percent of spot" />
+                    <input type="number" id="odds-target-pct" class="oc-target-input" value="10"
+                           min="0" max="50" step="1" />
+                </div>
+                <span id="odds-target-value" class="oc-target-value"></span>
+            </div>
+            <div class="odds-control">
+                <label class="odds-control__label" id="odds-dte-label">expiry window
+                    <span class="label-unit">days to expiry</span></label>
+                <div class="odds-control__row">
+                    <div class="odds-range-dual" role="group" aria-labelledby="odds-dte-label">
+                        <div class="odds-range-dual__track"><div class="odds-range-dual__fill" id="odds-dte-fill"></div></div>
+                        <input type="range" id="odds-dte-lo" class="odds-range__input" min="0" max="90" step="1"
+                               value="0" aria-label="Earliest days to expiry" />
+                        <input type="range" id="odds-dte-hi" class="odds-range__input" min="0" max="90" step="1"
+                               value="90" aria-label="Latest days to expiry" />
+                    </div>
+                    <span class="oc-target-value" id="odds-dte-readout">0–90 days</span>
+                </div>
+            </div>
+        </div>
         <div id="odds-charts-wrapper">
             <div class="content-card">
                 <div class="content-card-title">Long Call / Long Put Odds</div>
