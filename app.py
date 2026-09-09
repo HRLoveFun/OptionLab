@@ -108,7 +108,14 @@ app.register_blueprint(data_bp)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
+    # WHY: bind address via the HOST env var (default 0.0.0.0 for LAN access).
+    # Binding to 0.0.0.0 makes werkzeug's HTTPServer.server_bind call
+    # socket.getfqdn, which does a reverse-DNS lookup — on a flaky network
+    # (hotspot / dead proxy) this can block startup for 10s+ per resolver
+    # timeout. Bind to 127.0.0.1 (resolved via /etc/hosts, no DNS) for
+    # instant local startup.
     # CONSTRAINT: Werkzeug's debugger (/console) can execute arbitrary Python.
     # Never enable it implicitly on a 0.0.0.0 bind — opt in via FLASK_DEBUG.
+    host = os.environ.get("HOST", "0.0.0.0").strip() or "0.0.0.0"
     debug = os.environ.get("FLASK_DEBUG", "").strip().lower() in ("1", "true", "yes")
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    app.run(host=host, port=port, debug=debug)

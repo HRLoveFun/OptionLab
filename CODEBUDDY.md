@@ -26,7 +26,7 @@ keep in sync with `required-version` in `pyproject.toml`). `Pillow` is only for
 
 ### Run
 ```bash
-python app.py                                              # dev server, PORT defaults to 5001
+python app.py                                              # dev server, PORT defaults to 5001, HOST (bind address) defaults to 0.0.0.0
 gunicorn app:app -b 0.0.0.0:5001 --workers 2 --threads 4   # production
 ```
 `app.py` is a thin adapter: wires `/api/v1/*`→`/api/*` middleware, installs the JSON error

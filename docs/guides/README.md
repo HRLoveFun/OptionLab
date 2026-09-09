@@ -84,6 +84,7 @@ Yahoo Finance ──▶ downloader (upsert raw_prices)
 | `AUTO_UPDATE_TICKERS` | 定时刷新的标的列表（逗号分隔） | 空 |
 | `SCHED_TZ` | 调度器时区 | `UTC` |
 | `PORT` | 服务端口 | `5000` |
+| `HOST` | 绑定地址。`0.0.0.0`（默认）会触发 werkzeug 反向 DNS 查询，弱网环境下可能拖慢启动 10s+；仅本机调试可设 `127.0.0.1` | `0.0.0.0` |
 
 ### 可选：手动数据预载
 
