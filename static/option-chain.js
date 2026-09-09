@@ -294,8 +294,8 @@ function _ocRenderChain(calls, puts) {
 // UI phase driven via appState.panels.set('odds', ...).
 const _oddsState = () => window.appState.oddsChain;
 const _oddsPanel = (phase, opts) => window.appState.panels.set('odds', phase, opts);
-let _oddsCallChart = null;
-let _oddsPutChart = null;
+// Single combined chart: Call curves (solid) + Put curves (dashed).
+let _oddsChart = null;
 
 // Palette for expiration lines
 const ODDS_COLORS = [
@@ -312,7 +312,46 @@ document.addEventListener('DOMContentLoaded', function () {
             if (_oddsState().getData()) _oddsRenderCharts();
         });
     }
+
+    // Call / Put group switches on the combined chart (top-left overlay).
+    ['odds-toggle-call', 'odds-toggle-put'].forEach(function (id) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            if (btn.disabled) return;
+            const on = btn.getAttribute('aria-pressed') === 'true';
+            btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+            btn.classList.toggle('active', !on);
+            _oddsApplyGroupVisibility();
+        });
+    });
 });
+
+// Is the given curve group ('call' | 'put') currently switched on?
+// Reflects the switch's aria-pressed state; a disabled switch (empty group)
+// keeps its state so it restores correctly once that group has data again.
+function _oddsGroupOn(group) {
+    const btn = document.getElementById(group === 'put' ? 'odds-toggle-put' : 'odds-toggle-call');
+    return btn ? btn.getAttribute('aria-pressed') !== 'false' : true;
+}
+
+// Enable/disable a group switch (disabled = that group has no curves)
+function _oddsSetToggleEnabled(id, enabled) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = !enabled;
+    btn.classList.toggle('is-disabled', !enabled);
+}
+
+// Push the Call/Put switch state onto the live chart.
+function _oddsApplyGroupVisibility() {
+    if (!_oddsChart) return;
+    const on = { call: _oddsGroupOn('call'), put: _oddsGroupOn('put') };
+    _oddsChart.data.datasets.forEach(function (ds, i) {
+        _oddsChart.setDatasetVisibility(i, on[ds.oddsGroup] !== false);
+    });
+    _oddsChart.update();
+}
 
 function _oddsUpdateTargetDisplay() {
     const el = document.getElementById('odds-target-value');
@@ -392,9 +431,13 @@ function _oddsRenderCharts() {
     const putTarget = (1 - estMove / 100) * spot;
     const exps = data.expirations || [];
 
-    // Build datasets per expiration
+    // Build datasets per expiration. Both groups live in one chart:
+    // Call curves are solid, Put curves dashed; each Call/Put switch hides
+    // its whole group at once (see _oddsApplyGroupVisibility).
     const callDatasets = [];
     const putDatasets = [];
+    const callOn = _oddsGroupOn('call');
+    const putOn = _oddsGroupOn('put');
     let allStrikes = new Set();
 
     exps.forEach((exp, idx) => {
@@ -419,7 +462,9 @@ function _oddsRenderCharts() {
         if (callPoints.length > 0) {
             callPoints.sort((a, b) => a.x - b.x);
             callDatasets.push({
-                label: legend,
+                label: legend + ' C',
+                oddsGroup: 'call',
+                hidden: !callOn,
                 data: callPoints,
                 borderColor: color,
                 backgroundColor: color,
@@ -445,13 +490,17 @@ function _oddsRenderCharts() {
         if (putPoints.length > 0) {
             putPoints.sort((a, b) => a.x - b.x);
             putDatasets.push({
-                label: legend,
+                label: legend + ' P',
+                oddsGroup: 'put',
+                hidden: !putOn,
                 data: putPoints,
                 borderColor: color,
                 backgroundColor: color,
                 borderWidth: 1.5,
+                borderDash: [6, 4],
                 pointRadius: 2,
                 pointHoverRadius: 4,
+                pointStyle: 'rectRot',
                 tension: 0.1,
                 fill: false,
             });
@@ -499,6 +548,9 @@ function _oddsRenderCharts() {
         };
         if (xMin !== undefined) xCfg.min = xMin;
         if (xMax !== undefined) xCfg.max = xMax;
+        // Legend shows one entry per expiration (calls and puts share a
+        // colour); clicking it toggles that expiration in both groups.
+        const _baseLabel = (s) => s.replace(/ [CP]$/, '');
         return {
             responsive: true,
             maintainAspectRatio: true,
@@ -506,7 +558,30 @@ function _oddsRenderCharts() {
             plugins: {
                 legend: {
                     position: 'bottom',
-                    labels: { font: { size: 11 }, boxWidth: 14, padding: 10 }
+                    labels: {
+                        font: { size: 11 }, boxWidth: 14, padding: 10,
+                        generateLabels: function (chart) {
+                            const dsets = chart.data.datasets;
+                            const primary = dsets.some(d => d.oddsGroup === 'call') ? 'call' : 'put';
+                            return Chart.defaults.plugins.legend.labels.generateLabels(chart)
+                                .filter(it => dsets[it.datasetIndex].oddsGroup === primary)
+                                .map(it => {
+                                    const base = _baseLabel(it.text);
+                                    it.text = base;
+                                    it.hidden = !dsets.some((ds, i) =>
+                                        _baseLabel(ds.label) === base && chart.isDatasetVisible(i));
+                                    return it;
+                                });
+                        }
+                    },
+                    onClick: function (e, item, legend) {
+                        const chart = legend.chart;
+                        const base = _baseLabel(chart.data.datasets[item.datasetIndex].label);
+                        chart.data.datasets.forEach((ds, i) => {
+                            if (_baseLabel(ds.label) === base) chart.setDatasetVisibility(i, item.hidden);
+                        });
+                        chart.update();
+                    }
                 },
                 tooltip: {
                     callbacks: {
@@ -527,31 +602,23 @@ function _oddsRenderCharts() {
         };
     }
 
-    // Destroy existing charts
-    if (_oddsCallChart) { _oddsCallChart.destroy(); _oddsCallChart = null; }
-    if (_oddsPutChart) { _oddsPutChart.destroy(); _oddsPutChart = null; }
+    // Destroy existing chart
+    if (_oddsChart) { _oddsChart.destroy(); _oddsChart = null; }
+
+    // Grey out a switch whose group has no curves to show
+    _oddsSetToggleEnabled('odds-toggle-call', callDatasets.length > 0);
+    _oddsSetToggleEnabled('odds-toggle-put', putDatasets.length > 0);
 
     // X-axis range: (1 - estMove/100 - 0.05)*spot to (1 + estMove/100 + 0.05)*spot
     const xRangeMin = (1 - estMove / 100 - 0.05) * spot;
     const xRangeMax = (1 + estMove / 100 + 0.05) * spot;
 
-    // Call chart
-    const callCtx = document.getElementById('odds-call-chart');
-    if (callCtx && callDatasets.length > 0) {
-        _oddsCallChart = new Chart(callCtx, {
+    // Combined chart – Call curves first, then Put curves
+    const ctx = document.getElementById('odds-combined-chart');
+    if (ctx) {
+        _oddsChart = new Chart(ctx, {
             type: 'line',
-            data: { datasets: callDatasets },
-            options: makeChartOpts({ xMin: xRangeMin, xMax: xRangeMax }),
-            plugins: [spotLinePlugin]
-        });
-    }
-
-    // Put chart
-    const putCtx = document.getElementById('odds-put-chart');
-    if (putCtx && putDatasets.length > 0) {
-        _oddsPutChart = new Chart(putCtx, {
-            type: 'line',
-            data: { datasets: putDatasets },
+            data: { datasets: callDatasets.concat(putDatasets) },
             options: makeChartOpts({ xMin: xRangeMin, xMax: xRangeMax }),
             plugins: [spotLinePlugin]
         });

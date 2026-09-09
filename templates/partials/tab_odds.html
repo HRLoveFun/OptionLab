@@ -32,14 +32,20 @@
     <!-- Loaded content -->
     <div x-show="phase === 'loaded'" x-cloak>
         <div id="odds-charts-wrapper">
-            <div class="odds-charts-grid">
-                <div class="content-card">
-                    <div class="content-card-title">Long Call Odds</div>
-                    <div class="chart-wrapper"><canvas id="odds-call-chart"></canvas></div>
-                </div>
-                <div class="content-card">
-                    <div class="content-card-title">Long Put Odds</div>
-                    <div class="chart-wrapper"><canvas id="odds-put-chart"></canvas></div>
+            <div class="content-card">
+                <div class="content-card-title">Long Call / Long Put Odds</div>
+                <div class="chart-wrapper chart-wrapper--odds">
+                    <div class="odds-group-toggles" role="group" aria-label="Odds curve groups">
+                        <button type="button" class="btn-toggle btn-sm active" id="odds-toggle-call"
+                                data-odds-group="call" aria-pressed="true">
+                            <span class="odds-group-line odds-group-line--call" aria-hidden="true"></span>Call
+                        </button>
+                        <button type="button" class="btn-toggle btn-sm active" id="odds-toggle-put"
+                                data-odds-group="put" aria-pressed="true">
+                            <span class="odds-group-line odds-group-line--put" aria-hidden="true"></span>Put
+                        </button>
+                    </div>
+                    <canvas id="odds-combined-chart"></canvas>
                 </div>
             </div>
         </div>

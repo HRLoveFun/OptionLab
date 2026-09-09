@@ -1682,18 +1682,57 @@ body {
 }
 
 /* ============================================================
-   Odds Tab – stacked charts (Call upper, Put lower)
+   Odds Tab – one combined chart (Call solid + Put dashed).
+   The Call/Put switches sit as an overlay in the plot's
+   top-left corner, so the chart wrapper must be a positioning
+   context.
    ============================================================ */
-.odds-charts-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
+.chart-wrapper--odds {
+    position: relative;
 }
 
-@media (max-width: 900px) {
-    .odds-charts-grid {
-        grid-template-columns: 1fr;
+.odds-group-toggles {
+    position: absolute;
+    top: 1.5rem;
+    left: 3rem;
+    z-index: 2;
+    display: flex;
+    gap: .3rem;
+    padding: .3rem;
+    border-radius: var(--radius-sm);
+    background: var(--slate-50);
+    border: 1px solid var(--slate-200);
+    box-shadow: var(--shadow);
+}
+
+.odds-group-toggles .btn-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+}
+
+.odds-group-toggles .btn-toggle.is-disabled {
+    opacity: .4;
+    cursor: not-allowed;
+}
+
+/* Solid / dashed line sample echoing the curve style of each group */
+.odds-group-line {
+    width: 16px;
+    height: 0;
+    border-top-width: 2px;
+    border-top-style: solid;
+    border-top-color: currentColor;
+}
+
+.odds-group-line--put {
+    border-top-style: dashed;
+}
+
+@media (max-width: 640px) {
+    .odds-group-toggles {
+        top: 1rem;
+        left: 1.75rem;
     }
 }
 
