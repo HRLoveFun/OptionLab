@@ -6,6 +6,11 @@ requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# WHY: the repo has no top-level package, so `from app import app` in the test
+# modules only resolves when the repo root is on sys.path. `python -m pytest`
+# adds it implicitly; the bare `pytest` console script (what CI runs) does not.
+# Pin it here so every entry point — CI, `pytest tests/e2e`, local runs — agrees.
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-x --tb=short -q"

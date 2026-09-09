@@ -52,10 +52,7 @@ def test_theme_toggle_repaints_theme_dependent_tab_content(
 
     # Stamp the rendered hero; a repaint replaces #regime-current-body's
     # innerHTML, so the stamped node is gone once regime.js reacts.
-    page.evaluate(
-        "() => document.querySelector('#regime-current-body .regime-hero')"
-        ".setAttribute('data-stale', '1')"
-    )
+    page.evaluate("() => document.querySelector('#regime-current-body .regime-hero').setAttribute('data-stale', '1')")
     page.locator("#theme-toggle").click()
     page.wait_for_function(
         "() => { const el = document.querySelector('#regime-current-body .regime-hero');"
