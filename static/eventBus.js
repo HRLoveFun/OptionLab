@@ -13,7 +13,7 @@
  * Events used in this codebase (canonical names):
  *   'option_chain:loaded'      payload = { ticker, expirations, chain, spot }
  *   'option_chain:cleared'     payload = { ticker }
- *   'odds_chain:loaded'        payload = { ticker, ... }
+ *   'payoff_ratio:loaded'      payload = { ticker, ... }
  *   'game:started' / 'game:finished' / 'game:error'
  *   'market_review:loaded'     payload = { ticker }
  *   'ticker:changed'           payload = { ticker }

@@ -1,6 +1,6 @@
 /* state/tabFlagsState.js — first-load flags for lazy tabs.
  *
- * Replaces `window._mrLoaded`, `window._ocAutoLoaded`, `window._oddsAutoLoaded`,
+ * Replaces `window._mrLoaded`, `window._ocAutoLoaded`, `window._payoffRatioAutoLoaded`,
  * `window._regimeLoaded` flags scattered in templates/index.html.
  *
  * API:
@@ -9,7 +9,7 @@
  *   appState.tabFlags.reset(tab)      -> reset a single flag (for ticker change)
  *   appState.tabFlags.resetAll()
  *
- * Known tabs: 'market_review', 'option_chain', 'odds', 'regime'
+ * Known tabs: 'market_review', 'option_chain', 'payoff_ratio', 'regime'
  */
 (function (root) {
     'use strict';

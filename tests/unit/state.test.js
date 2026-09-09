@@ -2,7 +2,7 @@
  * Tests for state modules under static/state/.
  *
  * These cover the canonical accessors that replace ad-hoc window globals:
- *   abortRegistry, chainCacheState, optionChainState, oddsChainState,
+ *   abortRegistry, chainCacheState, optionChainState, payoffRatioState,
  *   tabFlagsState, panelState.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -131,22 +131,22 @@ describe('optionChainState', () => {
     });
 });
 
-describe('oddsChainState', () => {
+describe('payoffRatioState', () => {
     it('setData/getData and reset emit the right events', () => {
         const loaded = vi.fn();
         const cleared = vi.fn();
-        window.bus.on('odds_chain:loaded', loaded);
-        window.bus.on('odds_chain:cleared', cleared);
-        window.appState.oddsChain.setData({ rows: [1, 2] });
+        window.bus.on('payoff_ratio:loaded', loaded);
+        window.bus.on('payoff_ratio:cleared', cleared);
+        window.appState.payoffRatio.setData({ rows: [1, 2] });
         expect(loaded).toHaveBeenCalledWith({ rows: [1, 2] });
-        window.appState.oddsChain.reset();
-        expect(window.appState.oddsChain.getData()).toBeNull();
+        window.appState.payoffRatio.reset();
+        expect(window.appState.payoffRatio.getData()).toBeNull();
         expect(cleared).toHaveBeenCalled();
     });
 
     it('beginRequest aborts the prior signal', () => {
-        const s1 = window.appState.oddsChain.beginRequest();
-        const s2 = window.appState.oddsChain.beginRequest();
+        const s1 = window.appState.payoffRatio.beginRequest();
+        const s2 = window.appState.payoffRatio.beginRequest();
         expect(s1.aborted).toBe(true);
         expect(s2.aborted).toBe(false);
     });

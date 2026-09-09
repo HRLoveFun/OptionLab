@@ -15,7 +15,7 @@ polling globals.
 | `store.js`            | `appState`             | namespace bootstrap                        |
 | `chainCacheState.js`  | `appState.chainCache`  | `window._chainCache`, `_chainCacheGet/Set` |
 | `optionChainState.js` | `appState.optionChain` | `_ocChainData`, `_ocActivExp`, `_ocAbort`  |
-| `oddsChainState.js`   | `appState.oddsChain`   | `_oddsChainData`, `_oddsAbort`             |
+| `payoffRatioState.js` | `appState.payoffRatio` | `_oddsChainData`, `_oddsAbort`             |
 | `abortRegistry.js`    | `appState.aborts`      | `_gameAbort`, `_portfolioAbort`            |
 | `tabFlagsState.js`    | `appState.tabFlags`    | `_mrLoaded`, `_ocAutoLoaded`, ...          |
 
@@ -29,7 +29,7 @@ In `templates/index.html`:
 <script src="state/store.js"></script>
 <script src="state/chainCacheState.js"></script>
 <script src="state/optionChainState.js"></script>
-<script src="state/oddsChainState.js"></script>
+<script src="state/payoffRatioState.js"></script>
 <script src="state/abortRegistry.js"></script>
 <script src="state/tabFlagsState.js"></script>
 <!-- feature scripts: utils.js, position.js, option-chain.js, ... -->

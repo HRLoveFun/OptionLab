@@ -172,8 +172,8 @@
                     <button class="tab-btn" data-tab="tab-regime">
                         <span>Market Regime</span>
                     </button>
-                    <button class="tab-btn" data-tab="tab-odds">
-                        <span>Expiry Odds</span>
+                    <button class="tab-btn" data-tab="tab-payoff-ratio">
+                        <span>Payoff Ratio</span>
                     </button>
 
                     <div class="tab-section-label">Options</div>
@@ -230,8 +230,8 @@
             <!-- Tab 6: Options Chain Analysis -->
             {% include 'partials/tab_options_analysis.html' %}
 
-            <!-- Tab 7: Expiry Odds -->
-            {% include 'partials/tab_odds.html' %}
+            <!-- Tab 7: Payoff Ratio -->
+            {% include 'partials/tab_payoff_ratio.html' %}
 
             <!-- Tab: Market Regime -->
             {% include 'partials/tab_regime.html' %}
@@ -266,7 +266,7 @@
     <script src="{{ url_for('static', filename='state/store.js') }}"></script>
     <script src="{{ url_for('static', filename='state/chainCacheState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/optionChainState.js') }}"></script>
-    <script src="{{ url_for('static', filename='state/oddsChainState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/payoffRatioState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/abortRegistry.js') }}"></script>
     <script src="{{ url_for('static', filename='state/tabFlagsState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/panelState.js') }}"></script>
@@ -299,10 +299,10 @@
                     var ticker = (document.getElementById('ticker') || {}).value || '';
                     if (ticker.trim()) { loadOptionChain(); window.appState.tabFlags.markLoaded('option_chain'); }
                 }
-                // Auto-load Expiry Odds on tab switch
-                if (target === 'tab-odds' && !window.appState.tabFlags.isLoaded('odds')) {
+                // Auto-load Payoff Ratio on tab switch
+                if (target === 'tab-payoff-ratio' && !window.appState.tabFlags.isLoaded('payoff_ratio')) {
                     var ticker = (document.getElementById('ticker') || {}).value || '';
-                    if (ticker.trim()) { loadOddsData(); window.appState.tabFlags.markLoaded('odds'); }
+                    if (ticker.trim()) { loadPayoffRatioData(); window.appState.tabFlags.markLoaded('payoff_ratio'); }
                 }
                 // Auto-load Market Regime on tab switch
                 if (target === 'tab-regime' && !window.appState.tabFlags.isLoaded('regime')) {
@@ -324,7 +324,7 @@
         if (tickerInput) {
             tickerInput.addEventListener('change', function() {
                 window.appState.tabFlags.reset('option_chain');
-                window.appState.tabFlags.reset('odds');
+                window.appState.tabFlags.reset('payoff_ratio');
                 window.appState.tabFlags.reset('simulation');
             });
         }
@@ -351,7 +351,7 @@
                     var ticker = (document.getElementById('ticker') || {}).value || '';
                     if (!ticker.trim()) return;
                     if (tab === 'tab-option-chain') { loadOptionChain(); }
-                    else if (tab === 'tab-odds') { loadOddsData(); }
+                    else if (tab === 'tab-payoff-ratio') { loadPayoffRatioData(); }
                 }, refreshMs);
             }
 
@@ -363,7 +363,7 @@
             document.querySelectorAll('.tab-btn').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     var target = this.dataset.tab;
-                    if (target === 'tab-option-chain' || target === 'tab-odds') {
+                    if (target === 'tab-option-chain' || target === 'tab-payoff-ratio') {
                         startAutoRefresh();
                     } else {
                         stopAutoRefresh();
@@ -373,7 +373,7 @@
 
             // Start if already on one of those tabs
             var initTab = getActiveTab();
-            if (initTab === 'tab-option-chain' || initTab === 'tab-odds') {
+            if (initTab === 'tab-option-chain' || initTab === 'tab-payoff-ratio') {
                 startAutoRefresh();
             }
         })();

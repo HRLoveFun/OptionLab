@@ -40,7 +40,7 @@ static/
 │   ├── tabFlagsState.js       Lazy-load flags per tab (avoid re-fetch)
 │   ├── optionChainState.js    Selected expiry / strike / mode
 │   ├── chainCacheState.js     Per-ticker option chain cache
-│   ├── oddsChainState.js      Odds tab state
+│   ├── payoffRatioState.js    Payoff Ratio tab state
 │   └── abortRegistry.js       AbortController registry to cancel in-flight
 │                              requests when the user switches ticker
 ├── features/               (extension slot for future feature modules)
@@ -118,7 +118,7 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │  • Assessment │  Tab 4: Assessment & Projections        │
 │  • Chain      │  Tab 5: Option Chain T-View             │
 │  • Volatility │  Tab 6: Volatility Analysis             │
-│  • Odds       │  Tab 7: Expiry Odds                     │
+│  • Payoff     │  Tab 7: Payoff Ratio                    │
 │               │                                         │
 └───────────────┴─────────────────────────────────────────┘
 ```
@@ -156,7 +156,7 @@ inline as before, since a hover-peek panel is unusable at that width.
 | `tab-market-assessment`    | Assessment & Projections    | `projection_*`, `pnl_chart`      |
 | `tab-option-chain`         | Option Chain                | `oc_chain`, `oc_*` analysis      |
 | `tab-options-chain`        | Volatility Analysis         | `oc_*` metrics and charts        |
-| `tab-odds`                 | Expiry Odds                 | `odds_chart`                     |
+| `tab-payoff-ratio`         | Payoff Ratio                | `payoff_ratio_chart`             |
 
 ---
 
@@ -317,7 +317,7 @@ FormManager.clearState()  // After successful submission
 | `/api/preload_option_chain`              | POST     | `preloadOptionChains()`   | Cache option data                   |
 | `/api/market_review_ts`                  | POST     | `loadMarketReviewChart()` | Time-series chart data              |
 | `/api/option_chain`                      | GET      | Option-chain tab reload   | Raw chain JSON                      |
-| `/api/odds_with_vol`                     | POST     | Odds tab                  | Odds + IV per expiry                |
+| `/api/expiry_probability`               | POST     | Payoff Ratio tab (dormant) | Touch probability + IV per expiry  |
 | `/api/portfolio_analysis`                | POST     | `runPortfolioAnalysis()`  | Portfolio metrics                   |
 | `/api/regime/{current,history,backfill}` | GET/POST | Regime tab                | Macro regime data                   |
 

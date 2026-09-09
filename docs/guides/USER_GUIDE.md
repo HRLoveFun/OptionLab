@@ -17,7 +17,7 @@ This guide explains every tab in the Market Dashboard, covering the concepts, fo
 6. [Volatility Analysis](#6-volatility-analysis)
    - [Key Metrics](#61-key-metrics-snapshot)
    - [Volatility Premium Context](#62-volatility-premium-context)
-7. [Odds](#7-odds)
+7. [Payoff Ratio](#7-payoff-ratio)
 8. [Market Regime](#8-market-regime)
 9. [Config](#9-config)
 10. [Summary (multi-ticker)](#10-summary-multi-ticker)
@@ -525,39 +525,52 @@ Reference levels:
 
 ---
 
-## 7. Odds
+## 7. Payoff Ratio
 
-The **Odds** tab calculates the profit odds for long call and long put options across all strikes and expirations, given a target price.
+The **Payoff Ratio** tab (previously "Expiry Odds") plots, for every strike and
+expiration, how many times your premium you would get back **if** the underlying
+reaches a target price by expiry. It is a scenario tool, **not** a probability
+estimate — see the caveat below.
 
 ### How to Use
 
-1. Enter a ticker and click **Load Chain** to fetch the live options chain.
-2. Adjust the **Target** input (as a percentage of the spot price). For example, 105 means you expect the price to reach 105% of the current spot.
+1. Enter a ticker in the **Parameter** tab — the chain loads automatically when
+   you open this tab.
+2. Set **est. move** (percent of spot). Calls are evaluated against an up-move
+   target $T_{\text{call}} = \text{Spot} \times (1 + \text{est.\ move}\%)$; puts
+   against a down-move target $T_{\text{put}} = \text{Spot} \times (1 - \text{est.\ move}\%)$.
+3. Use the **expiry window** dual slider to limit which expirations are drawn
+   (0–90 days to expiry).
 
 ### Calculation
 
-For each option contract:
+The long option is priced at the **ask** (falls back to Last Price if the ask is
+missing) — that is what you actually pay to open the position.
 
-$$\text{Mid Price} = \frac{\text{Bid} + \text{Ask}}{2}$$
+**Long Call payoff ratio at strike $K$:**
 
-(Falls back to Last Price if bid/ask is unavailable.)
+$$\text{ratio}_{\text{call}} = \frac{\max(T_{\text{call}} - K,\; 0)}{\text{Ask}}$$
 
-**Long Call Odd at strike $K$:**
+**Long Put payoff ratio at strike $K$:**
 
-$$\text{Odd}_{\text{call}} = \frac{\max(T - K,\; 0) - \text{Mid}}{\text{Mid}}$$
+$$\text{ratio}_{\text{put}} = \frac{\max(K - T_{\text{put}},\; 0)}{\text{Ask}}$$
 
-**Long Put Odd at strike $K$:**
+**Interpretation (gross multiple, ≥ 0):**
+- `0x`: the option expires worthless at the target — the whole premium is lost.
+- `1x`: break-even (marked with a dashed green horizontal line).
+- `2.5x`: you get back 2.5× the premium (a +150% net return).
 
-$$\text{Odd}_{\text{put}} = \frac{\max(K - T,\; 0) - \text{Mid}}{\text{Mid}}$$
+Each expiration is a separate colour-coded line. The spot price is a dashed
+yellow vertical line; the x-axis spans the option chain's own strike range, and
+each strike tick carries a second line with its distance from spot (e.g.
+`+1.7%`, `-2.3%`). Hovering a point shows `<expiry> <C|P>: <ratio>x  (ask <price>)`.
 
-where $T$ is the target price.
+### Caveat — this is not "odds"
 
-**Interpretation:**
-- Odd $> 0$: Profitable if the underlying reaches the target. Higher odds mean better reward per dollar risked.
-- Odd $= 0$: Break-even.
-- Odd $< 0$: Loss even if the target is reached — the premium exceeds the intrinsic payoff.
-
-Each expiration date is rendered as a separate line on the chart, color-coded. The spot price is marked with a dashed yellow vertical line. The call chart is capped at the target + 1% for readability; the put chart floors at the target − 1%.
+The ratio is **not** probability-weighted. A cheap far-out-of-the-money strike
+shows a very high ratio *precisely because* the chance of the underlying
+reaching the target is small. Do not pick strikes on this number alone; read it
+together with est. move relative to implied volatility. (See ADR 0010.)
 
 ---
 

@@ -342,11 +342,11 @@ class TestAutoRefreshTemplate:
         assert "startAutoRefresh" in html
 
     def test_auto_load_flags_present(self, client):
-        """Auto-load flags for option chain and odds should be in the page."""
+        """Auto-load flags for option chain and payoff ratio should be in the page."""
         resp = client.get("/")
         html = resp.data.decode()
         # Legacy `_ocAutoLoaded` / `_oddsAutoLoaded` globals were replaced
         # with `appState.tabFlags`; assert the new entry points exist.
         assert "appState.tabFlags" in html
         assert "option_chain" in html
-        assert "odds" in html
+        assert "payoff_ratio" in html

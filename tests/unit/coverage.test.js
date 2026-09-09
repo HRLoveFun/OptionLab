@@ -19,7 +19,7 @@ import '../../static/state/store.js';
 import '../../static/state/abortRegistry.js';
 import '../../static/state/chainCacheState.js';
 import '../../static/state/optionChainState.js';
-import '../../static/state/oddsChainState.js';
+import '../../static/state/payoffRatioState.js';
 import '../../static/state/tabFlagsState.js';
 import '../../static/state/panelState.js';
 import '../../static/utils.js';
@@ -73,7 +73,7 @@ describe('coverage smoke — every module publishes its surface', () => {
         expect(window.appState.aborts).toBeDefined();
         expect(window.appState.chainCache).toBeDefined();
         expect(window.appState.optionChain).toBeDefined();
-        expect(window.appState.oddsChain).toBeDefined();
+        expect(window.appState.payoffRatio).toBeDefined();
         expect(window.appState.tabFlags).toBeDefined();
         expect(window.appState.panels).toBeDefined();
     });
@@ -229,13 +229,13 @@ describe('coverage drill — exercise instrumented sources', () => {
         window.appState.optionChain.abort();
         window.appState.optionChain.reset();
 
-        // oddsChain
-        window.appState.oddsChain.setData({ rows: [] });
-        window.appState.oddsChain.getData();
-        window.appState.oddsChain.beginRequest();
-        window.appState.oddsChain.beginRequest();
-        window.appState.oddsChain.abort();
-        window.appState.oddsChain.reset();
+        // payoffRatio
+        window.appState.payoffRatio.setData({ rows: [] });
+        window.appState.payoffRatio.getData();
+        window.appState.payoffRatio.beginRequest();
+        window.appState.payoffRatio.beginRequest();
+        window.appState.payoffRatio.abort();
+        window.appState.payoffRatio.reset();
 
         // tabFlags
         window.appState.tabFlags.markLoaded('a');

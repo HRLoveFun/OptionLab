@@ -171,8 +171,8 @@
         if (path === '/api/preload_option_chain' && method === 'POST') {
             return loadFixture('option_chain.nvda.json').then(function (c) { return jsonResponse(toPreload(c)); });
         }
-        if (path === '/api/odds_with_vol') {
-            return loadFixture('odds_with_vol.nvda.json').then(jsonResponse);
+        if (path === '/api/expiry_probability') {
+            return loadFixture('expiry_probability.nvda.json').then(jsonResponse);
         }
         if (path === '/api/expiry_calendar') {
             return loadFixture('expiry_calendar.json').then(jsonResponse);

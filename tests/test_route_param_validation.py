@@ -52,14 +52,14 @@ class TestOptionChainParamParsing:
         assert resp.get_json()["code"] == "invalid_parameter"
 
 
-class TestOddsWithVolParamValidation:
+class TestExpiryProbabilityParamValidation:
     def test_target_pct_out_of_range_is_400(self, client):
-        resp = client.post("/api/odds_with_vol", json={"ticker": "NVDA", "target_pct": -100})
+        resp = client.post("/api/expiry_probability", json={"ticker": "NVDA", "target_pct": -100})
         assert resp.status_code == 400
         assert resp.get_json()["code"] == "invalid_parameter"
 
     def test_target_pct_not_a_number_is_400(self, client):
-        resp = client.post("/api/odds_with_vol", json={"ticker": "NVDA", "target_pct": "lots"})
+        resp = client.post("/api/expiry_probability", json={"ticker": "NVDA", "target_pct": "lots"})
         assert resp.status_code == 400
         assert resp.get_json()["code"] == "invalid_parameter"
 

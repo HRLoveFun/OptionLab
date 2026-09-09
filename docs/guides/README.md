@@ -12,7 +12,7 @@
 | **Assessment & Projections** | 基于历史振荡的 Walk-Forward 价格投影（含样本外命中率）、期权组合到期损益图（含 BS Greeks 摘要）、仓位管理建议 |
 | **Option Chain** | 实时 T 型期权链（IV、OI、成交量、买卖价、时间价值），支持按到期日切换，流动性评分(GOOD/FAIR/AVOID)标注 |
 | **Volatility Analysis** | IV Smile、IV 期限结构、3D IV 曲面、偏度分析、OI/成交量分布、PCR 摘要、预期波动幅度、关键指标快照、**波动率溢价信号（IV vs HV）** |
-| **Odds** | 给定目标价，计算各行权价多头看涨 / 看跌期权的盈亏赔率，按到期日分色展示 |
+| **Payoff Ratio** | 给定目标价，计算各行权价多头看涨 / 看跌期权到期的回报倍数（毛倍数 = 内在价值 / 权利金，非概率），按到期日分色展示 |
 
 > 详细的公式推导与使用说明请参阅 [USER_GUIDE.md](USER_GUIDE.md)。
 
@@ -152,7 +152,7 @@ python app.py
 | 后端 | Flask 3.1, Python 3.11 |
 | 数据源 | yfinance |
 | 数据库 | SQLite |
-| 图表 | matplotlib, Chart.js (前端 Odds) |
+| 图表 | matplotlib, Chart.js (前端 Payoff Ratio) |
 | 调度 | APScheduler（可选，仅 `AUTO_UPDATE_TICKERS` 启用时需要） |
 | 前端 | 原生 JavaScript, CSS, Jinja2 |
 | 部署 | Gunicorn / Netlify |

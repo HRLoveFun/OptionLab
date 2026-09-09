@@ -7,7 +7,7 @@ Context:
   - Provides HTML-table helpers that delegate to core.options.chain.html_tables.
 Contracts:
   - OptionsChainAnalyzer(ticker, snapshot=None)
-  - get_odds_with_vol_context(spot, target_pct, chain, expiries) -> dict
+  - get_expiry_probability_context(spot, target_pct, chain, expiries) -> dict
 Dependencies UPWARD:
   - core.options.chain.metrics, term_structure, liquidity, html_tables
   - core.options.charts.*
@@ -49,13 +49,13 @@ def _norm_cdf(x: float) -> float:
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
 
 
-def get_odds_with_vol_context(
+def get_expiry_probability_context(
     spot: float,
     target_pct: float,
     chain: dict,
     expiries: list,
 ) -> dict:
-    """Return odds data enriched with nearest-expiry ATM IV context.
+    """Return probability-of-touch data enriched with nearest-expiry ATM IV context.
 
     Parameters
     ----------
@@ -72,19 +72,19 @@ def get_odds_with_vol_context(
     -------
     dict
         ``{"spot", "target_pct", "nearest_expiry", "atm_iv_pct", "dte",
-        "prob_touch", "odds": [...]}``.
+        "prob_touch", "metrics": [...]}``.
     """
     if not expiries or not chain:
-        return {"odds": [], "message": "no_chain_data"}
+        return {"metrics": [], "message": "no_chain_data"}
 
     nearest = expiries[0]
     if nearest not in chain:
-        return {"odds": [], "message": "no_nearest_expiry"}
+        return {"metrics": [], "message": "no_nearest_expiry"}
 
     puts = chain[nearest]["puts"]
     atm_iv = atm_iv_for_expiry(puts, spot)
     if atm_iv is None:
-        return {"odds": [], "message": "no_atm_iv"}
+        return {"metrics": [], "message": "no_atm_iv"}
 
     days_to_expiry = max(dte(nearest), 1)
     T = days_to_expiry / 365
@@ -99,7 +99,7 @@ def get_odds_with_vol_context(
         "atm_iv_pct": round(atm_iv * 100, 2),
         "dte": days_to_expiry,
         "prob_touch": round(prob_touch, 4),
-        "odds": [
+        "metrics": [
             {
                 "metric": "probability_of_touch",
                 "value": round(prob_touch, 4),

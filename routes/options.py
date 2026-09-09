@@ -5,7 +5,7 @@ Routes:
   POST /api/preload_option_chain
   GET  /api/options_chart/iv_smile
   GET  /api/options_chart/oi_profile
-  POST /api/odds_with_vol
+  POST /api/expiry_probability
   POST /api/simulate_expiry
 """
 
@@ -210,9 +210,14 @@ def oi_profile_json():
         )
 
 
-@bp.route("/api/odds_with_vol", methods=["POST"])
-def odds_with_vol():
-    """Return odds data enriched with implied realized vol vs ATM IV."""
+@bp.route("/api/expiry_probability", methods=["POST"])
+def expiry_probability():
+    """Return probability-of-touch data enriched with ATM IV context.
+
+    Vol-adjusted probabilities (touch / ITM), distinct from the Payoff Ratio
+    tab's per-strike return multiples. Its DOM container is not currently wired
+    into the partial — see ADR 0010.
+    """
     data = request.get_json(silent=True) or {}
     raw_ticker = data.get("ticker", "").strip().upper()
     if not raw_ticker:
@@ -231,12 +236,12 @@ def odds_with_vol():
     except ValueError:
         ticker = raw_ticker
     try:
-        result = OptionsChainService.odds_with_vol(ticker, target_pct)
+        result = OptionsChainService.expiry_probability(ticker, target_pct)
         return jsonify({"status": "ok", **result})
     except Exception as e:
-        logger.error("odds_with_vol error: %s", e, exc_info=True)
+        logger.error("expiry_probability error: %s", e, exc_info=True)
         return (
-            jsonify({"status": "error", "code": "odds_failed", "message": "计算胜率失败，请稍后重试"}),
+            jsonify({"status": "error", "code": "probability_failed", "message": "计算胜率失败，请稍后重试"}),
             500,
         )
 

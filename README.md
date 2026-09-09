@@ -36,7 +36,7 @@ app.py                       Flask entry point — registers blueprints, middlew
     ├── core.py                /, /render/*, form handling
     ├── data.py                /api/data/*, /health/*
     ├── market.py              /api/signals, /api/market_review_ts
-    ├── options.py             /api/option_chain, /api/options_chart/*, /api/odds_with_vol
+    ├── options.py             /api/option_chain, /api/options_chart/*, /api/expiry_probability
     ├── portfolio.py           /api/portfolio_analysis, /api/portfolio/positions
     ├── regime.py              /api/regime/*
     └── strategies.py          /api/strategies, /api/strategy/*
@@ -132,7 +132,7 @@ one elected worker) starts the APScheduler daily/monthly jobs.
 | `core_bp` | [`routes/core.py`](routes/core.py) | `GET /`, `POST /`, `/render/*` |
 | `data_bp` | [`routes/data.py`](routes/data.py) | `/api/data/seed`, `/health/*` |
 | `market_bp` | [`routes/market.py`](routes/market.py) | `/api/signals`, `/api/market_review_ts` |
-| `options_bp` | [`routes/options.py`](routes/options.py) | `/api/option_chain`, `/api/options_chart/*`, `/api/odds_with_vol` |
+| `options_bp` | [`routes/options.py`](routes/options.py) | `/api/option_chain`, `/api/options_chart/*`, `/api/expiry_probability` |
 | `portfolio_bp` | [`routes/portfolio.py`](routes/portfolio.py) | `/api/portfolio_analysis`, `/api/portfolio/positions` |
 | `regime_bp` | [`routes/regime.py`](routes/regime.py) | `/api/regime/*` |
 | `strategies_bp` | [`routes/strategies.py`](routes/strategies.py) | `/api/strategies`, `/api/strategy/*` |
@@ -279,7 +279,7 @@ Repo-maintenance helpers, all standalone:
 | `GET\|POST /api/portfolio/positions`, `POST /api/portfolio/positions/<id>/close`, `GET /api/portfolio/snapshot` | Tracked-position CRUD + live snapshot. |
 | `GET /api/strategies`, `POST /api/strategy/{analyze,build_from_chain}` | Strategy catalogue + analytics. |
 | `GET /api/signals` | Pure-OHLCV signal vector. |
-| `POST /api/market_review_ts`, `POST /api/odds_with_vol` | Time-series payloads for browser-side Chart.js. |
+| `POST /api/market_review_ts`, `POST /api/expiry_probability` | Time-series payloads for browser-side Chart.js. |
 | `GET /api/regime/{current,history}`, `POST /api/regime/backfill` | Regime read + backfill. |
 | `POST /api/data/seed` | One-shot historical backfill (rate-limited). |
 | `GET /health/data`, `GET /health/status` | DB freshness + process health. |

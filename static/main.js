@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const actionHandlers = {
         'game-run': () => runGameAnalysis(),
         'oc-reload': () => loadOptionChain(),
-        'odds-reload': () => loadOddsData(),
+        'payoff-ratio-reload': () => loadPayoffRatioData(),
         'sim-run': () => runSimulation(),
     };
     document.addEventListener('click', function (ev) {

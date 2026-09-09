@@ -8,7 +8,7 @@ import math
 
 from core.options.chain.analyzer import (
     OptionsChainAnalyzer,
-    get_odds_with_vol_context,
+    get_expiry_probability_context,
     liquidity_score,
 )
 from core.options.chain.filters import filter_option_chain
@@ -328,10 +328,10 @@ class OptionsChainService:
         }
 
     @staticmethod
-    def odds_with_vol(ticker: str, target_pct: float) -> dict:
-        """Probability-of-touch odds enriched with ATM IV context."""
+    def expiry_probability(ticker: str, target_pct: float) -> dict:
+        """Probability-of-touch enriched with ATM IV context."""
         analyzer = _build_analyzer(ticker)
-        return get_odds_with_vol_context(
+        return get_expiry_probability_context(
             spot=analyzer.spot,
             target_pct=target_pct,
             chain=analyzer.chain,

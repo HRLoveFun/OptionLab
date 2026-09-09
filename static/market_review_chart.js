@@ -431,12 +431,12 @@ function switchTickerContext(ticker) {
     }
 
     // Update the global ticker input so existing tab-load handlers
-    // (Option Chain, Odds, Regime) target the new ticker on activation.
+    // (Option Chain, Payoff Ratio, Regime) target the new ticker on activation.
     const tickerInput = document.getElementById('ticker');
     if (tickerInput) tickerInput.value = ticker;
     if (window.appState && window.appState.tabFlags) {
         // Force re-fetch of lazy-loaded tabs against the new ticker.
-        ['option_chain', 'odds', 'regime', 'market_review'].forEach(k => window.appState.tabFlags.reset(k));
+        ['option_chain', 'payoff_ratio', 'regime', 'market_review'].forEach(k => window.appState.tabFlags.reset(k));
     }
 
     // Reload the JS-driven Market Review chart for the new ticker if its tab

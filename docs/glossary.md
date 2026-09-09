@@ -42,6 +42,17 @@ The full set of calls + puts at every strike for a given expiry. yfinance return
 ### Mid Price
 `(bid + ask) / 2`. We use mid for IV calc and PnL marking. **Beware**: when `bid == 0` (illiquid strike), mid is misleading; pre-filter before computing.
 
+### Payoff Ratio
+The **Payoff Ratio** tab (formerly "Expiry Odds", ADR 0010) plots, per strike and
+expiry, `max(intrinsic_at_target, 0) / premium` — a **gross** return multiple:
+`0x` = the option expires worthless (whole premium lost), `1x` = breakeven
+(dashed reference line on the chart), `2.5x` = 2.5× the premium back (+150% net).
+`intrinsic_at_target` uses `spot × (1 ± est_move%)` as the assumed terminal
+price; the long option is priced at the **ask**. **Not probability-weighted** —
+a cheap far-OTM strike shows a high ratio *because* the chance of reaching the
+target is low. For a probability view use `est_move` alongside IV, or the
+(currently dormant) `/api/expiry_probability` touch-probability endpoint.
+
 ## Market Regime
 
 ### Regime

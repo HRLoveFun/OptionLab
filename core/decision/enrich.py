@@ -30,7 +30,9 @@ def enrich_contract(contract: dict, budget: float, spot_price: float, target_mov
     intrinsic_at_target = max(contract["strike"] - target_price, 0)
     payoff_at_target = intrinsic_at_target - mid
     total_payoff = payoff_at_target * 100 * contracts_n
-    odds_ratio = total_payoff / budget if budget > 0 else 0.0
+    # Net return on the deployed budget if the underlying reaches target_price.
+    # Not probability-weighted (see ADR 0010) — kept as `payoff_ratio`, not "odds".
+    payoff_ratio = total_payoff / budget if budget > 0 else 0.0
     theta = contract["theta"]
     vega = contract["vega"]
     vega_theta_ratio = (abs(vega) / abs(theta)) if theta != 0 else float("inf")
@@ -42,7 +44,7 @@ def enrich_contract(contract: dict, budget: float, spot_price: float, target_mov
         "target_price": round(target_price, 2),
         "payoff_at_target": round(payoff_at_target, 2),
         "total_payoff": round(total_payoff, 2),
-        "odds_ratio": round(odds_ratio, 2),
+        "payoff_ratio": round(payoff_ratio, 2),
         "vega_theta_ratio": round(vega_theta_ratio, 2) if math.isfinite(vega_theta_ratio) else 999.99,
         "vega_per_dollar": round(vega_per_dollar, 4),
         "implied_win_rate": round(implied_win_rate, 4),

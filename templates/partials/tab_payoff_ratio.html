@@ -1,0 +1,84 @@
+<div class="tab-content" id="tab-payoff-ratio" x-data="panelState('payoff_ratio')">
+    <div class="toolbar">
+        <div class="panel-header" style="margin:0;">
+            <h2>Payoff Ratio</h2>
+            <p class="panel-desc">Return multiple per strike if the underlying hits your target by expiry (not probability-weighted).</p>
+        </div>
+        <div class="toolbar-actions">
+            <button type="button" class="btn-primary" data-action="payoff-ratio-reload"
+                    :disabled="phase === 'loading'">
+                <template x-if="phase !== 'loading'"><span>Reload</span></template>
+                <template x-if="phase === 'loading'"><span>Loading…</span></template>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="panel-banner panel-banner--loading" x-show="phase === 'loading'" x-cloak>
+        <span x-text="message || 'Loading payoff data...'"></span>
+    </div>
+
+    <!-- Error -->
+    <div class="panel-banner panel-banner--error" x-show="phase === 'error'" x-cloak>
+        <span x-text="message"></span>
+    </div>
+
+    <!-- Loaded content -->
+    <div x-show="phase === 'loaded'" x-cloak>
+        <div class="pr-controls" role="group" aria-label="Payoff ratio chart controls">
+            <div class="pr-control">
+                <label class="pr-control__label" for="pr-target-pct">est. move
+                    <span class="label-unit">% &times; Spot</span></label>
+                <div class="pr-control__row">
+                    <input type="range" id="pr-target-range" class="pr-range__input" min="0" max="50" step="1"
+                           value="10" aria-label="Estimated move, percent of spot" />
+                    <input type="number" id="pr-target-pct" class="oc-target-input pr-control__num" value="10"
+                           min="0" max="50" step="1" />
+                </div>
+                <span id="pr-target-value" class="oc-target-value"></span>
+            </div>
+            <div class="pr-control">
+                <label class="pr-control__label" id="pr-dte-label">expiry window
+                    <span class="label-unit">days to expiry</span></label>
+                <div class="pr-control__row">
+                    <input type="number" id="pr-dte-lo-num" class="oc-target-input pr-control__num"
+                           min="0" max="90" step="1" value="0" aria-label="Earliest days to expiry" />
+                    <div class="pr-range-dual" role="group" aria-labelledby="pr-dte-label">
+                        <div class="pr-range-dual__track"><div class="pr-range-dual__fill" id="pr-dte-fill"></div></div>
+                        <input type="range" id="pr-dte-lo" class="pr-range__input" min="0" max="90" step="1"
+                               value="0" aria-label="Earliest days to expiry" />
+                        <input type="range" id="pr-dte-hi" class="pr-range__input" min="0" max="90" step="1"
+                               value="90" aria-label="Latest days to expiry" />
+                    </div>
+                    <input type="number" id="pr-dte-hi-num" class="oc-target-input pr-control__num"
+                           min="0" max="90" step="1" value="90" aria-label="Latest days to expiry" />
+                </div>
+            </div>
+        </div>
+        <div id="pr-charts-wrapper">
+            <div class="content-card">
+                <div class="content-card-title">Long Call / Long Put Payoff Ratio</div>
+                <div class="chart-wrapper chart-wrapper--payoff">
+                    <div class="pr-group-toggles" role="group" aria-label="Payoff ratio curve groups">
+                        <button type="button" class="btn-toggle btn-sm active" id="pr-toggle-call"
+                                data-pr-group="call" aria-pressed="true">
+                            <span class="pr-group-line pr-group-line--call" aria-hidden="true"></span>Call
+                        </button>
+                        <button type="button" class="btn-toggle btn-sm active" id="pr-toggle-put"
+                                data-pr-group="put" aria-pressed="true">
+                            <span class="pr-group-line pr-group-line--put" aria-hidden="true"></span>Put
+                        </button>
+                    </div>
+                    <canvas id="pr-combined-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty / idle -->
+    <div class="empty-state" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
+
+        <p x-show="phase === 'idle'">Set a ticker in <strong>Parameter</strong> tab — payoff data loads automatically when you switch to this tab.</p>
+        <p x-show="phase === 'empty'" x-text="message || 'No valid option data to compute payoff ratios.'"></p>
+    </div>
+</div>

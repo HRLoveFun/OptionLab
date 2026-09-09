@@ -1682,16 +1682,16 @@ body {
 }
 
 /* ============================================================
-   Odds Tab – one combined chart (Call solid + Put dashed).
+   Payoff Ratio Tab – one combined chart (Call solid + Put dashed).
    The Call/Put switches sit as an overlay in the plot's
    top-left corner, so the chart wrapper must be a positioning
    context.
    ============================================================ */
-.chart-wrapper--odds {
+.chart-wrapper--payoff {
     position: relative;
 }
 
-.odds-group-toggles {
+.pr-group-toggles {
     position: absolute;
     top: 1.5rem;
     left: 3rem;
@@ -1705,19 +1705,19 @@ body {
     box-shadow: var(--shadow);
 }
 
-.odds-group-toggles .btn-toggle {
+.pr-group-toggles .btn-toggle {
     display: inline-flex;
     align-items: center;
     gap: .35rem;
 }
 
-.odds-group-toggles .btn-toggle.is-disabled {
+.pr-group-toggles .btn-toggle.is-disabled {
     opacity: .4;
     cursor: not-allowed;
 }
 
 /* Solid / dashed line sample echoing the curve style of each group */
-.odds-group-line {
+.pr-group-line {
     width: 16px;
     height: 0;
     border-top-width: 2px;
@@ -1725,19 +1725,19 @@ body {
     border-top-color: currentColor;
 }
 
-.odds-group-line--put {
+.pr-group-line--put {
     border-top-style: dashed;
 }
 
 @media (max-width: 640px) {
-    .odds-group-toggles {
+    .pr-group-toggles {
         top: 1rem;
         left: 1.75rem;
     }
 }
 
-/* ── Odds chart control strip: est. move slider + DTE window slider ── */
-.odds-controls {
+/* ── Payoff ratio chart control strip: est. move slider + DTE window slider ── */
+.pr-controls {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -1745,7 +1745,7 @@ body {
     margin-bottom: 1rem;
 }
 
-.odds-control {
+.pr-control {
     display: flex;
     flex-direction: column;
     gap: .4rem;
@@ -1755,12 +1755,12 @@ body {
 }
 
 /* Number inputs flanking the sliders — fixed width, don't stretch in the row */
-.odds-control__num {
+.pr-control__num {
     flex: 0 0 auto;
     width: 3.75rem;
 }
 
-.odds-control__label {
+.pr-control__label {
     font-size: .72rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -1768,23 +1768,23 @@ body {
     color: var(--slate-500);
 }
 
-.odds-control__row {
+.pr-control__row {
     display: flex;
     align-items: center;
     gap: .7rem;
 }
 
-.odds-control__row .odds-range__input,
-.odds-control__row .odds-range-dual {
+.pr-control__row .pr-range__input,
+.pr-control__row .pr-range-dual {
     flex: 1 1 auto;
 }
 
-.odds-control > .oc-target-value {
+.pr-control > .oc-target-value {
     white-space: normal;
 }
 
 /* Range inputs — custom thumb, thin rounded track, theme-aware. */
-.odds-range__input {
+.pr-range__input {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -1794,19 +1794,19 @@ body {
     cursor: pointer;
 }
 
-.odds-range__input::-webkit-slider-runnable-track {
+.pr-range__input::-webkit-slider-runnable-track {
     height: 4px;
     border-radius: 999px;
     background: var(--slate-300);
 }
 
-.odds-range__input::-moz-range-track {
+.pr-range__input::-moz-range-track {
     height: 4px;
     border-radius: 999px;
     background: var(--slate-300);
 }
 
-.odds-range__input::-webkit-slider-thumb {
+.pr-range__input::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 16px;
@@ -1818,7 +1818,7 @@ body {
     box-shadow: 0 1px 3px rgb(0 0 0 / .25);
 }
 
-.odds-range__input::-moz-range-thumb {
+.pr-range__input::-moz-range-thumb {
     width: 16px;
     height: 16px;
     border-radius: 50%;
@@ -1827,34 +1827,34 @@ body {
     box-shadow: 0 1px 3px rgb(0 0 0 / .25);
 }
 
-.odds-range__input::-moz-focus-outer {
+.pr-range__input::-moz-focus-outer {
     border: 0;
 }
 
-.odds-range__input:focus-visible {
+.pr-range__input:focus-visible {
     outline: none;
 }
 
-.odds-range__input:focus-visible::-webkit-slider-thumb {
+.pr-range__input:focus-visible::-webkit-slider-thumb {
     outline: 2px solid var(--blue);
     outline-offset: 2px;
 }
 
-.odds-range__input:focus-visible::-moz-range-thumb {
+.pr-range__input:focus-visible::-moz-range-thumb {
     outline: 2px solid var(--blue);
     outline-offset: 2px;
 }
 
 /* Dual-thumb slider (DTE window): two range inputs stacked over one track;
    only the thumbs take pointer events so both stay grabbable. */
-.odds-range-dual {
+.pr-range-dual {
     position: relative;
     width: 100%;
     min-width: 170px;
     height: 28px;
 }
 
-.odds-range-dual .odds-range__input {
+.pr-range-dual .pr-range__input {
     position: absolute;
     left: 0;
     right: 0;
@@ -1862,23 +1862,23 @@ body {
     pointer-events: none;
 }
 
-.odds-range-dual .odds-range__input::-webkit-slider-runnable-track {
+.pr-range-dual .pr-range__input::-webkit-slider-runnable-track {
     background: transparent;
 }
 
-.odds-range-dual .odds-range__input::-moz-range-track {
+.pr-range-dual .pr-range__input::-moz-range-track {
     background: transparent;
 }
 
-.odds-range-dual .odds-range__input::-webkit-slider-thumb {
+.pr-range-dual .pr-range__input::-webkit-slider-thumb {
     pointer-events: auto;
 }
 
-.odds-range-dual .odds-range__input::-moz-range-thumb {
+.pr-range-dual .pr-range__input::-moz-range-thumb {
     pointer-events: auto;
 }
 
-.odds-range-dual__track {
+.pr-range-dual__track {
     position: absolute;
     left: 0;
     right: 0;
@@ -1890,7 +1890,7 @@ body {
     pointer-events: none;
 }
 
-.odds-range-dual__fill {
+.pr-range-dual__fill {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -3325,7 +3325,7 @@ textarea:focus-visible,
 }
 
 /* .oc-target-input hardcodes #fff / #000 for the light theme — needs a full
-   dark repaint, not just a focus tweak (used on the Odds + Option-Chain tabs). */
+   dark repaint, not just a focus tweak (used on the Payoff Ratio + Option-Chain tabs). */
 :root:not([data-theme="light"]) .oc-target-input {
     background: #141414;
     color: var(--slate-900);

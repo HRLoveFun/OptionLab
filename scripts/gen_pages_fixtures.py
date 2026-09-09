@@ -1,8 +1,8 @@
 """Deterministic Pages fixtures (no network, no yfinance).
 
 Writes (committed to site/fixtures/):
-  - expiry_calendar.json    — stdlib mirror of core calendar (parity: tests/test_pages_fixtures.py)
-  - odds_with_vol.nvda.json — demo vol-context table derived from the committed chain fixture
+  - expiry_calendar.json          — stdlib mirror of core calendar (parity: tests/test_pages_fixtures.py)
+  - expiry_probability.nvda.json  — demo vol-context table derived from the committed chain fixture
 
 Live-data fixtures (option_chain, market_review_ts, regime_*, validate_tickers)
 are refreshed by scripts/build_pages_site.py --refresh-snapshot instead.
@@ -107,11 +107,11 @@ def gen_calendar() -> dict:
     return {"status": "ok", "reference_date": REF_DATE, "expirations": exps}
 
 
-def gen_odds(target_pct: float = 10.0) -> dict:
+def gen_expiry_probability(target_pct: float = 10.0) -> dict:
     """Vol-context demo table derived from the COMMITTED chain fixture.
 
-    WHY synthetic (not the service): the live /api/odds_with_vol shape
-    ({spot, atm_iv_pct, prob_touch, odds}) has no vol_context/odds_by_expiry,
+    WHY synthetic (not the service): the live /api/expiry_probability shape
+    ({spot, atm_iv_pct, prob_touch, metrics}) has no vol_context/probability_by_expiry,
     so the tab's Module-4B table renders empty against the real backend too.
     This fixture keeps the same demo table working with whichever chain
     (synthetic or live snapshot) is committed.
@@ -151,14 +151,14 @@ def gen_odds(target_pct: float = 10.0) -> dict:
             "prob_above_target": 0.214,
             "prob_below_target": 0.196,
         },
-        "odds_by_expiry": rows,
+        "probability_by_expiry": rows,
         "sample": True,
         "sample_note": "Demo vol-context table for the GitHub Pages site.",
     }
 
 
 def main() -> None:
-    """Write the deterministic fixtures (expiry calendar + odds demo table).
+    """Write the deterministic fixtures (expiry calendar + probability demo table).
 
     Live-data fixtures (option_chain, market_review_ts, regime, validate)
     are refreshed by scripts/build_pages_site.py --refresh-snapshot and are
@@ -166,7 +166,7 @@ def main() -> None:
     """
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "expiry_calendar.json").write_text(json.dumps(gen_calendar(), indent=2) + "\n")
-    (OUT_DIR / "odds_with_vol.nvda.json").write_text(json.dumps(gen_odds(), indent=2) + "\n")
+    (OUT_DIR / "expiry_probability.nvda.json").write_text(json.dumps(gen_expiry_probability(), indent=2) + "\n")
     print(f"wrote deterministic fixtures to {OUT_DIR}")
 
 

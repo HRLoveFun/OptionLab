@@ -59,6 +59,7 @@ site/index.html
 site/static/
 site/market-review/index.html
 site/odds/index.html
+site/payoff-ratio/index.html
 site/option-chain/index.html
 site/option-pricing-matrix/index.html
 site/sim/index.html

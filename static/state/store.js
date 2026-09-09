@@ -4,7 +4,7 @@
  * `let _ocChainData`, etc.) with a single `window.appState` namespace.
  *
  * Design:
- *   - Each sub-module (chainCache, optionChain, oddsChain, tabFlags, aborts)
+ *   - Each sub-module (chainCache, optionChain, payoffRatio, tabFlags, aborts)
  *     attaches itself onto `window.appState.<name>` after this file loads.
  *   - State changes emit `state:<key>` events on the shared bus so components
  *     can react instead of polling globals.
@@ -28,7 +28,7 @@
         // Sub-modules register themselves here. Documented for discoverability:
         //   chainCache  -> state/chainCacheState.js
         //   optionChain -> state/optionChainState.js
-        //   oddsChain   -> state/oddsChainState.js
+        //   payoffRatio -> state/payoffRatioState.js
         //   tabFlags    -> state/tabFlagsState.js
         //   aborts      -> state/abortRegistry.js
     };

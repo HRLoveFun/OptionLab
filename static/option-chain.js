@@ -12,7 +12,7 @@ const _ocState = () => window.appState.optionChain;
 const _ocPanel = (phase, opts) => window.appState.panels.set('option_chain', phase, opts);
 
 /* Pages fixture fallback: try the live API first, then the committed NVDA
- * snapshot so the chain / odds tabs stay interactive on GitHub Pages. */
+ * snapshot so the chain / payoff-ratio tabs stay interactive on GitHub Pages. */
 function _pagesFixtureCandidates(name) {
     if (window.PagesSample && typeof window.PagesSample.fixture === 'function') {
         return [window.PagesSample.fixture(name), '../fixtures/' + name];
@@ -287,66 +287,66 @@ function _ocRenderChain(calls, puts) {
 
 
 /* ============================================================
-   Odds Tab – Line charts for Long Call / Long Put odds
+   Payoff Ratio Tab – Long Call / Long Put payoff ratio per strike
    ============================================================ */
 
-// State (data + abort) is encapsulated in static/state/oddsChainState.js.
-// UI phase driven via appState.panels.set('odds', ...).
-const _oddsState = () => window.appState.oddsChain;
-const _oddsPanel = (phase, opts) => window.appState.panels.set('odds', phase, opts);
+// State (data + abort) is encapsulated in static/state/payoffRatioState.js.
+// UI phase driven via appState.panels.set('payoff_ratio', ...).
+const _prState = () => window.appState.payoffRatio;
+const _prPanel = (phase, opts) => window.appState.panels.set('payoff_ratio', phase, opts);
 // Single combined chart: Call curves (solid) + Put curves (dashed).
-let _oddsChart = null;
+let _prChart = null;
 
 // Palette for expiration lines
-const ODDS_COLORS = [
+const PAYOFF_COLORS = [
     '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
     '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
     '#14b8a6', '#e11d48', '#a855f7', '#0ea5e9', '#d946ef',
 ];
 
 // Coalesce slider-driven re-renders into one per frame (a drag fires many
-// `input` events and _oddsRenderCharts rebuilds the whole chart).
-let _oddsRenderRaf = 0;
-function _oddsScheduleRender() {
-    if (!_oddsState().getData()) return;
-    if (_oddsRenderRaf) return;
-    _oddsRenderRaf = window.requestAnimationFrame(function () {
-        _oddsRenderRaf = 0;
-        _oddsRenderCharts();
+// `input` events and _prRenderCharts rebuilds the whole chart).
+let _prRenderRaf = 0;
+function _prScheduleRender() {
+    if (!_prState().getData()) return;
+    if (_prRenderRaf) return;
+    _prRenderRaf = window.requestAnimationFrame(function () {
+        _prRenderRaf = 0;
+        _prRenderCharts();
     });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    const tgt = document.getElementById('odds-target-pct');
-    const tgtRange = document.getElementById('odds-target-range');
+    const tgt = document.getElementById('pr-target-pct');
+    const tgtRange = document.getElementById('pr-target-range');
     if (tgt) {
         tgt.addEventListener('input', function () {
-            if (tgtRange) tgtRange.value = _oddsClampTarget(tgt.value);
-            _oddsUpdateTargetDisplay();
-            if (_oddsState().getData()) _oddsRenderCharts();
+            if (tgtRange) tgtRange.value = _prClampTarget(tgt.value);
+            _prUpdateTargetDisplay();
+            if (_prState().getData()) _prRenderCharts();
         });
     }
     if (tgtRange) {
         tgtRange.addEventListener('input', function () {
             if (tgt) tgt.value = tgtRange.value;
-            _oddsUpdateTargetDisplay();
-            _oddsScheduleRender();
+            _prUpdateTargetDisplay();
+            _prScheduleRender();
         });
     }
 
     // Days-to-expiry window — dual-thumb slider + a number box on each side,
     // one-way link to the legend. The sliders stay the source of truth; the
     // number boxes are a mirror and an alternate way to type a bound.
-    const dteLo = document.getElementById('odds-dte-lo');
-    const dteHi = document.getElementById('odds-dte-hi');
-    const dteLoNum = document.getElementById('odds-dte-lo-num');
-    const dteHiNum = document.getElementById('odds-dte-hi-num');
+    const dteLo = document.getElementById('pr-dte-lo');
+    const dteHi = document.getElementById('pr-dte-hi');
+    const dteLoNum = document.getElementById('pr-dte-lo-num');
+    const dteHiNum = document.getElementById('pr-dte-hi-num');
     [dteLo, dteHi].forEach(function (sl) {
         if (!sl) return;
         sl.addEventListener('input', function () {
-            _oddsNormalizeDteSlider(sl === dteHi);
-            _oddsSyncDteControls();
-            _oddsScheduleRender();
+            _prNormalizeDteSlider(sl === dteHi);
+            _prSyncDteControls();
+            _prScheduleRender();
         });
     });
     [[dteLoNum, dteLo, false], [dteHiNum, dteHi, true]].forEach(function (pair) {
@@ -356,17 +356,17 @@ document.addEventListener('DOMContentLoaded', function () {
             const v = parseInt(numEl.value, 10);
             if (!isFinite(v)) return;
             rangeEl.value = String(Math.min(90, Math.max(0, v)));
-            _oddsNormalizeDteSlider(isHi);
-            _oddsSyncDteControls();
-            _oddsScheduleRender();
+            _prNormalizeDteSlider(isHi);
+            _prSyncDteControls();
+            _prScheduleRender();
         });
         // Snap a bad / out-of-range entry back on blur.
-        numEl.addEventListener('change', _oddsSyncDteControls);
+        numEl.addEventListener('change', _prSyncDteControls);
     });
-    _oddsSyncDteControls();
+    _prSyncDteControls();
 
     // Call / Put group switches on the combined chart (top-left overlay).
-    ['odds-toggle-call', 'odds-toggle-put'].forEach(function (id) {
+    ['pr-toggle-call', 'pr-toggle-put'].forEach(function (id) {
         const btn = document.getElementById(id);
         if (!btn) return;
         btn.addEventListener('click', function () {
@@ -374,13 +374,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const on = btn.getAttribute('aria-pressed') === 'true';
             btn.setAttribute('aria-pressed', on ? 'false' : 'true');
             btn.classList.toggle('active', !on);
-            _oddsApplyGroupVisibility();
+            _prApplyGroupVisibility();
         });
     });
 });
 
 // est. move is capped at the slider's 0–50 range so the two stay in sync.
-function _oddsClampTarget(v) {
+function _prClampTarget(v) {
     const n = parseFloat(v);
     if (!isFinite(n)) return 0;
     return Math.min(50, Math.max(0, n));
@@ -388,9 +388,9 @@ function _oddsClampTarget(v) {
 
 // Keep lo <= hi by clamping whichever thumb just crossed the other
 // (the thumb you are not dragging stays put).
-function _oddsNormalizeDteSlider(hiMoved) {
-    const lo = document.getElementById('odds-dte-lo');
-    const hi = document.getElementById('odds-dte-hi');
+function _prNormalizeDteSlider(hiMoved) {
+    const lo = document.getElementById('pr-dte-lo');
+    const hi = document.getElementById('pr-dte-hi');
     if (!lo || !hi) return;
     const a = parseInt(lo.value, 10);
     const b = parseInt(hi.value, 10);
@@ -401,9 +401,9 @@ function _oddsNormalizeDteSlider(hiMoved) {
 }
 
 // Current [lo, hi] DTE window; defaults to "everything" when the slider is absent.
-function _oddsDteWindow() {
-    const lo = document.getElementById('odds-dte-lo');
-    const hi = document.getElementById('odds-dte-hi');
+function _prDteWindow() {
+    const lo = document.getElementById('pr-dte-lo');
+    const hi = document.getElementById('pr-dte-hi');
     if (!lo || !hi) return [0, Infinity];
     let a = parseInt(lo.value, 10);
     let b = parseInt(hi.value, 10);
@@ -413,25 +413,25 @@ function _oddsDteWindow() {
 }
 
 // Mirror the slider state onto the fill bar and the two number boxes.
-function _oddsSyncDteControls() {
-    const lo = document.getElementById('odds-dte-lo');
-    const hi = document.getElementById('odds-dte-hi');
+function _prSyncDteControls() {
+    const lo = document.getElementById('pr-dte-lo');
+    const hi = document.getElementById('pr-dte-hi');
     if (!lo || !hi) return;
-    const [a, b] = _oddsDteWindow();
-    const fill = document.getElementById('odds-dte-fill');
+    const [a, b] = _prDteWindow();
+    const fill = document.getElementById('pr-dte-fill');
     if (fill) {
         const span = (parseInt(hi.max, 10) || 90) - (parseInt(hi.min, 10) || 0) || 1;
         fill.style.left = (100 * a / span) + '%';
         fill.style.right = (100 * (span - b) / span) + '%';
     }
-    const loNum = document.getElementById('odds-dte-lo-num');
-    const hiNum = document.getElementById('odds-dte-hi-num');
+    const loNum = document.getElementById('pr-dte-lo-num');
+    const hiNum = document.getElementById('pr-dte-hi-num');
     if (loNum && document.activeElement !== loNum) loNum.value = String(a);
     if (hiNum && document.activeElement !== hiNum) hiNum.value = String(b);
 }
 
 // Whole days from local midnight today to the expiration date.
-function _oddsDte(expStr) {
+function _prDte(expStr) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const exp = new Date(expStr + 'T00:00:00');
@@ -441,13 +441,13 @@ function _oddsDte(expStr) {
 // Is the given curve group ('call' | 'put') currently switched on?
 // Reflects the switch's aria-pressed state; a disabled switch (empty group)
 // keeps its state so it restores correctly once that group has data again.
-function _oddsGroupOn(group) {
-    const btn = document.getElementById(group === 'put' ? 'odds-toggle-put' : 'odds-toggle-call');
+function _prGroupOn(group) {
+    const btn = document.getElementById(group === 'put' ? 'pr-toggle-put' : 'pr-toggle-call');
     return btn ? btn.getAttribute('aria-pressed') !== 'false' : true;
 }
 
 // Enable/disable a group switch (disabled = that group has no curves)
-function _oddsSetToggleEnabled(id, enabled) {
+function _prSetToggleEnabled(id, enabled) {
     const btn = document.getElementById(id);
     if (!btn) return;
     btn.disabled = !enabled;
@@ -455,21 +455,21 @@ function _oddsSetToggleEnabled(id, enabled) {
 }
 
 // Push the Call/Put switch state onto the live chart.
-function _oddsApplyGroupVisibility() {
-    if (!_oddsChart) return;
-    const on = { call: _oddsGroupOn('call'), put: _oddsGroupOn('put') };
-    _oddsChart.data.datasets.forEach(function (ds, i) {
-        _oddsChart.setDatasetVisibility(i, on[ds.oddsGroup] !== false);
+function _prApplyGroupVisibility() {
+    if (!_prChart) return;
+    const on = { call: _prGroupOn('call'), put: _prGroupOn('put') };
+    _prChart.data.datasets.forEach(function (ds, i) {
+        _prChart.setDatasetVisibility(i, on[ds.prGroup] !== false);
     });
-    _oddsChart.update();
+    _prChart.update();
 }
 
-function _oddsUpdateTargetDisplay() {
-    const el = document.getElementById('odds-target-value');
-    const estMove = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
-    const range = document.getElementById('odds-target-range');
-    if (range && document.activeElement !== range) range.value = String(_oddsClampTarget(estMove));
-    const data = _oddsState().getData();
+function _prUpdateTargetDisplay() {
+    const el = document.getElementById('pr-target-value');
+    const estMove = parseFloat((document.getElementById('pr-target-pct') || {}).value) || 0;
+    const range = document.getElementById('pr-target-range');
+    if (range && document.activeElement !== range) range.value = String(_prClampTarget(estMove));
+    const data = _prState().getData();
     const spot = data ? data.spot : null;
     if (!el) return;
     if (spot !== null && spot !== undefined) {
@@ -481,32 +481,32 @@ function _oddsUpdateTargetDisplay() {
     }
 }
 
-function loadOddsData() {
+function loadPayoffRatioData() {
     const input = document.getElementById('ticker');
     const rawTicker = (input ? input.value : '').trim().toUpperCase();
     // Extract first ticker from potentially comma-separated list
     const ticker = rawTicker.split(/[,\n]+/)[0].trim();
-    const tvEl = document.getElementById('odds-target-value');
+    const tvEl = document.getElementById('pr-target-value');
 
     if (!ticker) {
-        _oddsPanel('error', { message: 'Please enter a ticker symbol in the Parameter tab.' });
+        _prPanel('error', { message: 'Please enter a ticker symbol in the Parameter tab.' });
         return;
     }
 
     if (tvEl) { tvEl.textContent = ''; }
-    _oddsPanel('loading', { message: 'Loading odds data...' });
-    _oddsState().reset();
-    const signal = _oddsState().beginRequest();
+    _prPanel('loading', { message: 'Loading payoff data...' });
+    _prState().reset();
+    const signal = _prState().beginRequest();
 
     // Build URL with config-driven filter params
     const params = new URLSearchParams({ ticker });
     const cfgDte = document.getElementById('cfg-max-dte');
     const cfgMLow = document.getElementById('cfg-moneyness-low');
     const cfgMHigh = document.getElementById('cfg-moneyness-high');
-    // The Odds tab carries its own 0–90d expiry-window slider, so always pull
-    // at least 90 days of expirations regardless of the (lower) global Max DTE.
-    const oddsMaxDte = Math.max(90, parseInt((cfgDte && cfgDte.value) || '0', 10) || 0);
-    params.set('max_dte', String(oddsMaxDte));
+    // The Payoff Ratio tab carries its own 0–90d expiry-window slider, so always
+    // pull at least 90 days of expirations regardless of the (lower) global Max DTE.
+    const prMaxDte = Math.max(90, parseInt((cfgDte && cfgDte.value) || '0', 10) || 0);
+    params.set('max_dte', String(prMaxDte));
     if (cfgMLow && cfgMLow.value) params.set('moneyness_low', cfgMLow.value);
     if (cfgMHigh && cfgMHigh.value) params.set('moneyness_high', cfgMHigh.value);
 
@@ -525,23 +525,23 @@ function loadOddsData() {
             return p.then(data => { _markSampleUsed(data && data.sample_note); return data; });
         })
         .then(data => {
-            if (data.error) { _oddsPanel('error', { message: data.error }); return; }
-            _oddsState().setData(data);
-            _oddsUpdateTargetDisplay();
-            _oddsPanel('loaded', { data });
-            _oddsRenderCharts();
+            if (data.error) { _prPanel('error', { message: data.error }); return; }
+            _prState().setData(data);
+            _prUpdateTargetDisplay();
+            _prPanel('loaded', { data });
+            _prRenderCharts();
         })
         .catch(err => {
             if (err.name === 'AbortError') return;
-            _oddsPanel('error', { message: 'Network error: ' + err.message });
+            _prPanel('error', { message: 'Network error: ' + err.message });
         });
 }
 
-function _oddsRenderCharts() {
-    const data = _oddsState().getData();
+function _prRenderCharts() {
+    const data = _prState().getData();
     if (!data || !data.chain || !data.spot) return;
 
-    const estMove = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
+    const estMove = parseFloat((document.getElementById('pr-target-pct') || {}).value) || 0;
     const spot = data.spot;
     const callTarget = (1 + estMove / 100) * spot;
     const putTarget = (1 - estMove / 100) * spot;
@@ -549,24 +549,29 @@ function _oddsRenderCharts() {
 
     // Build datasets per expiration. Both groups live in one chart:
     // Call curves are solid, Put curves dashed; each Call/Put switch hides
-    // its whole group at once (see _oddsApplyGroupVisibility).
+    // its whole group at once (see _prApplyGroupVisibility).
     const callDatasets = [];
     const putDatasets = [];
-    const callOn = _oddsGroupOn('call');
-    const putOn = _oddsGroupOn('put');
-    const [dteLo, dteHi] = _oddsDteWindow();
+    const callOn = _prGroupOn('call');
+    const putOn = _prGroupOn('put');
+    const [dteLo, dteHi] = _prDteWindow();
     const chainStrikes = new Set();   // every strike in the chain (for the x-axis range)
     let anyRawData = false;   // any priced option at all, before the DTE filter
 
+    // Payoff ratio = gross intrinsic value at the target price / premium paid.
+    // 0x = worthless at expiry (lose the whole premium), 1x = breakeven,
+    // 2.5x = you get back 2.5× the premium. NOT probability-weighted — see
+    // ADR 0010; a cheap far-OTM strike shows a high ratio precisely because
+    // the odds of the underlying reaching the target are low.
     exps.forEach((exp, idx) => {
         const ch = data.chain[exp];
         if (!ch) return;
 
         // Format legend as YYYYMMDD
         const legend = exp.replace(/-/g, '');
-        const color = ODDS_COLORS[idx % ODDS_COLORS.length];
+        const color = PAYOFF_COLORS[idx % PAYOFF_COLORS.length];
         // Days-to-expiry window slider (one-way: legend follows, not vice versa)
-        const dte = _oddsDte(exp);
+        const dte = _prDte(exp);
         const inWindow = dte >= dteLo && dte <= dteHi;
 
         // Calls – use ask price (a long call is bought at the ask)
@@ -576,18 +581,18 @@ function _oddsRenderCharts() {
             chainStrikes.add(c.strike);
             const price = (c.ask != null && c.ask > 0) ? c.ask : c.lastPrice;
             if (!price || price <= 0) return;
-            const payoff = Math.max(callTarget - c.strike, 0);
-            const odd = (payoff - price) / price;
-            // `ask` = the price the odd is computed from (ask, or lastPrice
+            const grossPayoff = Math.max(callTarget - c.strike, 0);
+            const ratio = grossPayoff / price;
+            // `ask` = the price the ratio is computed from (ask, or lastPrice
             // fallback); surfaced in the point tooltip alongside the multiple.
-            callPoints.push({ x: c.strike, y: parseFloat(odd.toFixed(4)), ask: price });
+            callPoints.push({ x: c.strike, y: parseFloat(ratio.toFixed(4)), ask: price });
         });
         if (callPoints.length > 0) anyRawData = true;
         if (callPoints.length > 0 && inWindow) {
             callPoints.sort((a, b) => a.x - b.x);
             callDatasets.push({
                 label: legend + ' C',
-                oddsGroup: 'call',
+                prGroup: 'call',
                 hidden: !callOn,
                 data: callPoints,
                 borderColor: color,
@@ -601,23 +606,23 @@ function _oddsRenderCharts() {
         }
 
         // Puts – use ask price too (a long put is bought at the ask, same as
-        // the call; using bid understates cost and inflates the odd).
+        // the call; using bid understates cost and inflates the ratio).
         const putPoints = [];
         (ch.puts || []).forEach(p => {
             if (p.strike == null) return;
             chainStrikes.add(p.strike);
             const price = (p.ask != null && p.ask > 0) ? p.ask : p.lastPrice;
             if (!price || price <= 0) return;
-            const payoff = Math.max(p.strike - putTarget, 0);
-            const odd = (payoff - price) / price;
-            putPoints.push({ x: p.strike, y: parseFloat(odd.toFixed(4)), ask: price });
+            const grossPayoff = Math.max(p.strike - putTarget, 0);
+            const ratio = grossPayoff / price;
+            putPoints.push({ x: p.strike, y: parseFloat(ratio.toFixed(4)), ask: price });
         });
         if (putPoints.length > 0) anyRawData = true;
         if (putPoints.length > 0 && inWindow) {
             putPoints.sort((a, b) => a.x - b.x);
             putDatasets.push({
                 label: legend + ' P',
-                oddsGroup: 'put',
+                prGroup: 'put',
                 hidden: !putOn,
                 data: putPoints,
                 borderColor: color,
@@ -634,7 +639,7 @@ function _oddsRenderCharts() {
     });
 
     if (!anyRawData) {
-        _oddsPanel('empty', { message: 'No valid option data to compute odds.' });
+        _prPanel('empty', { message: 'No valid option data to compute payoff ratios.' });
         return;
     }
     // callDatasets/putDatasets may still be empty here — that just means the
@@ -678,6 +683,43 @@ function _oddsRenderCharts() {
         }
     };
 
+    // Breakeven horizontal line plugin — payoff ratio == 1 (the target-price
+    // intrinsic value exactly covers the premium). Mirrors spotLinePlugin's
+    // halo-label styling; drawn only when y=1 is inside the plot area.
+    const breakevenLinePlugin = {
+        id: 'breakevenLine',
+        afterDraw(chart) {
+            const xScale = chart.scales.x;
+            const yScale = chart.scales.y;
+            if (!xScale || !yScale) return;
+            const yPx = yScale.getPixelForValue(1);
+            if (yPx < yScale.top || yPx > yScale.bottom) return;
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.beginPath();
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(xScale.left, yPx);
+            ctx.lineTo(xScale.right, yPx);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = 'bold 11px ' + getComputedStyle(document.documentElement).getPropertyValue('--font').trim();
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const label = 'Breakeven 1.0x';
+            const labelX = xScale.left + 6;
+            const lightTheme = document.documentElement.getAttribute('data-theme') === 'light';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = lightTheme ? '#ffffff' : '#141414';
+            ctx.strokeText(label, labelX, yPx);
+            ctx.fillStyle = lightTheme ? '#047857' : '#34d399';
+            ctx.fillText(label, labelX, yPx);
+            ctx.restore();
+        }
+    };
+
     function makeChartOpts({ xMin, xMax } = {}) {
         const xCfg = {
             type: 'linear',
@@ -711,9 +753,9 @@ function _oddsRenderCharts() {
                         font: { size: 11 }, boxWidth: 14, padding: 10,
                         generateLabels: function (chart) {
                             const dsets = chart.data.datasets;
-                            const primary = dsets.some(d => d.oddsGroup === 'call') ? 'call' : 'put';
+                            const primary = dsets.some(d => d.prGroup === 'call') ? 'call' : 'put';
                             return Chart.defaults.plugins.legend.labels.generateLabels(chart)
-                                .filter(it => dsets[it.datasetIndex].oddsGroup === primary)
+                                .filter(it => dsets[it.datasetIndex].prGroup === primary)
                                 .map(it => {
                                     const base = _baseLabel(it.text);
                                     it.text = base;
@@ -747,7 +789,7 @@ function _oddsRenderCharts() {
             scales: {
                 x: xCfg,
                 y: {
-                    title: { display: true, text: 'Odd', font: { size: 12 } },
+                    title: { display: true, text: 'Payoff ratio (× premium)', font: { size: 12 } },
                     ticks: {
                         font: { size: 10 },
                         callback: function (v) { return v.toFixed(1) + 'x'; }
@@ -758,11 +800,11 @@ function _oddsRenderCharts() {
     }
 
     // Destroy existing chart
-    if (_oddsChart) { _oddsChart.destroy(); _oddsChart = null; }
+    if (_prChart) { _prChart.destroy(); _prChart = null; }
 
     // Grey out a switch whose group has no curves to show
-    _oddsSetToggleEnabled('odds-toggle-call', callDatasets.length > 0);
-    _oddsSetToggleEnabled('odds-toggle-put', putDatasets.length > 0);
+    _prSetToggleEnabled('pr-toggle-call', callDatasets.length > 0);
+    _prSetToggleEnabled('pr-toggle-put', putDatasets.length > 0);
 
     // X-axis spans the option chain's own strike range (matches the Option
     // Chain tab), not a band derived from est. move.
@@ -771,39 +813,39 @@ function _oddsRenderCharts() {
     const xRangeMax = strikeVals.length ? Math.max(...strikeVals) : undefined;
 
     // Combined chart – Call curves first, then Put curves
-    const ctx = document.getElementById('odds-combined-chart');
+    const ctx = document.getElementById('pr-combined-chart');
     if (ctx) {
-        _oddsChart = new Chart(ctx, {
+        _prChart = new Chart(ctx, {
             type: 'line',
             data: { datasets: callDatasets.concat(putDatasets) },
             options: makeChartOpts({ xMin: xRangeMin, xMax: xRangeMax }),
-            plugins: [spotLinePlugin]
+            plugins: [spotLinePlugin, breakevenLinePlugin]
         });
     }
 
-    // UI visibility is driven by appState.panels.set('odds', 'loaded') in
-    // loadOddsData(); no display-toggle needed here.
-    _oddsSyncDteControls();
+    // UI visibility is driven by appState.panels.set('payoff_ratio', 'loaded') in
+    // loadPayoffRatioData(); no display-toggle needed here.
+    _prSyncDteControls();
 
-    // Module 4B: Load vol-context data
-    _oddsLoadVolContext();
+    // Module 4B: Load probability context (vol-adjusted)
+    _prLoadProbabilityContext();
 }
 
 
 /* ============================================================
-   Module 4B: Odds + Vol Context
+   Module 4B: Payoff Ratio + Probability Context
    ============================================================ */
 
-async function _oddsLoadVolContext() {
+async function _prLoadProbabilityContext() {
     const input = document.getElementById('ticker');
     const ticker = (input ? input.value : '').trim().toUpperCase();
-    const tgt = parseFloat((document.getElementById('odds-target-pct') || {}).value) || 0;
-    const volCtxDiv = document.getElementById('odds-vol-context');
+    const tgt = parseFloat((document.getElementById('pr-target-pct') || {}).value) || 0;
+    const volCtxDiv = document.getElementById('pr-probability-context');
     if (!volCtxDiv) return;
     if (!ticker && !window.PAGES_SAMPLE_USED && !window.PagesSample) return;
 
     try {
-        const resp = await fetch('/api/odds_with_vol', {
+        const resp = await fetch('/api/expiry_probability', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ticker: ticker || 'NVDA', target_pct: tgt })
@@ -816,17 +858,17 @@ async function _oddsLoadVolContext() {
         throw new Error('fallback');
     } catch (e) {
         try {
-            const cands = _pagesFixtureCandidates('odds_with_vol.nvda.json');
+            const cands = _pagesFixtureCandidates('expiry_probability.nvda.json');
             const data = window.PagesSample && window.PagesSample.getJSON
                 ? await window.PagesSample.getJSON(cands)
                 : await fetch(cands[0]).then(r => r.json());
-            if (data && (data.vol_context || data.odds_by_expiry)) {
+            if (data && (data.vol_context || data.probability_by_expiry)) {
                 renderVolContextTable(volCtxDiv, data);
                 _markSampleUsed(data.sample_note);
                 return;
             }
         } catch (_) { /* ignore */ }
-        console.warn('Vol context load error:', e);
+        console.warn('Probability context load error:', e);
     }
 }
 
@@ -859,14 +901,14 @@ function renderVolContextTable(container, data) {
         html += `<tr><td>P(below target)</td><td>${(ctx.prob_below_target * 100).toFixed(1)}%</td></tr>`;
     }
 
-    // Per-expiry odds
-    if (data.odds_by_expiry && data.odds_by_expiry.length > 0) {
+    // Per-expiry probability
+    if (data.probability_by_expiry && data.probability_by_expiry.length > 0) {
         html += '</tbody></table>';
-        html += '<h4 class="section-subtitle" style="margin-top:1rem">Odds by Expiry (Vol-Adjusted)</h4>';
+        html += '<h4 class="section-subtitle" style="margin-top:1rem">Probability by Expiry (Vol-Adjusted)</h4>';
         html += '<table class="data-table vol-context-table"><thead><tr>';
         html += '<th>Expiry</th><th>DTE</th><th>IV</th><th>P(ITM Call)</th><th>P(ITM Put)</th><th>Expected Move</th>';
         html += '</tr></thead><tbody>';
-        data.odds_by_expiry.forEach(row => {
+        data.probability_by_expiry.forEach(row => {
             html += `<tr>
                 <td>${row.expiry || ''}</td>
                 <td>${row.dte || ''}</td>

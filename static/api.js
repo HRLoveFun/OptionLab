@@ -9,8 +9,8 @@
  *
  * Usage:
  *   const data = await api.get('/api/regime/current?ticker=AAPL');
- *   const data = await api.post('/api/odds_with_vol', { body: payload, key: 'odds' });
- *   api.abort('odds');           // cancel the previous 'odds' request
+ *   const data = await api.post('/api/expiry_probability', { body: payload, key: 'payoff_ratio' });
+ *   api.abort('payoff_ratio');   // cancel the previous 'payoff_ratio' request
  *
  * All thrown errors are ApiError instances (extending Error) with the
  * normalized fields above. AbortError is preserved (err.name === 'AbortError')

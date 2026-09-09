@@ -16,7 +16,7 @@ TAB_IDS = [
     "tab-market-assessment",
     "tab-option-chain",
     "tab-options-chain",
-    "tab-odds",
+    "tab-payoff-ratio",
     "tab-regime",
     "tab-simulation",
     "tab-option-pricing-matrix",

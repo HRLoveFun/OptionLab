@@ -30,7 +30,7 @@ def test_assemble_matches_flask_partials(tmp_path):
         "tab-market-assessment",
         "tab-option-chain",
         "tab-options-chain",
-        "tab-odds",
+        "tab-payoff-ratio",
         "tab-regime",
         "tab-simulation",
         "tab-option-pricing-matrix",
@@ -101,7 +101,7 @@ def test_snapshot_schema():
         "regime_current.json",
         "regime_history.json",
         "expiry_calendar.json",
-        "odds_with_vol.nvda.json",
+        "expiry_probability.nvda.json",
     ):
         p = REPO_ROOT / "site" / "fixtures" / name
         body = json.loads(p.read_text(encoding="utf-8"))

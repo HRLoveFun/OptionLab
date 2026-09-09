@@ -12,7 +12,7 @@
     "prob_above_target": 0.214,
     "prob_below_target": 0.196
   },
-  "odds_by_expiry": [
+  "probability_by_expiry": [
     {
       "expiry": "2026-09-04",
       "dte": 1,

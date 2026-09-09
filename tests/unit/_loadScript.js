@@ -45,7 +45,7 @@ export function loadStateBundle() {
     loadScript('static/state/abortRegistry.js');
     loadScript('static/state/chainCacheState.js');
     loadScript('static/state/optionChainState.js');
-    loadScript('static/state/oddsChainState.js');
+    loadScript('static/state/payoffRatioState.js');
     loadScript('static/state/tabFlagsState.js');
     loadScript('static/state/panelState.js');
 }
