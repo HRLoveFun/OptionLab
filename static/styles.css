@@ -1736,6 +1736,161 @@ body {
     }
 }
 
+/* ── Odds chart control strip: est. move slider + DTE window slider ── */
+.odds-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.25rem 2rem;
+    margin-bottom: 1rem;
+}
+
+.odds-control {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    flex: 1 1 300px;
+    min-width: 0;
+}
+
+.odds-control__label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--slate-500);
+}
+
+.odds-control__row {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+}
+
+.odds-control__row .odds-range__input,
+.odds-control__row .odds-range-dual {
+    flex: 1 1 auto;
+}
+
+.odds-control > .oc-target-value {
+    white-space: normal;
+}
+
+/* Range inputs — custom thumb, thin rounded track, theme-aware. */
+.odds-range__input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.odds-range__input::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--slate-300);
+}
+
+.odds-range__input::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--slate-300);
+}
+
+.odds-range__input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+}
+
+.odds-range__input::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+}
+
+.odds-range__input::-moz-focus-outer {
+    border: 0;
+}
+
+.odds-range__input:focus-visible {
+    outline: none;
+}
+
+.odds-range__input:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+.odds-range__input:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+
+/* Dual-thumb slider (DTE window): two range inputs stacked over one track;
+   only the thumbs take pointer events so both stay grabbable. */
+.odds-range-dual {
+    position: relative;
+    width: 100%;
+    min-width: 170px;
+    height: 28px;
+}
+
+.odds-range-dual .odds-range__input {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    pointer-events: none;
+}
+
+.odds-range-dual .odds-range__input::-webkit-slider-runnable-track {
+    background: transparent;
+}
+
+.odds-range-dual .odds-range__input::-moz-range-track {
+    background: transparent;
+}
+
+.odds-range-dual .odds-range__input::-webkit-slider-thumb {
+    pointer-events: auto;
+}
+
+.odds-range-dual .odds-range__input::-moz-range-thumb {
+    pointer-events: auto;
+}
+
+.odds-range-dual__track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 4px;
+    border-radius: 999px;
+    background: var(--slate-300);
+    pointer-events: none;
+}
+
+.odds-range-dual__fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--blue);
+    border-radius: 999px;
+}
+
 /* ============================================================
    Module 0: Multi-ticker badges
    ============================================================ */
@@ -3160,6 +3315,13 @@ textarea:focus-visible,
     background: rgba(168, 85, 247, .14);
     color: var(--purple);
     border-color: var(--purple);
+}
+
+/* .oc-target-input hardcodes #fff / #000 for the light theme — needs a full
+   dark repaint, not just a focus tweak (used on the Odds + Option-Chain tabs). */
+:root:not([data-theme="light"]) .oc-target-input {
+    background: #141414;
+    color: var(--slate-900);
 }
 
 /* Form controls — only focus styles need an override; default border/color flow from tokens */
