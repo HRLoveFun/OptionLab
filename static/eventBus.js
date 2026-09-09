@@ -17,6 +17,7 @@
  *   'game:started' / 'game:finished' / 'game:error'
  *   'market_review:loaded'     payload = { ticker }
  *   'ticker:changed'           payload = { ticker }
+ *   'theme:changed'            payload = 'light' | 'dark'
  */
 (function (root) {
     'use strict';

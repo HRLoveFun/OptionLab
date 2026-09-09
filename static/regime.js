@@ -6,7 +6,10 @@
 
     // Regime palettes are sourced from CSS custom properties defined in
     // static/styles.css (`--regime-*`) so the design tokens stay in one
-    // place. Keep these maps in sync with that token group.
+    // place. Several tokens are theme-dependent (the Onyx layer overrides
+    // --regime-mid-vol), and getComputedStyle is resolved once at read
+    // time, so these maps are rebuilt on every runtime theme toggle — see
+    // the 'theme:changed' subscription near the bottom of this file.
     function cssVar(name, fallback) {
         try {
             const v = getComputedStyle(document.documentElement)
@@ -16,24 +19,32 @@
             return fallback;
         }
     }
-    const VOL_COLORS = {
-        LOW_VOL: cssVar('--regime-low-vol', '#10b981'),
-        MID_VOL: cssVar('--regime-mid-vol', '#3b82f6'),
-        HIGH_VOL: cssVar('--regime-high-vol', '#f59e0b'),
-        STRESS_VOL: cssVar('--regime-stress-vol', '#ef4444'),
-        UNKNOWN_VOL: cssVar('--regime-unknown', '#94a3b8')
-    };
-    const DIR_COLORS = {
-        UP_TREND: cssVar('--regime-up-trend', '#10b981'),
-        DOWN_TREND: cssVar('--regime-down-trend', '#ef4444'),
-        CHOP: cssVar('--regime-chop', '#f59e0b'),
-        UNKNOWN_DIR: cssVar('--regime-unknown', '#94a3b8')
-    };
-    const REGIME_UNKNOWN_COLOR = cssVar('--regime-unknown', '#94a3b8');
-    const REGIME_BADGE_FALLBACK = cssVar('--regime-badge-fallback', '#64748b');
+    let VOL_COLORS, DIR_COLORS, REGIME_UNKNOWN_COLOR, REGIME_BADGE_FALLBACK;
+    function refreshPalettes() {
+        VOL_COLORS = {
+            LOW_VOL: cssVar('--regime-low-vol', '#10b981'),
+            MID_VOL: cssVar('--regime-mid-vol', '#3b82f6'),
+            HIGH_VOL: cssVar('--regime-high-vol', '#f59e0b'),
+            STRESS_VOL: cssVar('--regime-stress-vol', '#ef4444'),
+            UNKNOWN_VOL: cssVar('--regime-unknown', '#94a3b8')
+        };
+        DIR_COLORS = {
+            UP_TREND: cssVar('--regime-up-trend', '#10b981'),
+            DOWN_TREND: cssVar('--regime-down-trend', '#ef4444'),
+            CHOP: cssVar('--regime-chop', '#f59e0b'),
+            UNKNOWN_DIR: cssVar('--regime-unknown', '#94a3b8')
+        };
+        REGIME_UNKNOWN_COLOR = cssVar('--regime-unknown', '#94a3b8');
+        REGIME_BADGE_FALLBACK = cssVar('--regime-badge-fallback', '#64748b');
+    }
+    refreshPalettes();
 
     let stripChart = null;
     let currentDays = 180;
+    // Last rendered payloads, kept so a runtime theme toggle can repaint
+    // with fresh palettes without re-hitting the API.
+    let lastCurrent = null;
+    let lastHistory = null;
 
     function fmtPct(v) {
         if (v === null || v === undefined || isNaN(v)) return '—';
@@ -285,9 +296,10 @@
         try {
             const data = await api.get(`/api/regime/history?days=${currentDays}`, { key: 'regime_history' });
             if (data.status !== 'ok') throw new Error(data.message || 'history error');
-            renderStrip(data.rows || []);
-            renderCoverage(data.coverage);
-            renderTransitions((data.coverage && data.coverage.regime_transitions) || []);
+            lastHistory = { rows: data.rows || [], coverage: data.coverage };
+            renderStrip(lastHistory.rows);
+            renderCoverage(lastHistory.coverage);
+            renderTransitions((lastHistory.coverage && lastHistory.coverage.regime_transitions) || []);
             const tag = document.getElementById('regime-source-tag');
             if (tag) {
                 tag.innerHTML = `source: ${data.source}`;
@@ -304,6 +316,7 @@
         try {
             const data = await api.get('/api/regime/current', { key: 'regime_current' });
             if (data.status !== 'ok') throw new Error(data.message || 'current error');
+            lastCurrent = data;
             renderCurrent(data);
         } catch (e) {
             if (!_notAbort(e)) return;
@@ -352,4 +365,20 @@
         loadCurrent();
         loadHistory();
     };
+
+    // A runtime theme toggle (static/theme.js) re-resolves the --regime-*
+    // tokens; rebuild the palettes and repaint whatever is on screen from
+    // the last payload, since getComputedStyle was captured under the old
+    // theme.
+    if (window.bus && window.bus.on) {
+        window.bus.on('theme:changed', function () {
+            refreshPalettes();
+            if (lastCurrent) renderCurrent(lastCurrent);
+            if (lastHistory) {
+                renderStrip(lastHistory.rows);
+                renderCoverage(lastHistory.coverage);
+                renderTransitions((lastHistory.coverage && lastHistory.coverage.regime_transitions) || []);
+            }
+        });
+    }
 })();

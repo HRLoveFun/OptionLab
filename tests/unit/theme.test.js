@@ -8,13 +8,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { loadScript } from './_loadScript.js';
 
-// theme.js defers init() to DOMContentLoaded when the document is still
-// parsing; jsdom under vitest may report readyState 'loading'.
-function ensureInit() {
-    if (document.readyState === 'loading') {
-        document.dispatchEvent(new Event('DOMContentLoaded'));
-    }
-}
+// theme.js wires the toggle synchronously on load (the #theme-toggle
+// button sits above the script in index.html), so tests can assert
+// straight after loadScript() with no DOMContentLoaded dance.
 
 describe('theme.js — Light/Dark toggle', () => {
     beforeEach(() => {
@@ -25,14 +21,23 @@ describe('theme.js — Light/Dark toggle', () => {
 
     it('exposes themeManager and defaults to dark', () => {
         loadScript('static/theme.js');
-        ensureInit();
         expect(window.themeManager).toBeDefined();
         expect(window.themeManager.get()).toBe('dark');
     });
 
+    it('writes nothing to storage until the user makes an explicit choice', () => {
+        loadScript('static/theme.js');
+        // Default dark is not a stored choice — first load must not persist,
+        // so a later "honor prefers-color-scheme" default stays possible.
+        expect(window.themeManager.get()).toBe('dark');
+        expect(window.localStorage.getItem('theme')).toBeNull();
+
+        window.themeManager.toggle();
+        expect(window.localStorage.getItem('theme')).toBe('light');
+    });
+
     it('set("light") applies the attribute and persists the choice', () => {
         loadScript('static/theme.js');
-        ensureInit();
         expect(window.themeManager.set('light')).toBe('light');
         expect(document.documentElement.getAttribute('data-theme')).toBe('light');
         expect(window.localStorage.getItem('theme')).toBe('light');
@@ -40,7 +45,6 @@ describe('theme.js — Light/Dark toggle', () => {
 
     it('unknown theme values fall back to dark', () => {
         loadScript('static/theme.js');
-        ensureInit();
         expect(window.themeManager.set('sepia')).toBe('dark');
         expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
         expect(window.localStorage.getItem('theme')).toBe('dark');
@@ -48,7 +52,6 @@ describe('theme.js — Light/Dark toggle', () => {
 
     it('toggle flips light → dark → light', () => {
         loadScript('static/theme.js');
-        ensureInit();
         window.themeManager.set('light');
         expect(window.themeManager.toggle()).toBe('dark');
         expect(window.localStorage.getItem('theme')).toBe('dark');
@@ -59,7 +62,6 @@ describe('theme.js — Light/Dark toggle', () => {
     it('header button click toggles the theme and updates its aria-label', () => {
         document.body.innerHTML = '<button type="button" id="theme-toggle" class="theme-toggle"></button>';
         loadScript('static/theme.js');
-        ensureInit();
 
         const btn = document.getElementById('theme-toggle');
         btn.click();
@@ -78,7 +80,6 @@ describe('theme.js — Light/Dark toggle', () => {
         document.body.innerHTML = '<button type="button" id="theme-toggle" class="theme-toggle"></button>';
 
         loadScript('static/theme.js');
-        ensureInit();
 
         expect(window.themeManager.get()).toBe('light');
         expect(document.getElementById('theme-toggle').getAttribute('aria-label')).toBe('Switch to dark mode');
@@ -95,7 +96,6 @@ describe('theme.js — Light/Dark toggle', () => {
         });
         try {
             loadScript('static/theme.js');
-            ensureInit();
             expect(window.themeManager.toggle()).toBe('light');
             expect(document.documentElement.getAttribute('data-theme')).toBe('light');
         } finally {

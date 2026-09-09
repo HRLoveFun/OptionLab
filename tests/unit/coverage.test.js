@@ -25,6 +25,7 @@ import '../../static/state/panelState.js';
 import '../../static/utils.js';
 import '../../static/cache.js';
 import '../../static/simulation.js';
+import '../../static/theme.js';
 
 // Capture the post-import surface BEFORE the setup `beforeEach` runs and
 // wipes globals. We re-attach them in a local `beforeEach` so each `it`
@@ -44,6 +45,7 @@ const _snapshot = {
     toggleSizingSection: window.toggleSizingSection,
     loadSimulationTab: window.loadSimulationTab,
     runSimulation: window.runSimulation,
+    themeManager: window.themeManager,
 };
 
 beforeEach(() => {
@@ -84,6 +86,13 @@ describe('coverage smoke — every module publishes its surface', () => {
     it('simulation tab published its window surface', () => {
         expect(typeof window.loadSimulationTab).toBe('function');
         expect(typeof window.runSimulation).toBe('function');
+    });
+
+    it('theme manager published its window surface', () => {
+        expect(window.themeManager).toBeDefined();
+        expect(typeof window.themeManager.get).toBe('function');
+        expect(typeof window.themeManager.set).toBe('function');
+        expect(typeof window.themeManager.toggle).toBe('function');
     });
 });
 
@@ -170,6 +179,25 @@ describe('coverage drill — exercise instrumented sources', () => {
         window.appState.chainCache.set('AAPL', { spot: 1 });
         window.appState.chainCache.get('AAPL');
         window.appState.chainCache.set('AAPL', { spot: 2 });
+    });
+
+    it('theme manager get / set / toggle + label sync', () => {
+        document.documentElement.removeAttribute('data-theme');
+        const btn = document.createElement('button');
+        btn.id = 'theme-toggle';
+        document.body.appendChild(btn);
+
+        expect(window.themeManager.get()).toBe('dark');
+        window.themeManager.set('light');
+        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+        expect(btn.getAttribute('aria-label')).toBe('Switch to dark mode');
+        window.themeManager.set('sepia');        // invalid -> dark
+        expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        window.themeManager.toggle();            // dark -> light
+        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+
+        document.body.innerHTML = '';
+        document.documentElement.removeAttribute('data-theme');
     });
 
     it('state modules exercised', () => {

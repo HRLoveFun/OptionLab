@@ -9,8 +9,12 @@
  * before the stylesheet loads to avoid a flash of the wrong theme; this
  * module owns the runtime toggle and persistence.
  *
- * Loaded via <script> tag at the bottom of index.html (after the DOM).
- * Exposes window.themeManager for tests and programmatic control.
+ * Loaded via <script> tag near the bottom of index.html but AFTER the
+ * header markup, so #theme-toggle already exists and init() wires it
+ * synchronously (no DOMContentLoaded wait).
+ * Exposes window.themeManager for tests and programmatic control, and
+ * emits 'theme:changed' on window.bus so token-caching consumers
+ * (e.g. static/regime.js) can re-read theme-dependent CSS variables.
  */
 (function (root) {
     'use strict';
@@ -31,14 +35,15 @@
         }
     }
 
-    /* Apply a theme: set <html data-theme>, persist the choice, and sync
-       the button label + browser chrome color. Never throws. */
-    function apply(theme) {
+    /* Reflect a theme in the page: set <html data-theme>, sync the button
+       label, and sync the browser chrome color. Does NOT persist and does
+       NOT emit — that is reserved for an explicit choice (see apply()).
+       Never throws. */
+    function reflect(theme) {
         var value = theme === LIGHT ? LIGHT : DARK;
         try {
             root.document.documentElement.setAttribute('data-theme', value);
-            root.localStorage.setItem(STORAGE_KEY, value);
-        } catch (e) { /* storage unavailable — theme still applies for this page */ }
+        } catch (e) { /* pre-init script already set it — nothing else to do */ }
 
         try {
             var meta = root.document.querySelector('meta[name="theme-color"]');
@@ -49,7 +54,20 @@
                 btn.setAttribute('aria-label', label);
                 btn.setAttribute('title', label);
             }
-        } catch (e) { /* DOM not ready — init() re-syncs after DOMContentLoaded */ }
+        } catch (e) { /* DOM not ready — init() re-syncs */ }
+        return value;
+    }
+
+    /* Apply a theme AS AN EXPLICIT CHOICE: reflect it, persist it, and
+       notify consumers over the event bus. Never throws. */
+    function apply(theme) {
+        var value = reflect(theme);
+        try {
+            root.localStorage.setItem(STORAGE_KEY, value);
+        } catch (e) { /* storage unavailable — theme still applies for this page */ }
+        try {
+            if (root.bus && root.bus.emit) root.bus.emit('theme:changed', value);
+        } catch (e) { /* event bus not loaded (e.g. isolated unit test) */ }
         return value;
     }
 
@@ -66,16 +84,17 @@
         if (btn) {
             btn.addEventListener('click', toggleTheme);
         }
-        // Re-sync button label + meta color with whatever the pre-init
-        // script already applied (they are skipped if the DOM wasn't ready).
-        apply(getTheme());
+        // Sync the button label + meta color with whatever the pre-init
+        // script already applied. This is the default, not a user choice,
+        // so it must not persist or emit.
+        reflect(getTheme());
     }
 
     root.themeManager = { get: getTheme, set: setTheme, toggle: toggleTheme };
 
-    if (root.document.readyState === 'loading') {
-        root.document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    // #theme-toggle and <meta name="theme-color"> both sit above this
+    // script in index.html, so the DOM we touch is already parsed — wire
+    // the toggle now instead of deferring to DOMContentLoaded (8 feature
+    // scripts still follow). Mirrors the inline load of static/sidebar.js.
+    init();
 })(window);
