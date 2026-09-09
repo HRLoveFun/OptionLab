@@ -578,7 +578,9 @@ function _oddsRenderCharts() {
             if (!price || price <= 0) return;
             const payoff = Math.max(callTarget - c.strike, 0);
             const odd = (payoff - price) / price;
-            callPoints.push({ x: c.strike, y: parseFloat(odd.toFixed(4)) });
+            // `ask` = the price the odd is computed from (ask, or lastPrice
+            // fallback); surfaced in the point tooltip alongside the multiple.
+            callPoints.push({ x: c.strike, y: parseFloat(odd.toFixed(4)), ask: price });
         });
         if (callPoints.length > 0) anyRawData = true;
         if (callPoints.length > 0 && inWindow) {
@@ -608,7 +610,7 @@ function _oddsRenderCharts() {
             if (!price || price <= 0) return;
             const payoff = Math.max(p.strike - putTarget, 0);
             const odd = (payoff - price) / price;
-            putPoints.push({ x: p.strike, y: parseFloat(odd.toFixed(4)) });
+            putPoints.push({ x: p.strike, y: parseFloat(odd.toFixed(4)), ask: price });
         });
         if (putPoints.length > 0) anyRawData = true;
         if (putPoints.length > 0 && inWindow) {
@@ -680,7 +682,18 @@ function _oddsRenderCharts() {
         const xCfg = {
             type: 'linear',
             title: { display: true, text: 'Strike', font: { size: 12 } },
-            ticks: { font: { size: 10 } }
+            ticks: {
+                font: { size: 10 },
+                // Second line under each strike: its distance from spot (e.g.
+                // "+1.7%" / "-2.3%"), so a tick reads without eyeballing it
+                // against the Spot line.
+                callback: function (value) {
+                    const label = Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                    const pct = spot ? (value - spot) / spot * 100 : null;
+                    if (pct === null || !isFinite(pct)) return label;
+                    return [label, (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%'];
+                }
+            }
         };
         if (xMin !== undefined) xCfg.min = xMin;
         if (xMax !== undefined) xCfg.max = xMax;
@@ -721,7 +734,13 @@ function _oddsRenderCharts() {
                 },
                 tooltip: {
                     callbacks: {
-                        label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + 'x'; }
+                        label: function (ctx) {
+                            const base = ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + 'x';
+                            const ask = ctx.raw && ctx.raw.ask;
+                            return (ask != null && isFinite(ask))
+                                ? base + '  (ask ' + Number(ask).toFixed(2) + ')'
+                                : base;
+                        }
                     }
                 }
             },

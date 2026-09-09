@@ -284,6 +284,30 @@ describe('Expiry Odds — combined Call/Put chart', () => {
         expect(chart.options.scales.x.max).toBe(120);
     });
 
+    // ── X-axis ticks carry the strike's distance from spot ───────────────
+    it('labels each x-axis tick with its signed distance from spot', () => {
+        const chart = seedAndRender();                 // SPOT = 100
+        const cb = chart.options.scales.x.ticks.callback;
+        expect(cb(110)).toEqual(['110', '+10.0%']);
+        expect(cb(95)).toEqual(['95', '-5.0%']);
+        expect(cb(100)).toEqual(['100', '+0.0%']);
+    });
+
+    // ── Point tooltip appends the ask the multiple was priced from ───────
+    it('carries the ask on every point and appends it to the tooltip label', () => {
+        const chart = seedAndRender();                 // fixture call ask = 6
+        const call = chart.data.datasets.find((d) => d.oddsGroup === 'call');
+        const pt = call.data.find((p) => p.x === 100);
+        expect(pt.ask).toBe(6);
+
+        const label = chart.options.plugins.tooltip.callbacks.label({
+            dataset: call, parsed: { y: pt.y }, raw: pt,
+        });
+        expect(label).toContain(`${call.label}: `);
+        expect(label).toContain(`${pt.y.toFixed(2)}x`);
+        expect(label).toContain('(ask 6.00)');
+    });
+
     it('clamps the low thumb so it cannot pass the high thumb', () => {
         seedAndRender();
         const lo = document.getElementById('odds-dte-lo');
