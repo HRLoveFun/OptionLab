@@ -44,6 +44,48 @@ def _worktree_path(name: str) -> Path:
     return WORKTREE_ROOT / name
 
 
+def _worktree_entries() -> list[tuple[Path, str]]:
+    """Parse ``git worktree list --porcelain`` into ``(path, branch)`` pairs.
+
+    Domain:  developer workflow tooling.
+    Context: shared by ``list`` / ``remove`` / ``clean``.
+    Contracts: one pair per worktree, in git's order; ``branch`` is ``""`` for a
+    detached HEAD or a bare entry.
+    INVARIANT: entries are separated by a blank line, so ``branch`` must be
+    reset at every ``worktree`` key. Reading it across entry boundaries makes
+    the last worktree in the list win — which is how ``remove`` once tried to
+    delete the branch of an unrelated worktree.
+    Dependencies: ``git worktree list --porcelain``.
+    """
+    entries: list[tuple[Path, str]] = []
+    path: Path | None = None
+    branch = ""
+    for line in _git("worktree", "list", "--porcelain").splitlines():
+        key, _, value = line.partition(" ")
+        if key == "worktree":
+            if path is not None:
+                entries.append((path, branch))
+            path, branch = Path(value), ""
+        elif key == "branch":
+            branch = value.replace("refs/heads/", "")
+    if path is not None:
+        entries.append((path, branch))
+    return entries
+
+
+def _branch_of(path: Path) -> str:
+    """Return the branch checked out in the worktree at ``path``.
+
+    Returns ``""`` when that worktree is not registered (or has a detached
+    HEAD), so callers can treat "no branch" as a no-op instead of guessing.
+    """
+    target = path.resolve()
+    for wt_path, branch in _worktree_entries():
+        if wt_path.resolve() == target:
+            return branch
+    return ""
+
+
 def _is_dirty(path: Path) -> bool:
     return bool(_git("status", "--porcelain", cwd=path))
 
@@ -83,25 +125,9 @@ def cmd_create(args: argparse.Namespace) -> None:
 
 
 def cmd_list(_: argparse.Namespace) -> None:
-    out = _git("worktree", "list", "--porcelain")
-    entry: dict[str, str] = {}
-    for line in out.splitlines():
-        if not line:
-            wt = entry.get("worktree", "")
-            if wt:
-                dirty = _is_dirty(Path(wt))
-                flag = " (dirty)" if dirty else ""
-                print(f"{wt}  branch={entry.get('branch', '-').replace('refs/heads/', '')}{flag}")
-            entry = {}
-            continue
-        key, _, value = line.partition(" ")
-        entry[key] = value
-    if entry.get("worktree"):
-        dirty = _is_dirty(Path(entry["worktree"]))
-        print(
-            f"{entry['worktree']}  branch={entry.get('branch', '-').replace('refs/heads/', '')}"
-            f"{' (dirty)' if dirty else ''}"
-        )
+    for path, branch in _worktree_entries():
+        flag = " (dirty)" if _is_dirty(path) else ""
+        print(f"{path}  branch={branch or '-'}{flag}")
 
 
 def _remove(path: Path, branch: str, force: bool) -> None:
@@ -120,29 +146,11 @@ def cmd_remove(args: argparse.Namespace) -> None:
     path = _worktree_path(args.name)
     if not path.exists():
         sys.exit(f"[worktree] no such worktree: {path}")
-    out = _git("worktree", "list", "--porcelain")
-    branch = ""
-    for line in out.splitlines():
-        if line.startswith("worktree ") and path.samefile(Path(line.split(" ", 1)[1])):
-            continue
-        if line.startswith("branch "):
-            branch = line.split(" ", 1)[1].replace("refs/heads/", "")
-    _remove(path, branch, args.force)
+    _remove(path, _branch_of(path), args.force)
 
 
 def cmd_clean(args: argparse.Namespace) -> None:
-    out = _git("worktree", "list", "--porcelain")
-    entries: list[tuple[Path, str]] = []
-    entry: dict[str, str] = {}
-    for line in out.splitlines() + [""]:
-        if not line:
-            wt = entry.get("worktree")
-            if wt and Path(wt).parent == WORKTREE_ROOT.resolve():
-                entries.append((Path(wt), entry.get("branch", "").replace("refs/heads/", "")))
-            entry = {}
-            continue
-        key, _, value = line.partition(" ")
-        entry[key] = value
+    entries = [(p, b) for p, b in _worktree_entries() if p.parent == WORKTREE_ROOT.resolve()]
 
     if not entries:
         print("[worktree] nothing to clean")
