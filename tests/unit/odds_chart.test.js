@@ -248,7 +248,40 @@ describe('Expiry Odds — combined Call/Put chart', () => {
         expect(bases.size).toBe(2);
         expect(bases.has(isoInDays(75).replace(/-/g, ''))).toBe(false);
 
-        expect(document.getElementById('odds-dte-readout').textContent).toBe('0–50 days');
+        // the right-hand number box mirrors the slider
+        expect(document.getElementById('odds-dte-hi-num').value).toBe('50');
+    });
+
+    it('the DTE number boxes default to 0 and 90 and two-way bind the sliders', async () => {
+        seedAndRender();
+        const loNum = document.getElementById('odds-dte-lo-num');
+        const hiNum = document.getElementById('odds-dte-hi-num');
+        const lo = document.getElementById('odds-dte-lo');
+        const hi = document.getElementById('odds-dte-hi');
+        expect(loNum.value).toBe('0');
+        expect(hiNum.value).toBe('90');
+
+        // typing in the box moves the slider (and clamps to 0–90)
+        hiNum.value = '30';
+        hiNum.dispatchEvent(new window.Event('input', { bubbles: true }));
+        expect(hi.value).toBe('30');
+        await new Promise((r) => window.requestAnimationFrame(r));
+        const chart = FakeChart.instances[FakeChart.instances.length - 1];
+        const bases = new Set(chart.data.datasets.map((d) => d.label.replace(/ [CP]$/, '')));
+        expect(bases.has(isoInDays(40).replace(/-/g, ''))).toBe(false);   // 40 DTE now outside 0–30
+
+        // moving the slider writes back into the box
+        lo.value = '15';
+        lo.dispatchEvent(new window.Event('input', { bubbles: true }));
+        expect(loNum.value).toBe('15');
+    });
+
+    // ── X-axis aligns with the option chain strike range ─────────────────
+    it('sets the x-axis min/max to the option chain strike range', () => {
+        // fixture strikes: 80..120
+        const chart = seedAndRender();
+        expect(chart.options.scales.x.min).toBe(80);
+        expect(chart.options.scales.x.max).toBe(120);
     });
 
     it('clamps the low thumb so it cannot pass the high thumb', () => {

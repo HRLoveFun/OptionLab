@@ -32,7 +32,7 @@
                 <div class="odds-control__row">
                     <input type="range" id="odds-target-range" class="odds-range__input" min="0" max="50" step="1"
                            value="10" aria-label="Estimated move, percent of spot" />
-                    <input type="number" id="odds-target-pct" class="oc-target-input" value="10"
+                    <input type="number" id="odds-target-pct" class="oc-target-input odds-control__num" value="10"
                            min="0" max="50" step="1" />
                 </div>
                 <span id="odds-target-value" class="oc-target-value"></span>
@@ -41,6 +41,8 @@
                 <label class="odds-control__label" id="odds-dte-label">expiry window
                     <span class="label-unit">days to expiry</span></label>
                 <div class="odds-control__row">
+                    <input type="number" id="odds-dte-lo-num" class="oc-target-input odds-control__num"
+                           min="0" max="90" step="1" value="0" aria-label="Earliest days to expiry" />
                     <div class="odds-range-dual" role="group" aria-labelledby="odds-dte-label">
                         <div class="odds-range-dual__track"><div class="odds-range-dual__fill" id="odds-dte-fill"></div></div>
                         <input type="range" id="odds-dte-lo" class="odds-range__input" min="0" max="90" step="1"
@@ -48,7 +50,8 @@
                         <input type="range" id="odds-dte-hi" class="odds-range__input" min="0" max="90" step="1"
                                value="90" aria-label="Latest days to expiry" />
                     </div>
-                    <span class="oc-target-value" id="odds-dte-readout">0–90 days</span>
+                    <input type="number" id="odds-dte-hi-num" class="oc-target-input odds-control__num"
+                           min="0" max="90" step="1" value="90" aria-label="Latest days to expiry" />
                 </div>
             </div>
         </div>

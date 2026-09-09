@@ -1739,9 +1739,9 @@ body {
 /* ── Odds chart control strip: est. move slider + DTE window slider ── */
 .odds-controls {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: flex-start;
-    gap: 1.25rem 2rem;
+    gap: 1rem;
     margin-bottom: 1rem;
 }
 
@@ -1749,8 +1749,15 @@ body {
     display: flex;
     flex-direction: column;
     gap: .4rem;
-    flex: 1 1 300px;
+    width: 100%;
+    max-width: 560px;
     min-width: 0;
+}
+
+/* Number inputs flanking the sliders — fixed width, don't stretch in the row */
+.odds-control__num {
+    flex: 0 0 auto;
+    width: 3.75rem;
 }
 
 .odds-control__label {

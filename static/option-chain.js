@@ -334,18 +334,36 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Days-to-expiry window — dual-thumb slider, one-way link to the legend.
+    // Days-to-expiry window — dual-thumb slider + a number box on each side,
+    // one-way link to the legend. The sliders stay the source of truth; the
+    // number boxes are a mirror and an alternate way to type a bound.
     const dteLo = document.getElementById('odds-dte-lo');
     const dteHi = document.getElementById('odds-dte-hi');
+    const dteLoNum = document.getElementById('odds-dte-lo-num');
+    const dteHiNum = document.getElementById('odds-dte-hi-num');
     [dteLo, dteHi].forEach(function (sl) {
         if (!sl) return;
         sl.addEventListener('input', function () {
             _oddsNormalizeDteSlider(sl === dteHi);
-            _oddsUpdateDteReadout();
+            _oddsSyncDteControls();
             _oddsScheduleRender();
         });
     });
-    _oddsUpdateDteReadout();
+    [[dteLoNum, dteLo, false], [dteHiNum, dteHi, true]].forEach(function (pair) {
+        const numEl = pair[0], rangeEl = pair[1], isHi = pair[2];
+        if (!numEl || !rangeEl) return;
+        numEl.addEventListener('input', function () {
+            const v = parseInt(numEl.value, 10);
+            if (!isFinite(v)) return;
+            rangeEl.value = String(Math.min(90, Math.max(0, v)));
+            _oddsNormalizeDteSlider(isHi);
+            _oddsSyncDteControls();
+            _oddsScheduleRender();
+        });
+        // Snap a bad / out-of-range entry back on blur.
+        numEl.addEventListener('change', _oddsSyncDteControls);
+    });
+    _oddsSyncDteControls();
 
     // Call / Put group switches on the combined chart (top-left overlay).
     ['odds-toggle-call', 'odds-toggle-put'].forEach(function (id) {
@@ -394,19 +412,22 @@ function _oddsDteWindow() {
     return a <= b ? [a, b] : [b, a];
 }
 
-function _oddsUpdateDteReadout() {
-    const out = document.getElementById('odds-dte-readout');
-    const fill = document.getElementById('odds-dte-fill');
+// Mirror the slider state onto the fill bar and the two number boxes.
+function _oddsSyncDteControls() {
     const lo = document.getElementById('odds-dte-lo');
     const hi = document.getElementById('odds-dte-hi');
     if (!lo || !hi) return;
     const [a, b] = _oddsDteWindow();
-    if (out) out.textContent = a + '–' + b + ' days';
+    const fill = document.getElementById('odds-dte-fill');
     if (fill) {
         const span = (parseInt(hi.max, 10) || 90) - (parseInt(hi.min, 10) || 0) || 1;
         fill.style.left = (100 * a / span) + '%';
         fill.style.right = (100 * (span - b) / span) + '%';
     }
+    const loNum = document.getElementById('odds-dte-lo-num');
+    const hiNum = document.getElementById('odds-dte-hi-num');
+    if (loNum && document.activeElement !== loNum) loNum.value = String(a);
+    if (hiNum && document.activeElement !== hiNum) hiNum.value = String(b);
 }
 
 // Whole days from local midnight today to the expiration date.
@@ -534,7 +555,7 @@ function _oddsRenderCharts() {
     const callOn = _oddsGroupOn('call');
     const putOn = _oddsGroupOn('put');
     const [dteLo, dteHi] = _oddsDteWindow();
-    let allStrikes = new Set();
+    const chainStrikes = new Set();   // every strike in the chain (for the x-axis range)
     let anyRawData = false;   // any priced option at all, before the DTE filter
 
     exps.forEach((exp, idx) => {
@@ -552,12 +573,12 @@ function _oddsRenderCharts() {
         const callPoints = [];
         (ch.calls || []).forEach(c => {
             if (c.strike == null) return;
+            chainStrikes.add(c.strike);
             const price = (c.ask != null && c.ask > 0) ? c.ask : c.lastPrice;
             if (!price || price <= 0) return;
             const payoff = Math.max(callTarget - c.strike, 0);
             const odd = (payoff - price) / price;
             callPoints.push({ x: c.strike, y: parseFloat(odd.toFixed(4)) });
-            allStrikes.add(c.strike);
         });
         if (callPoints.length > 0) anyRawData = true;
         if (callPoints.length > 0 && inWindow) {
@@ -582,12 +603,12 @@ function _oddsRenderCharts() {
         const putPoints = [];
         (ch.puts || []).forEach(p => {
             if (p.strike == null) return;
+            chainStrikes.add(p.strike);
             const price = (p.ask != null && p.ask > 0) ? p.ask : p.lastPrice;
             if (!price || price <= 0) return;
             const payoff = Math.max(p.strike - putTarget, 0);
             const odd = (payoff - price) / price;
             putPoints.push({ x: p.strike, y: parseFloat(odd.toFixed(4)) });
-            allStrikes.add(p.strike);
         });
         if (putPoints.length > 0) anyRawData = true;
         if (putPoints.length > 0 && inWindow) {
@@ -636,12 +657,21 @@ function _oddsRenderCharts() {
             ctx.moveTo(xPx, yScale.top);
             ctx.lineTo(xPx, yScale.bottom);
             ctx.stroke();
-            // Label
+            // Label — vertically centred on the line, with a halo so it stays
+            // readable over the curves and gridlines in either theme.
             ctx.setLineDash([]);
-            ctx.fillStyle = '#92400e';
             ctx.font = 'bold 11px ' + getComputedStyle(document.documentElement).getPropertyValue('--font').trim();
             ctx.textAlign = 'center';
-            ctx.fillText('Spot ' + spot.toFixed(2), xPx, yScale.top - 6);
+            ctx.textBaseline = 'middle';
+            const label = 'Spot ' + spot.toFixed(2);
+            const labelY = (yScale.top + yScale.bottom) / 2;
+            const lightTheme = document.documentElement.getAttribute('data-theme') === 'light';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = lightTheme ? '#ffffff' : '#141414';
+            ctx.strokeText(label, xPx, labelY);
+            ctx.fillStyle = lightTheme ? '#92400e' : '#fbbf24';
+            ctx.fillText(label, xPx, labelY);
             ctx.restore();
         }
     };
@@ -715,9 +745,11 @@ function _oddsRenderCharts() {
     _oddsSetToggleEnabled('odds-toggle-call', callDatasets.length > 0);
     _oddsSetToggleEnabled('odds-toggle-put', putDatasets.length > 0);
 
-    // X-axis range: (1 - estMove/100 - 0.05)*spot to (1 + estMove/100 + 0.05)*spot
-    const xRangeMin = (1 - estMove / 100 - 0.05) * spot;
-    const xRangeMax = (1 + estMove / 100 + 0.05) * spot;
+    // X-axis spans the option chain's own strike range (matches the Option
+    // Chain tab), not a band derived from est. move.
+    const strikeVals = [...chainStrikes];
+    const xRangeMin = strikeVals.length ? Math.min(...strikeVals) : undefined;
+    const xRangeMax = strikeVals.length ? Math.max(...strikeVals) : undefined;
 
     // Combined chart – Call curves first, then Put curves
     const ctx = document.getElementById('odds-combined-chart');
@@ -732,7 +764,7 @@ function _oddsRenderCharts() {
 
     // UI visibility is driven by appState.panels.set('odds', 'loaded') in
     // loadOddsData(); no display-toggle needed here.
-    _oddsUpdateDteReadout();
+    _oddsSyncDteControls();
 
     // Module 4B: Load vol-context data
     _oddsLoadVolContext();
