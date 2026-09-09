@@ -51,9 +51,7 @@ def _is_dirty(path: Path) -> bool:
 def _is_merged(branch: str) -> bool:
     merged = _git("branch", "--merged", "main")
     # prefixes: `*` = current branch, `+` = checked out in another worktree
-    return any(
-        line.strip().lstrip("*+ ").rstrip() == branch for line in merged.splitlines()
-    )
+    return any(line.strip().lstrip("*+ ").rstrip() == branch for line in merged.splitlines())
 
 
 def _bootstrap(path: Path) -> None:
@@ -110,9 +108,7 @@ def _remove(path: Path, branch: str, force: bool) -> None:
     if _is_dirty(path) and not force:
         sys.exit(f"[worktree] {path} has uncommitted changes; commit them or use --force")
     if branch and not _is_merged(branch) and not force:
-        sys.exit(
-            f"[worktree] branch {branch} is not merged into main; merge it first or use --force"
-        )
+        sys.exit(f"[worktree] branch {branch} is not merged into main; merge it first or use --force")
     remove_args = ["worktree", "remove"] + (["--force"] if force else []) + [str(path)]
     _git(*remove_args)
     if branch:

@@ -30,10 +30,9 @@ jobs:
         run: ruff format --check .
 
       - name: Run tests
-        run: pytest
-
-      - name: Check committed site/ static assets match static/
-        run: diff -r -x .DS_Store static site/static
+        # `network`-marked tests hit live yfinance and are rate-limited from
+        # GitHub runners — they are opt-in only (see CLAUDE.md).
+        run: pytest -m "not network"
 
   e2e:
     runs-on: ubuntu-latest

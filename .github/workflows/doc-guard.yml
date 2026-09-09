@@ -36,9 +36,13 @@ jobs:
 
       - name: Run doc_guard on changed files
         if: steps.changes.outputs.files != ''
+        env:
+          # `git diff --name-only` output is newline-separated; injecting it
+          # straight into the script body turned every file after the first into
+          # its own (bogus) command. Pass it via env and let xargs re-split.
+          CHANGED_FILES: ${{ steps.changes.outputs.files }}
         run: |
-          # shellcheck disable=SC2086
-          python scripts/doc_guard.py --files ${{ steps.changes.outputs.files }}
+          printf '%s\n' "$CHANGED_FILES" | xargs python scripts/doc_guard.py --files
 
       - name: Verify ADR index is fresh
         run: |
