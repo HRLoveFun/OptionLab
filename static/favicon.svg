@@ -1,18 +1,25 @@
 <!-- OptionLab favicon — source of truth (vector).
      Raster derivatives (favicon-16x16/32x32.png, apple-touch-icon.png,
-     icon-192/512.png, favicon.ico) are generated from this file; keep them in
-     sync when the artwork changes.
-     Palette mirrors static/styles.css tokens: --blue (#3b82f6) → --blue-dark (#1d4ed8). -->
+     icon-192/512.png, favicon.ico) are generated from this file by
+     scripts/gen_favicons.py; keep them in sync when the artwork changes.
+
+     Motif: the long-call payoff curve — a capped-loss floor that kinks
+     upward at the strike into open-ended upside — the universal shorthand
+     for options. Palette mirrors the Onyx (default) theme tokens in
+     static/styles.css: onyx tile (slate-100 #0a0a0a) with a gold accent
+     (blue #d4af37 to blue-dark #f5c842). -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="OptionLab">
-  <defs>
-    <linearGradient id="ol-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3b82f6"/>
-      <stop offset="1" stop-color="#1d4ed8"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" ry="112" fill="url(#ol-bg)"/>
-  <!-- Long-call payoff: flat leg (limited loss) then rising leg -->
-  <path d="M104 356 H236" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="40" stroke-linecap="round"/>
-  <path d="M252 356 L404 156" fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="252" cy="356" r="36" fill="#ffffff"/>
+  <!-- Onyx tile -->
+  <rect width="512" height="512" rx="112" ry="112" fill="#0a0a0a"/>
+  <!-- Gold hairline, echoing the header's single gold rule -->
+  <rect x="12" y="12" width="488" height="488" rx="100" ry="100"
+        fill="none" stroke="#d4af37" stroke-opacity="0.28" stroke-width="7"/>
+  <!-- Payoff floor: capped loss below the strike -->
+  <path d="M108 350 H236" fill="none" stroke="#d4af37" stroke-opacity="0.45"
+        stroke-width="40" stroke-linecap="round"/>
+  <!-- Payoff upside: rising leg above the strike -->
+  <path d="M236 350 L412 146" fill="none" stroke="#f5c842"
+        stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Strike node -->
+  <circle cx="236" cy="350" r="27" fill="#f5c842"/>
 </svg>
