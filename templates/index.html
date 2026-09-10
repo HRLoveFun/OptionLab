@@ -193,11 +193,6 @@
                     <button class="tab-btn" data-tab="tab-portfolio">
                         <span>Portfolio</span>
                     </button>
-
-                    <div class="tab-section-label">System</div>
-                    <button class="tab-btn" data-tab="tab-config">
-                        <span>Config</span>
-                    </button>
                 </nav>
                 {% if tickers is defined and tickers|length > 1 %}
                 <div class="ticker-tab-nav" id="ticker-tabs-nav">
@@ -245,9 +240,6 @@
 
             <!-- Tab: Option Pricing Matrix -->
             {% include 'partials/tab_option_pricing_matrix.html' %}
-
-            <!-- Tab: Config -->
-            {% include 'partials/tab_config.html' %}
 
         </main>
 

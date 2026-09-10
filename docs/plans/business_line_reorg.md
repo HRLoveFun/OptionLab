@@ -4,9 +4,11 @@
 **ADRs**: [0011](../decisions/0011-pluggable-data-provider-seam.md) (data-provider seam + canonical schema — **Accepted**),
 [0012](../decisions/0012-parameter-ownership-and-prefetch.md) (parameter ownership + readiness prefetch — **Accepted**)
 
-> **Status: ACCEPTED TARGET, NOT YET IMPLEMENTED.** The shape below is the agreed
-> destination. It ships as the batches in §6 — each one independently shippable
-> and independently revertible. Track progress in the §0 ledger.
+> **Status: LANDED (2026-09-10).** All eight §6 batches are implemented on branch
+> `worktree-business-line-reorg`; the §0 ledger records what actually shipped,
+> including the deliberate deviations from the shape below. The batches are still
+> individually revertible — `git revert <batch-commit>` restores the previous
+> behaviour without touching the others.
 
 ---
 
@@ -45,7 +47,7 @@
 | B5 — readiness plan + prefetch | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (**manifest**, params as `/render` query args); readiness plan on the job; cold-start hold fragment. Actuals + deferrals in §8 |
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
 | B7 — module-scoped params | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). Backend query-arg contract + per-module allow-list; `state/*ParamsState.js`; module toolbars; bridge + hidden fields deleted; Config tab emptied (B8 decides its fate). See §8 B7 |
-| B8 — retire / repurpose Config tab | ⬜ not started | — | — | gate: §8 Q2 |
+| B8 — retire / repurpose Config tab | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q2 resolved (**deleted**). `grep tab_config` returns nothing; risk-free-rate follow-up on the watch list |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
 Keep the row order; edit the row in place.
@@ -420,7 +422,7 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 | # | Question | Decision gate | Working lean |
 |---|---|---|---|
 | Q1 | **Submit contract** — does `POST /` carry a `modules` manifest with per-module params attached to each `/render` call, or do the streaming market tabs move fully to client-fired `/api/*` like Option Chain? Manifest keeps the streaming model; full client-fired is more uniform but a bigger diff. | ✅ resolved 2026-09-10 (B5) — **manifest**, per-module params as query args on each `/render` call (sub-option A1) | **manifest.** Decisive reasons: (1) ADR 0012's readiness pass needs the module list *at submit time* — with no POST manifest, B5 would need an extra `/api/ready` protocol; (2) the four streaming slices return server-rendered HTML + base64 PNG, so client-firing changes only the transport, not the product; (3) the diff and the revert surface stay one batch wide. Full client-fired would only win if the charts moved to client-side rendering (ADR 0006/0008 territory). Params travel as query args (not `hx-post` JSON) to match the existing `/api/option_chain?ticker=…` shape and stay bookmark-reproducible — recorded in the B5 note below |
-| Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
+| Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | ✅ resolved 2026-09-10 (B8) — **tab deleted** | **Deleted.** After B7 nothing on it was global: every field had moved to the module that consumes it, so keeping the shell meant keeping a page whose only content was "these settings moved". The risk-free rate is not a *setting* yet (hard-coded in two places) — wiring it up is a new feature, not a cleanup, so there was nothing to shrink the tab to. The divergence risk is now on the watch list (`architecture_review.md` §2) |
 | Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | ✅ resolved 2026-09-10 (B6) — **dedicated Portfolio tab** | **Dedicated Portfolio tab** (`tab-portfolio`). The positions table drives `POST /api/portfolio_analysis` (client-fired) and owns a full result surface (Greeks / P&L / theta / breakeven / VaR); keeping it inside the bar's form would re-couple that workflow to the streaming submit — exactly the coupling ADR 0012 removes — and a one-line bar has nowhere to put the results. A tab also makes the workflow discoverable instead of buried under "Parameters". `#positions-tbody` stays in the DOM on every load, so the existing global handlers are unchanged |
 | Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | ✅ resolved 2026-09-10 (B2) | **minimal rename** — identical columns on both sides of each pair (structurally enforced: one column tuple per shape, used to create both names). The `adj_close` normalisation is already inside the provider (B1's `to_canonical_bars`), and ingest now consumes canonical bars, so no reshape is needed. ADR 0011's `symbol` column stays the target state but is deferred — see the B2 note below |
 | Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | ✅ resolved 2026-09-10 (B1) — outcome table in ADR 0011 §"Protocol shape" | design review of `base.py` against both field maps: IV → decimal, bid/ask nullable, `inTheMoney` dropped (derivable), expiries ISO strings |
@@ -685,13 +687,32 @@ full `pytest tests/e2e` → 41 passed; `npx vitest run` → 198 passed / 16 file
 `format --check` clean; `doc_guard.py` clean; `arch_metrics.py --check` ok (no baseline reset);
 `audit_tags.py` 16 vs baseline 16.
 
+**B8 (landed 2026-09-10) — Config tab retired (§8 Q2 = delete).**
+
+- `templates/partials/tab_config.html` deleted with its sidebar button and include; the
+  `System` section label goes with it (the last section is Portfolio). The shell kept a
+  "these settings moved" note after B7; once every field had moved, a page whose only content
+  was that note had no reason to exist.
+- **Nothing else changed**: no `switchTab` special case existed to remove (the plan anticipated
+  one; `grep tab-config` over `static/` is empty). The tab-list assertions lived in
+  `tests/{test_pages_build,e2e/test_smoke}.py` and `scripts/build_pages_site.py::build` — all three
+  updated.
+- **Follow-up, deliberately not folded in** (rule 7): the risk-free rate is hard-coded in
+  `static/sim/black_scholes.js` and again in `core/options/greeks` — two places, one number. Making
+  it a real global setting means a store entry, a form field and a backend path; that is a feature,
+  and until then the divergence risk is on `architecture_review.md` §2's watch list.
+- **Exit criteria**: `grep -rn tab_config` over `templates/ static/ tests/ site/` returns nothing;
+  `pytest -m "not network" --ignore=tests/e2e` → 505 passed / 5 skipped; `pytest tests/e2e` → 40
+  passed; `npx vitest run` → 198 passed / 16 files; `doc_guard.py` clean; `arch_metrics.py --check`
+  ok; `audit_tags.py` 16 vs baseline 16.
+
 ---
 
 ## 9. References
 
 - Current flow: `routes/core.py` → `services/market/dispatch.py` → `services/market/analysis/facade.py`
-- Data layer: `data_pipeline/data_ops/{facade,_range,_query}.py`, `yf_client.py`, `downloader.py`, `db.py`, `repos.py`
-- Frontend: `templates/partials/tab_parameter.html`, `tab_config.html`, `static/main.js`, `static/option-chain.js`
+- Data layer: `data_pipeline/read/facade.py`, `orchestrate/{update,backfill}.py`, `providers/`, `store/{db,repos}.py`, `ingest/ohlcv.py`
+- Frontend: `templates/partials/parameters_bar.html`, the module toolbars in `templates/partials/tab_*.html`, `static/main.js`, `static/moduleParams.js`, `static/option-chain.js`
 - `docs/decisions/0002-yfinance-as-sole-data-source.md`, `0004-no-iv-history-from-yfinance.md`, `0005-token-bucket-throttle.md`
 - `docs/constraints.md` §1–§6, `docs/frontend_architecture.md`, `docs/frontend_convergence.md`
 - `archive/futu_integration/field_mapping.md`

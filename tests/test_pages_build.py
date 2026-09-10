@@ -34,7 +34,6 @@ def test_assemble_matches_flask_partials(tmp_path):
         "tab-regime",
         "tab-simulation",
         "tab-option-pricing-matrix",
-        "tab-config",
     ):
         assert f'id="{tab_id}"' in html, tab_id
 

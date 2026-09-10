@@ -20,7 +20,6 @@ TAB_IDS = [
     "tab-regime",
     "tab-simulation",
     "tab-option-pricing-matrix",
-    "tab-config",
 ]
 
 _ACTIVE_RE = re.compile(r"\bactive\b")

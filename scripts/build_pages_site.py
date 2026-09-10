@@ -393,7 +393,6 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
         "tab-regime",
         "tab-simulation",
         "tab-option-pricing-matrix",
-        "tab-config",
     ):
         assert f'id="{tab_id}"' in html, f"missing tab body: {tab_id}"
     assert "./pages-shim.js" in html and "pages-demo-banner" in html
