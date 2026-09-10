@@ -4,9 +4,8 @@ import datetime as dt
 import logging
 import time
 
+from data_pipeline import _state as _g
 from utils.ticker_utils import is_valid_ticker_format
-
-from . import _globals as _g
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ def manual_update(ticker: str, days: int = 7) -> bool:
         start = end - dt.timedelta(days=days - 1)
         scan_start = end - dt.timedelta(days=_g.GAP_SCAN_DAYS)
 
-        from data_pipeline.downloader import find_missing_business_days
+        from data_pipeline.ingest.ohlcv import find_missing_business_days
 
         gaps = find_missing_business_days(ticker, scan_start, end)
         if gaps and min(gaps) < start:
@@ -51,9 +50,9 @@ def manual_update(ticker: str, days: int = 7) -> bool:
             )
             start = min(gaps)
 
-        import data_pipeline.cleaning as _cl
-        import data_pipeline.downloader as _dl
-        import data_pipeline.processing as _pr
+        import data_pipeline.ingest.ohlcv as _dl
+        import data_pipeline.transform.cleaning as _cl
+        import data_pipeline.transform.processing as _pr
 
         dl_result = _dl.upsert_raw_prices(ticker, start, end)
         if not dl_result.ok:
@@ -81,9 +80,9 @@ def seed_history(ticker: str, years: int = 5) -> None:
     """One-time helper to seed multi-year history for a ticker into the DB."""
     end = dt.date.today()
     start = end - dt.timedelta(days=years * 365)
-    import data_pipeline.cleaning as _cl
-    import data_pipeline.downloader as _dl
-    import data_pipeline.processing as _pr
+    import data_pipeline.ingest.ohlcv as _dl
+    import data_pipeline.transform.cleaning as _cl
+    import data_pipeline.transform.processing as _pr
 
     _dl.upsert_raw_prices(ticker, start, end)
     _cl.clean_range(ticker, start, end)

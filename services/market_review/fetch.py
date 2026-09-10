@@ -14,7 +14,7 @@ architecture review §2 `core-purity`).
 Contracts:
   - fetch_market_data(instrument, start_date, end_date) -> tuple[pd.DataFrame, pd.DataFrame, list]
 Dependencies:
-  - data_pipeline.yf_client, data_pipeline.db
+  - data_pipeline.providers.yf_client, data_pipeline.store.db
   - core.market_review.constants (BENCHMARKS)
 """
 
@@ -28,13 +28,13 @@ import time
 import pandas as pd
 
 from core.market_review.constants import BENCHMARKS
-from data_pipeline.repos import (
+from data_pipeline.providers.yf_client import fetch_close_panel
+from data_pipeline.store.repos import (
     ensure_schema,
     fetch_market_review_latest_dates,
     fetch_market_review_panel,
     upsert_market_review_prices,
 )
-from data_pipeline.yf_client import fetch_close_panel
 
 logger = logging.getLogger(__name__)
 

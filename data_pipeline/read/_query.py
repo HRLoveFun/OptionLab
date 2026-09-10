@@ -8,11 +8,10 @@ import time
 
 import pandas as pd
 
-from data_pipeline.db import fetch_df, init_db
-
-from . import _globals as _g
-from . import _range as _r
-from . import _update as _u
+from data_pipeline import _state as _g
+from data_pipeline.orchestrate import backfill as _bf
+from data_pipeline.orchestrate import update as _u
+from data_pipeline.store.db import fetch_df, init_db
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +41,13 @@ def _kick_backfill(ticker: str, start, end) -> None:
 
 def _run_backfill(ticker, start, end, key) -> None:
     try:
-        _r.ensure_range(ticker, start, end)
+        _bf.ensure_range(ticker, start, end)
     except Exception as e:
         logger.warning("background backfill failed for %s: %s", ticker, e)
     finally:
         # Daemon threads never re-run dispatch's finally-cleanups; drop this
         # thread's SQLite connection so _all_conns doesn't grow per backfill.
-        from data_pipeline.db import close_thread_conn
+        from data_pipeline.store.db import close_thread_conn
 
         close_thread_conn()
         with _backfill_lock:
@@ -66,10 +65,10 @@ def _join_backfills(timeout: float | None = None) -> None:
 def _wait_for_coverage(ticker, start, end, timeout: float) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not _r.needs_backfill(ticker, start, end):
+        if not _bf.needs_backfill(ticker, start, end):
             return True
         time.sleep(0.25)
-    return not _r.needs_backfill(ticker, start, end)
+    return not _bf.needs_backfill(ticker, start, end)
 
 
 def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> pd.DataFrame:
@@ -87,14 +86,14 @@ def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | 
         # ensure_range path.
         return cached
     _u.manual_update(ticker, days=7)
-    if _r.needs_backfill(ticker, start, end):
+    if _bf.needs_backfill(ticker, start, end):
         # Missing span ⇒ keep the heavy download off the request thread; give
         # it a short grace period so "one chunk missing" still returns full
         # data, then fall through to whatever coverage the DB has now.
         _kick_backfill(ticker, start, end)
         _wait_for_coverage(ticker, start, end, _BACKFILL_WAIT_SECONDS)
     else:
-        _r.ensure_range(ticker, start, end)
+        _bf.ensure_range(ticker, start, end)
     init_db()
     df = fetch_df(
         "SELECT date, open, high, low, close, adj_close, volume FROM clean_bars WHERE ticker=? AND date>=? AND date<=?",
@@ -104,7 +103,7 @@ def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | 
     # this df may lack the requested span. ensure_range invalidates the
     # ticker's cache entries on success, so the completed data becomes visible
     # on the next request.
-    if not _r.needs_backfill(ticker, start, end):
+    if not _bf.needs_backfill(ticker, start, end):
         _g._cache_set(cache_key, df)
     return df
 
@@ -156,7 +155,7 @@ def get_latest_spot(ticker: str) -> float | None:
         except (TypeError, ValueError):
             pass
 
-    from data_pipeline.yf_client import fetch_spot
+    from data_pipeline.providers.yf_client import fetch_spot
 
     try:
         price = fetch_spot(ticker)

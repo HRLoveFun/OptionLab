@@ -18,7 +18,7 @@ import logging
 
 from flask import Blueprint, current_app, jsonify, render_template, request
 
-from data_pipeline.job_cache import create_job
+from data_pipeline.orchestrate.job_cache import create_job
 from services.market.dispatch import render_streaming_slice
 from services.market.facade import MarketService
 from services.market.form import FormService

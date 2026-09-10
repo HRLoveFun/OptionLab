@@ -1,24 +1,40 @@
-"""DataService facade — thin orchestrator over data_ops submodules."""
+"""DataService facade — the DB-first read entry point (ADR 0011).
 
-from data_pipeline.db import init_db
+Domain:    Data Pipeline — Read
+Context:
+  - This is the only ``data_pipeline`` surface above the package: services/,
+    routes/ and app.py talk to ``DataService`` and never to store/ingest/
+    transform directly. Reads come from ``read/_query.py``; anything that has to
+    *make data ready* is delegated to ``orchestrate``.
+Contracts:
+  - ``DataService`` staticmethods — initialize, manual_update, seed_history,
+    has_data_for_date, ensure_range, get_cleaned_daily, get_processed,
+    get_processed_data, get_latest_spot.
+Dependencies UPWARD:
+  - store (db), orchestrate (backfill / update)
+Dependencies DOWNWARD:
+  - services/, routes/, app.py
+"""
+
+from data_pipeline.orchestrate import backfill as _bf
+from data_pipeline.orchestrate import update as _u
+from data_pipeline.store.db import init_db
 
 from . import _query as _q
-from . import _range as _r
-from . import _update as _u
 
 
 class DataService:
     """Facade for data operations."""
 
     # Re-export class-level attributes for backward compat
-    _ENSURE_RANGE_TTL = _r._ENSURE_RANGE_TTL
-    _ensure_range_memo = _r._ensure_range_memo
-    _ensure_range_lock = _r._ensure_range_lock
-    _ensure_range_inflight = _r._ensure_range_inflight
-    _ensure_range_inflight_lock = _r._ensure_range_inflight_lock
-    _BACKFILL_MIN_DATE = _r._BACKFILL_MIN_DATE
-    _SENTINEL_GAP_THRESHOLD_DAYS = _r._SENTINEL_GAP_THRESHOLD_DAYS
-    _SENTINEL_MIN_DB_SPAN_DAYS = _r._SENTINEL_MIN_DB_SPAN_DAYS
+    _ENSURE_RANGE_TTL = _bf._ENSURE_RANGE_TTL
+    _ensure_range_memo = _bf._ensure_range_memo
+    _ensure_range_lock = _bf._ensure_range_lock
+    _ensure_range_inflight = _bf._ensure_range_inflight
+    _ensure_range_inflight_lock = _bf._ensure_range_inflight_lock
+    _BACKFILL_MIN_DATE = _bf._BACKFILL_MIN_DATE
+    _SENTINEL_GAP_THRESHOLD_DAYS = _bf._SENTINEL_GAP_THRESHOLD_DAYS
+    _SENTINEL_MIN_DB_SPAN_DAYS = _bf._SENTINEL_MIN_DB_SPAN_DAYS
 
     @staticmethod
     def initialize():
@@ -35,7 +51,7 @@ class DataService:
     @staticmethod
     def has_data_for_date(ticker: str, date) -> bool:
         init_db()
-        from data_pipeline.db import fetch_df
+        from data_pipeline.store.db import fetch_df
 
         df = fetch_df(
             "SELECT * FROM clean_bars WHERE ticker=? AND date=?",
@@ -51,7 +67,7 @@ class DataService:
 
     @staticmethod
     def ensure_range(ticker: str, start, end) -> bool:
-        return _r.ensure_range(ticker, start, end)
+        return _bf.ensure_range(ticker, start, end)
 
     @staticmethod
     def get_cleaned_daily(ticker: str, start=None, end=None):
@@ -76,5 +92,5 @@ class DataService:
         Call this before ``seed_history`` when you want to bypass a
         previously cached failure and force a fresh backfill.
         """
-        with _r._ensure_range_lock:
-            _r._ensure_range_memo.pop(ticker, None)
+        with _bf._ensure_range_lock:
+            _bf._ensure_range_memo.pop(ticker, None)

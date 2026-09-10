@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from data_pipeline.db import CANONICAL_TABLES, canonical_table, get_conn, init_db, upsert_many
+from data_pipeline.store.db import CANONICAL_TABLES, canonical_table, get_conn, init_db, upsert_many
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -84,9 +84,9 @@ def test_upsert_many_writes_both_table_families():
 
 def test_pipeline_run_populates_both_table_families():
     """B2 exit criterion: one pipeline run leaves both families populated."""
-    from data_pipeline.cleaning import clean_range
-    from data_pipeline.downloader import upsert_raw_prices
-    from data_pipeline.processing import process_frequencies
+    from data_pipeline.ingest.ohlcv import upsert_raw_prices
+    from data_pipeline.transform.cleaning import clean_range
+    from data_pipeline.transform.processing import process_frequencies
 
     ticker = "TEST_CANON"
     end = dt.date.today()
@@ -108,7 +108,7 @@ def test_pipeline_run_populates_both_table_families():
 # ---------------------------------------------------------------------------
 def test_health_inventory_reads_canonical_table():
     """A row that exists only in ``raw_bars`` must be visible to the health read."""
-    from data_pipeline.repos import fetch_ticker_inventory
+    from data_pipeline.store.repos import fetch_ticker_inventory
 
     init_db()
     with get_conn() as conn:

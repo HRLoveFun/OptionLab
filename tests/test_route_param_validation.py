@@ -96,14 +96,14 @@ class TestGlobalEnvelope:
 
 class TestReposColumnWhitelist:
     def test_unknown_column_raises_before_sql(self):
-        from data_pipeline.repos import select_tracked_strategies
+        from data_pipeline.store.repos import select_tracked_strategies
 
         with pytest.raises(ValueError, match="unknown tracked_strategies columns"):
             select_tracked_strategies(["id", "notes; DROP TABLE tracked_strategies--"], None)
 
     def test_known_columns_accepted(self):
-        from data_pipeline.db import init_db
-        from data_pipeline.repos import select_tracked_strategies
+        from data_pipeline.store.db import init_db
+        from data_pipeline.store.repos import select_tracked_strategies
 
         init_db()
         rows = select_tracked_strategies(["id", "ticker", "status"], None)

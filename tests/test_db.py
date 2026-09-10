@@ -1,11 +1,11 @@
-"""Tests for data_pipeline/db.py — init, get_conn, upsert, fetch."""
+"""Tests for data_pipeline/store/db.py — init, get_conn, upsert, fetch."""
 
 import sqlite3
 import threading
 
 import pytest
 
-from data_pipeline.db import close_thread_conn, fetch_df, get_conn, init_db, upsert_many
+from data_pipeline.store.db import close_thread_conn, fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:

@@ -12,7 +12,7 @@ from core.options.chain.analyzer import (
     liquidity_score,
 )
 from core.options.chain.filters import filter_option_chain
-from data_pipeline.yf_client import fetch_option_chain
+from data_pipeline.providers.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
 

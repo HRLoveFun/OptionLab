@@ -26,7 +26,7 @@ Design rules:
   - CONSTRAINT: never pass ``session=requests.Session()`` — yfinance ≥0.2.50 uses
     curl_cffi and silently fails (ADR 0005 / docs/constraints.md §2).
 Dependencies UPWARD:
-  - utils.network (throttle), data_pipeline.quality_log (via providers._log)
+  - utils.network (throttle), data_pipeline.store.quality_log (via providers._log)
 Dependencies DOWNWARD:
   - providers/base, providers/_log, providers/yf_snapshot
 """
@@ -197,7 +197,7 @@ def download_daily_frame(ticker: str, start: dt.date, end: dt.date) -> pd.DataFr
     """Download daily OHLCV for ``[start, end]`` (inclusive) from yfinance.
 
     Returns a frame with Title-Case columns plus ``Adj_Close`` — the shape
-    ``data_pipeline.downloader.upsert_raw_prices`` consumes. ``history()`` on
+    ``data_pipeline.ingest.ohlcv.upsert_raw_prices`` consumes. ``history()`` on
     ``YFinanceProvider`` is the canonical equivalent.
     """
     # yfinance 'end' is exclusive, so pass end + 1 day to include the requested end date

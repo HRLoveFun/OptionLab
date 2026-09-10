@@ -10,7 +10,7 @@ Context:
 Contracts:
   - run_simulation(payload) -> dict
 Dependencies UPWARD:
-  - utils.api_errors, utils.ticker_utils, data_pipeline.yf_client
+  - utils.api_errors, utils.ticker_utils, data_pipeline.providers.yf_client
   - core.options.simulation
 Dependencies DOWNWARD:
   - routes.options, tests
@@ -118,7 +118,7 @@ def resolve_spot(ticker: str, override: Any) -> float:
     if not ticker:
         raise ApiError("ticker (or an explicit spot) is required", code="ticker_required")
 
-    from data_pipeline.yf_client import fetch_spot
+    from data_pipeline.providers.yf_client import fetch_spot
 
     spot = fetch_spot(ticker)
     if spot is None or not math.isfinite(spot) or spot <= 0:

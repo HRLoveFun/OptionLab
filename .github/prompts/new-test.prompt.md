@@ -2,7 +2,7 @@
 description: "Generate a test following OptionView project patterns for a specific module or function."
 agent: "agent"
 tools: [read, search, edit]
-argument-hint: "Module or function to test (e.g., 'data_pipeline/cleaning.py clean_range')"
+argument-hint: "Module or function to test (e.g., 'data_pipeline/transform/cleaning.py clean_range')"
 ---
 
 Generate a pytest test for the specified module/function following OptionView test conventions:

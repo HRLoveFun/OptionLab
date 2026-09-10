@@ -37,7 +37,7 @@ def generate_summary_analysis(tickers: list, results_by_ticker: dict) -> dict:
 
     # Correlation matrix
     try:
-        from data_pipeline.yf_client import fetch_close_panel
+        from data_pipeline.providers.yf_client import fetch_close_panel
 
         data = fetch_close_panel(tickers, period="90d")
         if data is None or data.empty:

@@ -11,7 +11,7 @@ Contracts:
   - ``to_canonical_bars`` / ``to_option_chain_snapshot`` apply the unit rules in
     ``providers/base.py`` (decimal IV, nullable bid/ask, no ``inTheMoney``).
   - ``get_provider`` defaults to yfinance and rejects unknown names loudly.
-  - ``data_pipeline.yf_client`` still re-exports the legacy callables unchanged.
+  - ``data_pipeline.providers.yf_client`` still re-exports the legacy callables unchanged.
 Dependencies UPWARD:
   - (none — stdlib + pytest + the package under test)
 """
@@ -238,8 +238,7 @@ def test_to_option_chain_snapshot_tolerates_empty_payload():
 # Compatibility shim
 # ---------------------------------------------------------------------------
 def test_yf_client_reexports_legacy_callables_unchanged():
-    from data_pipeline import yf_client
-    from data_pipeline.providers import yf_snapshot, yfinance_provider
+    from data_pipeline.providers import yf_client, yf_snapshot, yfinance_provider
 
     assert yf_client.fetch_spot is yf_snapshot.fetch_spot
     assert yf_client.fetch_spots_bulk is yf_snapshot.fetch_spots_bulk

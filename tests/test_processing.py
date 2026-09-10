@@ -1,12 +1,12 @@
-"""Tests for data_pipeline.processing — feature computation correctness."""
+"""Tests for data_pipeline.transform.processing — feature computation correctness."""
 
 import datetime as dt
 
 import numpy as np
 import pandas as pd
 
-from data_pipeline.db import init_db, upsert_many
-from data_pipeline.processing import _agg_ohlcv, _features, process_frequencies
+from data_pipeline.store.db import init_db, upsert_many
+from data_pipeline.transform.processing import _agg_ohlcv, _features, process_frequencies
 
 # ── Helpers ───────────────────────────────────────────────────────
 
@@ -193,7 +193,7 @@ class TestProcessFrequencies:
 
     def test_all_frequencies_present(self):
         """Check D, W, ME rows are produced."""
-        from data_pipeline.db import fetch_df
+        from data_pipeline.store.db import fetch_df
 
         df = _make_daily(30)
         _seed_clean_bars("FREQ", df)
@@ -210,7 +210,7 @@ class TestProcessFrequencies:
 
     def test_feature_columns_in_db(self):
         """Verify key feature columns are stored."""
-        from data_pipeline.db import fetch_df
+        from data_pipeline.store.db import fetch_df
 
         df = _make_daily(30)
         _seed_clean_bars("COLS", df)

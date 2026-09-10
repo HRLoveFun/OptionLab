@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 
-import data_pipeline.db as _db
+import data_pipeline.store.db as _db
 
 logger = logging.getLogger(__name__)
 
@@ -102,10 +102,10 @@ def ensure_range(ticker: str, start: dt.date, end: dt.date) -> bool:
 def _ensure_range_impl(ticker: str, start: dt.date, end: dt.date, now: float, was_sentinel: bool = False) -> bool:
     """Internal: actual backfill. Caller must hold the in-flight slot."""
 
-    import data_pipeline.cleaning as _cl
-    import data_pipeline.downloader as _dl
-    import data_pipeline.processing as _pr
-    from data_pipeline.downloader import MAX_AUTO_BACKFILL_DAYS
+    import data_pipeline.ingest.ohlcv as _dl
+    import data_pipeline.transform.cleaning as _cl
+    import data_pipeline.transform.processing as _pr
+    from data_pipeline.ingest.ohlcv import MAX_AUTO_BACKFILL_DAYS
 
     cov = _db.fetch_df(
         "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n FROM clean_bars WHERE ticker=?",
@@ -177,7 +177,7 @@ def _ensure_range_impl(ticker: str, start: dt.date, end: dt.date, now: float, wa
         if not pr.ok:
             logger.warning("ensure_range processing failed for %s: %s", ticker, pr.error)
             return False
-        from . import _globals as _g
+        from data_pipeline import _state as _g
 
         _g._cache_invalidate(ticker)
         with _ensure_range_lock:

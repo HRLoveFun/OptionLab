@@ -1,11 +1,11 @@
 """Repository layer — the only place that builds SQL.
 
 INVARIANT (doc_guard `db-access`): upper layers (routes/services) must import
-these functions instead of touching ``data_pipeline.db`` connection primitives
+these functions instead of touching ``data_pipeline.store.db`` connection primitives
 directly, so WAL pragmas and the query cache apply uniformly (ADR 0003).
 
 This module is part of ``data_pipeline`` (an I/O layer); importing
-``data_pipeline.db`` here is the intended single exception and is not flagged
+``data_pipeline.store.db`` here is the intended single exception and is not flagged
 by the guardrail.
 """
 
@@ -17,7 +17,7 @@ from typing import Any
 
 import pandas as pd
 
-from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
+from data_pipeline.store.db import fetch_df, get_conn, init_db, upsert_many
 
 
 # ── Health / data-quality inventory ─────────────────────────────────

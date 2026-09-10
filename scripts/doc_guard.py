@@ -178,7 +178,7 @@ _SQLITE_CONNECT_RE = re.compile(r"\bsqlite3\.connect\(")
 
 
 def rule_sqlite_bypass(ctx: Context) -> None:
-    allowed = {REPO_ROOT / "data_pipeline" / "db.py"}
+    allowed = {REPO_ROOT / "data_pipeline" / "store" / "db.py"}
     for path in ctx.files:
         if path.suffix != ".py":
             continue
@@ -192,14 +192,24 @@ def rule_sqlite_bypass(ctx: Context) -> None:
                     "sqlite-bypass",
                     path,
                     i,
-                    "direct sqlite3.connect outside data_pipeline/db.py — bypasses WAL pragmas (ADR 0003)",
+                    "direct sqlite3.connect outside data_pipeline/store/db.py — bypasses WAL pragmas (ADR 0003)",
                 )
 
 
 # ── Rule: import-direction ───────────────────────────────────────
 # INVARIANT: the layer order is app → routes → services → core → data_pipeline
-# → utils. A layer may only depend on layers *below* it, and ``routes`` may not
-# skip across ``services`` into ``core``.
+# → utils, and inside data_pipeline/ the acquire → process → serve stages are
+# their own layers (ADR 0011, batch B3):
+#
+#     data_pipeline/providers/    ACQUIRE  (the only `import yfinance` site)
+#     data_pipeline/store/        schema + the only SQL
+#     data_pipeline/ingest/       acquisition → store glue
+#     data_pipeline/transform/    raw → clean → features (never imports providers)
+#     data_pipeline/read/         the DB-first read API services call
+#     data_pipeline/orchestrate/  "make the data ready" drivers
+#
+# A layer may only depend on layers *below* it, and ``routes`` may not skip
+# across ``services`` into ``core``.
 #
 # WHY an explicit allow-list instead of the previous numeric comparison: the
 # numeric form compared layer numbers and therefore
@@ -209,19 +219,48 @@ def rule_sqlite_bypass(ctx: Context) -> None:
 #   (c) exempted ``utils`` wholesale via a sentinel value.
 # Those three blind spots let the declared architecture drift from the real
 # import graph. The allow-list states the intended edges directly.
+#
+# Two deviations from the plan's sketch, both recorded in
+# docs/plans/business_line_reorg.md §8 (B3 note):
+#   * ``read → orchestrate``: the read path triggers refreshes, so the edge
+#     exists (orchestrate must therefore never import read).
+#   * ``providers → store``: the provider writes its own failures to
+#     ``store/quality_log``; keeping providers a pure leaf would mean inventing
+#     a callback for a one-line diagnostic write.
 _ALLOWED_DEPS: dict[str, set[str]] = {
-    "app": {"routes", "services", "core", "data_pipeline", "utils"},
-    "routes": {"services", "data_pipeline", "utils"},
-    "services": {"core", "data_pipeline", "utils"},
-    # TRADEOFF: core→data_pipeline is directionally legal but breaks core's
+    "app": {"routes", "services", "core", "data_pipeline", "utils", "read", "orchestrate"},
+    "routes": {"services", "data_pipeline", "utils", "store", "read", "orchestrate"},
+    "services": {
+        "core",
+        "data_pipeline",
+        "utils",
+        "providers",
+        "store",
+        "ingest",
+        "transform",
+        "read",
+        "orchestrate",
+    },
+    # TRADEOFF: core→data_pipeline* is directionally legal but breaks core's
     # purity contract. It is policed by the separate ``core-purity`` rule so the
     # two concerns (direction vs. purity) can be whitelisted and paid down at
-    # different paces.
-    "core": {"data_pipeline", "utils"},
+    # different paces. B4 removes these two edges entirely.
+    "core": {"data_pipeline", "utils", "read", "providers"},
+    # data_pipeline/ root: shared types (PipelineResult) + process-local state.
     "data_pipeline": {"utils"},
+    "store": set(),
+    "providers": {"store", "utils"},
+    "ingest": {"data_pipeline", "providers", "store", "utils"},
+    "transform": {"data_pipeline", "store", "utils"},
+    "read": {"data_pipeline", "orchestrate", "providers", "store", "utils"},
+    "orchestrate": {"data_pipeline", "ingest", "store", "transform", "utils"},
     # utils is a leaf: it may not reach back into any business layer.
     "utils": set(),
 }
+
+# INVARIANT (KEEP IN SYNC with scripts/arch_metrics.py): the data_pipeline
+# sub-packages that get their own layer key.
+DATA_PIPELINE_SUBLAYERS = frozenset({"providers", "store", "ingest", "transform", "read", "orchestrate"})
 
 
 def _layer_of(path: Path) -> str | None:
@@ -229,10 +268,21 @@ def _layer_of(path: Path) -> str | None:
         rel = path.relative_to(REPO_ROOT) if path.is_absolute() else path
     except ValueError:
         return None
-    head = rel.parts[0] if rel.parts else ""
+    parts = rel.parts
+    head = parts[0] if parts else ""
     if head == "app.py":
         return "app"
+    if head == "data_pipeline" and len(parts) > 2 and parts[1] in DATA_PIPELINE_SUBLAYERS:
+        return parts[1]
     return head if head in _ALLOWED_DEPS else None
+
+
+def _import_layer(module: str) -> str:
+    """Map an imported module path to its layer key (see ``_layer_of``)."""
+    parts = module.split(".")
+    if parts[0] == "data_pipeline" and len(parts) > 1 and parts[1] in DATA_PIPELINE_SUBLAYERS:
+        return parts[1]
+    return parts[0]
 
 
 def _is_suppressed_at(path: Path, lineno: int, rule: str) -> bool:
@@ -243,11 +293,15 @@ def _is_suppressed_at(path: Path, lineno: int, rule: str) -> bool:
 
 
 def _imported_heads(path: Path) -> list[tuple[int, str]]:
-    """Every absolutely-imported top-level package with its line number.
+    """Every absolutely-imported module's *layer key*, with its line number.
 
     WHY ast.walk and not a scan of top-level statements: ``routes/`` historically
     hid its service imports inside function bodies, which kept them invisible to
     static review. Function-local imports are dependencies just the same.
+
+    WHY a layer key rather than the top-level package: since batch B3 the six
+    ``data_pipeline/`` sub-packages are separate layers, so
+    ``data_pipeline.store.db`` must resolve to ``store``, not ``data_pipeline``.
     """
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -261,7 +315,7 @@ def _imported_heads(path: Path) -> list[tuple[int, str]]:
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             mods = [node.module]
         for m in mods:
-            out.append((getattr(node, "lineno", 1), m.split(".", 1)[0]))
+            out.append((getattr(node, "lineno", 1), _import_layer(m)))
     return out
 
 
@@ -299,7 +353,7 @@ def rule_core_purity(ctx: Context) -> None:
         if path.suffix != ".py" or _layer_of(path) != "core":
             continue
         for lineno, head in _imported_heads(path):
-            if head != "data_pipeline":
+            if head != "data_pipeline" and head not in DATA_PIPELINE_SUBLAYERS:
                 continue
             if _is_suppressed_at(path, lineno, "core-purity"):
                 continue
@@ -313,10 +367,10 @@ def rule_core_purity(ctx: Context) -> None:
 
 
 # ── Rule: db-access ──────────────────────────────────────────────
-# INVARIANT: data_pipeline/repos.py is the only place that builds SQL and
-# data_pipeline/db.py the only place that owns connections. Upper layers must go
+# INVARIANT: data_pipeline/store/repos.py is the only place that builds SQL and
+# data_pipeline/store/db.py the only place that owns connections. Upper layers must go
 # through repos.py / DataService so WAL pragmas and the query cache apply.
-_DB_IMPORT_RE = re.compile(r"^\s*from\s+data_pipeline\.db\s+import\s+(.+)$")
+_DB_IMPORT_RE = re.compile(r"^\s*from\s+data_pipeline\.store\.db\s+import\s+(.+)$")
 # Connection lifecycle helpers are not SQL access: they have no repos.py
 # equivalent and every threaded render path must call them to avoid leaking the
 # thread-local connection.
@@ -340,8 +394,8 @@ def rule_db_access(ctx: Context) -> None:
                 "db-access",
                 path,
                 i,
-                "do not touch data_pipeline.db primitives — go through "
-                "data_pipeline/repos.py or DataService (ADR 0003)",
+                "do not touch data_pipeline.store.db primitives — go through "
+                "data_pipeline/store/repos.py or DataService (ADR 0003)",
             )
 
 

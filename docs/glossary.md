@@ -73,7 +73,7 @@ Untouched OHLCV pulled from a provider (yfinance today) and mapped onto the cano
 ### `feature_bars`
 `clean_bars` resampled per frequency (D/W/ME/QE) with engineered features (returns, MA, HV, oscillation). Indexed by `(ticker, date, frequency)`.
 
-> **Compatibility (one release)**: the pre-rename names `raw_prices` / `clean_prices` / `processed_prices` still exist as shadow tables — every write goes to both families (see `data_pipeline/db.py`) — so an un-migrated DB and a `git revert` of the rename keep working. See [ADR 0011](decisions/0011-pluggable-data-provider-seam.md).
+> **Compatibility (one release)**: the pre-rename names `raw_prices` / `clean_prices` / `processed_prices` still exist as shadow tables — every write goes to both families (see `data_pipeline/store/db.py`) — so an un-migrated DB and a `git revert` of the rename keep working. See [ADR 0011](decisions/0011-pluggable-data-provider-seam.md).
 
 ### Anomaly Flags
 - `price_jump_flag`: |log return| > 5σ.

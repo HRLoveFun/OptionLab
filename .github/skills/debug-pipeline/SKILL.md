@@ -23,10 +23,10 @@ Classify the user's report:
 | Symptom | Likely Layer |
 |---------|-------------|
 | Empty chart panels | core/ (PriceDynamic) or data_pipeline/ (NaN filler rows) |
-| "No data for TICKER" message | data_pipeline/downloader.py (download failed) |
+| "No data for TICKER" message | data_pipeline/ingest/ohlcv.py (download failed) |
 | Stale prices (dates from days ago) | data_pipeline/data_service.py (cooldown blocking refresh) |
 | 429 / timeout errors | yfinance rate-limiting or proxy issue |
-| Wrong values in analysis | data_pipeline/cleaning.py or processing.py |
+| Wrong values in analysis | data_pipeline/transform/cleaning.py or processing.py |
 
 ### Step 2: Check DB State
 

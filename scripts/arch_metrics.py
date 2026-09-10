@@ -50,15 +50,34 @@ BASELINE_PATH = REPO_ROOT / ".github" / "data" / "arch_baseline.json"
 
 GOD_FILE_LINES = 400
 
-# KEEP IN SYNC with scripts/doc_guard.py::_ALLOWED_DEPS.
+# KEEP IN SYNC with scripts/doc_guard.py::_ALLOWED_DEPS (same invariant, two
+# consumers: doc_guard blocks edits, this script tracks trend).
 ALLOWED_DEPS: dict[str, set[str]] = {
-    "app": {"routes", "services", "core", "data_pipeline", "utils"},
-    "routes": {"services", "data_pipeline", "utils"},
-    "services": {"core", "data_pipeline", "utils"},
-    "core": {"data_pipeline", "utils"},
+    "app": {"routes", "services", "core", "data_pipeline", "utils", "read", "orchestrate"},
+    "routes": {"services", "data_pipeline", "utils", "store", "read", "orchestrate"},
+    "services": {
+        "core",
+        "data_pipeline",
+        "utils",
+        "providers",
+        "store",
+        "ingest",
+        "transform",
+        "read",
+        "orchestrate",
+    },
+    "core": {"data_pipeline", "utils", "read", "providers"},
     "data_pipeline": {"utils"},
+    "store": set(),
+    "providers": {"store", "utils"},
+    "ingest": {"data_pipeline", "providers", "store", "utils"},
+    "transform": {"data_pipeline", "store", "utils"},
+    "read": {"data_pipeline", "orchestrate", "providers", "store", "utils"},
+    "orchestrate": {"data_pipeline", "ingest", "store", "transform", "utils"},
     "utils": set(),
 }
+# KEEP IN SYNC with scripts/doc_guard.py::DATA_PIPELINE_SUBLAYERS.
+DATA_PIPELINE_SUBLAYERS = frozenset({"providers", "store", "ingest", "transform", "read", "orchestrate"})
 BUSINESS_LAYERS = set(ALLOWED_DEPS)
 
 
@@ -74,7 +93,12 @@ def collect_files() -> list[Path]:
 
 
 def layer_of(rel: Path) -> str:
-    return "app" if rel.as_posix() == "app.py" else rel.parts[0]
+    parts = rel.parts
+    if rel.as_posix() == "app.py":
+        return "app"
+    if parts[0] == "data_pipeline" and len(parts) > 2 and parts[1] in DATA_PIPELINE_SUBLAYERS:
+        return parts[1]
+    return parts[0]
 
 
 def resolve_import(module: str | None, name: str | None, level: int, src: Path) -> Path | None:

@@ -6,7 +6,7 @@ Context:
   - Batch B2 renamed the store tables (: ``raw_prices``/``clean_prices``/
     ``processed_prices`` → ``raw_bars``/``clean_bars``/``feature_bars``). The
     pipeline now reads and writes the canonical names, and writes the legacy
-    names too for one release (see ``data_pipeline/db.py::_TABLE_SHADOWS``), but
+    names too for one release (see ``data_pipeline/store/db.py::_TABLE_SHADOWS``), but
     a DB created *before* B2 only has rows under the legacy names.
   - This script copies legacy → canonical so an existing ``market_data.sqlite``
     becomes readable by the new code without waiting for a re-download.
@@ -21,7 +21,7 @@ Contracts:
 Usage:
     python scripts/migrate_canonical_tables.py [--db PATH] [--dry-run]
 Dependencies:
-  - data_pipeline.db (schema + connection pragmas); stdlib only otherwise.
+  - data_pipeline.store.db (schema + connection pragmas); stdlib only otherwise.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from data_pipeline.db import CANONICAL_TABLES, DB_PATH, get_conn, init_db  # noqa: E402
+from data_pipeline.store.db import CANONICAL_TABLES, DB_PATH, get_conn, init_db  # noqa: E402
 
 
 def _columns(conn, table: str) -> list[str]:

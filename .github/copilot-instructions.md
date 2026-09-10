@@ -25,7 +25,7 @@ Flask-based market analysis dashboard with options strategy tools.
 
 ## Database
 
-- SQLite via `data_pipeline/db.py` — always use `get_conn()` context manager
+- SQLite via `data_pipeline/store/db.py` — always use `get_conn()` context manager
 - WAL mode enabled; `PRAGMA synchronous=NORMAL`
 - DB path from `MARKET_DB_PATH` env var, default `./market_data.sqlite`
 

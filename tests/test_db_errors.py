@@ -1,4 +1,4 @@
-"""Tests for data_pipeline.db — error scenarios and edge cases."""
+"""Tests for data_pipeline.store.db — error scenarios and edge cases."""
 
 import os
 import sqlite3
@@ -6,7 +6,7 @@ import sqlite3
 import pandas as pd
 import pytest
 
-from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
+from data_pipeline.store.db import fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:

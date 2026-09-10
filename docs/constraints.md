@@ -37,14 +37,14 @@ is usually a workaround for one of the items below.
 
 - **Constraint**: this app runs on one developer machine, occasionally a small VPS. Postgres is overkill.
 - **WAL mode + `synchronous=NORMAL`**: chosen for read concurrency. Do not switch to `FULL` (latency) or remove WAL (locks block reads during scheduler writes).
-- **Thread-local connections** (`data_pipeline/db.py`): SQLite connections are not thread-safe to share, but per-query reconnects are wasteful. We cache one connection per (thread, path) and apply PRAGMAs once.
+- **Thread-local connections** (`data_pipeline/store/db.py`): SQLite connections are not thread-safe to share, but per-query reconnects are wasteful. We cache one connection per (thread, path) and apply PRAGMAs once.
 - **No migration framework**: schemas are created via `CREATE TABLE IF NOT EXISTS`. Breaking changes require manual `.sqlite` migration scripts in `scripts/`.
 
 ## 4. The machine is not 24/7
 
 - Snapshot cadence (scheduler) **will have gaps**: laptop sleeps, weekends off, network outages.
 - Any feature that consumes time-series data must tolerate **sparse, non-contiguous days**. Do NOT assume daily continuity.
-- `data_pipeline/cleaning.py` aligns to business days and marks missing days as NA — **no interpolation**, by design. Filling gaps would invent prices that didn't trade.
+- `data_pipeline/transform/cleaning.py` aligns to business days and marks missing days as NA — **no interpolation**, by design. Filling gaps would invent prices that didn't trade.
 
 ## 5. Financial domain "magic numbers" are intentional
 
@@ -60,7 +60,7 @@ These are NOT magic numbers — they encode domain knowledge. Do not "DRY" them 
 ## 6. Computation must finish in one HTTP request
 
 - **No background job queue** (no Celery, no RQ). The Flask process serves the UI and runs the scheduler in-thread.
-- **APScheduler is optional and lazily imported.** The scheduler only starts when `AUTO_UPDATE_TICKERS` is set, and `data_pipeline/scheduler.py` imports APScheduler inside `UpdateScheduler.__init__` (plus a lazy `CronTrigger` import) so the rest of the app — and `acquire_scheduler_lock`'s unit tests — run without the package installed. **Do not move that import back to module scope**: an optional feature must not become a hard startup dependency.
+- **APScheduler is optional and lazily imported.** The scheduler only starts when `AUTO_UPDATE_TICKERS` is set, and `data_pipeline/orchestrate/scheduler.py` imports APScheduler inside `UpdateScheduler.__init__` (plus a lazy `CronTrigger` import) so the rest of the app — and `acquire_scheduler_lock`'s unit tests — run without the package installed. **Do not move that import back to module scope**: an optional feature must not become a hard startup dependency.
 - Long-running computations either:
   - Run inside a request and respond synchronously (fine for <2s), or
   - Are pre-computed by the scheduler and read from DB.

@@ -9,9 +9,9 @@ You are a data pipeline diagnostician for the OptionView project. Your job is to
 ## Architecture
 
 ```
-data_pipeline/downloader.py → raw_bars table
-data_pipeline/cleaning.py   → clean_bars table
-data_pipeline/processing.py → feature_bars table
+data_pipeline/ingest/ohlcv.py → raw_bars table
+data_pipeline/transform/cleaning.py   → clean_bars table
+data_pipeline/transform/processing.py → feature_bars table
 core/price_dynamic.py       → features DataFrame
 core/market_analyzer.py     → chart generation
 services/market/analysis/facade.py → base64 images to frontend

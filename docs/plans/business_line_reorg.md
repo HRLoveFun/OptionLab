@@ -40,7 +40,7 @@
 | — (planning + ADRs) | 🔨 in review (PR #7) | #7 | branch `worktree-business-line-reorg` · 2026-09-10 | plan, ADR 0011/0012 (Accepted), scaffolding (ledger, gates, AI-guide pointers, memory) |
 | B1 — provider seam extraction | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | delivers the "pluggable API" seam on its own. Actual shape / deviations recorded in §8; `_ALLOWED_DEPS` promotion of `providers` deferred to B3 |
 | B2 — canonical raw store | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | gate §8 Q4 resolved (name-only rename). Actuals in §8; `symbol` column deferred (ADR 0011 amendment) |
-| B3 — package re-home | ⬜ not started | — | — | resets `arch_baseline.json` |
+| B3 — package re-home | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | six stages + `_state.py`; first sub-layer guard table; `arch_baseline.json` **not** reset (no tracked drift). Actuals + deviations in §8 |
 | B4 — close L1 (`core-purity`) | ⬜ not started | — | — | — |
 | B5 — readiness plan + prefetch | ⬜ not started | — | — | gate: §8 Q1 |
 | B6 — `ticker`-only Parameters bar | ⬜ not started | — | — | gate: §8 Q3; depends on B5 |
@@ -477,6 +477,49 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   `doc_guard.py` clean; `arch_metrics.py --check` ok (no baseline reset needed);
   `audit_tags.py` unchanged (16 vs baseline 16); `routes/` untouched (only the one-line comment
   fix in `services/market/facade.py` outside `data_pipeline/`).
+
+**B3 (2026-09-10) — package re-home.**
+
+- **Layout achieved** (`data_pipeline/`): `providers/` (ACQUIRE) · `store/` · `ingest/` ·
+  `transform/` · `read/` · `orchestrate/` + `_state.py`. `data_ops/` is gone; `yf_client.py` moved
+  to `providers/yf_client.py` (kept, not deleted, so its one-release shim promise holds while
+  *services*→*providers* becomes the visible edge). Path map for anyone following older docs:
+
+  | old | new |
+  |---|---|
+  | `db.py` / `repos.py` / `quality_log.py` | `store/…` |
+  | `downloader.py` | `ingest/ohlcv.py` |
+  | `cleaning.py` / `processing.py` | `transform/…` |
+  | `data_ops/{facade,_query}.py` | `read/…` |
+  | `data_ops/{_update,_range}.py` | `orchestrate/{update,backfill}.py` |
+  | `job_cache.py` / `scheduler.py` | `orchestrate/…` |
+  | `data_ops/_globals.py` | `_state.py` (package root) |
+  | `yf_client.py` | `providers/yf_client.py` |
+
+- **Guards now sub-package aware**: `doc_guard._layer_of` / `_imported_heads` and
+  `arch_metrics.layer_of` resolve `data_pipeline/<stage>/…` to `<stage>`; `_ALLOWED_DEPS` carries
+  the six new keys **plus** the `providers` key B1 deferred; `sqlite-bypass` and `db-access` were
+  rescoped to `store/db.py` / `store/repos.py`. `tests/test_architecture_purity.py` gained three
+  tests: the layer graph matches the table, `transform/` never imports `providers/`, and the two
+  copies of the layer table agree.
+- **Deviations from §5.2's sketch** (all deliberate):
+  1. `orchestrate/update.py` exists (the sketch listed four files) — `manual_update` /
+     `seed_history` is a distinct "make it ready" entry point from chunked backfill.
+  2. **No `ingest/snapshots.py`**: live snapshots are never persisted (ADR 0004), so there is no
+     ingest glue to move — callers reach `providers` directly.
+  3. `_state.py` sits at the package root (the sketch put nothing there): `read` and `orchestrate`
+     both need the query cache / update locks, and the two must not import each other.
+  4. **`read → orchestrate`** is kept (the read path triggers refreshes), which is the reverse of
+     the sketch's `orchestrate → read`. Consequence: `orchestrate` may not import `read`, so
+     `orchestrate/scheduler.py` now calls `orchestrate.update.manual_update` instead of
+     `DataService.manual_update` (behaviour-identical; it removed the last cycle candidate).
+  5. **`providers → store`** (the provider writes its own failures to `store/quality_log.py`)
+     instead of being a pure leaf; the alternative was inventing a callback for a diagnostic write.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 472 passed / 5 skipped;
+  full `pytest tests/e2e` → 38 passed; `ruff check` + `format --check` clean; `doc_guard.py` clean;
+  `arch_metrics.py --check` ok — layer violations 0, cycles 0, god files 0, dead code 1, so
+  **no baseline reset was needed** (the §6 row anticipated one); `audit_tags.py` regenerated
+  (`--update-baseline`) because the uncovered-constant *paths* moved while the count stayed 16.
 
 ---
 

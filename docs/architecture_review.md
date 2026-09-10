@@ -54,8 +54,8 @@ for the live list. State at registration:
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `services/market/health.py` — **resolved 2026-09-03**, `services/portfolio/facade.py` — **resolved 2026-09-03** (`get_conn`) | ad-hoc health/inventory SQL predates `repos.py` coverage | queries moved into `data_pipeline/repos.py` |
-| `services/regime/facade.py`, `services/regime/ops/_bootstrap.py`, `services/regime/ops/_persistence.py` (`fetch_df`, `init_db`, `upsert_many`) — **resolved 2026-09-03** | regime log writes were split across service and ops modules | consolidated behind `data_pipeline/repos.py` (regime-log + clean-row ops) |
+| `services/market/health.py` — **resolved 2026-09-03**, `services/portfolio/facade.py` — **resolved 2026-09-03** (`get_conn`) | ad-hoc health/inventory SQL predates `repos.py` coverage | queries moved into `data_pipeline/store/repos.py` |
+| `services/regime/facade.py`, `services/regime/ops/_bootstrap.py`, `services/regime/ops/_persistence.py` (`fetch_df`, `init_db`, `upsert_many`) — **resolved 2026-09-03** | regime log writes were split across service and ops modules | consolidated behind `data_pipeline/store/repos.py` (regime-log + clean-row ops) |
 
 ### single-yf-exit (only `data_pipeline/providers/` may import yfinance) — 0 markers
 
@@ -65,33 +65,40 @@ Rescoped in batch B1 of [ADR 0011](decisions/0011-pluggable-data-provider-seam.m
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `data_pipeline/downloader.py` — **resolved 2026-09-10 (B1)** | DB-aware gap-detection bulk downloads; it used to call `yf.download` directly as a registered second exit point | the download call moved to `providers/yfinance_provider.py::download_daily_frame`; `downloader.py` keeps only gap detection + `raw_bars` upsert, so it no longer imports yfinance |
-| `data_pipeline/data_ops/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `fetch_spot` (provider, re-exported by `yf_client`) |
+| `data_pipeline/ingest/ohlcv.py` — **resolved 2026-09-10 (B1)** | DB-aware gap-detection bulk downloads; it used to call `yf.download` directly as a registered second exit point | the download call moved to `providers/yfinance_provider.py::download_daily_frame`; `downloader.py` keeps only gap detection + `raw_bars` upsert, so it no longer imports yfinance |
+| `data_pipeline/read/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `fetch_spot` (provider, re-exported by `providers/yf_client.py`) |
 
 ### Watch list (pre-debt, no marker yet)
 
 | Location | Concern | Trigger to act |
 |---|---|---|
 | `services/market/analysis/summary.py` (fan-in 0, tracked as `dead_code_candidates=1` in baseline) | `generate_summary_analysis` lost its caller when the streaming refactor removed the server-rendered `summary_data` template variable; the Summary tab button is gated off in `templates/index.html` and `summary_pending` in `routes/core.py` is vestigial | any request to ship the multi-ticker Summary tab ⇒ add a `summary` slice to `_RENDER_KIND_SLICES` (aggregates across the job's tickers, not per-ticker) ; otherwise delete the module + `partials/tab_summary.html` + the `summary_pending` flag in the same commit and reset the baseline |
-| ~~`data_pipeline/yf_client.py` (391 lines, fan-in 11)~~ — **resolved 2026-09-10 (B1)** | it sat 9 lines below the 400-line god-file threshold | the option-chain section was extracted pre-emptively, as prescribed, into `providers/yf_snapshot.py`; `yf_client.py` is now a ~35-line shim. The pressure moved to `providers/yf_snapshot.py` (≈340 lines) and `providers/yfinance_provider.py` (≈290 lines) — watch them before adding endpoints |
+| ~~`data_pipeline/providers/yf_client.py` (391 lines, fan-in 11)~~ — **resolved 2026-09-10 (B1)** | it sat 9 lines below the 400-line god-file threshold | the option-chain section was extracted pre-emptively, as prescribed, into `providers/yf_snapshot.py`; `yf_client.py` is now a ~35-line shim. The pressure moved to `providers/yf_snapshot.py` (≈340 lines) and `providers/yfinance_provider.py` (≈290 lines) — watch them before adding endpoints |
 
 ## 3. Guardrails (how the score is kept)
 
 | Tool | Role | Run where |
 |---|---|---|
-| `scripts/doc_guard.py` | blocks violating edits: `import-direction`, `core-purity`, `db-access`, `single-yf-exit`, `sqlite-bypass`, `yfinance-throttle`, `yfinance-session-kwarg`, `tag-syntax`, `module-docstring`, ADR rules | pre-commit + CI, per changed file |
+| `scripts/doc_guard.py` | blocks violating edits: `import-direction` (sub-package aware since B3), `core-purity`, `db-access`, `single-yf-exit`, `sqlite-bypass`, `yfinance-throttle`, `yfinance-session-kwarg`, `tag-syntax`, `module-docstring`, ADR rules | pre-commit + CI, per changed file |
 | `scripts/arch_metrics.py` | trend metrics: layer-edge violations, import cycles (Tarjan), god files, dead-code candidates, fan-in/out Top-5; `--check` fails CI on regression vs `.github/data/arch_baseline.json` | CI, whole repo |
-| `tests/test_architecture_purity.py` | contract test re-asserting core purity at the test layer so suppressed markers stay visible in the test report | pytest |
+| `tests/test_architecture_purity.py` | contract tests at the test layer: core purity, the `data_pipeline/` layer graph, transform↛providers, and that the two copies of the layer table agree | pytest |
 
 **Layer allow-list** (single source of truth: `doc_guard.py::_ALLOWED_DEPS`,
-mirrored in `arch_metrics.py`):
+mirrored in `arch_metrics.py`; asserted equal by
+`tests/test_architecture_purity.py::test_layer_tables_are_in_sync`):
 
 ```
-app           → routes, services, core, data_pipeline, utils
-routes        → services, data_pipeline, utils          (never core directly)
-services      → core, data_pipeline, utils
-core          → utils (data_pipeline only via §2 markers)
-data_pipeline → utils
+app           → routes, services, core, data_pipeline, utils, read, orchestrate
+routes        → services, data_pipeline, utils, store, read, orchestrate   (never core directly)
+services      → core, data_pipeline, utils, providers, store, ingest, transform, read, orchestrate
+core          → utils, read, providers        (data_pipeline* only via §2 markers; B4 removes both)
+data_pipeline → utils                          # root: PipelineResult (types) + _state.py
+  store       → (nothing upward)
+  providers   → store, utils                   # store = quality_log; see plan §8 B3
+  ingest      → data_pipeline, providers, store, utils
+  transform   → data_pipeline, store, utils     # never providers (asserted by test)
+  read        → data_pipeline, orchestrate, providers, store, utils
+  orchestrate → data_pipeline, ingest, store, transform, utils
 utils         → (leaf: nothing upward)
 ```
 

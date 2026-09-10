@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from data_pipeline.db import get_conn, init_db
+from data_pipeline.store.db import get_conn, init_db
 
 _JOB_ID_RE = re.compile(r'STREAMING_JOB_ID\s*=\s*"([^"]+)"')
 
@@ -39,7 +39,7 @@ def _seed_clean_bars(ticker: str, n_rows: int = 30, *, nan_only: bool = False):
     """
     init_db()
     # Drop the cross-test query cache that DataService maintains (TTL 60s).
-    from data_pipeline.data_ops import _cache_invalidate
+    from data_pipeline._state import _cache_invalidate
 
     _cache_invalidate(ticker)
     dates = pd.bdate_range(end=dt.date.today(), periods=n_rows)
@@ -68,17 +68,17 @@ def _seed_clean_bars(ticker: str, n_rows: int = 30, *, nan_only: bool = False):
 @pytest.fixture()
 def _patch_downloads(monkeypatch):
     """Disable all real yfinance download paths for unit tests."""
-    from data_pipeline.data_ops import DataService
+    from data_pipeline.read import DataService
 
     # Block the manual_update → pipeline path. Patch BOTH the DataService
     # facade and the module-level function: _query.py calls the _update module
     # directly because facade imports _query (the reverse edge would be an
     # import cycle), so patching only the class would be bypassed.
     monkeypatch.setattr(DataService, "manual_update", staticmethod(lambda *a, **kw: None))
-    monkeypatch.setattr("data_pipeline.data_ops._update.manual_update", lambda *a, **kw: None)
+    monkeypatch.setattr("data_pipeline.orchestrate.update.manual_update", lambda *a, **kw: None)
     # Block the ensure_range → chunked backfill path (same dual patching).
     monkeypatch.setattr(DataService, "ensure_range", staticmethod(lambda *a, **kw: True))
-    monkeypatch.setattr("data_pipeline.data_ops._range.ensure_range", lambda *a, **kw: True)
+    monkeypatch.setattr("data_pipeline.orchestrate.backfill.ensure_range", lambda *a, **kw: True)
     # Block the data_context fallback to yfinance
     monkeypatch.setattr("core.market.data_context._download_data", lambda *a, **kw: None)
 
@@ -180,8 +180,8 @@ def client(_patch_downloads):
     """Create Flask test client with isolated DB."""
     import app as flask_app
 
-    from data_pipeline import data_ops as _ds
-    from data_pipeline import job_cache as _jc
+    from data_pipeline import _state as _ds
+    from data_pipeline.orchestrate import job_cache as _jc
 
     # Reset module-level caches so prior tests don't leak data into this one.
     _jc._reset()

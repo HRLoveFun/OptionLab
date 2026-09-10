@@ -2,7 +2,7 @@
 
 Data flows through 5 stages. A failure at any stage can propagate downstream as empty/NaN data.
 
-## Stage 1: Download (`data_pipeline/downloader.py`)
+## Stage 1: Download (`data_pipeline/ingest/ohlcv.py`)
 
 **Function**: `upsert_raw_prices(ticker, start, end)`
 **Input**: Ticker symbol, date range
@@ -16,7 +16,7 @@ Data flows through 5 stages. A failure at any stage can propagate downstream as 
 
 **Check**: `SELECT count(*) FROM raw_bars WHERE ticker=? AND date BETWEEN ? AND ?`
 
-## Stage 2: Clean (`data_pipeline/cleaning.py`)
+## Stage 2: Clean (`data_pipeline/transform/cleaning.py`)
 
 **Function**: `clean_range(ticker, start, end)`
 **Input**: Reads from `raw_bars` table
@@ -30,7 +30,7 @@ Data flows through 5 stages. A failure at any stage can propagate downstream as 
 
 **Check**: `SELECT date, missing_any, price_jump_flag FROM clean_bars WHERE ticker=? ORDER BY date DESC LIMIT 10`
 
-## Stage 3: Process (`data_pipeline/processing.py`)
+## Stage 3: Process (`data_pipeline/transform/processing.py`)
 
 **Function**: `build_features(ticker, frequency)`
 **Input**: Reads from `clean_bars` table

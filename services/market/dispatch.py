@@ -11,7 +11,7 @@ Context:
 Contracts:
   - render_streaming_slice(kind) -> Response | tuple[str, int]
 Dependencies UPWARD:
-  - data_pipeline.job_cache, data_pipeline.db
+  - data_pipeline.orchestrate.job_cache, data_pipeline.store.db
   - services.market.analysis
   - utils.constants, utils.render_helpers
 Dependencies DOWNWARD:
@@ -26,8 +26,8 @@ from typing import Any
 
 from flask import render_template, request
 
-from data_pipeline.db import close_thread_conn
-from data_pipeline.job_cache import compute_or_get, get_job
+from data_pipeline.orchestrate.job_cache import compute_or_get, get_job
+from data_pipeline.store.db import close_thread_conn
 from services.market.analysis import AnalysisService
 from utils.constants import (
     DEFAULT_FREQUENCY,

@@ -15,7 +15,7 @@ Contracts:
 Dependencies UPWARD:
   - providers.yfinance_provider (download), .db (fetch_df / upsert_many)
 Dependencies DOWNWARD:
-  - data_pipeline/data_ops (_update / _range), services/regime/ops/_bootstrap.py
+  - data_pipeline/orchestrate (update / backfill), services/regime/ops/_bootstrap.py
 """
 
 import datetime as dt
@@ -25,12 +25,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from data_pipeline import PipelineResult
 from data_pipeline.providers import get_provider
 from data_pipeline.providers.base import CANONICAL_BAR_COLUMNS
 from data_pipeline.providers.yfinance_provider import to_canonical_bars
-
-from . import PipelineResult
-from .db import fetch_df, upsert_many
+from data_pipeline.store.db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 

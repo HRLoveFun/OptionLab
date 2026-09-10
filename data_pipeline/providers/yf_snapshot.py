@@ -15,7 +15,7 @@ Contracts:
   - ``fetch_spot(ticker)`` / ``fetch_spots_bulk(tickers)`` -> ``float`` / ``dict``.
   - ``fetch_option_chain(ticker)`` keeps the legacy payload contract
     (``ticker`` / ``spot`` / ``expiries`` / ``chain{expiry:{calls,puts}}``) for
-    callers that still import it through the ``data_pipeline.yf_client`` shim.
+    callers that still import it through the ``data_pipeline.providers.yf_client`` shim.
   - ``to_option_chain_snapshot(payload)`` -> canonical ``OptionChainSnapshot``.
 Design rules:
   - CONSTRAINT: every public function calls ``yf_throttle()`` before each
@@ -24,7 +24,7 @@ Design rules:
     chain and decide how to surface the error. Raising here would cascade into
     unhandled 500s from several routes.
 Dependencies UPWARD:
-  - utils.network (throttle), data_pipeline.quality_log (via providers._log)
+  - utils.network (throttle), data_pipeline.store.quality_log (via providers._log)
 Dependencies DOWNWARD:
   - providers/base, providers/_log
 """

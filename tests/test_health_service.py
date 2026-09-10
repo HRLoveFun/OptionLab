@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from data_pipeline.db import get_conn
+from data_pipeline.store.db import get_conn
 from services.market.health import overall_summary, per_ticker_summary
 
 
 def _seed(ticker: str, dates: list[str], close_vals: list[float | None]) -> None:
-    from data_pipeline.db import init_db
+    from data_pipeline.store.db import init_db
 
     init_db()
     with get_conn() as conn:

@@ -10,7 +10,7 @@ import datetime as dt
 import logging
 
 from core.market.data_context import build_data_context
-from data_pipeline.yf_client import fetch_spot as _fetch_spot
+from data_pipeline.providers.yf_client import fetch_spot as _fetch_spot
 from services.market_review import market_review, market_review_timeseries
 from utils.date_helpers import exclusive_month_end
 from utils.ticker_utils import is_valid_ticker_format

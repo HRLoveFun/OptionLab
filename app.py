@@ -13,8 +13,8 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 
-from data_pipeline.data_ops import DataService
-from data_pipeline.scheduler import UpdateScheduler, acquire_scheduler_lock
+from data_pipeline.orchestrate.scheduler import UpdateScheduler, acquire_scheduler_lock
+from data_pipeline.read import DataService
 from utils.network import init_yf_proxy
 
 load_dotenv()

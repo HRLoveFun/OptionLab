@@ -3,7 +3,9 @@
 Context:
 - Reads from ``clean_bars`` and emits resampled bars + indicator columns to
   ``feature_bars``. Pure pandas; no I/O outside the DB helpers in
-  ``data_pipeline.db``.
+  ``data_pipeline.store.db``. INVARIANT (ADR 0011 §5.2): never imports
+  ``providers/`` — the processing stage only ever sees canonical tables.
+  ``data_pipeline.store.db``.
 """
 
 import datetime as dt
@@ -12,8 +14,8 @@ import logging
 import numpy as np
 import pandas as pd
 
-from . import PipelineResult
-from .db import fetch_df, upsert_many
+from data_pipeline import PipelineResult
+from data_pipeline.store.db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 

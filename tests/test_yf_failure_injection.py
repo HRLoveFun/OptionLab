@@ -30,15 +30,10 @@ import pandas as pd
 import pytest
 
 from data_pipeline import PipelineResult
-from data_pipeline.data_ops import (
-    DataService,
-    _query_cache,
-    _query_cache_lock,
-    _update_lock_mutex,
-    _update_locks,
-)
-from data_pipeline.db import fetch_df, init_db, upsert_many
-from data_pipeline.downloader import download_bars, upsert_raw_prices
+from data_pipeline._state import _query_cache, _query_cache_lock, _update_lock_mutex, _update_locks
+from data_pipeline.ingest.ohlcv import download_bars, upsert_raw_prices
+from data_pipeline.read import DataService
+from data_pipeline.store.db import fetch_df, init_db, upsert_many
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -290,7 +285,7 @@ class TestManualUpdateGracefulFailure:
         result = DataService.manual_update("E2E_TKR")
         assert result is False
 
-    @patch("data_pipeline.downloader.upsert_raw_prices")
+    @patch("data_pipeline.ingest.ohlcv.upsert_raw_prices")
     def test_manual_update_returns_false_on_pipeline_error_field(self, mock_upsert):
         """Even if downloader returns ok=False (rather than raising), we degrade gracefully."""
         init_db()

@@ -1,8 +1,23 @@
-"""Shared globals for data operations (locks, caches, TTLs).
+"""Process-local shared state for the read + orchestrate layers.
 
-All heavy-lifting state (cooldown locks, query cache, TTL constants) is
-co-located here so that ``data_ops.facade.DataService`` and tests operate
-on the **same** underlying objects.
+Domain:    Data Pipeline — Shared State
+Context:
+  - All heavy-lifting state (update cooldown locks, the query cache, TTL
+    constants) is co-located here so ``read`` and ``orchestrate`` — and the
+    tests that inspect them — operate on the **same** underlying objects.
+  - It lives at the ``data_pipeline/`` root rather than in ``read/`` or
+    ``orchestrate/`` because both layers need it and neither may import the
+    other's internals (``read`` imports ``orchestrate``, so ``orchestrate``
+    must not import ``read``). See the layer table in
+    docs/architecture_review.md §3.
+Why not in ``store/``: this is in-memory state, not persistence.
+Contracts:
+  - ``_query_cache`` / ``_cache_get`` / ``_cache_set`` / ``_cache_invalidate``
+  - ``_update_locks`` / ``_update_lock_mutex`` / ``_UPDATE_COOLDOWN`` / ``GAP_SCAN_DAYS``
+Dependencies UPWARD:
+  - (none — stdlib + pandas only)
+Dependencies DOWNWARD:
+  - read/ (query cache), orchestrate/ (update locks), tests
 """
 
 import os

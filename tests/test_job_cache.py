@@ -1,11 +1,11 @@
-"""Tests for data_pipeline/job_cache.py."""
+"""Tests for data_pipeline/orchestrate/job_cache.py."""
 
 import threading
 import time
 
 import pytest
 
-from data_pipeline import job_cache as jc
+from data_pipeline.orchestrate import job_cache as jc
 
 
 @pytest.fixture(autouse=True)

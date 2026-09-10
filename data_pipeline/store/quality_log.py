@@ -15,7 +15,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from data_pipeline.db import get_conn
+from data_pipeline.store.db import get_conn
 
 _logger = logging.getLogger(__name__)
 

@@ -11,7 +11,10 @@ import logging
 import os
 from pathlib import Path
 
-from .data_ops import DataService
+# WHY (no DataService): the scheduler drives the pipeline, it does not read.
+# Going through the read facade here would create read <-> orchestrate cycle
+# (read/_query.py already imports this package to trigger refreshes).
+from data_pipeline.orchestrate.update import manual_update
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +96,7 @@ class UpdateScheduler:
         def job():
             for t in tickers:
                 try:
-                    DataService.manual_update(t, days=7)
+                    manual_update(t, days=7)
                     logger.info(f"Auto-updated {t}")
                 except Exception as e:
                     logger.exception(f"Auto-update failed for {t}: {e}")
@@ -115,7 +118,7 @@ class UpdateScheduler:
             for t in tickers:
                 try:
                     # Trigger a full data update which includes correlation recalculation
-                    DataService.manual_update(t, days=30)
+                    manual_update(t, days=30)
                     logger.info(f"Monthly correlation update completed for {t}")
                 except Exception as e:
                     logger.exception(f"Monthly correlation update failed for {t}: {e}")

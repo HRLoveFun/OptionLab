@@ -1,4 +1,18 @@
-"""Data cleaning utilities for raw market price data."""
+"""Data cleaning: raw_prices → clean_bars.
+
+Domain:    Data Pipeline — Transform (cleaning)
+Context:
+  - Aligns raw bars to business days, flags anomalies, and marks missing days as
+    NA. INVARIANT: **no interpolation** — inventing prices that never traded
+    would corrupt every downstream indicator (HV, MA, regime). See
+    docs/constraints.md §4.
+Contracts:
+  - ``clean_range(ticker, start, end) -> PipelineResult`` — raw_bars → clean_bars.
+Dependencies UPWARD:
+  - store (db), data_pipeline (PipelineResult)
+Dependencies DOWNWARD:
+  - orchestrate/update.py, orchestrate/backfill.py
+"""
 
 import datetime as dt
 import logging
@@ -6,8 +20,8 @@ import logging
 import numpy as np
 import pandas as pd
 
-from . import PipelineResult
-from .db import fetch_df, upsert_many
+from data_pipeline import PipelineResult
+from data_pipeline.store.db import fetch_df, upsert_many
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""Tests for the gap-aware downloader logic in `data_pipeline/downloader.py`.
+"""Tests for the gap-aware downloader logic in `data_pipeline/ingest/ohlcv.py`.
 
 These lock in the behavior fix for the NVDA-style outage: when historical
 business days are missing from `raw_prices` (e.g. after a yfinance rate-limit
@@ -14,15 +14,10 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from data_pipeline.data_ops import (
-    DataService,
-    _query_cache,
-    _query_cache_lock,
-    _update_lock_mutex,
-    _update_locks,
-)
-from data_pipeline.db import init_db, upsert_many
-from data_pipeline.downloader import find_missing_business_days, upsert_raw_prices
+from data_pipeline._state import _query_cache, _query_cache_lock, _update_lock_mutex, _update_locks
+from data_pipeline.ingest.ohlcv import find_missing_business_days, upsert_raw_prices
+from data_pipeline.read import DataService
+from data_pipeline.store.db import init_db, upsert_many
 
 
 @pytest.fixture(autouse=True)

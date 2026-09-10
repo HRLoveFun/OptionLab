@@ -63,7 +63,7 @@ def _validate_inputs(ticker, start_date, frequency, end_date=None):
 
 
 def _fetch_daily_from_db(ticker: str, download_start: dt.date):
-    from data_pipeline.data_ops import DataService  # doc-guard: allow=core-purity
+    from data_pipeline.read import DataService  # doc-guard: allow=core-purity
 
     try:
         DataService.initialize()
@@ -96,7 +96,7 @@ def _fetch_daily_from_db(ticker: str, download_start: dt.date):
 
 
 def _download_data(ticker: str, download_start: dt.date):
-    from data_pipeline.yf_client import fetch_daily_ohlcv  # doc-guard: allow=core-purity
+    from data_pipeline.providers.yf_client import fetch_daily_ohlcv  # doc-guard: allow=core-purity
 
     yf_end = dt.date.today() + dt.timedelta(days=1)
     df = fetch_daily_ohlcv(

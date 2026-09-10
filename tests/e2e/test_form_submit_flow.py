@@ -4,7 +4,7 @@ Exercises the *real* Flask backend: form POST → DataService pipeline →
 template render → table visible. The yfinance layer is patched at the
 backend process level via the `yf_stub` fixture; the synthetic ticker
 ``TEST_AAPL`` routes through the existing fixture branch in
-`data_pipeline.downloader`.
+`data_pipeline.ingest.ohlcv`.
 """
 
 from __future__ import annotations

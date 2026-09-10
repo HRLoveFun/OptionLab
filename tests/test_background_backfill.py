@@ -14,14 +14,15 @@ import time
 import pandas as pd
 import pytest
 
-import data_pipeline.data_ops._query as _q
+import data_pipeline.read._query as _q
 from data_pipeline import PipelineResult
-from data_pipeline.data_ops import _cache_get, _cache_invalidate
-from data_pipeline.data_ops._query import (
+from data_pipeline._state import _cache_get, _cache_invalidate
+from data_pipeline.orchestrate import backfill as _bf
+from data_pipeline.read._query import (
     _join_backfills,
     _kick_backfill,
 )
-from data_pipeline.db import init_db
+from data_pipeline.store.db import init_db
 
 TICKER = "BGTEST1"
 
@@ -48,9 +49,11 @@ class TestBackgroundBackfill:
         whatever exists (nothing), while the backfill continues in background."""
         init_db()
         _dl, calls = _slow_downloader(delay=1.0)
-        monkeypatch.setattr("data_pipeline.downloader.upsert_raw_prices", _dl)
-        monkeypatch.setattr("data_pipeline.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
-        monkeypatch.setattr("data_pipeline.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr("data_pipeline.ingest.ohlcv.upsert_raw_prices", _dl)
+        monkeypatch.setattr("data_pipeline.transform.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr(
+            "data_pipeline.transform.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1)
+        )
 
         start = dt.date(2021, 1, 1)
         end = dt.date.today()
@@ -68,9 +71,11 @@ class TestBackgroundBackfill:
     def test_partial_read_is_not_cached(self, monkeypatch):
         init_db()
         _dl, _calls = _slow_downloader(delay=1.0)
-        monkeypatch.setattr("data_pipeline.downloader.upsert_raw_prices", _dl)
-        monkeypatch.setattr("data_pipeline.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
-        monkeypatch.setattr("data_pipeline.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr("data_pipeline.ingest.ohlcv.upsert_raw_prices", _dl)
+        monkeypatch.setattr("data_pipeline.transform.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr(
+            "data_pipeline.transform.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1)
+        )
 
         start = dt.date(2021, 1, 1)
         end = dt.date.today()
@@ -88,11 +93,13 @@ class TestBackgroundBackfill:
         def _fast_dl(ticker, start, end):  # noqa: ARG001
             return PipelineResult(rows=10)
 
-        monkeypatch.setattr("data_pipeline.downloader.upsert_raw_prices", _fast_dl)
-        monkeypatch.setattr("data_pipeline.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
-        monkeypatch.setattr("data_pipeline.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr("data_pipeline.ingest.ohlcv.upsert_raw_prices", _fast_dl)
+        monkeypatch.setattr("data_pipeline.transform.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
         monkeypatch.setattr(
-            "data_pipeline.data_ops._query.fetch_df",
+            "data_pipeline.transform.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1)
+        )
+        monkeypatch.setattr(
+            "data_pipeline.read._query.fetch_df",
             lambda sql, params: pd.DataFrame(
                 {
                     "date": ["2026-01-05"],
@@ -123,14 +130,16 @@ class TestBackgroundBackfill:
         start = dt.date(2021, 1, 1)
         end = dt.date.today()
         # Empty DB → backfill needed.
-        assert _q._r.needs_backfill(TICKER + "-PROBE", start, end) is True
+        assert _bf.needs_backfill(TICKER + "-PROBE", start, end) is True
 
     def test_kick_dedupes_concurrent_kicks(self, monkeypatch):
         init_db()
         _dl, calls = _slow_downloader(delay=0.3)
-        monkeypatch.setattr("data_pipeline.downloader.upsert_raw_prices", _dl)
-        monkeypatch.setattr("data_pipeline.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
-        monkeypatch.setattr("data_pipeline.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr("data_pipeline.ingest.ohlcv.upsert_raw_prices", _dl)
+        monkeypatch.setattr("data_pipeline.transform.cleaning.clean_range", lambda *a, **k: PipelineResult(rows=1))
+        monkeypatch.setattr(
+            "data_pipeline.transform.processing.process_frequencies", lambda *a, **k: PipelineResult(rows=1)
+        )
 
         start, end = dt.date(2021, 1, 1), dt.date.today()
         for _ in range(5):

@@ -40,7 +40,7 @@ def test_importing_scheduler_module_does_not_import_apscheduler():
     """Module import alone must not require the package (see constraints §6)."""
     result = _run(
         "import sys\n"
-        "import data_pipeline.scheduler\n"
+        "import data_pipeline.orchestrate.scheduler\n"
         "assert 'apscheduler' not in sys.modules, 'apscheduler imported at module scope'\n"
     )
 
@@ -52,7 +52,7 @@ def test_missing_apscheduler_raises_actionable_error():
     result = _run(
         _BLOCK_APSCHEDULER
         + (
-            "from data_pipeline.scheduler import UpdateScheduler\n"
+            "from data_pipeline.orchestrate.scheduler import UpdateScheduler\n"
             "try:\n"
             "    UpdateScheduler()\n"
             "except ModuleNotFoundError as exc:\n"

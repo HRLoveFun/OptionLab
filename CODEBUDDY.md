@@ -123,7 +123,7 @@ Always reference and import them package-qualified (`from core.options.greeks im
 
 `POST /` computes **nothing**. `routes/core.py::index` normalises the form
 (`FormService.extract_form_data` → `ValidationService.validate_input_data`), registers a job via
-`data_pipeline/job_cache.py::create_job` (TTL default 90 s), and renders `templates/index.html`
+`data_pipeline/orchestrate/job_cache.py::create_job` (TTL default 90 s), and renders `templates/index.html`
 with `streaming_mode=True`. Each tab shell emits an HTMX placeholder
 (`hx-get="/render/<kind>?job=…&ticker=…" hx-trigger="load"`), and the browser fans out parallel requests.
 
@@ -146,26 +146,37 @@ chart-level memo keyed by `(ticker, chart name, params)` because PNG encoding is
 
 ### `data_pipeline/` specifics
 
-- **`data_ops/` — `DataService` (facade)** is the single read entry point. `ensure_range(ticker,
-  start, end)` is DB-first with a memo + in-flight de-duplication + TTL, which stops concurrent UI
-  requests from stampeding Yahoo. `_query.py` calls `_update`/`_range` module functions directly
-  (never the facade) to avoid an import cycle.
+Re-homed in batch B3 of ADR 0011 into six one-way stages; the authoritative layer table is
+`docs/architecture_review.md` §3 and is enforced by `doc_guard` + `tests/test_architecture_purity.py`:
+
+- **`read/` — `DataService` (facade)** is the single read entry point above the package.
+  `ensure_range(ticker, start, end)` is DB-first with a memo + in-flight de-duplication + TTL, which
+  stops concurrent UI requests from stampeding Yahoo. The facade and `read/_query.py` call the
+  `orchestrate` drivers directly (never each other's facade) — `read → orchestrate` is why
+  `orchestrate` must not import `read` (no cycle).
 - **`providers/`** is the **only** package allowed to call yfinance (the chokepoint moved here from
-  `yf_client.py` in batch B1 of ADR 0011; enforced by `doc_guard` `single-yf-exit`, exceptions
-  registered in `docs/architecture_review.md` §2). It owns the mapping from the vendor's fields onto
-  one canonical schema (`providers/base.py`) — IV as a decimal, nullable bid/ask, no `inTheMoney`.
-  Every call goes through `yf_throttle()` (token bucket, 5 req/s, burst 5). `yf_client.py` is a
-  one-release compatibility shim over the package and `downloader.py` keeps only gap detection +
-  upsert. **Never** pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently
-  fails (ADR 0005).
-- **`db.py`** — `init_db()` uses `CREATE TABLE IF NOT EXISTS` (no migration framework). Tables are
-  named canonically (`raw_bars` / `clean_bars` / `feature_bars`); the pre-rename names
-  (`raw_prices` / `clean_prices` / `processed_prices`) are kept as shadows for one release — every
-  `upsert_many` writes both families, and `scripts/migrate_canonical_tables.py` backfills an existing
-  DB. `get_conn()` yields a **thread-local** WAL connection (`synchronous=NORMAL`,
-  `busy_timeout=5000`) and does **not** close on exit. `repos.py` is the only place that builds SQL.
-- **`cleaning.py` / `processing.py`** — align to business days, mark gaps NA with **no
-  interpolation** (invented prices are worse than missing ones), then engineer returns/MAs/HV.
+  `yf_client.py` in batch B1; enforced by `doc_guard` `single-yf-exit`, exceptions registered in
+  `docs/architecture_review.md` §2). It owns the mapping from the vendor's fields onto one canonical
+  schema (`providers/base.py`) — IV as a decimal, nullable bid/ask, no `inTheMoney`. Every call goes
+  through `yf_throttle()` (token bucket, 5 req/s, burst 5). `providers/yf_client.py` is a one-release
+  compatibility shim over the package; `_registry.py` is the `MARKET_DATA_PROVIDER` seam.
+  **Never** pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently fails
+  (ADR 0005).
+- **`store/`** — `db.py` (`init_db()` uses `CREATE TABLE IF NOT EXISTS`; no migration framework),
+  `repos.py` (the only place that builds SQL) and `quality_log.py`. Tables are named canonically
+  (`raw_bars` / `clean_bars` / `feature_bars`); the pre-rename names (`raw_prices` / `clean_prices` /
+  `processed_prices`) are kept as shadows for one release — every `upsert_many` writes both families,
+  and `scripts/migrate_canonical_tables.py` backfills an existing DB. `get_conn()` yields a
+  **thread-local** WAL connection (`synchronous=NORMAL`, `busy_timeout=5000`) and does **not** close
+  on exit.
+- **`ingest/ohlcv.py`** — business-day gap detection + `raw_bars` upsert; acquisition goes through
+  `providers.get_provider().history()`, so this module never names a vendor.
+- **`transform/cleaning.py` / `transform/processing.py`** — align to business days, mark gaps NA with
+  **no interpolation** (invented prices are worse than missing ones), then engineer returns/MAs/HV.
+  Never imports `providers/` (asserted by a test).
+- **`orchestrate/`** — `update.py` (incremental/full drivers), `backfill.py` (chunked coverage
+  repair), `job_cache.py` (streaming slice memo), `scheduler.py` (optional APScheduler).
+- **`_state.py`** — process-local query cache + update locks, shared by `read` and `orchestrate`.
 - No option-chain history exists from yfinance — no IV rank/percentile/backtests; HV percentile is
   the deliberate substitute (ADR 0004).
 
@@ -211,8 +222,8 @@ Pages-only. Rendered `site/index.html` / `site/static/` are build artefacts — 
 | Question | File |
 |---|---|
 | How does a request get served? | `routes/core.py` → `services/market/dispatch.py` |
-| Where does data come from? | `data_pipeline/data_ops/facade.py`, `_range.py`, `yf_client.py` |
-| Schema / SQL | `data_pipeline/db.py` (`init_db`), `repos.py` |
+| Where does data come from? | `data_pipeline/read/facade.py`, `orchestrate/backfill.py`, `providers/` |
+| Schema / SQL | `data_pipeline/store/db.py` (`init_db`), `store/repos.py` |
 | Chart / analysis maths | `core/market/analyzer.py`, `core/options/`, `core/strategies/` |
 | Frontend contract | `docs/frontend_architecture.md` |
 | Why is this weird? | `docs/constraints.md`, then `docs/decisions/` |
