@@ -48,7 +48,7 @@
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
 | B7 — module-scoped params | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). Backend query-arg contract + per-module allow-list; `state/*ParamsState.js`; module toolbars; bridge + hidden fields deleted; Config tab emptied (B8 decides its fate). See §8 B7 |
 | B8 — retire / repurpose Config tab | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q2 resolved (**deleted**). `grep tab_config` returns nothing; risk-free-rate follow-up on the watch list |
-| B9 — acceptance-review remediation | 🔨 F1–F3+F6 landed | — | branch `worktree-business-line-reorg` · 2026-09-11 | §10 review. **F1** (memo `variant` key), **F2** (real collapse target + hide fields), **F3** (inline-SVG chevron), **F6** (docstrings) done; F4/F5/F7c open |
+| B9 — acceptance-review remediation | 🔨 F1–F4, F5-b/c, F6 landed | — | branch `worktree-business-line-reorg` · 2026-09-11 | §10 review. F1 (memo `variant` key), F2 (real collapse), F3 (SVG chevron), F4 (feature_bars self-heal), F5-b/c (stale UI), F6 (docstrings) done. **Open**: F5-a (retire-vs-refeed decision), F7c (merge to main). Watch-list: `summary.py` delete recommended, risk-free-rate + L5 deferred |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
 Keep the row order; edit the row in place.
@@ -738,13 +738,60 @@ not blockers, and each is one small independent change.
 - **F6 — stale docstrings** (already in review commit `9691776`): `providers/base.py`,
   `providers/yf_client.py`, `providers/__init__.py`, `providers/yfinance_provider.py`,
   and the §0 ledger planning-row status.
-- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → exit 0
+- **Exit criteria (F1–F3, F6)**: `pytest -m "not network" --ignore=tests/e2e` → exit 0
   (+2 tests vs B8: `test_job_cache.py::test_variant_computes_independently`,
   `test_module_params.py::test_a_param_change_recomputes_within_the_same_job`);
   `pytest tests/e2e` → exit 0; `npx vitest run` → 199 passed / 16 files (+1
   aria-controls case); `ruff check` + `format --check` clean; `doc_guard.py`
   clean; `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 / dead 1);
   `audit_tags.py` 16 vs 16.
+
+**B9 — second pass (F4, F5-b/c), 2026-09-11.**
+
+- **F4 — feature_bars coverage gap.** `orchestrate/backfill.py`: new `_range_covers`
+  helper (shared 3-day tolerance) and `_feature_bars_behind(ticker, start, end)`
+  (probes `feature_bars` frequency='D', which is 1:1 with `clean_bars`).
+  `needs_backfill` now returns True when clean covers the span **but** features
+  lag; `_ensure_range_impl`'s clean-covered short-circuit runs
+  `process_frequencies` (no download) before memoising. `read/_query.py::get_processed`
+  gained the same `needs_backfill` → kick + grace-wait self-heal as
+  `get_cleaned_daily`, and its memo guard now also refuses a partial read.
+  `readiness.py` docstring INVARIANT updated. Tests: `TestFeatureBarsHeal`
+  (`needs_backfill` true on clean-only; `ensure_range` reprocesses with zero
+  downloads and clears the probe).
+- **F5-b/c + stale refs.** `market_review.html` meta-bar drops the three chips
+  that showed constants after B7 (`frequency`, `Threshold`, `side_bias`) — keeps
+  ticker + horizon; "Required vars" comment trimmed. `index.html` header badge
+  drops `badge-meta` (no single frequency/side-bias exists per-page any more) —
+  ticker only. `routes/core.py` GET branch drops the now-unused
+  `frequency`/`risk_threshold`/`rolling_window`/`side_bias` template vars and
+  their imports. Four fragment empty-states + `tab_simulation.html`'s placeholder
+  stop pointing at the deleted "Parameter" tab. `form.py` gets a DORMANT note on
+  `option_data` (see F5-a below).
+- **F5-a is NOT dead code — it is a B7 regression, left for a decision.**
+  `services/market/analysis/assessment.py` still reads `form_data["option_data"]`
+  for (i) the projection-vs-positions option overlay chart and (ii) the sizing
+  max-loss-per-contract. B7 moved positions to the Portfolio tab and stopped
+  `POST /` carrying `option_position`, so that overlay is now **permanently
+  unfed** (it degrades gracefully — no error, the chart is just absent) and
+  sizing always assumes a debit strategy. Decision needed: **retire** the overlay
+  (delete the `option_data` branches in `assessment.py`, `parse_option_data`,
+  `core/market/{analyzer.analyze_options, option_pnl, charts/option_pnl}` if
+  unused elsewhere) — the Portfolio tab is the home for position P&L now — or
+  **re-feed** it (give the Assessment toolbar a positions handle). Leaning
+  retire. Tracked on `architecture_review.md` §2 watch list.
+- **Exit criteria (F4, F5)**: `pytest -m "not network" --ignore=tests/e2e` → exit
+  0 (+2: `TestFeatureBarsHeal`); `pytest tests/e2e` → exit 0; `ruff` +
+  `doc_guard` + `arch_metrics --check` clean.
+
+### Watch-list follow-ups — 2026-09-11 assessment
+
+| Item | Call | Why |
+|---|---|---|
+| **Risk-free rate** hard-coded (`r = 0.05` default in `static/sim/{analyze,stats}.js`, `core/options/greeks/portfolio.py`, `grid.js` `r_pct=5`) → true global setting | **Defer the setting; do the cheap consolidation if wanted.** | A *user-facing* setting needs a surface — B8 deliberately deleted the Config tab, so this means re-introducing one for a number that moves ~quarterly. The silent-divergence risk is cheaply killed by one shared constant (`utils/constants.RISK_FREE_RATE` + a `static/sim/` mirror + a parity test) without any UI. Full setting = wait until someone actually wants to tweak it. |
+| **`market_review_prices` (L5)** → fold into provider seam | **Defer to its own batch (B10).** | It is ADR 0011's stated L5 exit and it would let readiness prefetch the benchmark panel (closing the other half of F4's spirit), but it is a real refactor: benchmark tickers (SPY/QQQ/…) would route through `ensure_range`/`clean_bars` instead of the close-only ladder. ~1 day + tests. Not a bundle-in. |
+| **ADR 0011 `symbol` column** (ticker→symbol rename) | **Agree — stay deferred.** | Pure churn with one provider (`ticker == symbol` for yfinance). Do it *with* the second provider, when the mapping actually has two shapes to reconcile. |
+| **`services/market/analysis/summary.py`** (fan-in 0, `dead_code_candidates=1`) | **Delete now** (bundle into B9). | `summary_data` is never set anywhere; `tab_summary.html`, the correlation-heatmap JS, and the `summary_pending` flag are all vestigial. Building a real multi-ticker Summary tab is a feature nobody has asked for. Deleting the module + template + flag + sidebar button clears the standing `dead_code` finding. Pure removal, low risk. |
 
 ---
 
@@ -778,8 +825,8 @@ Findings worked as **batch B9 (remediation)** under the §0 rules.
 | F1 | **high — correctness, CONFIRMED** | ✅ **fixed (B9)** | `job_cache.compute_or_get` memoised per `(ticker, kind)`; `dispatch.py::_compute` captured `module_params` from the query string but they were **not in the key** and nothing invalidated on change. Reproduced: two `/render/statistical` calls on one job, `frequency=ME` then `=W` → slice invoked once, both response bodies byte-identical. B7's headline behaviour ("changing a module control re-runs that module") re-fired the request and flashed "Updating…" but served the stale fragment for up to `JOB_CACHE_TTL` (90 s). `tests/e2e/test_module_params.py` missed it — it asserts request **URLs**, never fragment **content**. | `compute_or_get(..., *, variant="")` — key is now `(ticker, kind, variant)`; `dispatch._params_variant(module_params)` builds a sorted digest. New tests: `test_job_cache.py::test_variant_computes_independently`, `test_module_params.py::test_a_param_change_recomputes_within_the_same_job`. |
 | F2 | moderate — UX / a11y | ✅ **fixed (B9)** | The Parameters bar "collapse" was hollow after B7: `data-collapsed="true"` hid a non-existent `.parameters-bar-body` and revealed `▸ ^SPX` **beside the still-visible ticker input + label + Run** → ~zero visible effect; `aria-controls="parameters-bar-body"` was a dangling reference. | The label + input + badges are now wrapped in `<div class="parameters-bar-fields" id="parameters-bar-body">` (real `aria-controls` target); collapsed hides that div **and** `.ticker-validation`, leaving toggle + `▸ ^SPX` + Run on one line. Dead `.parameters-bar-body` / `-group-title` CSS removed. New vitest: "has a real element behind aria-controls". |
 | F3 | minor — UX | ✅ **fixed (B9)** | Collapse toggle icon was invisible — `<i class="fas fa-chevron-down">` with Font Awesome not loaded and no CSS fallback. | Inline SVG chevron (`.parameters-bar-chevron`) rotated `-90°` by `.parameters-bar[data-collapsed="true"]`; `parametersBar.js` drops the `<i>` class swap and updates `title` instead. |
-| F4 | minor — readiness gap | ⬜ open | `readiness.check_and_kick` gates coverage on the `clean_bars` probe (`needs_backfill`). The "one pipeline run fills both" INVARIANT holds for a fresh backfill, but a DB with `clean_bars` for the range yet stale/missing `feature_bars` (new frequency, or processing failed after cleaning) → probe says "covered", no kick, `statistical`/`assessment` fall back to the per-slice `get_processed` → `manual_update` path. Fallback works, prefetch promise unmet. | `feature_bars`-aware probe, or a `WHY:` note in `readiness.py` accepting the gap. |
-| F5 | minor — dead code / stale UI | ⬜ open | (a) `form.py::parse_option_data` + `form_data["option_data"]`: FormManager no longer submits `#option_position` (B7) and no slice reads `option_data` — always `[]` on the POST path. (b) `routes/core.py` GET branch still passes `frequency`/`risk_threshold`/`rolling_window`/`side_bias` to `render_template`. (c) `index.html:112` header badge renders `{{ frequency_display or frequency }}, {{ side_bias }}` — after B7 these are always the POST-time defaults, so the badge shows "Monthly, Neutral" regardless of the toolbar selection. | Drop the dead form path or comment it dormant; remove the unused GET vars; fix or remove the header badge meta. |
+| F4 | minor — readiness gap | ✅ **fixed (B9)** | `needs_backfill` probed `clean_bars` only, so a DB with clean rows but stale/missing `feature_bars` (a past `process_frequencies` failure, or clean extended without a reprocess) was never healed — Statistical/Assessment read `feature_bars`. `process_frequencies` writes D/W/ME/QE together so a *new* frequency is not the trigger; the partial-failure state is. | `backfill._feature_bars_behind` (probe frequency='D', 1:1 with clean); `needs_backfill` returns True on feature lag; `_ensure_range_impl` reprocesses (no download) on the clean-covered short-circuit; `get_processed` self-heals like `get_cleaned_daily`. Tests: `TestFeatureBarsHeal`. |
+| F5 | mixed | 🔨 **b/c fixed (B9); a is a decision** | **(a) not dead code — a B7 regression:** `assessment.py` reads `form_data["option_data"]` (projection-vs-positions overlay + sizing max-loss); B7 stopped `POST /` carrying positions, so the overlay is permanently unfed (degrades gracefully). **(b/c) stale UI:** `routes/core.py` GET vars + `index.html` `badge-meta` + `market_review.html` meta-chips all showed POST-time defaults after B7 (`badge` always "Monthly, Neutral"). | **(a)** DORMANT note added; retire-vs-refeed decision open (§10 B9 note, §2 watch list) — leaning retire. **(b/c)** GET vars + imports removed; `badge-meta` dropped (ticker only); 3 stale `market_review` chips removed; 4 "Parameter tab" empty-state refs + `tab_simulation` placeholder fixed. |
 | F6 | trivial — stale docstrings | ✅ **fixed (review commit `9691776`)** | `providers/base.py` "yf_option_chain.py" → `yf_snapshot.py`; `providers/yf_client.py` listed `core/market/data_context.py` as an importer (B4 removed it); `providers/__init__.py` + `yfinance_provider.py` said `downloader.py` (it is `ingest/ohlcv.py` since B3); §0 ledger planning-row status. | done |
 | F7 | housekeeping | 🔨 partial | (a) `providers/yf_client.py` "one-release" shim has no tracked removal trigger. (b) `market_review_prices` (L5) is still a parallel acquisition path outside the seam. (c) Branch is ahead of `origin/main`, unmerged. | (a)+(b) **added to `architecture_review.md` §2 watch list** (review commit); (c) push + merge still pending. |
 

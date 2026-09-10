@@ -107,9 +107,11 @@
             </div>
             <div class="header-actions">
                 {% if ticker %}
+                {# Analysis parameters are per-module now (batch B7): frequency /
+                   horizon / side-bias differ per tab, so there is no single
+                   value to show here. The badge is just the active ticker. #}
                 <div class="header-badge">
                     <span class="badge-ticker">{{ ticker }}</span>
-                    <span class="badge-meta">{{ frequency_display or frequency }}, {{ side_bias or 'Natural' }}</span>
                 </div>
                 {% endif %}
                 <!-- Theme toggle: persistent in the top-right on desktop and

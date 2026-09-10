@@ -86,16 +86,21 @@ def get_processed(
     if cached is not None:
         return cached
     _u.manual_update(ticker, days=7)
+    if _bf.needs_backfill(ticker, start, end):
+        # A clean gap, or clean present but feature_bars lagging (plan §10 F4):
+        # heal off the request thread with a short grace wait, then read
+        # whatever coverage exists — same pattern as get_cleaned_daily.
+        _kick_backfill(ticker, start, end)
+        _wait_for_coverage(ticker, start, end, _BACKFILL_WAIT_SECONDS)
     init_db()
     df = fetch_df(
         "SELECT * FROM feature_bars WHERE ticker=? AND frequency=? AND date>=? AND date<=?",
         (ticker, frequency, start.isoformat(), end.isoformat()),
     )
-    # Never memoise an empty read: a not-yet-generated frequency/range would
-    # otherwise be pinned for _QUERY_CACHE_TTL and hide the data once the
-    # processing pass completes (mirrors the partial-read guard in
-    # get_cleaned_daily above).
-    if not df.empty:
+    # Never memoise an empty or partial read: a not-yet-generated frequency/range
+    # would otherwise be pinned for _QUERY_CACHE_TTL and hide the data once the
+    # processing pass completes (mirrors the guard in get_cleaned_daily above).
+    if not df.empty and not _bf.needs_backfill(ticker, start, end):
         _g._cache_set(cache_key, df)
     return df
 

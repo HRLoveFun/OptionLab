@@ -155,6 +155,12 @@ class FormService:
             rolling_window = DEFAULT_ROLLING_WINDOW
         side_bias = request.form.get("side_bias", DEFAULT_SIDE_BIAS)
         target_bias = None if side_bias == "Natural" else 0
+        # DORMANT (plan §10 F5): batch B7 moved option positions to the Portfolio
+        # tab, so `POST /` no longer carries `option_position` and this is always
+        # []. `assessment.py` still *reads* `option_data` (the projection-vs-
+        # positions overlay + sizing max-loss); that overlay is currently unfed —
+        # retire vs. re-feed is an open decision. Kept wired so re-adding a POST
+        # positions field would just work.
         option_data = FormService.parse_option_data(request)
 
         # Position sizing (optional)

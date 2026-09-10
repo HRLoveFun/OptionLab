@@ -24,13 +24,7 @@ from services.market.facade import MarketService
 from services.market.form import FormService
 from services.market.readiness import prepare_readiness
 from services.market.validation import ValidationService
-from utils.constants import (
-    DEFAULT_FREQUENCY,
-    DEFAULT_RISK_THRESHOLD,
-    DEFAULT_ROLLING_WINDOW,
-    DEFAULT_SIDE_BIAS,
-    DEFAULT_TICKER,
-)
+from utils.constants import DEFAULT_TICKER
 from utils.ticker_utils import normalize_ticker, parse_tickers
 
 logger = logging.getLogger(__name__)
@@ -108,6 +102,9 @@ def index():
             }
             return render_template("index.html", **template_data)
 
+        # The GET skeleton only needs the ticker + horizon the Parameters bar
+        # renders; every analysis knob is per-module (batch B7) and hydrated
+        # client-side from its own store.
         return render_template(
             "index.html",
             ticker=DEFAULT_TICKER,
@@ -115,10 +112,6 @@ def index():
             tickers_raw=DEFAULT_TICKER,
             start_time=(lambda today: f"{today.year - 5}-{today.month:02d}")(dt.date.today()),
             end_time="",
-            frequency=DEFAULT_FREQUENCY,
-            risk_threshold=DEFAULT_RISK_THRESHOLD,
-            rolling_window=DEFAULT_ROLLING_WINDOW,
-            side_bias=DEFAULT_SIDE_BIAS,
         )
 
     except Exception as e:

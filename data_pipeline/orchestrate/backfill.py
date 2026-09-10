@@ -20,13 +20,51 @@ _SENTINEL_GAP_THRESHOLD_DAYS = 365
 _SENTINEL_MIN_DB_SPAN_DAYS = 365
 
 
-def needs_backfill(ticker: str, start: dt.date, end: dt.date) -> bool:
-    """Cheap probe: would ``ensure_range(ticker, start, end)`` need a download?
+def _range_covers(cov, start: dt.date, end: dt.date) -> bool:
+    """True when a ``MIN(date)/MAX(date)/COUNT(*)`` coverage row spans [start, end].
 
-    Checks the memo and DB coverage only — never networks. Lets callers keep
-    wide-range backfills off the request thread. NOTE: the probe does not
-    model the sentinel short-circuit; a false positive there merely kicks a
-    background ``ensure_range`` that immediately short-circuits.
+    Uses the same 3-day tail tolerance everywhere: the last few days may be a
+    weekend / not-yet-published, which is not a gap worth a download.
+    """
+    if cov.empty or not cov.iloc[0]["n"]:
+        return False
+    try:
+        cmin = dt.date.fromisoformat(str(cov.iloc[0]["min_d"]))
+        cmax = dt.date.fromisoformat(str(cov.iloc[0]["max_d"]))
+    except (ValueError, TypeError):
+        return False
+    return cmin <= start and cmax >= end - dt.timedelta(days=3)
+
+
+def _feature_bars_behind(ticker: str, start: dt.date, end: dt.date) -> bool:
+    """True when ``feature_bars`` does not cover [start, end] for *ticker*.
+
+    WHY (plan §10 F4): ``ensure_range``'s clean-covered short-circuit and
+    ``needs_backfill`` used to probe ``clean_bars`` only, so a DB that has clean
+    rows but stale/missing ``feature_bars`` (a past ``process_frequencies``
+    failure, or clean extended without a reprocess) was never healed — the
+    Statistical / Assessment slices read ``feature_bars`` and would render an
+    empty chart. ``process_frequencies`` writes D/W/ME/QE together and the D
+    series is 1:1 with ``clean_bars``, so the D-frequency span is the cheapest
+    honest probe.
+    """
+    cov = _db.fetch_df(
+        "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n "
+        "FROM feature_bars WHERE ticker=? AND frequency='D'",
+        (ticker,),
+    )
+    return not _range_covers(cov, start, end)
+
+
+def needs_backfill(ticker: str, start: dt.date, end: dt.date) -> bool:
+    """Cheap probe: would ``ensure_range(ticker, start, end)`` need to do work?
+
+    Checks the memo and DB coverage only — never networks. Returns True when
+    ``clean_bars`` is missing the span (needs a download) **or** ``feature_bars``
+    lags behind clean (needs a reprocess only). Lets callers keep both kinds of
+    catch-up off the request thread. NOTE: the probe does not model the sentinel
+    short-circuit; a false positive there merely kicks a background
+    ``ensure_range`` that immediately short-circuits.
     """
     now = time.monotonic()
     with _ensure_range_lock:
@@ -39,14 +77,9 @@ def needs_backfill(ticker: str, start: dt.date, end: dt.date) -> bool:
         "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n FROM clean_bars WHERE ticker=?",
         (ticker,),
     )
-    if cov.empty or not cov.iloc[0]["n"]:
+    if not _range_covers(cov, start, end):
         return True
-    try:
-        existing_min = dt.date.fromisoformat(str(cov.iloc[0]["min_d"]))
-        existing_max = dt.date.fromisoformat(str(cov.iloc[0]["max_d"]))
-    except (ValueError, TypeError):
-        return True
-    return not (existing_min <= start and existing_max >= end - dt.timedelta(days=3))
+    return _feature_bars_behind(ticker, start, end)
 
 
 def ensure_range(ticker: str, start: dt.date, end: dt.date) -> bool:
@@ -121,6 +154,18 @@ def _ensure_range_impl(ticker: str, start: dt.date, end: dt.date, now: float, wa
             existing_min = existing_max = None
 
     if existing_min is not None and existing_min <= start and existing_max >= end - dt.timedelta(days=3):
+        # clean_bars covers the span — no download. But features may still lag
+        # (a past processing failure, or clean extended without a reprocess);
+        # rebuild them here so the memo below is honest (plan §10 F4).
+        if _feature_bars_behind(ticker, start, end):
+            logger.info("ensure_range: %s clean covered but feature_bars behind — reprocessing", ticker)
+            pr = _pr.process_frequencies(ticker, start, end)
+            if not pr.ok:
+                logger.warning("ensure_range reprocess failed for %s: %s", ticker, pr.error)
+                return False
+            from data_pipeline import _state as _g
+
+            _g._cache_invalidate(ticker)
         with _ensure_range_lock:
             _ensure_range_memo[ticker] = (now, start, end)
         return True

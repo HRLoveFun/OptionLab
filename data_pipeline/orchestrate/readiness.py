@@ -16,9 +16,10 @@ Constraints:
     on a daemon thread. ``check_and_kick`` therefore cannot block for more than a
     probe, so ``POST /`` still returns the skeleton in < 1 s.
   - INVARIANT: one pipeline run (download → clean → process) fills both
-    ``clean_bars`` and ``feature_bars``, so coverage is gated on the
-    ``clean_bars`` probe and a single kick per (ticker, range) covers every
-    dataset the plan asked for.
+    ``clean_bars`` and ``feature_bars``, so a single kick per (ticker, range)
+    covers every dataset the plan asked for. The probe (``backfill.needs_backfill``)
+    checks *both* families — clean coverage **and** a feature-bars lag — so a DB
+    with clean rows but stale features is still healed (plan §10 F4).
 Contracts:
   - ``plan_datasets(tickers, modules, *, start, end, today=None)``
   - ``check_and_kick(plan, *, kick=None)``

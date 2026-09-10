@@ -149,3 +149,63 @@ class TestBackgroundBackfill:
         assert calls["n"] <= expected_chunks, (
             f"kicks were not deduped: {calls['n']} downloads > {expected_chunks} (single leader)"
         )
+
+
+class TestFeatureBarsHeal:
+    """Plan §10 F4: clean_bars present but feature_bars stale must self-heal
+    (a reprocess, no download)."""
+
+    @staticmethod
+    def _seed_clean(ticker, start, end):
+        from data_pipeline.store.db import upsert_many
+
+        days = pd.bdate_range(start, end)
+        rows = [
+            (ticker, d.date().isoformat(), 100.0, 101.0, 99.0, 100.5, 100.5, 1_000_000, 1, 0, 0, 0, 0) for d in days
+        ]
+        upsert_many(
+            "clean_bars",
+            [
+                "ticker",
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "adj_close",
+                "volume",
+                "is_trading_day",
+                "missing_any",
+                "price_jump_flag",
+                "vol_anom_flag",
+                "ohlc_inconsistent",
+            ],
+            rows,
+        )
+
+    def test_needs_backfill_true_when_only_clean_exists(self):
+        init_db()
+        start, end = dt.date(2024, 1, 1), dt.date(2024, 6, 30)
+        self._seed_clean("FEATHEAL1", start, end)
+        assert _bf.needs_backfill("FEATHEAL1", start, end) is True
+
+    def test_ensure_range_reprocesses_without_downloading(self, monkeypatch):
+        from data_pipeline.store.db import fetch_df
+
+        init_db()
+        start, end = dt.date(2024, 1, 1), dt.date(2024, 6, 30)
+        self._seed_clean("FEATHEAL2", start, end)
+
+        downloads = {"n": 0}
+        monkeypatch.setattr(
+            "data_pipeline.ingest.ohlcv.upsert_raw_prices",
+            lambda *a, **k: downloads.__setitem__("n", downloads["n"] + 1) or PipelineResult(rows=0),
+        )
+
+        _cache_invalidate("FEATHEAL2")
+        assert _bf.ensure_range("FEATHEAL2", start, end) is True
+        assert downloads["n"] == 0, "clean already covers the span — no download"
+
+        feat = fetch_df("SELECT frequency, COUNT(*) AS n FROM feature_bars WHERE ticker='FEATHEAL2' GROUP BY frequency")
+        assert not feat.empty, "feature_bars must be populated after the heal"
+        assert _bf.needs_backfill("FEATHEAL2", start, end) is False
