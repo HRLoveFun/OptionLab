@@ -56,6 +56,68 @@ class FormService:
         # De-duplicate while preserving the caller's order.
         return list(dict.fromkeys(known))
 
+    #: Module token → the query args its own toolbar sends (batch B7 / §8 Q1).
+    #: INVARIANT: `/render/<kind>` reads only these keys, so a hand-crafted query
+    #: string cannot inject arbitrary keys into the slice's form_data.
+    MODULE_PARAM_KEYS: dict[str, tuple[str, ...]] = {
+        "market_review": ("from", "to"),
+        "statistical": ("from", "to", "frequency"),
+        "assessment": (
+            "from",
+            "to",
+            "frequency",
+            "side_bias",
+            "risk_threshold",
+            "rolling_window",
+            "account_size",
+            "max_risk_pct",
+        ),
+        # The volatility slice needs the ticker only; its chain comes live.
+        "options_chain": (),
+    }
+
+    _FREQUENCIES = ("D", "W", "ME", "QE")
+
+    @staticmethod
+    def extract_module_params(module: str, args) -> dict:
+        """Parse one module's own query args into a partial ``form_data``.
+
+        Only the keys declared in ``MODULE_PARAM_KEYS[module]`` are read. Blank or
+        malformed values are skipped rather than defaulted, so a missing param
+        falls back to whatever the job recorded at POST time.
+        """
+        out: dict = {}
+        for key in FormService.MODULE_PARAM_KEYS.get(module, ()):
+            raw = args.get(key)
+            if raw is None or str(raw).strip() == "":
+                continue
+            text = str(raw).strip()
+            if key == "from":
+                parsed = parse_month_str(text)
+                if parsed is not None:
+                    out["start_time"] = text
+                    out["parsed_start_time"] = parsed
+            elif key == "to":
+                out["end_time"] = text
+                out["parsed_end_time"] = parse_month_str(text)
+            elif key == "frequency":
+                if text in FormService._FREQUENCIES:
+                    out["frequency"] = text
+            elif key == "side_bias":
+                out["side_bias"] = text
+                out["target_bias"] = None if text == "Natural" else 0
+            elif key in ("risk_threshold", "rolling_window"):
+                try:
+                    out[key] = int(text)
+                except (TypeError, ValueError):
+                    pass
+            elif key in ("account_size", "max_risk_pct"):
+                try:
+                    out[key] = float(text)
+                except (TypeError, ValueError):
+                    pass
+        return out
+
     @staticmethod
     def extract_form_data(request):
         """

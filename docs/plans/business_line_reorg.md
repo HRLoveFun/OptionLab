@@ -44,7 +44,7 @@
 | B4 — close L1 (`core-purity`) | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | zero core→data_pipeline edges; markers deleted and refused by test; `core` layer tightened to `{utils}` |
 | B5 — readiness plan + prefetch | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (**manifest**, params as `/render` query args); readiness plan on the job; cold-start hold fragment. Actuals + deferrals in §8 |
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
-| B7 — module-scoped params | ⬜ not started | — | — | gate: §8 Q1; depends on B6 |
+| B7 — module-scoped params | 🔨 in progress | — | backend half: branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). **Landed**: `/render` query-arg contract + per-module allow-list. **Remaining**: `state/*ParamsState.js` stores, module toolbars, hidden-field/bridge removal, e2e. See §8 B7 |
 | B8 — retire / repurpose Config tab | ⬜ not started | — | — | gate: §8 Q2 |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
@@ -618,6 +618,40 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   instead: the bar is a labelled `<label for="ticker">` + `<input>`, the toggle is a real `<button>` with
   `aria-expanded`/`aria-controls` and an `sr-only` label, and the collapsed summary is `aria-hidden`
   while the input still carries the value.
+
+**B7 (in progress, 2026-09-10) — module-scoped params.**
+
+Landed so far (the backend half, committed separately so the batch's revert unit stays one PR):
+
+- `FormService.MODULE_PARAM_KEYS` + `FormService.extract_module_params(module, args)`: the
+  query-arg contract. `from` / `to` become `start_time`/`end_time` **and**
+  `parsed_start_time`/`parsed_end_time` (the keys the slices actually read) through the same
+  `parse_month_str` as the POST path; `frequency` is whitelisted to `D/W/ME/QE`; `side_bias`
+  also derives `target_bias`; the assessment knobs are coerced, and malformed values are
+  **skipped** so the job's POST-time value survives as the fallback.
+- `services/market/dispatch.py`: `render_streaming_slice` merges
+  `{**job.form_data, **module_params, "ticker": ticker}`, so a direct URL / bookmark still
+  works with no query args while a module toolbar can override its own parameters.
+- INVARIANT (pinned by `tests/test_module_params.py`, 11 cases): only the keys a module
+  declares are ever read, so `?option_position=…&ticker=EVIL` cannot smuggle keys into the
+  slice's `form_data`.
+
+Still to do in this batch:
+
+1. `static/state/{market,assessment,optionFilter}ParamsState.js` — one `localStorage` key per
+   group, hydrating its toolbar inputs **at parse time** (before HTMX processes its `load`
+   triggers), plus vitest coverage and the `coverage.test.js` pass.
+2. Per-module toolbars in `templates/partials/tab_{market_review,statistical_analysis,market_assessment,option_chain}.html`
+   with `name=`d inputs, `hx-include="#<toolbar>"` on the placeholder and
+   `hx-trigger="load, module:params-changed from:body"`, so changing one module's controls
+   re-runs only that module.
+3. Delete the transitional "Analysis settings" group from `parameters_bar.html`, the four
+   hidden fields, and `FormManager.syncConfigToForm/loadConfig/saveConfig`; repoint
+   `option-chain.js`'s `cfg-max-dte` / `cfg-moneyness-*` reads and the auto-refresh interval
+   IIFE at the `optionFilter` store.
+4. `tab_config.html`: drop the module-scoped fields (they now live with their modules) — the
+   tab shell survives until B8 answers §8 Q2 about the risk-free rate.
+5. e2e: per-tab "changing a module param re-runs only that module" + "values survive reload".
 
 ---
 

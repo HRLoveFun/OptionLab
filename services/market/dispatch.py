@@ -30,6 +30,7 @@ from data_pipeline.orchestrate.job_cache import compute_or_get, get_job
 from data_pipeline.orchestrate.readiness import should_hold, status_for
 from data_pipeline.store.db import close_thread_conn
 from services.market.analysis import AnalysisService
+from services.market.form import FormService
 from utils.constants import (
     DEFAULT_FREQUENCY,
     DEFAULT_RISK_THRESHOLD,
@@ -145,13 +146,21 @@ def render_streaming_slice(kind: str) -> Any:
 
     slice_fn_name, template = _RENDER_KIND_SLICES[kind]
 
+    # ── Batch B7: the module's own parameters travel as query args ──
+    # `POST /` no longer carries the market-analysis parameters; each module's
+    # toolbar appends its own (`?from=…&to=…&frequency=…`), so changing one
+    # module's controls re-runs only that module. Parameters are validated
+    # against a per-module allow-list, and the job's POST-time values stay the
+    # fallback for a direct URL / bookmark that carries none.
+    module_params = FormService.extract_module_params(kind, request.args)
+
     # The form_data captured at POST time was for the first ticker. When the
     # user switches tickers via the sidebar we re-target by overriding
     # `ticker` in a per-call form_data copy.
     def _compute(form_data: dict[str, Any]) -> dict[str, Any]:
         # Worker-thread cleanup so we don't leak DB connections.
         try:
-            local_form = {**form_data, "ticker": ticker}
+            local_form = {**form_data, **module_params, "ticker": ticker}
             # Late-bind the slice attr so test monkey-patches are honoured.
             slice_fn = getattr(AnalysisService, slice_fn_name)
             return slice_fn(local_form)
