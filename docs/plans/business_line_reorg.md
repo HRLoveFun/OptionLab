@@ -1,12 +1,54 @@
 # Reorganization Plan: Business Lines, Parameter Ownership & Data-Pipeline Seams
 
-**Branch**: `feat/business-line-reorg` (planning only) | **Date**: 2026-09-10
-**ADRs**: [0011](../decisions/0011-pluggable-data-provider-seam.md) (data-provider seam + canonical schema),
-[0012](../decisions/0012-parameter-ownership-and-prefetch.md) (parameter ownership + readiness prefetch)
+**Date**: 2026-09-10 (plan) | **Owner**: repo owner
+**ADRs**: [0011](../decisions/0011-pluggable-data-provider-seam.md) (data-provider seam + canonical schema — **Accepted**),
+[0012](../decisions/0012-parameter-ownership-and-prefetch.md) (parameter ownership + readiness prefetch — **Accepted**)
 
-> **Status: PROPOSAL.** Nothing in this file is implemented yet. It exists so the
-> reorg is reviewed as one coherent shape before any batch lands. Each batch in §6
-> is independently shippable and independently revertible.
+> **Status: ACCEPTED TARGET, NOT YET IMPLEMENTED.** The shape below is the agreed
+> destination. It ships as the batches in §6 — each one independently shippable
+> and independently revertible. Track progress in the §0 ledger.
+
+---
+
+## 0. How to use this document — start here
+
+### Rules of engagement (every session working this reorg)
+
+1. **One batch = one PR = one revert.** Execute exactly one §6 batch, open the PR,
+   stop. Never start the next batch in the same PR.
+2. **A batch is "landed" only when** every exit-criterion in its §6 row is
+   *literally* true (the grep returns nothing / the named test passes /
+   `python scripts/arch_metrics.py --check` is green) **and** CI is green.
+3. **Update the Batch Ledger below in the same commit** that lands the batch —
+   this doc is the single place a cold session looks to know where the reorg is.
+4. **Do not re-litigate an Accepted ADR** (0011, 0012). If reality forces a
+   change, write an amending/superseding ADR *in the same PR* — never just
+   diverge silently.
+5. **Resolve the batch's §8 decision gate first.** Each open question names the
+   batch it blocks; fold the answer into this doc or a new ADR *before* writing
+   that batch's code.
+6. **Docs move first.** Update `docs/` then mirror into `CLAUDE.md` /
+   `CODEBUDDY.md` / `.github/copilot-instructions.md` — same PR. Run
+   `python scripts/doc_guard.py` and `python scripts/regen_adr_index.py`.
+7. **Scope discipline.** If you find something worth doing that is not in a §6
+   row, add a row (or a note under §8) — do not fold it into the batch in hand.
+
+### Batch Ledger
+
+| Batch | State | PR | Landed (commit · date) | Notes |
+|---|---|---|---|---|
+| — (planning + ADRs) | 🔨 in review (PR #7) | #7 | branch `worktree-business-line-reorg` · 2026-09-10 | plan, ADR 0011/0012 (Accepted), scaffolding (ledger, gates, AI-guide pointers, memory) |
+| B1 — provider seam extraction | ⬜ not started | — | — | delivers the "pluggable API" seam on its own |
+| B2 — canonical raw store | ⬜ not started | — | — | gate: §8 Q4 |
+| B3 — package re-home | ⬜ not started | — | — | resets `arch_baseline.json` |
+| B4 — close L1 (`core-purity`) | ⬜ not started | — | — | — |
+| B5 — readiness plan + prefetch | ⬜ not started | — | — | gate: §8 Q1 |
+| B6 — `ticker`-only Parameters bar | ⬜ not started | — | — | gate: §8 Q3; depends on B5 |
+| B7 — module-scoped params | ⬜ not started | — | — | gate: §8 Q1; depends on B6 |
+| B8 — retire / repurpose Config tab | ⬜ not started | — | — | gate: §8 Q2 |
+
+States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
+Keep the row order; edit the row in place.
 
 ---
 
@@ -340,11 +382,11 @@ Ordered by risk. Each is one PR, green CI, its own revert. `arch_baseline.json` 
 
 | B | Title | Touches | Guard / doc impact | Exit criteria |
 |---|---|---|---|---|
-| **B1** | Provider seam extraction (no behaviour change) | new `data_pipeline/providers/{base,yfinance_provider,_registry}.py`; `yf_client.py` + `downloader.py` become thin re-exports; canonical dataclasses | ADR 0011 → Accepted; `constraints.md` §1 amended; `single-yf-exit` rule rescoped to `providers/`; `_ALLOWED_DEPS` gains `providers`; `arch_baseline` reset | `pytest -m "not network"` green; `grep -rn "import yfinance"` → only `providers/`; no route/service diff |
+| **B1** | Provider seam extraction (no behaviour change) | new `data_pipeline/providers/{base,yfinance_provider,_registry}.py`; `yf_client.py` + `downloader.py` become thin re-exports; canonical dataclasses | `constraints.md` §1 amended per ADR 0011; `single-yf-exit` rule rescoped to `providers/`; `_ALLOWED_DEPS` gains `providers`; `arch_baseline` reset | `pytest -m "not network"` green; `grep -rn "import yfinance"` → only `providers/`; no route/service diff |
 | **B2** | Canonical raw store | `store/db.py` adds `raw_bars`/`clean_bars`/`feature_bars` (IF NOT EXISTS); `scripts/migrate_canonical_tables.py` one-shot copy; `ingest/` writes canonical; `transform/` reads canonical | `sqlite-bypass` guard unchanged; `docs/l0_architecture.md` schema table updated | old + new tables both populated on a run; `transform` tests pass against `clean_bars`; health endpoint reads new table |
 | **B3** | Package re-home: `ingest/ transform/ store/ read/ orchestrate/` | move files, update imports, `doc_guard._ALLOWED_DEPS`, all docstring `Dependencies:` blocks, docs | new layer-edge rules in `doc_guard`; `arch_metrics` baseline reset; `l0_architecture.md` + `architecture_review.md` §2 rewritten | `arch_metrics.py --check` green; import cycles still 0; `test_architecture_purity.py` extended |
 | **B4** | Close L1 (`core-purity`) | split `build_data_context`; new `services/market/data_context_fetch.py`; `core/market/data_context.py` pure | 2× `allow=core-purity` markers deleted; `architecture_review.md` §2 row closed | `test_architecture_purity.py` asserts `core` has zero `data_pipeline` imports |
-| **B5** | Readiness plan + prefetch on submit | new `orchestrate/readiness.py`; `routes/core.py::index`; `job_cache` stores plan; `dispatch.py` consults plan; `services/options/preload` warm hook | ADR 0012 → Accepted; `frontend_architecture.md` streaming section updated | new tests: plan union per module set; cold-tab switch timing; direct-URL path still bootstraps |
+| **B5** | Readiness plan + prefetch on submit | new `orchestrate/readiness.py`; `routes/core.py::index`; `job_cache` stores plan; `dispatch.py` consults plan; `services/options/preload` warm hook | `frontend_architecture.md` streaming section updated per ADR 0012 | new tests: plan union per module set; cold-tab switch timing; direct-URL path still bootstraps |
 | **B6** | Frontend: `ticker`-only Parameters bar | `templates/index.html`, new `templates/partials/parameters_bar.html`, delete `tab_parameter.html` form scaffolding (positions block moves to a Portfolio panel), `static/parametersBar.js`, `styles.css` sticky/collapse | P1–P5 checklist in the PR; `frontend_architecture.md` layout diagram | e2e: bar persists across tab switches, collapse state survives reload; axe ≥ 95 |
 | **B7** | Frontend: module-scoped params | per-module toolbars in each `tab_*.html`; `state/marketParamsState.js`, `state/optionFilterState.js`, `state/assessmentParamsState.js`; delete `syncConfigToForm` + hidden fields; `/render/*` + `/api/option_chain` read params from stores | `frontend_convergence.md` "next steps" ticked; vitest for the new stores | e2e per tab: changing a module param re-runs only that module; values survive reload |
 | **B8** | Retire / repurpose Config tab | delete `tab_config.html` + sidebar button, or shrink to genuine globals (theme, risk-free rate); remove `marketAnalysisConfig` migration shim after one release | `glossary.md` if "global settings" was a defined term; `frontend_architecture.md` tab table | no dangling `cfg-*` ids; `grep -rn "marketAnalysisConfig"` clean |
@@ -370,24 +412,18 @@ ask (the seam); a second provider is a later, separate piece of work.
 
 ---
 
-## 8. Open Questions (resolve per-batch, not now)
+## 8. Decision Gates (open questions, each blocks one batch)
 
-1. **Submit contract (B5/B7)** — does `POST /` carry a `modules` manifest and each
-   `/render` carry its own params, or do the streaming tabs move fully to
-   client-fired `/api/*` like Option Chain? The manifest keeps the streaming model;
-   full client-fired is more uniform but a bigger diff.
-2. **Config tab fate (B8)** — is there *any* genuine global setting to keep
-   (risk-free rate is the strongest candidate — it is currently hard-coded in two
-   places)? If yes, the tab shrinks; if no, it is deleted.
-3. **`positions` block (B6)** — Portfolio Analysis is the only consumer. Does it
-   move into a "Portfolio" panel/tab, or stay as a section that the bar's Run
-   ignores?
-4. **Table rename vs. reshape (B2)** — rename `raw_prices`→`raw_bars` with the same
-   columns (minimal), or take the rename opportunity to also drop the
-   yfinance-ism `adj_close` handling into the provider? Leaning minimal.
-5. **Second provider** — not in scope, but the `base.py` protocol should be sketched
-   against *both* yfinance and the archived futu field map so it is not
-   accidentally yfinance-shaped.
+Each item must be resolved — into this doc or a new ADR — **before** its gate
+batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
+
+| # | Question | Decision gate | Working lean |
+|---|---|---|---|
+| Q1 | **Submit contract** — does `POST /` carry a `modules` manifest with per-module params attached to each `/render` call, or do the streaming market tabs move fully to client-fired `/api/*` like Option Chain? Manifest keeps the streaming model; full client-fired is more uniform but a bigger diff. | before **B5** (locks how B7 wires params) | manifest |
+| Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
+| Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | before **B6** | dedicated Portfolio panel |
+| Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | before **B2** | minimal rename |
+| Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | before **B1** | design review of `base.py` against both field maps |
 
 ---
 

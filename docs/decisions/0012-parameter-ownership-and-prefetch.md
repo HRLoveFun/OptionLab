@@ -1,8 +1,13 @@
 # 0012. Parameter Ownership & Data-Readiness Prefetch
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-09-10
-- **Deciders**: repo owner (pending review)
+- **Deciders**: repo owner
+
+> **Accepted as a target, implemented in stages.** The frontend moves and the
+> `POST /` contract change land batch-by-batch per
+> [`docs/plans/business_line_reorg.md`](../plans/business_line_reorg.md) §6
+> (B5–B8). Until a batch lands, the current Parameter/Config tabs still stand.
 
 ## Context
 

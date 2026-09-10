@@ -4,6 +4,11 @@
 - **Date**: 2025-01-15 (retroactive)
 - **Deciders**: project author
 
+> **Amended by [0011](0011-pluggable-data-provider-seam.md) (2026-09-10)**: "sole
+> data source" is refined to "sole data-source *implementation*, behind
+> `data_pipeline/providers/`". The cost argument and the no-option-history
+> caveats (ADR 0004) below are unchanged.
+
 ## Context
 
 This is a personal-use research / learning tool. We need US equity OHLCV history,

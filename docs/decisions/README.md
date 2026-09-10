@@ -39,5 +39,5 @@ and fill in every section. Keep ADRs short — 1 page is ideal, 2 pages max.
 | [0008](0008-server-side-expiry-simulation.md) | Server-Side Options Expiry Simulation | Accepted |
 | [0009](0009-per-task-git-worktree-isolation.md) | Per-Task Git Worktree Isolation | Accepted |
 | [0010](0010-payoff-ratio-not-odds.md) | "Expiry Odds" renamed to "Payoff Ratio" | Accepted |
-| [0011](0011-pluggable-data-provider-seam.md) | Pluggable Data-Provider Seam & Canonical Internal Schema | Proposed |
-| [0012](0012-parameter-ownership-and-prefetch.md) | Parameter Ownership & Data-Readiness Prefetch | Proposed |
+| [0011](0011-pluggable-data-provider-seam.md) | Pluggable Data-Provider Seam & Canonical Internal Schema | Accepted |
+| [0012](0012-parameter-ownership-and-prefetch.md) | Parameter Ownership & Data-Readiness Prefetch | Accepted |
