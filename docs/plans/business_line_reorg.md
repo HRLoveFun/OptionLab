@@ -456,7 +456,8 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   `data_pipeline/` switched to them. The pre-rename names are kept as shadow tables and
   `upsert_many` mirrors **both** directions, so an old seeding path, an un-migrated DB and a
   `git revert` all keep working. `scripts/migrate_canonical_tables.py` backfills an existing DB
-  (idempotent, `INSERT OR IGNORE`, never clobbers the canonical table).
+  (idempotent, `INSERT OR IGNORE`, never clobbers the canonical table; `--dry-run` reports without
+  creating anything — it does not even run `init_db`).
 - **Ingest is now canonical**: `downloader.download_bars()` (was `_download_yf`) acquires through
   `providers.get_provider().history()` — i.e. the registry, not a concrete vendor module — and
   returns `CANONICAL_BAR_COLUMNS`. The yfinance-ism (`Adj Close`→`Adj_Close`) is now confined to

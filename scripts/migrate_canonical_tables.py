@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from data_pipeline.db import CANONICAL_TABLES, get_conn, init_db  # noqa: E402
+from data_pipeline.db import CANONICAL_TABLES, DB_PATH, get_conn, init_db  # noqa: E402
 
 
 def _columns(conn, table: str) -> list[str]:
@@ -74,14 +74,23 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="report what would be copied, change nothing")
     args = ap.parse_args()
 
-    init_db(args.db)
-    with get_conn(args.db) as conn:
-        if args.dry_run:
+    if args.dry_run:
+        # WHY: a dry run must have NO side effects — in particular it must not
+        # create the canonical tables, otherwise "dry" would already have
+        # changed the database it is reporting on.
+        db_file = Path(args.db) if args.db else Path(DB_PATH)
+        if not db_file.exists():
+            sys.exit(f"[migrate] no database at {db_file}")
+        with get_conn(str(db_file)) as conn:
             for legacy, canonical in CANONICAL_TABLES.items():
                 legacy_n = _count(conn, legacy) if _columns(conn, legacy) else 0
-                print(f"  {legacy} ({legacy_n} rows) → {canonical}")
-            print("[migrate] dry run — nothing written")
-            return 0
+                canonical_n = _count(conn, canonical) if _columns(conn, canonical) else 0
+                print(f"  {legacy} ({legacy_n} rows) → {canonical} ({canonical_n} rows)")
+        print(f"[migrate] dry run on {db_file} — nothing written")
+        return 0
+
+    init_db(args.db)
+    with get_conn(args.db) as conn:
         print("[migrate] copying pre-rename tables into the canonical store")
         total = sum(_copy_table(conn, legacy, canonical) for legacy, canonical in CANONICAL_TABLES.items())
     print(f"[migrate] done — {total} row(s) backfilled")

@@ -151,6 +151,36 @@ def test_migration_script_backfills_legacy_only_rows():
     assert row is not None and row[0] == pytest.approx(42.0)
 
 
+def test_migration_dry_run_has_no_side_effects():
+    """`--dry-run` must report without creating or copying anything."""
+    import os
+
+    db_file = os.environ["MARKET_DB_PATH"]
+    init_db(db_file)
+    with get_conn() as conn:
+        conn.execute("DROP TABLE IF EXISTS raw_bars")
+        conn.execute(
+            "INSERT OR REPLACE INTO raw_prices (ticker,date,close) VALUES (?,?,?)",
+            ("DRY_RUN", "2026-01-05", 3.0),
+        )
+        conn.commit()
+
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "migrate_canonical_tables.py"), "--db", db_file, "--dry-run"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "nothing written" in result.stdout
+
+    with get_conn() as conn:
+        created = conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='raw_bars'").fetchone()[
+            0
+        ]
+    assert created == 0, "dry run created the canonical table"
+
+
 def test_migration_script_is_idempotent():
     """Re-running the backfill must not duplicate or clobber canonical rows."""
     init_db()
