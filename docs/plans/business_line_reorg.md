@@ -423,7 +423,7 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 | Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
 | Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | before **B6** | dedicated Portfolio panel |
 | Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | before **B2** | minimal rename |
-| Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | before **B1** | design review of `base.py` against both field maps |
+| Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). Field-and-deployment reference: [`futu_provider_integration.md`](futu_provider_integration.md) (exploration, 2026-09-11 — includes a `base.py` sketch checked against both). | before **B1** | design review of `base.py` against both field maps |
 
 ---
 
@@ -434,4 +434,5 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 - Frontend: `templates/partials/tab_parameter.html`, `tab_config.html`, `static/main.js`, `static/option-chain.js`
 - `docs/decisions/0002-yfinance-as-sole-data-source.md`, `0004-no-iv-history-from-yfinance.md`, `0005-token-bucket-throttle.md`
 - `docs/constraints.md` §1–§6, `docs/frontend_architecture.md`, `docs/frontend_convergence.md`
-- `archive/futu_integration/field_mapping.md`
+- `archive/futu_integration/field_mapping.md`,
+  [`futu_provider_integration.md`](futu_provider_integration.md) (futu second-provider exploration)
