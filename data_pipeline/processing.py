@@ -1,8 +1,8 @@
 """Feature engineering for cleaned daily price series.
 
 Context:
-- Reads from ``clean_prices`` and emits resampled bars + indicator columns to
-  ``processed_prices``. Pure pandas; no I/O outside the DB helpers in
+- Reads from ``clean_bars`` and emits resampled bars + indicator columns to
+  ``feature_bars``. Pure pandas; no I/O outside the DB helpers in
   ``data_pipeline.db``.
 """
 
@@ -73,7 +73,7 @@ def process_frequencies(ticker: str, start: dt.date | None = None, end: dt.date 
     start = start or (end - dt.timedelta(days=90))
 
     daily = fetch_df(
-        "SELECT date, open, high, low, close, adj_close, volume FROM clean_prices WHERE ticker=? AND date>=? AND date<=?",
+        "SELECT date, open, high, low, close, adj_close, volume FROM clean_bars WHERE ticker=? AND date>=? AND date<=?",
         (ticker, start.isoformat(), end.isoformat()),
     )
     if daily.empty:
@@ -131,7 +131,7 @@ def process_frequencies(ticker: str, start: dt.date | None = None, end: dt.date 
             )
         if rows:
             upsert_many(
-                "processed_prices",
+                "feature_bars",
                 [
                     "ticker",
                     "date",

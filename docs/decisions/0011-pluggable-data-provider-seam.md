@@ -123,6 +123,16 @@ vendor means two providers coexist rather than one replacing the other.
 `yf_client.py` is a compatibility shim and `downloader.py` no longer imports yfinance.
 Batch ledger: [`docs/plans/business_line_reorg.md`](../plans/business_line_reorg.md) §0.
 
+**Amendment (batch B2, 2026-09-10) — canonical tables are a name-only rename.** B2 landed
+`raw_bars` / `clean_bars` / `feature_bars` carrying *exactly* the column sets of the tables they
+replace, including the `ticker` column. Renaming `ticker` → `symbol` (and introducing a
+`symbol_map`) is deferred until a second provider actually needs a provider-native identifier:
+today it is a cross-cutting rename through `repos.py`, `data_ops/`, `services/` and the test
+fixtures with no consumer, which batch scope forbids riding along with. The target-state column
+lists in the Decision section above stay the reference for when that provider lands.
+Compatibility: the pre-rename names remain as shadow tables for one release (`upsert_many`
+writes both families) and `scripts/migrate_canonical_tables.py` backfills an existing DB.
+
 ## Consequences
 
 - Positive: a second provider is one file + one registry line + a field-map test.

@@ -39,7 +39,7 @@
 |---|---|---|---|---|
 | — (planning + ADRs) | 🔨 in review (PR #7) | #7 | branch `worktree-business-line-reorg` · 2026-09-10 | plan, ADR 0011/0012 (Accepted), scaffolding (ledger, gates, AI-guide pointers, memory) |
 | B1 — provider seam extraction | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | delivers the "pluggable API" seam on its own. Actual shape / deviations recorded in §8; `_ALLOWED_DEPS` promotion of `providers` deferred to B3 |
-| B2 — canonical raw store | ⬜ not started | — | — | gate: §8 Q4 |
+| B2 — canonical raw store | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | gate §8 Q4 resolved (name-only rename). Actuals in §8; `symbol` column deferred (ADR 0011 amendment) |
 | B3 — package re-home | ⬜ not started | — | — | resets `arch_baseline.json` |
 | B4 — close L1 (`core-purity`) | ⬜ not started | — | — | — |
 | B5 — readiness plan + prefetch | ⬜ not started | — | — | gate: §8 Q1 |
@@ -422,7 +422,7 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 | Q1 | **Submit contract** — does `POST /` carry a `modules` manifest with per-module params attached to each `/render` call, or do the streaming market tabs move fully to client-fired `/api/*` like Option Chain? Manifest keeps the streaming model; full client-fired is more uniform but a bigger diff. | before **B5** (locks how B7 wires params) | manifest |
 | Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
 | Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | before **B6** | dedicated Portfolio panel |
-| Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | before **B2** | minimal rename |
+| Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | ✅ resolved 2026-09-10 (B2) | **minimal rename** — identical columns on both sides of each pair (structurally enforced: one column tuple per shape, used to create both names). The `adj_close` normalisation is already inside the provider (B1's `to_canonical_bars`), and ingest now consumes canonical bars, so no reshape is needed. ADR 0011's `symbol` column stays the target state but is deferred — see the B2 note below |
 | Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | ✅ resolved 2026-09-10 (B1) — outcome table in ADR 0011 §"Protocol shape" | design review of `base.py` against both field maps: IV → decimal, bid/ask nullable, `inTheMoney` dropped (derivable), expiries ISO strings |
 
 ### Batch notes (actuals + deviations, recorded as batches land)
@@ -449,6 +449,33 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   `audit_tags.py` unchanged (16 uncovered vs baseline 16). Production-code
   `import yfinance` hits: exactly the two `providers/` modules. (`tests/test_yf_download.py` and
   `tests/e2e/conftest.py` also import it as test doubles — `doc_guard` exempts `tests/` by design.)
+
+**B2 (2026-09-10) — canonical raw store.**
+
+- **Shape**: `raw_bars` / `clean_bars` / `feature_bars` added; all reads *and* writes in
+  `data_pipeline/` switched to them. The pre-rename names are kept as shadow tables and
+  `upsert_many` mirrors **both** directions, so an old seeding path, an un-migrated DB and a
+  `git revert` all keep working. `scripts/migrate_canonical_tables.py` backfills an existing DB
+  (idempotent, `INSERT OR IGNORE`, never clobbers the canonical table).
+- **Ingest is now canonical**: `downloader.download_bars()` (was `_download_yf`) acquires through
+  `providers.get_provider().history()` — i.e. the registry, not a concrete vendor module — and
+  returns `CANONICAL_BAR_COLUMNS`. The yfinance-ism (`Adj Close`→`Adj_Close`) is now confined to
+  the provider's mapping, and the `provider` column is written from `get_provider().name`.
+- **No column reshape** (Q4 above). To keep that true by construction rather than by review,
+  `init_db` builds each canonical/legacy pair from one shared column tuple — which also kept
+  `db.py` under the 400-line god-file cap after the 3 extra tables (+0 tracked metrics).
+- **Deliberate non-change**: the function name `upsert_raw_prices` is kept (it is called from
+  `data_ops/{_update,_range}.py`, `services/regime/ops/_bootstrap.py` and ~12 test patch targets);
+  renaming it is a cross-cutting edit that belongs with the B3 re-home, not with the rename.
+- **Tests**: new `tests/test_canonical_tables.py` pins column parity per pair, bidirectional
+  mirroring, "one pipeline run populates both families", that `fetch_ticker_inventory` (the /health
+  read) hits `raw_bars`, and that the migration script backfills + is idempotent.
+  `test_processing.py` now seeds `clean_bars` and reads `feature_bars` (the §6 exit criterion);
+  `test_health_service.py` / `test_nvda_analysis.py` seeded via raw SQL and therefore had to move.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 468 passed / 5 skipped;
+  `doc_guard.py` clean; `arch_metrics.py --check` ok (no baseline reset needed);
+  `audit_tags.py` unchanged (16 vs baseline 16); `routes/` untouched (only the one-line comment
+  fix in `services/market/facade.py` outside `data_pipeline/`).
 
 ---
 

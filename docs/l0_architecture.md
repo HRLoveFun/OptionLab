@@ -68,7 +68,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 | Item | State | Note |
 |---|---|---|
-| `market_data.sqlite` (11.7 MB) | git-ignored, still in repo root | code default is now `data/market_data.sqlite` (`data_pipeline/db.py:27`); the local `.env` overrides it back to the root file — move the file into `data/` whenever convenient |
+| `market_data.sqlite` (11.7 MB) | git-ignored, still in repo root | code default is now `data/market_data.sqlite` (`data_pipeline/db.py:27`); the local `.env` overrides it back to the root file — move the file into `data/` whenever convenient. Schema: canonical `raw_bars` / `clean_bars` / `feature_bars`, plus the one-release shadows `raw_prices` / `clean_prices` / `processed_prices` — see [ADR 0011](decisions/0011-pluggable-data-provider-seam.md) |
 | `site/` | **inputs committed (9 files) · build output ignored** | tracked: `fixtures/` (7) · `snapshot/snapshot.json` · `pages-shim.js`; ignored: `index.html`, 5 feature + 6 showcase redirects, `static/**` (42 generated files) — see §5 P1-1 |
 | `archive/` (8 files · 1 070 lines) | committed | retired code still in tree — P3-3 |
 | `test.ipynb` (58 lines) | git-ignored | leftover scratch file — P2-2 |
@@ -78,10 +78,10 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 ## 2. Measured shape (`scripts/arch_metrics.py`)
 
-_Refreshed 2026-09-10 after batch B1 (provider seam extraction); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
+_Refreshed 2026-09-10 after batches B1 (provider seam) and B2 (canonical table names); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
 
 ```
-modules=152  import_edges=312
+modules=152  import_edges=314
 Layer-edge violations : (none)
 Import cycles         : 0
 God files (>400 lines): (none)

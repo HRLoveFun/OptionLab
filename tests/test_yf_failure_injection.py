@@ -38,7 +38,7 @@ from data_pipeline.data_ops import (
     _update_locks,
 )
 from data_pipeline.db import fetch_df, init_db, upsert_many
-from data_pipeline.downloader import _download_yf, upsert_raw_prices
+from data_pipeline.downloader import download_bars, upsert_raw_prices
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -265,7 +265,7 @@ class TestThrottleOrdering:
             patch("data_pipeline.providers.yfinance_provider.yf_throttle", parent.throttle),
             patch("data_pipeline.providers.yfinance_provider.yf.download", parent.dl),
         ):
-            _download_yf("ORDER_TKR", dt.date(2024, 1, 1), dt.date(2024, 1, 5))
+            download_bars("ORDER_TKR", dt.date(2024, 1, 1), dt.date(2024, 1, 5))
 
         # First parent call must be throttle, then download.
         names = [c[0] for c in parent.mock_calls if c[0] in {"throttle", "dl"}]

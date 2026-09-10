@@ -158,8 +158,11 @@ chart-level memo keyed by `(ticker, chart name, params)` because PNG encoding is
   one-release compatibility shim over the package and `downloader.py` keeps only gap detection +
   upsert. **Never** pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently
   fails (ADR 0005).
-- **`db.py`** — `init_db()` uses `CREATE TABLE IF NOT EXISTS` (no migration framework).
-  `get_conn()` yields a **thread-local** WAL connection (`synchronous=NORMAL`,
+- **`db.py`** — `init_db()` uses `CREATE TABLE IF NOT EXISTS` (no migration framework). Tables are
+  named canonically (`raw_bars` / `clean_bars` / `feature_bars`); the pre-rename names
+  (`raw_prices` / `clean_prices` / `processed_prices`) are kept as shadows for one release — every
+  `upsert_many` writes both families, and `scripts/migrate_canonical_tables.py` backfills an existing
+  DB. `get_conn()` yields a **thread-local** WAL connection (`synchronous=NORMAL`,
   `busy_timeout=5000`) and does **not** close on exit. `repos.py` is the only place that builds SQL.
 - **`cleaning.py` / `processing.py`** — align to business days, mark gaps NA with **no
   interpolation** (invented prices are worse than missing ones), then engineer returns/MAs/HV.

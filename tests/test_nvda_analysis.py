@@ -30,8 +30,8 @@ def _extract_job_id(html: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False):
-    """Insert synthetic price rows into clean_prices.
+def _seed_clean_bars(ticker: str, n_rows: int = 30, *, nan_only: bool = False):
+    """Insert synthetic price rows into clean_bars.
 
     Wipes any previous rows for `ticker` first so the seeded distribution is
     deterministic regardless of test ordering, and invalidates the in-memory
@@ -46,18 +46,18 @@ def _seed_clean_prices(ticker: str, n_rows: int = 30, *, nan_only: bool = False)
     np.random.seed(42)
     close = 120.0 + np.cumsum(np.random.randn(n_rows) * 0.5)
     with get_conn() as conn:
-        conn.execute("DELETE FROM clean_prices WHERE ticker = ?", (ticker,))
+        conn.execute("DELETE FROM clean_bars WHERE ticker = ?", (ticker,))
         for i, d in enumerate(dates):
             date_str = d.strftime("%Y-%m-%d")
             if nan_only:
                 conn.execute(
-                    "INSERT OR REPLACE INTO clean_prices (ticker, date, is_trading_day, missing_any) VALUES (?,?,?,?)",
+                    "INSERT OR REPLACE INTO clean_bars (ticker, date, is_trading_day, missing_any) VALUES (?,?,?,?)",
                     (ticker, date_str, 0, 1),
                 )
             else:
                 c = float(close[i])
                 conn.execute(
-                    "INSERT OR REPLACE INTO clean_prices "
+                    "INSERT OR REPLACE INTO clean_bars "
                     "(ticker, date, open, high, low, close, adj_close, volume) "
                     "VALUES (?,?,?,?,?,?,?,?)",
                     (ticker, date_str, c - 0.5, c + 1.0, c - 1.0, c, c, 1_000_000),
@@ -93,7 +93,7 @@ class TestFeaturesDF:
 
     def test_good_data_produces_nonempty_features(self, _patch_downloads):
         """With 30 rows of price data, features_df should have ~29 rows."""
-        _seed_clean_prices("NVDA", 30)
+        _seed_clean_bars("NVDA", 30)
         from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
@@ -103,7 +103,7 @@ class TestFeaturesDF:
 
     def test_nan_only_filler_rows_produce_empty_features(self, _patch_downloads):
         """NaN-only filler rows from clean_range should not fool is_valid."""
-        _seed_clean_prices("NVDA", 5, nan_only=True)
+        _seed_clean_bars("NVDA", 5, nan_only=True)
         from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
@@ -131,14 +131,14 @@ class TestFeaturesDF:
                 if i < 7:  # 7 real rows
                     c = float(close[i])
                     conn.execute(
-                        "INSERT OR REPLACE INTO clean_prices "
+                        "INSERT OR REPLACE INTO clean_bars "
                         "(ticker, date, open, high, low, close, adj_close, volume) "
                         "VALUES (?,?,?,?,?,?,?,?)",
                         ("NVDA", date_str, c - 0.5, c + 1.0, c - 1.0, c, c, 1_000_000),
                     )
                 else:  # 3 NaN filler rows
                     conn.execute(
-                        "INSERT OR REPLACE INTO clean_prices "
+                        "INSERT OR REPLACE INTO clean_bars "
                         "(ticker, date, is_trading_day, missing_any) VALUES (?,?,?,?)",
                         ("NVDA", date_str, 0, 1),
                     )
@@ -153,7 +153,7 @@ class TestFeaturesDF:
 
     def test_single_row_produces_empty_features(self, _patch_downloads):
         """Only 1 row of data → shift(1) creates NaN → no valid features."""
-        _seed_clean_prices("NVDA", 1)
+        _seed_clean_bars("NVDA", 1)
         from core.market.analyzer import MarketAnalyzer
 
         analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
@@ -162,7 +162,7 @@ class TestFeaturesDF:
 
     def test_futu_format_ticker_normalized(self, _patch_downloads):
         """build_data_context normalizes US.NVDA → NVDA for DB lookup."""
-        _seed_clean_prices("NVDA", 10)
+        _seed_clean_bars("NVDA", 10)
         from core.market.data_context import build_data_context
 
         ctx = build_data_context("US.NVDA", dt.date(2026, 1, 1), "D")
@@ -201,7 +201,7 @@ class TestFlaskAnalysisPost:
 
     def test_nvda_post_returns_charts(self, client):
         """POST returns a skeleton; GET /render/statistical produces charts."""
-        _seed_clean_prices("NVDA", 60)
+        _seed_clean_bars("NVDA", 60)
 
         resp = client.post(
             "/",
@@ -230,7 +230,7 @@ class TestFlaskAnalysisPost:
 
     def test_nvda_post_futu_format_works(self, client):
         """POST with US.NVDA (futu format) should also work end-to-end."""
-        _seed_clean_prices("NVDA", 60)
+        _seed_clean_bars("NVDA", 60)
 
         resp = client.post(
             "/",
@@ -287,7 +287,7 @@ class TestFlaskAnalysisPost:
     def test_nan_only_db_shows_error(self, client):
         """DB with NaN-only rows should produce an error fragment from
         /render/statistical, not blank charts."""
-        _seed_clean_prices("NVDA", 5, nan_only=True)
+        _seed_clean_bars("NVDA", 5, nan_only=True)
         resp = client.post(
             "/",
             data={
@@ -314,7 +314,7 @@ class TestFlaskAnalysisPost:
 
     def test_analysis_service_direct(self, _patch_downloads):
         """Direct AnalysisService call with good data produces charts."""
-        _seed_clean_prices("NVDA", 60)
+        _seed_clean_bars("NVDA", 60)
         from services.market.analysis import AnalysisService
 
         form_data = {

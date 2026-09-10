@@ -36,7 +36,7 @@ def needs_backfill(ticker: str, start: dt.date, end: dt.date) -> bool:
             if (now - last_ts) < _ENSURE_RANGE_TTL and last_start <= start and last_end >= end:
                 return False
     cov = _db.fetch_df(
-        "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n FROM clean_prices WHERE ticker=?",
+        "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n FROM clean_bars WHERE ticker=?",
         (ticker,),
     )
     if cov.empty or not cov.iloc[0]["n"]:
@@ -50,7 +50,7 @@ def needs_backfill(ticker: str, start: dt.date, end: dt.date) -> bool:
 
 
 def ensure_range(ticker: str, start: dt.date, end: dt.date) -> bool:
-    """Ensure clean_prices covers [start, end].
+    """Ensure clean_bars covers [start, end].
 
     NOTE: only *successful* coverage is memoised. Memoising a failure would
     make every caller within the TTL believe the range is covered and silently
@@ -108,7 +108,7 @@ def _ensure_range_impl(ticker: str, start: dt.date, end: dt.date, now: float, wa
     from data_pipeline.downloader import MAX_AUTO_BACKFILL_DAYS
 
     cov = _db.fetch_df(
-        "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n FROM clean_prices WHERE ticker=?",
+        "SELECT MIN(date) AS min_d, MAX(date) AS max_d, COUNT(*) AS n FROM clean_bars WHERE ticker=?",
         (ticker,),
     )
     existing_min = None

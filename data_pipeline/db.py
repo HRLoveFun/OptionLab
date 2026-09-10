@@ -12,6 +12,14 @@ Context:
 Do NOT add: a migration framework, an ORM, connection pooling beyond the
 thread-local cache. Each was considered and rejected as overkill for this
 project's scale.
+
+Canonical table names (ADR 0011, batch B2):
+- The pipeline reads and writes ``raw_bars`` / ``clean_bars`` / ``feature_bars``.
+  The pre-rename names (``raw_prices`` / ``clean_prices`` / ``processed_prices``)
+  are kept for one release as shadow tables: ``upsert_many`` writes both, so a
+  ``git revert`` of batch B2 loses no rows. Column sets are deliberately
+  identical (decision gate Q4 = minimal rename); ``tests/test_canonical_tables.py``
+  asserts that and ``scripts/migrate_canonical_tables.py`` backfills old DBs.
 """
 
 import logging
@@ -104,86 +112,104 @@ def close_all_conns() -> None:
         _thread_local.conns.clear()
 
 
+# ── Schema: one column tuple per table shape ────────────────────────
+# INVARIANT: a canonical table and its pre-rename shadow are created from the
+# SAME tuple, so their column sets cannot drift while both exist (the rename is
+# a pure name change — decision gate §8 Q4).
+# INVARIANT: ``frequency`` is one of D / W / ME / QE (see
+# ``core/_shared/types.Frequency``).
+_BARS_COLUMNS: tuple[str, ...] = (
+    "ticker TEXT NOT NULL",
+    "date TEXT NOT NULL",
+    "open REAL",
+    "high REAL",
+    "low REAL",
+    "close REAL",
+    "adj_close REAL",
+    "volume REAL",
+    "provider TEXT DEFAULT 'yfinance'",
+    "PRIMARY KEY (ticker, date)",
+)
+
+_CLEAN_BARS_COLUMNS: tuple[str, ...] = (
+    "ticker TEXT NOT NULL",
+    "date TEXT NOT NULL",
+    "open REAL",
+    "high REAL",
+    "low REAL",
+    "close REAL",
+    "adj_close REAL",
+    "volume REAL",
+    "is_trading_day INTEGER DEFAULT 1",
+    "missing_any INTEGER DEFAULT 0",
+    "price_jump_flag INTEGER DEFAULT 0",
+    "vol_anom_flag INTEGER DEFAULT 0",
+    "ohlc_inconsistent INTEGER DEFAULT 0",
+    "PRIMARY KEY (ticker, date)",
+)
+
+_FEATURE_BARS_COLUMNS: tuple[str, ...] = (
+    "ticker TEXT NOT NULL",
+    "date TEXT NOT NULL",
+    "frequency TEXT NOT NULL",
+    "open REAL",
+    "high REAL",
+    "low REAL",
+    "close REAL",
+    "adj_close REAL",
+    "volume REAL",
+    "last_close REAL",
+    "log_return REAL",
+    "amplitude REAL",
+    "log_hl_spread REAL",
+    "parkinson_var REAL",
+    "gk_var REAL",
+    "log_vol_delta REAL",
+    "vol_zscore REAL",
+    "ma_5 REAL",
+    "ma_10 REAL",
+    "ma_20 REAL",
+    "ma_60 REAL",
+    "ma_120 REAL",
+    "ma_250 REAL",
+    "mom_10 REAL",
+    "mom_20 REAL",
+    "mom_60 REAL",
+    "osc_high REAL",
+    "osc_low REAL",
+    "osc REAL",
+    "PRIMARY KEY (ticker, date, frequency)",
+)
+
+
+def _create_table(cur, name: str, columns: tuple[str, ...]) -> None:
+    """Create ``name`` if absent, from ``columns``.
+
+    CONSTRAINT: ``name`` is interpolated into SQL; it is only ever a literal from
+    this module (never caller input) — mirrors ``upsert_many``'s table validation.
+    """
+    body = ",\n    ".join(columns)
+    cur.execute(f"CREATE TABLE IF NOT EXISTS {name} (\n    {body}\n)")
+
+
 def init_db(db_path: str | None = None):
     path = db_path or DB_PATH
     Path(os.path.dirname(path)).mkdir(parents=True, exist_ok=True)
     conn = _get_or_create_conn(path)
     cur = conn.cursor()
-    # Raw OHLCV data
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS raw_prices (
-            ticker TEXT NOT NULL,
-            date TEXT NOT NULL,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            adj_close REAL,
-            volume REAL,
-            provider TEXT DEFAULT 'yfinance',
-            PRIMARY KEY (ticker, date)
-        )
-        """
-    )
-    # Cleaned daily OHLCV with flags
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS clean_prices (
-            ticker TEXT NOT NULL,
-            date TEXT NOT NULL,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            adj_close REAL,
-            volume REAL,
-            is_trading_day INTEGER DEFAULT 1,
-            missing_any INTEGER DEFAULT 0,
-            price_jump_flag INTEGER DEFAULT 0,
-            vol_anom_flag INTEGER DEFAULT 0,
-            ohlc_inconsistent INTEGER DEFAULT 0,
-            PRIMARY KEY (ticker, date)
-        )
-        """
-    )
-    # Processed features per frequency
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS processed_prices (
-            ticker TEXT NOT NULL,
-            date TEXT NOT NULL,
-            frequency TEXT NOT NULL, -- D/W/M
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            adj_close REAL,
-            volume REAL,
-            last_close REAL,
-            log_return REAL,
-            amplitude REAL,
-            log_hl_spread REAL,
-            parkinson_var REAL,
-            gk_var REAL,
-            log_vol_delta REAL,
-            vol_zscore REAL,
-            ma_5 REAL,
-            ma_10 REAL,
-            ma_20 REAL,
-            ma_60 REAL,
-            ma_120 REAL,
-            ma_250 REAL,
-            mom_10 REAL,
-            mom_20 REAL,
-            mom_60 REAL,
-            osc_high REAL,
-            osc_low REAL,
-            osc REAL,
-            PRIMARY KEY (ticker, date, frequency)
-        )
-        """
-    )
+    # Canonical store (ADR 0011) — the pipeline reads and writes these names.
+    _create_table(cur, "raw_bars", _BARS_COLUMNS)
+    _create_table(cur, "clean_bars", _CLEAN_BARS_COLUMNS)
+    _create_table(cur, "feature_bars", _FEATURE_BARS_COLUMNS)
+    # ── Compatibility shadows (transitional — one release) ──────────────
+    # TRADEOFF: the pre-rename names are kept, created from the same column
+    # tuples, so reverting batch B2 loses no rows and a DB written before the
+    # rename keeps working until scripts/migrate_canonical_tables.py has run
+    # (and afterwards: `upsert_many` writes both families). Drop these three
+    # lines + `_TABLE_SHADOWS` one release after the rename.
+    _create_table(cur, "raw_prices", _BARS_COLUMNS)
+    _create_table(cur, "clean_prices", _CLEAN_BARS_COLUMNS)
+    _create_table(cur, "processed_prices", _FEATURE_BARS_COLUMNS)
     # Market review benchmark close prices
     cur.execute(
         """
@@ -274,6 +300,11 @@ def get_conn(db_path: str | None = None):
 
 _UPSERTABLE_TABLES = frozenset(
     {
+        # canonical (ADR 0011)
+        "raw_bars",
+        "clean_bars",
+        "feature_bars",
+        # compatibility shadows — removable one release after the rename
         "raw_prices",
         "clean_prices",
         "processed_prices",
@@ -284,14 +315,41 @@ _UPSERTABLE_TABLES = frozenset(
     }
 )
 
+# ── Canonical ↔ legacy table naming (transitional) ──────────────────
+# INVARIANT: each pair has an identical column set — enforced by
+# tests/test_canonical_tables.py, because the two families must stay
+# interchangeable for the compatibility window to be safe.
+CANONICAL_TABLES: dict[str, str] = {
+    "raw_prices": "raw_bars",
+    "clean_prices": "clean_bars",
+    "processed_prices": "feature_bars",
+}
+
+# WHY bidirectional: writes may arrive under either name during the window (old
+# call sites, tests seeding fixtures directly). Mirroring both ways keeps the two
+# families identical no matter which name a caller uses.
+_TABLE_SHADOWS: dict[str, str] = {
+    **CANONICAL_TABLES,
+    **{canonical: legacy for legacy, canonical in CANONICAL_TABLES.items()},
+}
+
+
+def canonical_table(name: str) -> str:
+    """Return the canonical table name for a legacy name (identity otherwise)."""
+    return CANONICAL_TABLES.get(name, name)
+
 
 def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db_path: str | None = None):
-    """Bulk-upsert *rows* into *table*.
+    """Bulk-upsert *rows* into *table*, plus its shadow table if it has one.
 
     CONSTRAINT: the table name is interpolated into SQL (values are still
     parameterised), so it is validated against the known schema tables —
     a typo or caller-supplied name fails fast instead of building a
     malformed (or, with hostile input, malicious) statement.
+    TRADEOFF (transitional — one release): the canonical and pre-rename table
+    families are written together (see ``_TABLE_SHADOWS``) so that either name
+    can be read during the rename. The extra write is one more executemany over
+    the same small batches; drop it with the shadow tables.
     """
     if table not in _UPSERTABLE_TABLES:
         raise ValueError(f"upsert_many: unknown table {table!r}; expected one of {sorted(_UPSERTABLE_TABLES)}")
@@ -301,11 +359,16 @@ def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db
     cols = list(columns)
     placeholders = ",".join(["?"] * len(cols))
     updates = ",".join([f"{c}=excluded.{c}" for c in cols if c not in ("ticker", "date", "frequency")])
-    sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT DO UPDATE SET {updates}"
+    targets = [table, *((_TABLE_SHADOWS[table],) if table in _TABLE_SHADOWS else ())]
+    statements = [
+        f"INSERT INTO {target} ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT DO UPDATE SET {updates}"
+        for target in targets
+    ]
     conn = _get_or_create_conn(db_path or DB_PATH)
     try:
         conn.execute("BEGIN")
-        conn.executemany(sql, rows)
+        for sql in statements:
+            conn.executemany(sql, rows)
         conn.execute("COMMIT")
     except Exception:
         try:

@@ -22,7 +22,7 @@ from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
 
 # ── Health / data-quality inventory ─────────────────────────────────
 def fetch_ticker_inventory() -> list[tuple[Any, ...]]:
-    """Return one row per ticker from ``raw_prices`` with row counts + NaN tallies.
+    """Return one row per ticker from ``raw_bars`` with row counts + NaN tallies.
 
     Columns: ``(ticker, rows, latest_date, earliest_date, null_close,
     null_volume)`` ordered by ticker.
@@ -35,7 +35,7 @@ def fetch_ticker_inventory() -> list[tuple[Any, ...]]:
             MIN(date) AS earliest_date,
             SUM(CASE WHEN close IS NULL THEN 1 ELSE 0 END) AS null_close,
             SUM(CASE WHEN volume IS NULL THEN 1 ELSE 0 END) AS null_volume
-        FROM raw_prices
+        FROM raw_bars
         GROUP BY ticker
         ORDER BY ticker
     """
@@ -172,7 +172,7 @@ def count_clean_rows(ticker: str) -> int:
     """Return how many priced rows the DB holds for ``ticker``."""
     ensure_schema()
     df = fetch_df(
-        "SELECT COUNT(*) AS n FROM clean_prices WHERE ticker=? AND close IS NOT NULL",
+        "SELECT COUNT(*) AS n FROM clean_bars WHERE ticker=? AND close IS NOT NULL",
         (ticker,),
     )
     if df.empty:

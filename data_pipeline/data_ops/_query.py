@@ -97,7 +97,7 @@ def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | 
         _r.ensure_range(ticker, start, end)
     init_db()
     df = fetch_df(
-        "SELECT date, open, high, low, close, adj_close, volume FROM clean_prices WHERE ticker=? AND date>=? AND date<=?",
+        "SELECT date, open, high, low, close, adj_close, volume FROM clean_bars WHERE ticker=? AND date>=? AND date<=?",
         (ticker, start.isoformat(), end.isoformat()),
     )
     # Never memoise a partial read: while the background backfill is running
@@ -121,7 +121,7 @@ def get_processed(
     _u.manual_update(ticker, days=7)
     init_db()
     df = fetch_df(
-        "SELECT * FROM processed_prices WHERE ticker=? AND frequency=? AND date>=? AND date<=?",
+        "SELECT * FROM feature_bars WHERE ticker=? AND frequency=? AND date>=? AND date<=?",
         (ticker, frequency, start.isoformat(), end.isoformat()),
     )
     # Never memoise an empty read: a not-yet-generated frequency/range would
@@ -143,10 +143,10 @@ def get_processed_data(ticker: str, start: dt.date, end: dt.date, frequency: str
 
 
 def get_latest_spot(ticker: str) -> float | None:
-    """Return latest close price for *ticker* from clean_prices (Yahoo-sourced)."""
+    """Return latest close price for *ticker* from clean_bars (provider-sourced)."""
     init_db()
     df = fetch_df(
-        "SELECT close FROM clean_prices WHERE ticker=? AND close IS NOT NULL ORDER BY date DESC LIMIT 1",
+        "SELECT close FROM clean_bars WHERE ticker=? AND close IS NOT NULL ORDER BY date DESC LIMIT 1",
         (ticker,),
     )
     if not df.empty:

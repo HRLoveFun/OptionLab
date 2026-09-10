@@ -30,7 +30,7 @@ is usually a workaround for one of the items below.
 - Proxy must be set via `HTTP_PROXY` / `HTTPS_PROXY` env vars; we read `YF_PROXY` and propagate to both. See [utils/network.py](../utils/network.py) `init_yf_proxy`.
 - **Dead-proxy poisoning**: an unreachable proxy makes curl_cffi hang. We TCP-probe before activating; falls back to direct connect.
 - **Global throttle**: token-bucket limiter (default 5 req/s, burst 5) in [utils/network.py](../utils/network.py)::`yf_throttle`. Every yfinance call MUST be routed through `data_pipeline/providers/` (the single chokepoint since batch B1 of ADR 0011) rather than calling `yf_throttle()` directly at each call site — see ADR 0005.
-- **DB-first pattern**: never re-download data already in `clean_prices`. The 60-second cooldown in `DataService` exists to prevent thundering herd from concurrent UI requests.
+- **DB-first pattern**: never re-download data already in `clean_bars`. The 60-second cooldown in `DataService` exists to prevent thundering herd from concurrent UI requests.
 - **Single yfinance exit point**: only `data_pipeline/providers/` may `import yfinance`. The chokepoint moved there from `yf_client.py` in batch B1; `yf_client.py` is now a one-release compatibility shim over the provider package. Any other module needs a `# doc-guard: allow=single-yf-exit` marker (tracked as architecture debt — see [architecture_review.md](architecture_review.md) §2). `tests/` and `scripts/` are exempt by design (test doubles patch `yfinance.download` on the module object). Enforced by `scripts/doc_guard.py` rules `single-yf-exit`, `import-direction`, `core-purity` and `db-access`; trend-gated in CI by `scripts/arch_metrics.py --check`.
 
 ## 3. SQLite, single-machine deployment

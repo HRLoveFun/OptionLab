@@ -4,7 +4,7 @@ Domain:    Data Pipeline — Ingest Glue
 Context:
   - Acquisition itself lives in ``data_pipeline/providers/``. This module keeps
     only the DB-aware parts: business-day gap detection, the auto-backfill cap,
-    and the ``raw_prices`` upsert. Batch B1 (see
+    and the ``raw_bars`` upsert. Batch B1 (see
     docs/plans/business_line_reorg.md §6) moved the ``yf.download`` call behind
     ``providers.yfinance_provider.download_daily_frame``, so this module no
     longer imports yfinance.
@@ -25,7 +25,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_pipeline.providers.yfinance_provider import download_daily_frame
+from data_pipeline.providers import get_provider
+from data_pipeline.providers.base import CANONICAL_BAR_COLUMNS
+from data_pipeline.providers.yfinance_provider import to_canonical_bars
 
 from . import PipelineResult
 from .db import fetch_df, upsert_many
@@ -54,10 +56,10 @@ def _last_business_day_on_or_before(d: dt.date) -> dt.date:
 def _load_test_fixture(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
     """Synthesise OHLCV for ``TEST_*`` tickers without touching the network.
 
-    Matches the column shape produced by ``_download_yf`` so the rest of the
-    pipeline is fixture-agnostic. If a CSV exists at
-    ``tests/fixtures/yf/<TICKER>.csv`` it is used verbatim; otherwise a
-    deterministic synthetic series is generated.
+    Matches the yfinance column shape (Title Case + ``Adj_Close``) so the
+    canonical mapping is exercised identically for fixtures and real downloads.
+    If a CSV exists at ``tests/fixtures/yf/<TICKER>.csv`` it is used verbatim;
+    otherwise a deterministic synthetic series is generated.
     """
     csv_path = _FIXTURE_DIR / f"{ticker}.csv"
     if csv_path.exists():
@@ -85,7 +87,7 @@ def _load_test_fixture(ticker: str, start: dt.date, end: dt.date) -> pd.DataFram
 
 
 def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> list[dt.date]:
-    """Return business days in [start, end] (inclusive) that have no row in raw_prices.
+    """Return business days in [start, end] (inclusive) that have no row in raw_bars.
 
     Uses the same Mon-Fri business-day calendar as `cleaning._get_business_days`
     so gaps map 1:1 with cleaning's expected index. Holidays are intentionally
@@ -95,7 +97,7 @@ def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> lis
     if len(expected) == 0:
         return []
     df = fetch_df(
-        "SELECT date FROM raw_prices WHERE ticker=? AND date>=? AND date<=?",
+        "SELECT date FROM raw_bars WHERE ticker=? AND date>=? AND date<=?",
         (ticker, start.isoformat(), end.isoformat()),
     )
     have: set[dt.date] = set()
@@ -111,24 +113,28 @@ def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> lis
     return [ts.date() for ts in expected if ts.date() not in have]
 
 
-def _download_yf(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
-    """Download daily OHLCV for ``[start, end]`` (inclusive), fixture-aware.
+def download_bars(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Acquire daily bars for ``[start, end]`` (inclusive) in the canonical schema.
 
     ``TEST_*`` tickers never hit the network (useful for unit tests + ad-hoc
     smoke tests under rate-limit conditions; see ``_load_test_fixture``).
-    Everything else is delegated to the yfinance provider.
+    Everything else goes through the provider registry, which returns canonical
+    bars already (ADR 0011).
     """
     if ticker.startswith("TEST_"):
         logger.info("Loading fixture data for test ticker %s (%s..%s)", ticker, start, end)
-        return _load_test_fixture(ticker, start, end)
-    return download_daily_frame(ticker, start, end)
+        # WHY the yfinance mapper for fixtures: the fixture frames deliberately
+        # mimic `yf.download`'s Title-Case shape, so they need the same mapping
+        # the provider applies to a real download.
+        return to_canonical_bars(_load_test_fixture(ticker, start, end))
+    return get_provider().history(ticker, start, end)
 
 
 def upsert_raw_prices(
     ticker: str, start: dt.date | None = None, end: dt.date | None = None, days: int = 7
 ) -> PipelineResult:
     """
-    Download OHLCV for [start, end) and upsert into raw_prices.
+    Download OHLCV for [start, end) and upsert into raw_bars (canonical store).
     If df for a day is entirely NA, skip and keep existing row.
     Returns a PipelineResult with row count and any warnings.
     """
@@ -145,7 +151,7 @@ def upsert_raw_prices(
 
     # ── Gap-aware coverage check ──
     # Skip the network only when every business day in [start, end] is already
-    # present in raw_prices. Otherwise expand the download range to cover the
+    # present in raw_bars. Otherwise expand the download range to cover the
     # earliest gap so back-fills happen automatically after an outage.
     missing = find_missing_business_days(ticker, start, end)
     if not missing:
@@ -171,7 +177,7 @@ def upsert_raw_prices(
         start = effective_start
 
     try:
-        df_new = _download_yf(ticker, start, end)
+        df_new = download_bars(ticker, start, end)
     except Exception as e:
         logger.error(f"Download failed for {ticker}: {e}", exc_info=True)
         return PipelineResult(ok=False, error=f"download_failed: {e}")
@@ -188,42 +194,33 @@ def upsert_raw_prices(
     df_new.index = idx.tz_localize(None) if idx.tz is None else idx.tz_convert(None)
     df_new["date"] = df_new.index.date
 
+    # INVARIANT: bars arrive canonical (ADR 0011), so the ingest stage never
+    # touches vendor column names — the mapping lives in the provider.
+    bar_cols = list(CANONICAL_BAR_COLUMNS)
+    provider_name = get_provider().name
+
     rows = []
     for _d, row in df_new.iterrows():
         date_str = row["date"].isoformat()
         # If all new values are NA, retain old data (skip insert) and log
-        if row[["Open", "High", "Low", "Close", "Adj_Close", "Volume"]].isna().all():
+        if row[bar_cols].isna().all():
             msg = f"Blank data for {ticker} on {date_str}; retaining old data if exists"
             logger.warning(msg)
             result.warnings.append(msg)
             continue
-        tup = (
-            ticker,
-            date_str,
-            float(row.get("Open", pd.NA)) if pd.notna(row.get("Open")) else None,
-            float(row.get("High", pd.NA)) if pd.notna(row.get("High")) else None,
-            float(row.get("Low", pd.NA)) if pd.notna(row.get("Low")) else None,
-            float(row.get("Close", pd.NA)) if pd.notna(row.get("Close")) else None,
-            float(row.get("Adj_Close", pd.NA)) if pd.notna(row.get("Adj_Close")) else None,
-            float(row.get("Volume", pd.NA)) if pd.notna(row.get("Volume")) else None,
-            "yfinance",
+        rows.append(
+            (
+                ticker,
+                date_str,
+                *[float(row[col]) if pd.notna(row.get(col)) else None for col in bar_cols],
+                provider_name,
+            )
         )
-        rows.append(tup)
 
     if rows:
         upsert_many(
-            "raw_prices",
-            [
-                "ticker",
-                "date",
-                "open",
-                "high",
-                "low",
-                "close",
-                "adj_close",
-                "volume",
-                "provider",
-            ],
+            "raw_bars",
+            ["ticker", "date", *bar_cols, "provider"],
             rows,
         )
     result.rows = len(rows)

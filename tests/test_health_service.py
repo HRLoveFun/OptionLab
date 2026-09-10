@@ -14,7 +14,7 @@ def _seed(ticker: str, dates: list[str], close_vals: list[float | None]) -> None
     init_db()
     with get_conn() as conn:
         conn.executemany(
-            "INSERT OR REPLACE INTO raw_prices (ticker,date,open,high,low,close,adj_close,volume) "
+            "INSERT OR REPLACE INTO raw_bars (ticker,date,open,high,low,close,adj_close,volume) "
             "VALUES (?,?,?,?,?,?,?,?)",
             [(ticker, d, 1.0, 1.0, 1.0, c, c, 100.0) for d, c in zip(dates, close_vals, strict=True)],
         )

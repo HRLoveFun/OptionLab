@@ -98,7 +98,7 @@ def _e2e_db(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 #   * `yfinance.Ticker(...).option_chain(exp)` — calls/puts DataFrames
 #
 # Combined with the existing `TEST_*` ticker bypass in
-# `data_pipeline.downloader._download_yf`, real `TEST_AAPL` form submissions
+# `data_pipeline.downloader.download_bars`, real `TEST_AAPL` form submissions
 # never hit the network.
 # ---------------------------------------------------------------------------
 def _synthetic_ohlcv(ticker: str, start: dt.date, end: dt.date):

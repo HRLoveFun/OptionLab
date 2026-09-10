@@ -65,7 +65,7 @@ Rescoped in batch B1 of [ADR 0011](decisions/0011-pluggable-data-provider-seam.m
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `data_pipeline/downloader.py` — **resolved 2026-09-10 (B1)** | DB-aware gap-detection bulk downloads; it used to call `yf.download` directly as a registered second exit point | the download call moved to `providers/yfinance_provider.py::download_daily_frame`; `downloader.py` keeps only gap detection + `raw_prices` upsert, so it no longer imports yfinance |
+| `data_pipeline/downloader.py` — **resolved 2026-09-10 (B1)** | DB-aware gap-detection bulk downloads; it used to call `yf.download` directly as a registered second exit point | the download call moved to `providers/yfinance_provider.py::download_daily_frame`; `downloader.py` keeps only gap detection + `raw_bars` upsert, so it no longer imports yfinance |
 | `data_pipeline/data_ops/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `fetch_spot` (provider, re-exported by `yf_client`) |
 
 ### Watch list (pre-debt, no marker yet)

@@ -52,7 +52,7 @@ def _flag_anomalies(df: pd.DataFrame) -> pd.DataFrame:
 def clean_range(ticker: str, start: dt.date | None = None, end: dt.date | None = None) -> PipelineResult:
     """
     Clean data for [start, end). Align to business days, mark missing days as NA
-    (no interpolation for full missing days), flag anomalies, and upsert to clean_prices.
+    (no interpolation for full missing days), flag anomalies, and upsert to clean_bars.
     Returns a PipelineResult with row count and any warnings.
 
     INVARIANT: missing trading days remain NA. We do NOT interpolate prices
@@ -65,27 +65,27 @@ def clean_range(ticker: str, start: dt.date | None = None, end: dt.date | None =
 
     # Inclusive end date query
     df = fetch_df(
-        "SELECT * FROM raw_prices WHERE ticker=? AND date>=? AND date<=?",
+        "SELECT * FROM raw_bars WHERE ticker=? AND date>=? AND date<=?",
         (ticker, start.isoformat(), end.isoformat()),
     )
-    # WHY: If raw_prices has zero rows for this ticker (e.g. the ticker was
+    # WHY: If raw_bars has zero rows for this ticker (e.g. the ticker was
     # invalid and yfinance returned nothing), do NOT generate a business-day
-    # aligned all-NaN frame and upsert it. Doing so pollutes clean_prices
+    # aligned all-NaN frame and upsert it. Doing so pollutes clean_bars
     # with phantom rows for arbitrary user input — including XSS payloads —
     # and turns a read-only "validate_ticker" call into a DB writer.
     if df.empty:
-        # Sanity check: only short-circuit when the ticker has no clean_prices
+        # Sanity check: only short-circuit when the ticker has no clean_bars
         # history at all. Established tickers might legitimately have a quiet
         # period (e.g. exchange holiday week) where the requested raw range
         # is empty; in that case fall through and align as before so existing
         # downstream guarantees about business-day alignment are preserved.
         existing = fetch_df(
-            "SELECT 1 FROM clean_prices WHERE ticker=? LIMIT 1",
+            "SELECT 1 FROM clean_bars WHERE ticker=? LIMIT 1",
             (ticker,),
         )
         if existing.empty:
             logger.info(
-                "clean_range: skipping upsert for %s — no raw rows and no existing clean_prices",
+                "clean_range: skipping upsert for %s — no raw rows and no existing clean_bars",
                 ticker,
             )
             return PipelineResult(ok=True, rows=0, warnings=["no_data_for_ticker"])
@@ -180,7 +180,7 @@ def clean_range(ticker: str, start: dt.date | None = None, end: dt.date | None =
         )
     if rows:
         upsert_many(
-            "clean_prices",
+            "clean_bars",
             [
                 "ticker",
                 "date",

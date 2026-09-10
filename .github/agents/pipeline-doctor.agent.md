@@ -9,9 +9,9 @@ You are a data pipeline diagnostician for the OptionView project. Your job is to
 ## Architecture
 
 ```
-data_pipeline/downloader.py → raw_prices table
-data_pipeline/cleaning.py   → clean_prices table
-data_pipeline/processing.py → processed_prices table
+data_pipeline/downloader.py → raw_bars table
+data_pipeline/cleaning.py   → clean_bars table
+data_pipeline/processing.py → feature_bars table
 core/price_dynamic.py       → features DataFrame
 core/market_analyzer.py     → chart generation
 services/market/analysis/facade.py → base64 images to frontend
@@ -26,8 +26,8 @@ services/market/analysis/facade.py → base64 images to frontend
 ## Approach
 
 1. **Clarify symptom**: What's the user seeing? Empty chart, wrong data, error message?
-2. **Check DB tables** (raw_prices → clean_prices → processed_prices) for the target ticker
-3. **Look for NaN-only rows**: `SELECT count(*) FROM raw_prices WHERE ticker=? AND open IS NULL AND close IS NULL`
+2. **Check DB tables** (raw_bars → clean_bars → feature_bars) for the target ticker
+3. **Look for NaN-only rows**: `SELECT count(*) FROM raw_bars WHERE ticker=? AND open IS NULL AND close IS NULL`
 4. **Check logs**: Look for yfinance errors (429, timeout), "No new data", pipeline warnings
 5. **Trace the failure**: Which stage first produced invalid data? Follow downstream
 6. **Check connectivity**: If download is suspected, verify proxy and throttle state

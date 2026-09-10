@@ -38,13 +38,13 @@ class DataService:
         from data_pipeline.db import fetch_df
 
         df = fetch_df(
-            "SELECT * FROM clean_prices WHERE ticker=? AND date=?",
+            "SELECT * FROM clean_bars WHERE ticker=? AND date=?",
             (ticker, date.isoformat()),
         )
         if not df.empty:
             return True
         df2 = fetch_df(
-            "SELECT * FROM raw_prices WHERE ticker=? AND date=?",
+            "SELECT * FROM raw_bars WHERE ticker=? AND date=?",
             (ticker, date.isoformat()),
         )
         return not df2.empty

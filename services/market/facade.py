@@ -34,7 +34,7 @@ class MarketService:
         # WHY: Reject obvious junk (XSS payloads, SQL fragments, lowercase, etc.)
         # before hitting the data layer. Otherwise a single call would
         # trigger DataService.manual_update() which writes one NaN row per
-        # business day to clean_prices for the bogus ticker.
+        # business day to clean_bars for the bogus ticker.
         if not is_valid_ticker_format(ticker):
             return False, "invalid_ticker_or_no_data_available"
         try:

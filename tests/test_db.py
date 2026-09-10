@@ -14,6 +14,11 @@ class TestInitDb:
         init_db(db)
         with sqlite3.connect(db) as conn:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        # canonical store (ADR 0011)
+        assert "raw_bars" in tables
+        assert "clean_bars" in tables
+        assert "feature_bars" in tables
+        # compatibility shadows — removable one release after the rename
         assert "raw_prices" in tables
         assert "clean_prices" in tables
         assert "processed_prices" in tables

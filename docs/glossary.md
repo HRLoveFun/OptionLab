@@ -64,11 +64,16 @@ User-supplied directional preference (Bull / Bear / Neutral) used to filter stra
 
 ## Data Pipeline
 
-### `raw_prices`
-Untouched OHLCV pulled from yfinance. Indexed by `(ticker, date)`.
+### `raw_bars`
+Untouched OHLCV pulled from a provider (yfinance today) and mapped onto the canonical schema. Indexed by `(ticker, date)`.
 
-### `clean_prices`
-`raw_prices` aligned to business days, anomalies flagged, missing days = NA. **NO interpolation** — see [constraints.md §4](constraints.md#4-the-machine-is-not-247).
+### `clean_bars`
+`raw_bars` aligned to business days, anomalies flagged, missing days = NA. **NO interpolation** — see [constraints.md §4](constraints.md#4-the-machine-is-not-247).
+
+### `feature_bars`
+`clean_bars` resampled per frequency (D/W/ME/QE) with engineered features (returns, MA, HV, oscillation). Indexed by `(ticker, date, frequency)`.
+
+> **Compatibility (one release)**: the pre-rename names `raw_prices` / `clean_prices` / `processed_prices` still exist as shadow tables — every write goes to both families (see `data_pipeline/db.py`) — so an un-migrated DB and a `git revert` of the rename keep working. See [ADR 0011](decisions/0011-pluggable-data-provider-seam.md).
 
 ### Anomaly Flags
 - `price_jump_flag`: |log return| > 5σ.
