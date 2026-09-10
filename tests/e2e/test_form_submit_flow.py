@@ -33,7 +33,7 @@ def test_form_submit_renders_summary(
     """Submit the analysis form with a TEST_ ticker and assert the page
     re-renders with the ticker echoed back."""
     page.goto(live_server, wait_until="domcontentloaded")
-    open_tab("tab-parameter")
+    # The Parameters bar is always visible (batch B6).
 
     page.fill("#ticker", "TEST_AAPL")
     page.fill("#start_time", _months_ago(3))

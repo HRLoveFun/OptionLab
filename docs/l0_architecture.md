@@ -40,7 +40,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 | `core/` | 6 372 lines · 8 sub-packages + `_shared` | Pure computation — no Flask, no DB, no network | good |
 | `data_pipeline/` | 3 618 lines · 27 files | The only I/O boundary, re-homed into six one-way stages (ADR 0011, batch B3): `providers/` · `store/` · `ingest/` · `transform/` · `read/` · `orchestrate/` (+ `_state.py`) | good |
 | `utils/` | 756 lines · 7 files | Leaf layer; highest fan-in (`ticker_utils.py` = 11) | good |
-| `templates/` | 1 546 lines · 17 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
+| `templates/` | 1 676 lines · 19 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
 | `static/` | 5 473 lines · 31 JS/CSS | `state/` · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
 
 ### B. Dependencies & configuration

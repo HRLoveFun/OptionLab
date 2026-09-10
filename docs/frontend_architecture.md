@@ -128,12 +128,14 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │  ├── Brand (icon + title + subtitle)                    │
 │  └── Ticker Badge (when analysis active)                │
 ├─────────────────────────────────────────────────────────┤
+│  Parameters bar  [ticker] [Run]  (collapse ▸/▾)          │  ← sticky, not a tab
+├─────────────────────────────────────────────────────────┤
 │  Sidebar      │  Main Panel                             │
 │  (tab-nav)    │  (tab-content)                          │
 │               │                                         │
-│  • Parameter  │  Tab 1: Parameter Form                  │
-│  • Market     │  Tab 2: Market Review Table/Chart       │
-│  • Statistics │  Tab 3: Statistical Analysis Charts     │
+│  • Market     │  Tab 1: Market Review Table/Chart       │
+│  • Statistics │  Tab 2: Statistical Analysis Charts     │
+│  • Portfolio  │  Tab 3: Positions / Portfolio Analysis  │
 │  • Assessment │  Tab 4: Assessment & Projections        │
 │  • Chain      │  Tab 5: Option Chain T-View             │
 │  • Volatility │  Tab 6: Volatility Analysis             │
@@ -141,6 +143,15 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │               │                                         │
 └───────────────┴─────────────────────────────────────────┘
 ```
+
+The **Parameters bar** (`templates/partials/parameters_bar.html`, batch B6) renders
+between the header and `.app-body`, is `position: sticky` under the header, and owns
+exactly one input — `ticker` — plus the Run button and the ticker-validation badges.
+It is **not** a tab: it survives tab switches, and collapsing it (persisted per
+viewer under `localStorage['parametersBarCollapsed']`, guarded `try/catch`) leaves a
+one-line summary (`▸ ^SPX`). Analysis settings that have not yet moved to their
+module toolbars sit in a collapsible group inside the same `<form>`, so the POST
+contract is unchanged until B7.
 
 ### Peek Sidebar
 
@@ -168,7 +179,7 @@ inline as before, since a hover-peek panel is unusable at that width.
 
 | Tab ID                     | Label                       | Data Source                      |
 | -------------------------- | --------------------------- | -------------------------------- |
-| `tab-parameter`            | Parameter                   | Static form                      |
+| `tab-portfolio`            | Portfolio                   | `POST /api/portfolio_analysis`   |
 | `tab-summary`              | 综合 (Multi-ticker summary) | `results.__综合__`               |
 | `tab-market-review`        | Market Review               | `market_review_table`            |
 | `tab-statistical-analysis` | Statistical Analysis        | `scatter_*`, `dynamics_*` charts |

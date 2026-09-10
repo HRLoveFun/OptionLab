@@ -133,6 +133,10 @@
         </div>
     </header>
 
+    {# Persistent Parameters bar (batch B6): above the panes so it survives tab
+       switches. Owns `ticker` + Run; module params move to the tab toolbars in B7. #}
+    {% include 'partials/parameters_bar.html' %}
+
     <div class="app-body">
         <!-- Sidebar Tab Nav -->
         <aside class="sidebar" id="sidebar">
@@ -147,18 +151,13 @@
 
             <div class="sidebar-body" id="sidebar-body">
                 <nav class="tab-nav">
-                    <div class="tab-section-label">Setup</div>
-                    <button class="tab-btn {% if not streaming_mode %}active{% endif %}" data-tab="tab-parameter">
-                        <span>Parameter</span>
-                    </button>
-
                     <div class="tab-section-label">Overview</div>
                     {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
                     <button class="tab-btn" data-tab="tab-summary">
                         <span>Summary</span>
                     </button>
                     {% endif %}
-                    <button class="tab-btn {% if market_review_table is defined and market_review_table %}active{% endif %}" data-tab="tab-market-review">
+                    <button class="tab-btn {% if not streaming_mode or (market_review_table is defined and market_review_table) %}active{% endif %}" data-tab="tab-market-review">
                         <span>Market Review</span>
                     </button>
                     <button class="tab-btn" data-tab="tab-statistical-analysis">
@@ -190,6 +189,11 @@
                         <span>Option Pricing Matrix</span>
                     </button>
 
+                    <div class="tab-section-label">Portfolio</div>
+                    <button class="tab-btn" data-tab="tab-portfolio">
+                        <span>Portfolio</span>
+                    </button>
+
                     <div class="tab-section-label">System</div>
                     <button class="tab-btn" data-tab="tab-config">
                         <span>Config</span>
@@ -212,11 +216,11 @@
         <!-- Main Panel -->
         <main class="main-panel">
 
-            <!-- Tab 1: Parameter -->
-            {% include 'partials/tab_parameter.html' %}
-
-            <!-- Tab 2: Market Review -->
+            <!-- Tab 1: Market Review -->
             {% include 'partials/tab_market_review.html' %}
+
+            <!-- Portfolio (batch B6 / gate Q3) -->
+            {% include 'partials/tab_portfolio.html' %}
 
             <!-- Tab 3: Statistical Analysis -->
             {% include 'partials/tab_statistical_analysis.html' %}
@@ -271,6 +275,7 @@
     <script src="{{ url_for('static', filename='state/tabFlagsState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/panelState.js') }}"></script>
     <script src="{{ url_for('static', filename='utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='parametersBar.js') }}"></script>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <script src="{{ url_for('static', filename='position.js') }}"></script>
     <script src="{{ url_for('static', filename='option-chain.js') }}"></script>

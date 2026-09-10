@@ -126,6 +126,14 @@ probes coverage (DB-only) and kicks missing ranges on a daemon thread;
 `HOLD_SECONDS` and by backfill-thread liveness). The per-module toolbars and the removal of
 `syncConfigToForm` remain B7's work.
 
+**Implementation status (B6)**: the Parameters tab is gone. A persistent, collapsible
+Parameters bar (`templates/partials/parameters_bar.html` + `static/parametersBar.js`,
+`localStorage` key `parametersBarCollapsed`) renders above `.main-panel`, is `position:
+sticky` under the header, and owns exactly one input — `ticker` — plus the Run button and the
+validation badges. Analysis settings that B7 will move to module toolbars stay in a collapsible
+group inside the same `<form>`, so the submit contract is untouched. The `positions` block moved
+to its own **Portfolio** tab (decision gate §8 Q3).
+
 ## Consequences
 
 - Positive: the always-visible surface is one field; module parameters are

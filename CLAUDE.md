@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **⚠ Active reorg (2026-09) — [ADR 0011](docs/decisions/0011-pluggable-data-provider-seam.md)
 > + [0012](docs/decisions/0012-parameter-ownership-and-prefetch.md), both Accepted.**
 > Before touching `data_pipeline/`, the parameter surfaces
-> (`templates/partials/tab_parameter.html`, `tab_config.html`, `static/main.js`
+> (`templates/partials/parameters_bar.html`, `tab_config.html`, `static/main.js`
 > `FormManager`) or `routes/core.py::index`, read
 > **[`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md) §0**:
 > work the numbered batches (B1–B8) in order, one batch per PR, update its ledger

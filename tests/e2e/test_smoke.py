@@ -9,7 +9,7 @@ from playwright.sync_api import Page, expect
 
 # All sidebar tab IDs (must match `data-tab` values in templates/index.html).
 TAB_IDS = [
-    "tab-parameter",
+    "tab-portfolio",
     "tab-summary",
     "tab-market-review",
     "tab-statistical-analysis",

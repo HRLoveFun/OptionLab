@@ -26,6 +26,7 @@ import '../../static/utils.js';
 import '../../static/cache.js';
 import '../../static/simulation.js';
 import '../../static/theme.js';
+import '../../static/parametersBar.js';
 
 // Capture the post-import surface BEFORE the setup `beforeEach` runs and
 // wipes globals. We re-attach them in a local `beforeEach` so each `it`
@@ -46,6 +47,7 @@ const _snapshot = {
     loadSimulationTab: window.loadSimulationTab,
     runSimulation: window.runSimulation,
     themeManager: window.themeManager,
+    parametersBar: window.parametersBar,
 };
 
 beforeEach(() => {
@@ -81,6 +83,12 @@ describe('coverage smoke — every module publishes its surface', () => {
     it('utils functions are global', () => {
         expect(typeof window.escapeHtml).toBe('function');
         expect(typeof window.parseTickers).toBe('function');
+    });
+
+    it('parameters bar published its window surface', () => {
+        expect(window.parametersBar).toBeDefined();
+        expect(typeof window.parametersBar.init).toBe('function');
+        expect(window.parametersBar.STORAGE_KEY).toBe('parametersBarCollapsed');
     });
 
     it('simulation tab published its window surface', () => {

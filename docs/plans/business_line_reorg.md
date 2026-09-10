@@ -43,7 +43,7 @@
 | B3 — package re-home | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | six stages + `_state.py`; first sub-layer guard table; `arch_baseline.json` **not** reset (no tracked drift). Actuals + deviations in §8 |
 | B4 — close L1 (`core-purity`) | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | zero core→data_pipeline edges; markers deleted and refused by test; `core` layer tightened to `{utils}` |
 | B5 — readiness plan + prefetch | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (**manifest**, params as `/render` query args); readiness plan on the job; cold-start hold fragment. Actuals + deferrals in §8 |
-| B6 — `ticker`-only Parameters bar | ⬜ not started | — | — | gate: §8 Q3; depends on B5 |
+| B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
 | B7 — module-scoped params | ⬜ not started | — | — | gate: §8 Q1; depends on B6 |
 | B8 — retire / repurpose Config tab | ⬜ not started | — | — | gate: §8 Q2 |
 
@@ -421,7 +421,7 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 |---|---|---|---|
 | Q1 | **Submit contract** — does `POST /` carry a `modules` manifest with per-module params attached to each `/render` call, or do the streaming market tabs move fully to client-fired `/api/*` like Option Chain? Manifest keeps the streaming model; full client-fired is more uniform but a bigger diff. | ✅ resolved 2026-09-10 (B5) — **manifest**, per-module params as query args on each `/render` call (sub-option A1) | **manifest.** Decisive reasons: (1) ADR 0012's readiness pass needs the module list *at submit time* — with no POST manifest, B5 would need an extra `/api/ready` protocol; (2) the four streaming slices return server-rendered HTML + base64 PNG, so client-firing changes only the transport, not the product; (3) the diff and the revert surface stay one batch wide. Full client-fired would only win if the charts moved to client-side rendering (ADR 0006/0008 territory). Params travel as query args (not `hx-post` JSON) to match the existing `/api/option_chain?ticker=…` shape and stay bookmark-reproducible — recorded in the B5 note below |
 | Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
-| Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | before **B6** | dedicated Portfolio panel |
+| Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | ✅ resolved 2026-09-10 (B6) — **dedicated Portfolio tab** | **Dedicated Portfolio tab** (`tab-portfolio`). The positions table drives `POST /api/portfolio_analysis` (client-fired) and owns a full result surface (Greeks / P&L / theta / breakeven / VaR); keeping it inside the bar's form would re-couple that workflow to the streaming submit — exactly the coupling ADR 0012 removes — and a one-line bar has nowhere to put the results. A tab also makes the workflow discoverable instead of buried under "Parameters". `#positions-tbody` stays in the DOM on every load, so the existing global handlers are unchanged |
 | Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | ✅ resolved 2026-09-10 (B2) | **minimal rename** — identical columns on both sides of each pair (structurally enforced: one column tuple per shape, used to create both names). The `adj_close` normalisation is already inside the provider (B1's `to_canonical_bars`), and ingest now consumes canonical bars, so no reshape is needed. ADR 0011's `symbol` column stays the target state but is deferred — see the B2 note below |
 | Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | ✅ resolved 2026-09-10 (B1) — outcome table in ADR 0011 §"Protocol shape" | design review of `base.py` against both field maps: IV → decimal, bid/ask nullable, `inTheMoney` dropped (derivable), expiries ISO strings |
 
@@ -584,6 +584,40 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   full `pytest tests/e2e` → 38 passed; `ruff check` + `format --check` clean; `doc_guard.py` clean;
   `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 / dead 1 — no baseline reset);
   `audit_tags.py` 16 vs baseline 16 after tagging two new domain constants.
+
+**B6 (2026-09-10) — `ticker`-only Parameters bar (+ Q3: Portfolio tab).**
+
+- **The bar** (`templates/partials/parameters_bar.html` + `static/parametersBar.js`): renders between the
+  header and `.app-body`, `position: sticky; top: var(--header-h)`, and owns exactly one input —
+  `ticker` (comma-separated, existing multi-ticker parse) — plus the Run button and the
+  ticker-validation badges. Collapsing persists per viewer under
+  `localStorage['parametersBarCollapsed']` (every access guarded; a denied-storage browser degrades to
+  "not persisted") and leaves the one-line summary `▸ ^SPX`. Tokens only in CSS, so the Onyx layer
+  themes it for free. The `tab_parameter.html` tab and its sidebar button are deleted.
+- **Q3 = dedicated Portfolio tab**: `templates/partials/tab_portfolio.html` holds the positions table +
+  the Portfolio-Analysis result panel; the global handlers (`addPositionRow`, `runPortfolioAnalysis`,
+  `initializeOptionsTable`) are unchanged because `#positions-tbody` still exists on every page load.
+- **Deviation (documented, temporary)**: the plan says the bar owns *one* input, and B7 is what gives each
+  module its own toolbar. Removing the Parameters tab in B6 while B7 has not landed would have left the
+  time horizon, sizing and the Config bridge with **no UI at all** — a functional regression, not a
+  shippable increment. They therefore sit in a collapsible "Analysis settings" group **inside the same
+  `<form>`**, explicitly marked as B7's extraction source; the POST contract is byte-for-byte unchanged.
+- **Pages mirror**: `build_pages_site.py::build` asserted `id="tab-parameter"` and generated
+  `showcase/parameter.html`; both now point at `tab-portfolio`, and the demo banner links to
+  "去 Portfolio 页". `tests/test_pages_build.py`'s ticker-input assertion was made attribute-order
+  agnostic (it broke on the new `class` attribute — brittle, not a real contract).
+- **Tests**: `tests/unit/parametersBar.test.js` (8 cases: default expanded, toggle + persistence, restore,
+  summary mirroring, storage-denied, bar-absent) and `parametersBar.js` added to the coverage pass;
+  5 e2e files dropped their "activate the parameter tab" step (the bar is always visible),
+  `test_position_cascade.py` opens `tab-portfolio`, and `test_smoke.py`'s tab list swapped
+  `tab-parameter` → `tab-portfolio`.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 493 passed / 5 skipped;
+  full `pytest tests/e2e` → 38 passed; `npx vitest run` → 187 passed / 15 files;
+  `doc_guard.py` clean; `arch_metrics.py --check` ok; `audit_tags.py` 16 vs baseline 16.
+  The §6 row's "axe ≥ 95" is **not** automated in this repo (no axe harness exists) — verified by hand
+  instead: the bar is a labelled `<label for="ticker">` + `<input>`, the toggle is a real `<button>` with
+  `aria-expanded`/`aria-controls` and an `sr-only` label, and the collapsed summary is `aria-hidden`
+  while the input still carries the value.
 
 ---
 

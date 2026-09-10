@@ -1,0 +1,83 @@
+{# Persistent, collapsible Parameters bar (batch B6 of the reorg).
+
+   Owns exactly ONE input that every data module shares: `ticker` — plus the Run
+   button and the ticker-validation badges, which used to live in the Parameters
+   tab. It is not a tab: it renders above `.main-panel`, stays put while the user
+   switches tabs, and collapses to a one-line summary (persisted per viewer).
+
+   TRANSITIONAL (removed in B7): the analysis settings below the divider are the
+   parameters that batch B7 moves into each module's own toolbar (time horizon →
+   Market Review / Statistical / Assessment, sizing → Assessment, frequency and
+   the Assessment knobs → their modules). They stay inside this same <form> so the
+   POST contract is unchanged until then; `main.js` still bridges the Config tab
+   values through the hidden inputs at the bottom. #}
+<form method="post" id="analysis-form" class="parameters-bar" data-collapsed="false">
+    <div class="parameters-bar-main">
+        <button type="button" class="parameters-bar-toggle" id="parameters-bar-toggle"
+                aria-expanded="true" aria-controls="parameters-bar-body"
+                title="Collapse parameters">
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            <span class="sr-only">Toggle parameters</span>
+        </button>
+
+        <label class="parameters-bar-label" for="ticker">Ticker</label>
+        <input type="text" id="ticker" name="ticker" class="parameters-bar-ticker"
+               value="{{ ticker or '' }}" placeholder="e.g. AAPL, SPY, ^SPX"
+               autocomplete="off" required>
+        {# Collapsed summary: the bar collapses to `▸ ^SPX` (see parametersBar.js) #}
+        <span class="parameters-bar-summary" id="parameters-bar-summary"></span>
+        <div id="ticker-validation-container" class="ticker-badges"></div>
+
+        <button type="submit" class="btn-primary" id="parameters-bar-run">Run</button>
+    </div>
+
+    {# Always visible, even when the bar is collapsed: a failed submit must not hide
+       its own error message. #}
+    {% if error %}
+    <div class="alert alert-error parameters-bar-alert"><span>{{ error }}</span></div>
+    {% endif %}
+    <div class="ticker-validation" id="ticker-validation"></div>
+
+    <div class="parameters-bar-body" id="parameters-bar-body">
+        {# ── Transitional analysis settings (B7 extracts these into module toolbars) ── #}
+        <div class="parameters-bar-group">
+            <span class="parameters-bar-group-title">Analysis settings</span>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Time Horizon</label>
+                    <div class="compact-range-input">
+                        <input type="month" id="start_time" name="start_time"
+                               value="{{ (start_time[:4] + '-' + start_time[4:6]) if start_time and start_time|length == 6 else start_time or '' }}"
+                               required>
+                        <span class="range-separator">to</span>
+                        <input type="month" id="end_time" name="end_time"
+                               value="{{ (end_time[:4] + '-' + end_time[4:6]) if end_time and end_time|length == 6 else end_time or '' }}"
+                               placeholder="latest">
+                    </div>
+                    <div class="validation-warning" id="horizon-warning" style="display:none;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="account_size">Account Size <span class="label-unit">$</span></label>
+                    <input type="number" id="account_size" name="account_size"
+                           min="0" step="1000" placeholder="e.g. 100000"
+                           value="{{ account_size if account_size is defined and account_size else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="max_risk_pct">Max Risk <span class="label-unit">%</span></label>
+                    <input type="number" id="max_risk_pct" name="max_risk_pct"
+                           min="0.1" max="20" step="0.1" placeholder="e.g. 2"
+                           value="{{ max_risk_pct if max_risk_pct is defined and max_risk_pct else '' }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Hidden fields for Config-tab values (injected by JS from localStorage).
+       Batch B7 replaces the whole bridge; B8 retires the Config tab. #}
+    <input type="hidden" id="frequency" name="frequency" value="{{ frequency or 'ME' }}">
+    <input type="hidden" id="side_bias" name="side_bias" value="{{ side_bias or 'Natural' }}">
+    <input type="hidden" id="risk_threshold" name="risk_threshold" value="{{ risk_threshold if risk_threshold is defined and risk_threshold is not none else 90 }}">
+    <input type="hidden" id="rolling_window" name="rolling_window" value="{{ rolling_window if rolling_window is defined and rolling_window is not none else 120 }}">
+    <input type="hidden" id="option_position" name="option_position">
+</form>
