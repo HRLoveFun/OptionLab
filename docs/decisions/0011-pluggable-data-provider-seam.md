@@ -1,8 +1,13 @@
 # 0011. Pluggable Data-Provider Seam & Canonical Internal Schema
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-09-10
-- **Deciders**: repo owner (pending review)
+- **Deciders**: repo owner
+
+> **Accepted as a target, implemented in stages.** The layer moves, guard rules
+> and `constraints.md` §1 amendment land batch-by-batch per
+> [`docs/plans/business_line_reorg.md`](../plans/business_line_reorg.md) §6
+> (B1–B4). Until a batch lands, the current code still stands.
 
 ## Context
 
