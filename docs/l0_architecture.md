@@ -41,7 +41,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 | `data_pipeline/` | 3 618 lines · 27 files | The only I/O boundary, re-homed into six one-way stages (ADR 0011, batch B3): `providers/` · `store/` · `ingest/` · `transform/` · `read/` · `orchestrate/` (+ `_state.py`) | good |
 | `utils/` | 756 lines · 7 files | Leaf layer; highest fan-in (`ticker_utils.py` = 11) | good |
 | `templates/` | 1 676 lines · 19 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
-| `static/` | 5 473 lines · 31 JS/CSS | `state/` · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
+| `static/` | 6 287 lines · 35 JS + 1 CSS | `state/` (now incl. the module parameter groups) · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
 
 ### B. Dependencies & configuration
 
@@ -78,7 +78,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 ## 2. Measured shape (`scripts/arch_metrics.py`)
 
-_Refreshed 2026-09-10 after batches B1 (provider seam), B2 (canonical table names), B3 (data_pipeline re-home), B4 (core purity) and B5 (readiness); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
+_Refreshed 2026-09-10 after batches B1 (provider seam), B2 (canonical table names), B3 (data_pipeline re-home), B4 (core purity), B5 (readiness), B6 (Parameters bar) and B7 (module-scoped params); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
 
 ```
 modules=159  import_edges=324

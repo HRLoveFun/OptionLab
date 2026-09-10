@@ -28,7 +28,7 @@
             <div class="form-group">
                 <label for="sim-ticker">Ticker</label>
                 <input type="text" id="sim-ticker" placeholder="inherited from Parameter" autocomplete="off">
-                <span class="field-hint">Blank = use the Parameter tab ticker.</span>
+                <span class="field-hint">Blank = use the Parameters bar ticker.</span>
             </div>
             <div class="form-group">
                 <label for="sim-spot">Spot override</label>
@@ -182,7 +182,7 @@
     <!-- Empty / idle -->
     <div class="empty-state" role="status" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
         <p x-show="phase === 'idle'">
-            Set a ticker in the <strong>Parameter</strong> tab — the simulation runs
+            Set a ticker in the <strong>Parameters</strong> bar — the simulation runs
             automatically when you switch to this tab.
         </p>
         <p x-show="phase === 'empty'" x-text="message || 'No simulation output for these inputs.'"></p>

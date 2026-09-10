@@ -191,6 +191,8 @@ Re-homed in batch B3 of ADR 0011 into six one-way stages; the authoritative laye
 
 `static/api.js` is the **only** `fetch` wrapper (owns aborting + `ApiError` normalisation) —
 components must not call `fetch` directly. `static/state/` holds tiny observable stores:
+`marketParamsState.js` / `assessmentParamsState.js` / `optionFilterState.js` own the module-scoped
+parameters (one `localStorage` key per group) and re-run exactly the modules that consume a change;
 `panelState.js` enforces the four-phase async contract (`idle → loading → loaded → empty|error`,
 no sixth state), `tabFlagsState.js` is the lazy-load guard, `abortRegistry.js` cancels in-flight
 requests on ticker switch. Charts are server PNGs except `static/market_review_chart.js` and

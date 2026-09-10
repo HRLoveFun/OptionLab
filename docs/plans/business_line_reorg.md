@@ -44,7 +44,7 @@
 | B4 — close L1 (`core-purity`) | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | zero core→data_pipeline edges; markers deleted and refused by test; `core` layer tightened to `{utils}` |
 | B5 — readiness plan + prefetch | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (**manifest**, params as `/render` query args); readiness plan on the job; cold-start hold fragment. Actuals + deferrals in §8 |
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
-| B7 — module-scoped params | 🔨 in progress | — | backend half: branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). **Landed**: `/render` query-arg contract + per-module allow-list. **Remaining**: `state/*ParamsState.js` stores, module toolbars, hidden-field/bridge removal, e2e. See §8 B7 |
+| B7 — module-scoped params | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). Backend query-arg contract + per-module allow-list; `state/*ParamsState.js`; module toolbars; bridge + hidden fields deleted; Config tab emptied (B8 decides its fate). See §8 B7 |
 | B8 — retire / repurpose Config tab | ⬜ not started | — | — | gate: §8 Q2 |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
@@ -619,9 +619,10 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   `aria-expanded`/`aria-controls` and an `sr-only` label, and the collapsed summary is `aria-hidden`
   while the input still carries the value.
 
-**B7 (in progress, 2026-09-10) — module-scoped params.**
+**B7 (landed 2026-09-10) — module-scoped params.**
 
-Landed so far (the backend half, committed separately so the batch's revert unit stays one PR):
+Landed in two commits on the same branch: the backend contract first (so it was testable on its own),
+then the frontend. Backend:
 
 - `FormService.MODULE_PARAM_KEYS` + `FormService.extract_module_params(module, args)`: the
   query-arg contract. `from` / `to` become `start_time`/`end_time` **and**
@@ -636,22 +637,53 @@ Landed so far (the backend half, committed separately so the batch's revert unit
   declares are ever read, so `?option_position=…&ticker=EVIL` cannot smuggle keys into the
   slice's `form_data`.
 
-Still to do in this batch:
+Landed with the frontend half (same branch, second commit):
 
-1. `static/state/{market,assessment,optionFilter}ParamsState.js` — one `localStorage` key per
-   group, hydrating its toolbar inputs **at parse time** (before HTMX processes its `load`
-   triggers), plus vitest coverage and the `coverage.test.js` pass.
-2. Per-module toolbars in `templates/partials/tab_{market_review,statistical_analysis,market_assessment,option_chain}.html`
-   with `name=`d inputs, `hx-include="#<toolbar>"` on the placeholder and
-   `hx-trigger="load, module:params-changed from:body"`, so changing one module's controls
-   re-runs only that module.
-3. Delete the transitional "Analysis settings" group from `parameters_bar.html`, the four
-   hidden fields, and `FormManager.syncConfigToForm/loadConfig/saveConfig`; repoint
-   `option-chain.js`'s `cfg-max-dte` / `cfg-moneyness-*` reads and the auto-refresh interval
-   IIFE at the `optionFilter` store.
-4. `tab_config.html`: drop the module-scoped fields (they now live with their modules) — the
-   tab shell survives until B8 answers §8 Q2 about the risk-free rate.
-5. e2e: per-tab "changing a module param re-runs only that module" + "values survive reload".
+1. **Stores**: `state/paramsStore.js` (factory) + `state/{market,assessment,optionFilter}ParamsState.js`
+   — one `localStorage` key per group; `hydrate()` runs **at parse time** (the toolbars are parsed
+   before the scripts, so the first `hx-include` fan-out already carries the stored values); `init()`
+   returns the store.
+2. **Toolbars**: `tab_{market_review,statistical_analysis,market_assessment}.html` (horizon ± frequency,
+   Assessment's knobs in a `<details>` group) and `tab_option_chain.html` (chain filters + refresh
+   interval). Placeholders carry `hx-include="#<module>-toolbar"`, so the initial fan-out is
+   parameterised by the server.
+3. **Re-runs**: `static/moduleParams.js` maps kind → element + owning stores, and re-issues exactly the
+   affected `/render` calls using the skeleton + `htmx.process` idiom from
+   `static/market_review_chart.js`. A change to a `marketParams` field re-runs the three market tabs
+   (they share the group, by the plan's own store granularity); a chain-filter change triggers **no**
+   `/render` at all — `option-chain.js` listens for the group event instead.
+4. **Bridge deleted**: `FormManager.syncConfigToForm/loadConfig/saveConfig`, the four hidden fields and
+   the `option_position` assignment are gone; `saveState/loadState` keeps only the ticker and the
+   positions table. The bar keeps **two** hidden inputs (`start_time`/`end_time`) because `POST /`
+   validates the horizon and sizes the readiness prefetch — the visible controls are the module
+   toolbars, `marketParams` is the source of truth, the store mirrors into them.
+5. **Config tab emptied** (`tab_config.html`): the module-scoped fields are gone, the shell keeps a
+   "these settings moved" note. B8 answers §8 Q2 (delete it, or repurpose it for the risk-free rate).
+6. **e2e**: `test_module_params.py` (a market-param change re-runs exactly its group and carries the new
+   value + horizon; a chain-filter change triggers no `/render`; values survive a reload) and
+   `test_localstorage_restore.py` rewritten to the one-key-per-group contract;
+   `tests/unit/paramsStore.test.js` (10 cases) + the new scripts in the coverage pass.
+
+Bugs the tests caught while landing this (all fixed, all pinned):
+
+- **Shared-field clobber**: `commitFromDom` read *every* bound input, so a stale
+  `#assess-frequency` (`ME`) overwrote a fresh `#stat-frequency` (`W`) on the same commit. It now
+  commits only the event target's field and propagates via `hydrate()`
+  (`test_keeps_the_three_toolbars_in_sync_through_the_shared_horizon`).
+- **`init()` clobbered its own global**: the factory publishes the store and the caller then assigned
+  `appState.marketParams = ....init()` — with no return value that assignment wrote `undefined`,
+  silently detaching every consumer. `init()` returns the store
+  (`test_does_not_clobber_the_published_global`).
+- **`input` + `change` double-emit race**: one edit emitted twice, the second rerun replaced the element
+  the first was still swapping into, and htmx threw `htmx:swapError` (null parent). `select` now emits
+  on `change` only, and `rerun` skips an in-flight skeleton for the same URL.
+- **Test-only**: the e2e used `frequency=Q`, which is not a legal value (`D/W/ME/QE`) — an invalid
+  `select` assignment silently writes `""` into the store.
+
+**Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 505 passed / 5 skipped;
+full `pytest tests/e2e` → 41 passed; `npx vitest run` → 198 passed / 16 files; `ruff check` +
+`format --check` clean; `doc_guard.py` clean; `arch_metrics.py --check` ok (no baseline reset);
+`audit_tags.py` 16 vs baseline 16.
 
 ---
 

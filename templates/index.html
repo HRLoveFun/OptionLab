@@ -274,6 +274,13 @@
     <script src="{{ url_for('static', filename='state/abortRegistry.js') }}"></script>
     <script src="{{ url_for('static', filename='state/tabFlagsState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/panelState.js') }}"></script>
+    {# Module-scoped parameter groups (batch B7): hydrated at parse time so the
+       first hx-include fan-out already carries the stored values. #}
+    <script src="{{ url_for('static', filename='state/paramsStore.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/marketParamsState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/assessmentParamsState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/optionFilterState.js') }}"></script>
+    <script src="{{ url_for('static', filename='moduleParams.js') }}"></script>
     <script src="{{ url_for('static', filename='utils.js') }}"></script>
     <script src="{{ url_for('static', filename='parametersBar.js') }}"></script>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
@@ -337,7 +344,8 @@
         // ── Option data auto-refresh (configurable interval) ──
         (function() {
             function getRefreshMs() {
-                var intervalSec = parseInt((document.getElementById('cfg-refresh-interval') || {}).value, 10);
+                var _of = (window.appState && window.appState.optionFilter && window.appState.optionFilter.get()) || {};
+                var intervalSec = parseInt(_of.refresh_interval || '60', 10);
                 if (isNaN(intervalSec) || intervalSec < 10) intervalSec = 60;
                 return intervalSec * 1000;
             }

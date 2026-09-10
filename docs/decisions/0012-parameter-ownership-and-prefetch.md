@@ -134,6 +134,14 @@ validation badges. Analysis settings that B7 will move to module toolbars stay i
 group inside the same `<form>`, so the submit contract is untouched. The `positions` block moved
 to its own **Portfolio** tab (decision gate §8 Q3).
 
+**Implementation status (B7)**: the per-module toolbars are live and the bridge is gone. Each
+module's parameters travel as query args on its own `/render` call (or, for the client-fired chain,
+in the request `static/option-chain.js` builds from the `optionFilter` store); a change re-runs
+exactly the modules that consume that group. Three bugs were caught by the new tests while landing
+this — a shared-field clobber between toolbars, an `init()` that clobbered its own published global,
+and an `input`+`change` double-emit race — and are pinned by `tests/unit/paramsStore.test.js` and
+`tests/e2e/test_module_params.py`.
+
 ## Consequences
 
 - Positive: the always-visible surface is one field; module parameters are

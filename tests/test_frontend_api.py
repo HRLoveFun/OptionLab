@@ -29,22 +29,44 @@ class TestIndexPage:
         assert 'id="ticker"' in html
         assert 'id="start_time"' in html
 
-    def test_get_has_config_tab(self, client):
-        """Config tab with all option filter fields should be present."""
+    def test_get_has_option_filter_toolbar(self, client):
+        """Batch B7: the chain filters live with the Option Chain module."""
         resp = client.get("/")
         html = resp.data.decode()
-        assert 'id="cfg-frequency"' in html
-        assert 'id="cfg-max-dte"' in html
-        assert 'id="cfg-moneyness-low"' in html
-        assert 'id="cfg-moneyness-high"' in html
-        assert 'id="cfg-max-contracts"' in html
+        assert 'id="option-toolbar"' in html
+        assert 'id="oc-max-dte"' in html
+        assert 'id="oc-moneyness-low"' in html
+        assert 'id="oc-moneyness-high"' in html
+        assert 'id="oc-max-contracts"' in html
+        assert 'id="oc-refresh-interval"' in html
 
-    def test_get_has_position_sizing_in_settings(self, client):
-        """Position sizing fields should be inside Analysis Settings card."""
+    def test_post_renders_the_market_module_toolbars(self, client, monkeypatch):
+        """The market toolbars render in streaming mode, each owning its params.
+
+        WHY the kick is stubbed: `POST /` runs the readiness pass (B5), which would
+        otherwise start a real backfill on a daemon thread for the test ticker.
+        """
+        monkeypatch.setattr("data_pipeline.orchestrate.readiness.kick_backfill", lambda *a, **k: None)
+        resp = client.post("/", data={"ticker": "TEST_AAPL", "start_time": "2024-01", "frequency": "ME"})
+        html = resp.data.decode()
+        assert resp.status_code == 200
+        assert 'id="market-toolbar"' in html
+        assert 'id="statistical-toolbar"' in html
+        assert 'id="assessment-toolbar"' in html
+        # Frequency is a market-module parameter; sizing is Assessment's.
+        assert 'id="stat-frequency"' in html
+        assert 'id="assess-account-size"' in html
+        assert 'id="assess-max-risk-pct"' in html
+        # The ready placeholder carries the params on its first fan-out.
+        assert 'hx-include="#statistical-toolbar"' in html
+
+    def test_get_has_parameters_bar_with_a_single_input(self, client):
+        """The bar owns `ticker` only; the horizon is a submit-time mirror."""
         resp = client.get("/")
         html = resp.data.decode()
-        assert 'id="account_size"' in html
-        assert 'id="max_risk_pct"' in html
+        assert 'class="parameters-bar"' in html
+        assert 'id="parameters-bar-toggle"' in html
+        assert 'id="parameters-bar-summary"' in html
 
     def test_post_missing_ticker(self, client):
         """POST without ticker should show error."""

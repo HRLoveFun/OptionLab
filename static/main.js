@@ -3,54 +3,14 @@
 
 const FormManager = {
     saveState() {
+        // Batch B7: the horizon lives in state/marketParamsState.js and positions
+        // in the Portfolio tab — this store is only the viewer's convenience copy
+        // of the bar's ticker and the positions table.
         const formData = {
             ticker: document.getElementById('ticker').value,
-            start_time: this.normalizeMonth(document.getElementById('start_time').value),
-            end_time: document.getElementById('end_time') ? this.normalizeMonth(document.getElementById('end_time').value) : '',
             positions: this.getPositionsData()
         };
         localStorage.setItem('marketAnalysisForm', JSON.stringify(formData));
-    },
-    saveConfig() {
-        const cfg = {
-            frequency: (document.getElementById('cfg-frequency') || {}).value || 'ME',
-            side_bias: (document.getElementById('cfg-side-bias') || {}).value || 'Natural',
-            risk_threshold: (document.getElementById('cfg-risk-threshold') || {}).value || '90',
-            rolling_window: (document.getElementById('cfg-rolling-window') || {}).value || '120',
-            max_dte: (document.getElementById('cfg-max-dte') || {}).value || '45',
-            moneyness_low: (document.getElementById('cfg-moneyness-low') || {}).value || '0.70',
-            moneyness_high: (document.getElementById('cfg-moneyness-high') || {}).value || '1.30',
-            max_contracts: (document.getElementById('cfg-max-contracts') || {}).value || '1000',
-            refresh_interval: (document.getElementById('cfg-refresh-interval') || {}).value || '60',
-        };
-        localStorage.setItem('marketAnalysisConfig', JSON.stringify(cfg));
-        this.syncConfigToForm();
-    },
-    loadConfig() {
-        const saved = localStorage.getItem('marketAnalysisConfig');
-        if (saved) {
-            try {
-                const cfg = JSON.parse(saved);
-                const el = (id) => document.getElementById(id);
-                if (cfg.frequency && el('cfg-frequency')) el('cfg-frequency').value = cfg.frequency;
-                if (cfg.side_bias && el('cfg-side-bias')) el('cfg-side-bias').value = cfg.side_bias;
-                if (cfg.risk_threshold && el('cfg-risk-threshold')) el('cfg-risk-threshold').value = cfg.risk_threshold;
-                if (cfg.rolling_window && el('cfg-rolling-window')) el('cfg-rolling-window').value = cfg.rolling_window;
-                if (cfg.max_dte && el('cfg-max-dte')) el('cfg-max-dte').value = cfg.max_dte;
-                if (cfg.moneyness_low && el('cfg-moneyness-low')) el('cfg-moneyness-low').value = cfg.moneyness_low;
-                if (cfg.moneyness_high && el('cfg-moneyness-high')) el('cfg-moneyness-high').value = cfg.moneyness_high;
-                if (cfg.max_contracts && el('cfg-max-contracts')) el('cfg-max-contracts').value = cfg.max_contracts;
-                if (cfg.refresh_interval && el('cfg-refresh-interval')) el('cfg-refresh-interval').value = cfg.refresh_interval;
-            } catch (e) { /* ignore */ }
-        }
-        this.syncConfigToForm();
-    },
-    syncConfigToForm() {
-        const el = (id) => document.getElementById(id);
-        if (el('frequency')) el('frequency').value = (el('cfg-frequency') || {}).value || 'ME';
-        if (el('side_bias')) el('side_bias').value = (el('cfg-side-bias') || {}).value || 'Natural';
-        if (el('risk_threshold')) el('risk_threshold').value = (el('cfg-risk-threshold') || {}).value || '90';
-        if (el('rolling_window')) el('rolling_window').value = (el('cfg-rolling-window') || {}).value || '120';
     },
     loadState() {
         const saved = localStorage.getItem('marketAnalysisForm');
@@ -58,8 +18,6 @@ const FormManager = {
         try {
             const formData = JSON.parse(saved);
             if (formData.ticker) document.getElementById('ticker').value = formData.ticker;
-            if (formData.start_time) document.getElementById('start_time').value = this.toMonthInput(formData.start_time);
-            if (formData.end_time && document.getElementById('end_time')) document.getElementById('end_time').value = this.toMonthInput(formData.end_time);
             if (formData.positions && formData.positions.length > 0) {
                 this.restorePositionsTable(formData.positions);
             } else if (formData.options && formData.options.length > 0) {
@@ -79,8 +37,9 @@ const FormManager = {
         return m ? `${m[1]}-${m[2]}` : val;
     },
     validateHorizon() {
-        const startVal = this.normalizeMonth(document.getElementById('start_time').value);
-        const endVal = this.normalizeMonth(document.getElementById('end_time').value);
+        const params = (window.appState && window.appState.marketParams && window.appState.marketParams.get()) || {};
+        const startVal = this.normalizeMonth(params.from || (document.getElementById('start_time') || {}).value || '');
+        const endVal = this.normalizeMonth(params.to || (document.getElementById('end_time') || {}).value || '');
         const warning = document.getElementById('horizon-warning');
         if (!warning) return true;
         warning.style.display = 'none';
@@ -219,9 +178,6 @@ document.getElementById('analysis-form')?.addEventListener('submit', function (e
         return;
     }
     FormManager.saveState();
-    FormManager.syncConfigToForm();
-    const optionsData = FormManager.getOptionsData();
-    document.getElementById('option_position').value = JSON.stringify(optionsData);
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = 'Analyzing...';
@@ -234,23 +190,8 @@ document.getElementById('analysis-form')?.addEventListener('submit', function (e
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-    FormManager.loadConfig();
     FormManager.loadState();
     FormManager.validateHorizon();
-    ['start_time', 'end_time'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('change', () => {
-                FormManager.validateHorizon();
-                FormManager.saveState();
-            });
-        }
-    });
-    ['cfg-frequency', 'cfg-side-bias', 'cfg-risk-threshold', 'cfg-rolling-window',
-        'cfg-max-dte', 'cfg-moneyness-low', 'cfg-moneyness-high', 'cfg-max-contracts', 'cfg-refresh-interval'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('change', () => FormManager.saveConfig());
-        });
     const tbody = document.getElementById('positions-tbody');
     if (tbody && tbody.children.length === 0) {
         initializeOptionsTable();

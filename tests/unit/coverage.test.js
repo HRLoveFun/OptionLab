@@ -27,6 +27,11 @@ import '../../static/cache.js';
 import '../../static/simulation.js';
 import '../../static/theme.js';
 import '../../static/parametersBar.js';
+import '../../static/state/paramsStore.js';
+import '../../static/state/marketParamsState.js';
+import '../../static/state/assessmentParamsState.js';
+import '../../static/state/optionFilterState.js';
+import '../../static/moduleParams.js';
 
 // Capture the post-import surface BEFORE the setup `beforeEach` runs and
 // wipes globals. We re-attach them in a local `beforeEach` so each `it`
@@ -48,6 +53,10 @@ const _snapshot = {
     runSimulation: window.runSimulation,
     themeManager: window.themeManager,
     parametersBar: window.parametersBar,
+    marketParams: window.appState.marketParams,
+    assessmentParams: window.appState.assessmentParams,
+    optionFilter: window.appState.optionFilter,
+    moduleParams: window.moduleParams,
 };
 
 beforeEach(() => {
@@ -89,6 +98,14 @@ describe('coverage smoke — every module publishes its surface', () => {
         expect(window.parametersBar).toBeDefined();
         expect(typeof window.parametersBar.init).toBe('function');
         expect(window.parametersBar.STORAGE_KEY).toBe('parametersBarCollapsed');
+    });
+
+    it('module parameter groups published their window surface', () => {
+        for (const key of ['marketParams', 'assessmentParams', 'optionFilter']) {
+            expect(typeof window.appState[key].get).toBe('function');
+            expect(typeof window.appState[key].query).toBe('function');
+        }
+        expect(typeof window.moduleParams.rerun).toBe('function');
     });
 
     it('simulation tab published its window surface', () => {

@@ -7,9 +7,60 @@
     </div>
 
     {% if streaming_mode and job_id and ticker %}
+    {# Module toolbar (batch B7): horizon + frequency (the shared marketParams
+       group) and the Assessment-only knobs (assessmentParams group). #}
+    <div class="module-toolbar" id="assessment-toolbar">
+        <span class="module-toolbar-title">Assessment settings</span>
+        <label class="sr-only" for="assess-from">From month</label>
+        <input type="month" id="assess-from" name="from">
+        <span class="range-separator">to</span>
+        <label class="sr-only" for="assess-to">To month</label>
+        <input type="month" id="assess-to" name="to" placeholder="latest">
+        <label class="sr-only" for="assess-frequency">Frequency</label>
+        <select id="assess-frequency" name="frequency">
+            <option value="D">Daily</option>
+            <option value="W">Weekly</option>
+            <option value="ME">Monthly</option>
+            <option value="QE">Quarterly</option>
+        </select>
+
+        <details class="module-toolbar-details">
+            <summary>Assessment knobs</summary>
+            <div class="module-toolbar-grid">
+                <div class="form-group">
+                    <label for="assess-side-bias">Side Bias</label>
+                    <select id="assess-side-bias" name="side_bias">
+                        <option value="Natural">Natural</option>
+                        <option value="Neutral">Neutral</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="assess-risk-threshold">Risk Threshold <span class="label-unit">%</span></label>
+                    <input type="number" id="assess-risk-threshold" name="risk_threshold"
+                           min="0" max="100" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="assess-rolling-window">Rolling Window <span class="label-unit">periods</span></label>
+                    <input type="number" id="assess-rolling-window" name="rolling_window" min="1" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="assess-account-size">Account Size <span class="label-unit">$</span></label>
+                    <input type="number" id="assess-account-size" name="account_size"
+                           min="0" step="1000" placeholder="optional">
+                </div>
+                <div class="form-group">
+                    <label for="assess-max-risk-pct">Max Risk <span class="label-unit">%</span></label>
+                    <input type="number" id="assess-max-risk-pct" name="max_risk_pct"
+                           min="0.1" max="20" step="0.1" placeholder="optional">
+                </div>
+            </div>
+        </details>
+    </div>
+
     <div id="tab-market-assessment-content"
          class="loading-skeleton"
          hx-get="/render/assessment?job={{ job_id }}&ticker={{ ticker }}"
+         hx-include="#assessment-toolbar"
          hx-trigger="load"
          hx-swap="outerHTML">
         <div class="empty-state"><p>Loading projections…</p></div>
