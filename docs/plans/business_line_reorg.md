@@ -741,8 +741,7 @@ not blockers, and each is one small independent change.
 - **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → exit 0
   (+2 tests vs B8: `test_job_cache.py::test_variant_computes_independently`,
   `test_module_params.py::test_a_param_change_recomputes_within_the_same_job`);
-  relevant `pytest tests/e2e` (module_params, smoke, localstorage, form_submit,
-  streaming) → 20 passed; `npx vitest run` → 199 passed / 16 files (+1
+  `pytest tests/e2e` → exit 0; `npx vitest run` → 199 passed / 16 files (+1
   aria-controls case); `ruff check` + `format --check` clean; `doc_guard.py`
   clean; `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 / dead 1);
   `audit_tags.py` 16 vs 16.
