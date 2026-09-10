@@ -3,10 +3,10 @@
 Domain:    Data Pipeline — yfinance Provider
 Context:
   - This module (with ``yf_snapshot.py``) is the **only** place in the repo that
-    imports ``yfinance``; batch B1 moved these calls here out of
-    ``data_pipeline/yf_client.py`` and ``data_pipeline/downloader.py`` without
-    changing behaviour. See ADR 0002 (as amended by ADR 0011) and
-    docs/plans/business_line_reorg.md §6.
+    imports ``yfinance``; batch B1 moved these calls here out of the old
+    ``data_pipeline/yf_client.py`` and ``data_pipeline/downloader.py`` (now
+    ``ingest/ohlcv.py``) without changing behaviour. See ADR 0002 (as amended by
+    ADR 0011) and docs/plans/business_line_reorg.md §6.
   - ``YFinanceProvider`` is the canonical seam implementation (``history()`` /
     ``close_panel()`` / ``spot()`` / ``option_chain()``); it delegates the live
     snapshots to ``yf_snapshot.py``. The module-level ``fetch_*`` functions keep

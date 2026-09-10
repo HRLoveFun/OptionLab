@@ -39,7 +39,7 @@
 
 | Batch | State | PR | Landed (commit · date) | Notes |
 |---|---|---|---|---|
-| — (planning + ADRs) | 🔨 in review (PR #7) | #7 | branch `worktree-business-line-reorg` · 2026-09-10 | plan, ADR 0011/0012 (Accepted), scaffolding (ledger, gates, AI-guide pointers, memory) |
+| — (planning + ADRs) | ✅ landed | #7 + #8 | merged to `main` · 2026-09-10 | plan, ADR 0011/0012 (Accepted), scaffolding (ledger, gates, AI-guide pointers, memory) |
 | B1 — provider seam extraction | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | delivers the "pluggable API" seam on its own. Actual shape / deviations recorded in §8; `_ALLOWED_DEPS` promotion of `providers` deferred to B3 |
 | B2 — canonical raw store | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | gate §8 Q4 resolved (name-only rename). Actuals in §8; `symbol` column deferred (ADR 0011 amendment) |
 | B3 — package re-home | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | six stages + `_state.py`; first sub-layer guard table; `arch_baseline.json` **not** reset (no tracked drift). Actuals + deviations in §8 |
@@ -48,6 +48,7 @@
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
 | B7 — module-scoped params | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). Backend query-arg contract + per-module allow-list; `state/*ParamsState.js`; module toolbars; bridge + hidden fields deleted; Config tab emptied (B8 decides its fate). See §8 B7 |
 | B8 — retire / repurpose Config tab | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q2 resolved (**deleted**). `grep tab_config` returns nothing; risk-free-rate follow-up on the watch list |
+| B9 — acceptance-review remediation | ⬜ not started | — | — | F1–F7 from §10 (2026-09-11 review). F1 (module-param memo staleness) is the blocker; F6 done in the review commit |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
 Keep the row order; edit the row in place.
@@ -716,3 +717,29 @@ full `pytest tests/e2e` → 41 passed; `npx vitest run` → 198 passed / 16 file
 - `docs/decisions/0002-yfinance-as-sole-data-source.md`, `0004-no-iv-history-from-yfinance.md`, `0005-token-bucket-throttle.md`
 - `docs/constraints.md` §1–§6, `docs/frontend_architecture.md`, `docs/frontend_convergence.md`
 - `archive/futu_integration/field_mapping.md`
+
+---
+
+## 10. Acceptance review (2026-09-11)
+
+Post-B8 review of the landed branch. Mechanical gate is **green**:
+`pytest -m "not network" --ignore=tests/e2e` exit 0 (505 / 5 skipped),
+`npx vitest run` 198 / 16 files, `ruff check` + `format --check` clean (347 files),
+`doc_guard.py` clean, `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 /
+dead 1 = pre-existing `summary.py`), `audit_tags.py` 16 vs 16. Every §6 exit
+criterion and every §2 debt-row closure verified by grep. The three asks are
+delivered — the backend acquire/process/serve separation in particular is clean
+and enforceable.
+
+Findings, to be worked as **batch B9 (remediation)** under the §0 rules:
+
+| # | Sev | Finding | Fix |
+|---|---|---|---|
+| F1 | **high — correctness, CONFIRMED** | `job_cache.compute_or_get` memoises per `(ticker, kind)`; `dispatch.py::_compute` captures `module_params` from the query string but they are **not in the key** and nothing invalidates on change. Reproduced: two `/render/statistical` calls on one job, `frequency=ME` then `=W` → slice invoked once, both response bodies byte-identical. B7's headline behaviour ("changing a module control re-runs that module") re-fires the request and flashes "Updating…" but serves the stale fragment for up to `JOB_CACHE_TTL` (90 s). Params *do* work on the no-job direct-URL path (it bypasses the memo). `tests/e2e/test_module_params.py` missed it — it asserts request **URLs**, never that the fragment **content** changed. | Fold a stable digest of `module_params` into the memo key (4th arg to `compute_or_get`, or `f"{kind}|{sorted(module_params.items())}"`). Add a slice-level test asserting the **body** differs after a param change. |
+| F2 | moderate — UX / a11y | The Parameters bar "collapse" is hollow after B7. B6 built it to hide `.parameters-bar-body` (the "Analysis settings" group); B7 moved that group to the tab toolbars and deleted the body but did not re-point the collapse. Collapsed now = `data-collapsed="true"` hides a non-existent element and reveals `▸ ^SPX` **beside the still-visible ticker input + label + Run** → ~zero visible effect. `aria-controls="parameters-bar-body"` is a dangling reference (no such id). The ask was 「常驻页面顶部，可收起」. | Make collapsed actually hide the label + input + validation, leaving toggle + `▸ ^SPX` (+ maybe Run) on one line; fix or remove `aria-controls`. |
+| F3 | minor — UX | Collapse toggle icon is invisible: `parameters_bar.html` uses `<i class="fas fa-chevron-down">` / `parametersBar.js` swaps to `fa-chevron-right`, but Font Awesome is not loaded (`index.html`: "Font Awesome removed for clean UI") and `.parameters-bar-toggle` has no CSS fallback. Toggle works (sr-only label + title) but renders an empty bordered box. | Draw the chevron in CSS (`::before` rotated by `[data-collapsed]`) or inline SVG like the theme toggle; drop the FA class. |
+| F4 | minor — readiness gap | `readiness.check_and_kick` gates coverage on the `clean_bars` probe (`needs_backfill`). The "one pipeline run fills both" INVARIANT holds for a fresh backfill, but a DB with `clean_bars` for the range yet stale/missing `feature_bars` (new frequency, or processing failed after cleaning) → probe says "covered", no kick, `statistical`/`assessment` fall back to the per-slice `get_processed` → `manual_update` path. Fallback works, prefetch promise unmet. | `feature_bars`-aware probe, or a `WHY:` note in `readiness.py` accepting the gap. |
+| F5 | minor — dead code / stale UI | (a) `form.py::parse_option_data` + `form_data["option_data"]`: FormManager no longer submits `#option_position` (B7) and no slice reads `option_data` — always `[]` on the POST path. (b) `routes/core.py` GET branch still passes `frequency`/`risk_threshold`/`rolling_window`/`side_bias` to `render_template`. (c) `index.html:112` header badge renders `{{ frequency_display or frequency }}, {{ side_bias }}` — after B7 these are always the POST-time defaults, so the badge shows "Monthly, Neutral" regardless of the toolbar selection. | Drop the dead form path or comment it dormant; remove the unused GET vars; fix or remove the header badge meta. |
+| F6 | trivial — stale docstrings | `providers/base.py:32` "yf_option_chain.py" → `yf_snapshot.py`; `providers/yf_client.py:7,22` still lists `core/market/data_context.py` as an importer (B4 removed it); `providers/__init__.py:9` + `yfinance_provider.py:7` say `downloader.py` (it is `ingest/ohlcv.py` since B3); the §0 ledger's planning row still says "🔨 in review (PR #7)" (PR #7 + #8 both merged). | **Fixed in this review's commit.** |
+| F7 | housekeeping | (a) `providers/yf_client.py` is a "one-release" shim with no tracked removal trigger. (b) `market_review_prices` (L5) is still a parallel acquisition path outside the seam — B5 acknowledged the deferral. Both should be `architecture_review.md` §2 watch-list rows. (c) Branch is 10 commits ahead of `origin/main`, unpushed, no PR — the batches have not landed on `main`. | Add the two §2 rows; push + PR the branch. |
+

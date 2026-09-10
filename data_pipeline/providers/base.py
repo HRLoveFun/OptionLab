@@ -29,7 +29,7 @@ Unit conventions — INVARIANT for every provider implementation:
 Dependencies UPWARD:
   - (none — no external SDK is imported here; implementations sit beside it)
 Dependencies DOWNWARD:
-  - providers/yfinance_provider.py, providers/yf_option_chain.py,
+  - providers/yfinance_provider.py, providers/yf_snapshot.py,
     providers/_registry.py
 """
 

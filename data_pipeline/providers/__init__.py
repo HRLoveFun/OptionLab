@@ -6,7 +6,7 @@ Context:
     mapped onto the canonical schema in ``providers/base.py``; processing and
     serving stay provider-agnostic.
   - ``yf_client.py`` is a compatibility shim over this package for one release;
-    ``downloader.py`` keeps only gap detection + DB upsert.
+    ``ingest/ohlcv.py`` keeps only gap detection + DB upsert.
 Contracts:
   - ``get_provider(name=None)``: resolve a ``MarketDataProvider`` implementation.
   - ``available_providers()``: registered provider names.

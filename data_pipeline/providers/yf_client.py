@@ -4,9 +4,10 @@ Domain:    Data Pipeline — yfinance compatibility surface
 Context:
   - Batch B1 (docs/plans/business_line_reorg.md §6) moved every yfinance call
     into ``data_pipeline/providers/``. This module is kept for one release so the
-    existing importers (``services/``, ``core/market/data_context.py``,
-    ``data_pipeline/read/``) do not have to change in the same PR as the
-    extraction. See ADR 0011.
+    existing importers (``services/``, ``data_pipeline/read/``) do not have to
+    change in the same PR as the extraction. See ADR 0011. (``core/`` used to
+    import it too; batch B4 removed that — ``core`` no longer touches
+    ``data_pipeline``.)
   - New code should import from ``data_pipeline.providers`` (canonical shapes)
     instead of here.
 Contracts:
@@ -19,7 +20,7 @@ Design rules:
 Dependencies UPWARD:
   - providers/yf_snapshot (live snapshots), providers/yfinance_provider (bars)
 Dependencies DOWNWARD:
-  - services/*, core/market/data_context.py, data_pipeline/read/*
+  - services/*, data_pipeline/read/*
 """
 
 from __future__ import annotations
