@@ -57,6 +57,15 @@ static/
 * Did not introduce a build step. Plain ES modules served as static files
   remain the deployment unit.
 
+## Landed Since This Pass
+
+* **Batch B7 of the reorg (2026-09-10)**: parameters are owned by their modules —
+  `state/{market,assessment,optionFilter}ParamsState.js` (one localStorage key per
+  group) hydrate the module toolbars and re-run exactly the modules that consume
+  them; the `localStorage -> hidden input` bridge and `syncConfigToForm` are gone.
+  This is the "read/write through `state/`" direction this document asked for,
+  applied to the last place that still held module-local state.
+
 ## Next Concrete Steps (when time permits)
 
 1. Delete `static/eventBus.js` if `state/store.js` covers all listeners.

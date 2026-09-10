@@ -25,7 +25,7 @@ Flask-based market analysis dashboard with options strategy tools.
 
 ## Database
 
-- SQLite via `data_pipeline/db.py` — always use `get_conn()` context manager
+- SQLite via `data_pipeline/store/db.py` — always use `get_conn()` context manager
 - WAL mode enabled; `PRAGMA synchronous=NORMAL`
 - DB path from `MARKET_DB_PATH` env var, default `./market_data.sqlite`
 
@@ -59,7 +59,7 @@ gunicorn app:app -b 0.0.0.0:5000  # production
 
 Before suggesting non-trivial changes, consult these:
 
-- **⚠ [docs/plans/business_line_reorg.md](../docs/plans/business_line_reorg.md)** — **active reorg** of `data_pipeline/`, the parameter surfaces, and `routes/core.py::index`. ADRs [0011](../docs/decisions/0011-pluggable-data-provider-seam.md) / [0012](../docs/decisions/0012-parameter-ownership-and-prefetch.md) are **Accepted**. Read §0 first: work batches B1–B8 in order, one batch per PR, update the ledger in the same commit, don't re-litigate the Accepted ADRs.
+- **[docs/plans/business_line_reorg.md](../docs/plans/business_line_reorg.md)** — the 2026-09 business-line reorg (provider seam + canonical schema, ticker-only Parameters bar, readiness prefetch). Batches **B1–B9 landed**; §10 lists the deferred follow-ups. ADRs [0011](../docs/decisions/0011-pluggable-data-provider-seam.md) / [0012](../docs/decisions/0012-parameter-ownership-and-prefetch.md) are **Accepted** — don't re-litigate.
 - **[docs/constraints.md](../docs/constraints.md)** — external/historical constraints (yfinance limits, SQLite choice, single-machine assumption, intentional "magic numbers"). Read this before flagging anything as tech debt.
 - **[docs/glossary.md](../docs/glossary.md)** — domain terms (IV vs HV, Greeks, regime, anomaly flags). Read this before assuming a term means what you think it means.
 - **[docs/decisions/](../docs/decisions/)** — Architecture Decision Records. Each ADR explains the context, options considered, and accepted trade-offs for a major design choice.

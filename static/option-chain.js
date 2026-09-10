@@ -56,6 +56,20 @@ function _fetchChainJSON(url, signal) {
     });
 }
 
+// ── B7: the live filters live in the `optionFilter` store ────────────────
+// (they used to be read off the Config tab's `cfg-*` DOM nodes, and the value
+// travelled through localStorage -> hidden inputs; the toolbar owns them now).
+function _ocFilterValues() {
+    const store = (window.appState && window.appState.optionFilter) || null;
+    const filters = store ? store.get() : {};
+    return {
+        max_dte: parseInt(filters.max_dte || '45', 10) || 45,
+        moneyness_low: filters.moneyness_low || '0.70',
+        moneyness_high: filters.moneyness_high || '1.30',
+        refresh_interval: parseInt(filters.refresh_interval || '60', 10) || 60,
+    };
+}
+
 function loadOptionChain() {
     const input = document.getElementById('ticker');
     const rawTicker = (input ? input.value : '').trim().toUpperCase();
@@ -70,14 +84,12 @@ function loadOptionChain() {
     _ocPanel('loading', { message: 'Loading option chain...' });
     _ocState().reset();
 
-    // Build URL with config-driven filter params
+    // Build URL with the module's own filter params (batch B7)
+    const filters = _ocFilterValues();
     const params = new URLSearchParams({ ticker });
-    const cfgDte = document.getElementById('cfg-max-dte');
-    const cfgMLow = document.getElementById('cfg-moneyness-low');
-    const cfgMHigh = document.getElementById('cfg-moneyness-high');
-    if (cfgDte && cfgDte.value) params.set('max_dte', cfgDte.value);
-    if (cfgMLow && cfgMLow.value) params.set('moneyness_low', cfgMLow.value);
-    if (cfgMHigh && cfgMHigh.value) params.set('moneyness_high', cfgMHigh.value);
+    params.set('max_dte', String(filters.max_dte));
+    params.set('moneyness_low', filters.moneyness_low);
+    params.set('moneyness_high', filters.moneyness_high);
 
     const signal = _ocState().beginRequest();
 
@@ -498,17 +510,14 @@ function loadPayoffRatioData() {
     _prState().reset();
     const signal = _prState().beginRequest();
 
-    // Build URL with config-driven filter params
+    // Build URL with the shared option filter (batch B7)
+    const prFilters = _ocFilterValues();
     const params = new URLSearchParams({ ticker });
-    const cfgDte = document.getElementById('cfg-max-dte');
-    const cfgMLow = document.getElementById('cfg-moneyness-low');
-    const cfgMHigh = document.getElementById('cfg-moneyness-high');
     // The Payoff Ratio tab carries its own 0–90d expiry-window slider, so always
-    // pull at least 90 days of expirations regardless of the (lower) global Max DTE.
-    const prMaxDte = Math.max(90, parseInt((cfgDte && cfgDte.value) || '0', 10) || 0);
-    params.set('max_dte', String(prMaxDte));
-    if (cfgMLow && cfgMLow.value) params.set('moneyness_low', cfgMLow.value);
-    if (cfgMHigh && cfgMHigh.value) params.set('moneyness_high', cfgMHigh.value);
+    // pull at least 90 days of expirations regardless of the (lower) Max DTE.
+    params.set('max_dte', String(Math.max(90, prFilters.max_dte)));
+    params.set('moneyness_low', prFilters.moneyness_low);
+    params.set('moneyness_high', prFilters.moneyness_high);
 
     fetch(`/api/option_chain?${params}`, { signal })
         .then(r => {

@@ -1,0 +1,390 @@
+"""SQLite access layer.
+
+Context:
+- Single-machine deployment, SQLite + WAL mode chosen deliberately. See
+  docs/decisions/0003-sqlite-wal-single-machine.md.
+- WAL allows the scheduler to write while UI threads read concurrently.
+- ``synchronous=NORMAL`` accepts a tiny risk of losing the last commit on
+  power loss; market data we can re-download. Do NOT switch to FULL.
+- Connections are thread-local: SQLite forbids sharing a connection across
+  threads, but per-query reconnect re-applies PRAGMAs and is wasteful.
+
+Do NOT add: a migration framework, an ORM, connection pooling beyond the
+thread-local cache. Each was considered and rejected as overkill for this
+project's scale.
+
+Canonical table names (ADR 0011, batch B2):
+- The pipeline reads and writes ``raw_bars`` / ``clean_bars`` / ``feature_bars``.
+  The pre-rename names (``raw_prices`` / ``clean_prices`` / ``processed_prices``)
+  are kept for one release as shadow tables: ``upsert_many`` writes both, so a
+  ``git revert`` of batch B2 loses no rows. Column sets are deliberately
+  identical (decision gate Q4 = minimal rename); ``tests/test_canonical_tables.py``
+  asserts that and ``scripts/migrate_canonical_tables.py`` backfills old DBs.
+"""
+
+import logging
+import os
+import sqlite3
+import threading
+from collections.abc import Iterable
+from contextlib import contextmanager
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Default lives under data/ so the DB family (sqlite + -wal/-shm/-journal and
+# the scheduler lock) stays out of the source root; MARKET_DB_PATH overrides.
+DB_PATH = os.environ.get("MARKET_DB_PATH", os.path.join(os.getcwd(), "data", "market_data.sqlite"))
+
+# ── Thread-local connection cache ───────────────────────────────────
+# CONSTRAINT: SQLite connections are not safe to share across threads.
+# WHY (cache, not reconnect): per-query reconnect re-applies PRAGMAs and
+# costs a few ms each — noticeable when the UI fires 20+ queries per render.
+# INVARIANT: PRAGMAs (journal_mode, synchronous, busy_timeout) MUST be
+# applied on first acquisition per thread — they are connection-scoped, not
+# database-scoped, and must be re-set on every new connection.
+_thread_local = threading.local()
+# Track all opened connections so background tasks (tests, scheduler shutdown)
+# can close them explicitly. Indexed by (thread_id, path).
+_all_conns_lock = threading.Lock()
+_all_conns: dict = {}
+
+
+def _get_or_create_conn(path: str) -> sqlite3.Connection:
+    """Return a persistent connection scoped to the current thread.
+
+    Creates and caches one on first call per thread. Applies PRAGMAs once.
+    """
+    cache = getattr(_thread_local, "conns", None)
+    if cache is None:
+        cache = {}
+        _thread_local.conns = cache
+    conn = cache.get(path)
+    if conn is not None:
+        return conn
+
+    conn = sqlite3.connect(path, detect_types=sqlite3.PARSE_DECLTYPES, timeout=10)
+    # CONSTRAINT: WAL + synchronous=NORMAL is a deliberate pair. See ADR 0003.
+    # Do NOT change to FULL (latency) or remove WAL (writers block readers).
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    cache[path] = conn
+    with _all_conns_lock:
+        _all_conns[(threading.get_ident(), path)] = conn
+    logger.debug("Opened SQLite connection (thread=%s, path=%s)", threading.get_ident(), path)
+    return conn
+
+
+def close_thread_conn(db_path: str | None = None) -> None:
+    """Close the current thread's cached connection(s).
+
+    Safe to call from teardown hooks (tests, request teardown). If db_path is
+    None, closes all cached connections for this thread.
+    """
+    cache = getattr(_thread_local, "conns", None)
+    if not cache:
+        return
+    paths = [db_path or DB_PATH] if db_path else list(cache.keys())
+    for p in paths:
+        conn = cache.pop(p, None)
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+            with _all_conns_lock:
+                _all_conns.pop((threading.get_ident(), p), None)
+
+
+def close_all_conns() -> None:
+    """Close every cached connection across all threads. Test/shutdown helper."""
+    with _all_conns_lock:
+        items = list(_all_conns.items())
+        _all_conns.clear()
+    for _, conn in items:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    # Also clear current thread's cache so re-acquire works.
+    if getattr(_thread_local, "conns", None) is not None:
+        _thread_local.conns.clear()
+
+
+# ── Schema: one column tuple per table shape ────────────────────────
+# INVARIANT: a canonical table and its pre-rename shadow are created from the
+# SAME tuple, so their column sets cannot drift while both exist (the rename is
+# a pure name change — decision gate §8 Q4).
+# INVARIANT: ``frequency`` is one of D / W / ME / QE (see
+# ``core/_shared/types.Frequency``).
+_BARS_COLUMNS: tuple[str, ...] = (
+    "ticker TEXT NOT NULL",
+    "date TEXT NOT NULL",
+    "open REAL",
+    "high REAL",
+    "low REAL",
+    "close REAL",
+    "adj_close REAL",
+    "volume REAL",
+    "provider TEXT DEFAULT 'yfinance'",
+    "PRIMARY KEY (ticker, date)",
+)
+
+_CLEAN_BARS_COLUMNS: tuple[str, ...] = (
+    "ticker TEXT NOT NULL",
+    "date TEXT NOT NULL",
+    "open REAL",
+    "high REAL",
+    "low REAL",
+    "close REAL",
+    "adj_close REAL",
+    "volume REAL",
+    "is_trading_day INTEGER DEFAULT 1",
+    "missing_any INTEGER DEFAULT 0",
+    "price_jump_flag INTEGER DEFAULT 0",
+    "vol_anom_flag INTEGER DEFAULT 0",
+    "ohlc_inconsistent INTEGER DEFAULT 0",
+    "PRIMARY KEY (ticker, date)",
+)
+
+_FEATURE_BARS_COLUMNS: tuple[str, ...] = (
+    "ticker TEXT NOT NULL",
+    "date TEXT NOT NULL",
+    "frequency TEXT NOT NULL",
+    "open REAL",
+    "high REAL",
+    "low REAL",
+    "close REAL",
+    "adj_close REAL",
+    "volume REAL",
+    "last_close REAL",
+    "log_return REAL",
+    "amplitude REAL",
+    "log_hl_spread REAL",
+    "parkinson_var REAL",
+    "gk_var REAL",
+    "log_vol_delta REAL",
+    "vol_zscore REAL",
+    "ma_5 REAL",
+    "ma_10 REAL",
+    "ma_20 REAL",
+    "ma_60 REAL",
+    "ma_120 REAL",
+    "ma_250 REAL",
+    "mom_10 REAL",
+    "mom_20 REAL",
+    "mom_60 REAL",
+    "osc_high REAL",
+    "osc_low REAL",
+    "osc REAL",
+    "PRIMARY KEY (ticker, date, frequency)",
+)
+
+
+def _create_table(cur, name: str, columns: tuple[str, ...]) -> None:
+    """Create ``name`` if absent, from ``columns``.
+
+    CONSTRAINT: ``name`` is interpolated into SQL; it is only ever a literal from
+    this module (never caller input) — mirrors ``upsert_many``'s table validation.
+    """
+    body = ",\n    ".join(columns)
+    cur.execute(f"CREATE TABLE IF NOT EXISTS {name} (\n    {body}\n)")
+
+
+def init_db(db_path: str | None = None):
+    path = db_path or DB_PATH
+    Path(os.path.dirname(path)).mkdir(parents=True, exist_ok=True)
+    conn = _get_or_create_conn(path)
+    cur = conn.cursor()
+    # Canonical store (ADR 0011) — the pipeline reads and writes these names.
+    _create_table(cur, "raw_bars", _BARS_COLUMNS)
+    _create_table(cur, "clean_bars", _CLEAN_BARS_COLUMNS)
+    _create_table(cur, "feature_bars", _FEATURE_BARS_COLUMNS)
+    # ── Compatibility shadows (transitional — one release) ──────────────
+    # TRADEOFF: the pre-rename names are kept, created from the same column
+    # tuples, so reverting batch B2 loses no rows and a DB written before the
+    # rename keeps working until scripts/migrate_canonical_tables.py has run
+    # (and afterwards: `upsert_many` writes both families). Drop these three
+    # lines + `_TABLE_SHADOWS` one release after the rename.
+    _create_table(cur, "raw_prices", _BARS_COLUMNS)
+    _create_table(cur, "clean_prices", _CLEAN_BARS_COLUMNS)
+    _create_table(cur, "processed_prices", _FEATURE_BARS_COLUMNS)
+    # Market review benchmark close prices
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market_review_prices (
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            close REAL,
+            PRIMARY KEY (ticker, date)
+        )
+        """
+    )
+    # Market regime daily log (see core.regime)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS regime_log (
+            date TEXT PRIMARY KEY,
+            vol_regime TEXT,
+            dir_regime TEXT,
+            vix_value REAL,
+            sma_20 REAL,
+            sma_slope_5d REAL,
+            close_vs_sma_pct REAL,
+            regime_changed_from_previous INTEGER DEFAULT 0,
+            fetch_timestamp TEXT,
+            notes TEXT
+        )
+        """
+    )
+    # Data-quality / fetch failure log. Every yfinance error, scheduler
+    # failure, or anomaly worth surfacing in /health/data lands here.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS data_quality_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            ticker TEXT,
+            source TEXT NOT NULL,
+            error_class TEXT NOT NULL,
+            message TEXT,
+            details TEXT
+        )
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dq_ts ON data_quality_log(ts)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_dq_ticker ON data_quality_log(ticker)")
+    # Tracked strategies — user-saved multi-leg positions for P&L tracking.
+    # ``legs_json`` stores the full Leg list at entry; ``entry_meta_json``
+    # captures snapshots needed for P&L attribution (spot, IV per leg, total
+    # net premium). ``status`` is open|closed.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tracked_strategies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            template TEXT NOT NULL,
+            expiry TEXT NOT NULL,
+            entry_date TEXT NOT NULL,
+            entry_spot REAL,
+            entry_net_premium REAL,
+            qty INTEGER DEFAULT 1,
+            legs_json TEXT NOT NULL,
+            entry_meta_json TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            notes TEXT,
+            closed_date TEXT,
+            closed_value REAL
+        )
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tracked_status ON tracked_strategies(status)")
+    conn.commit()
+
+
+@contextmanager
+def get_conn(db_path: str | None = None):
+    """Yield a per-thread persistent SQLite connection.
+
+    The connection is cached for the lifetime of the calling thread (see
+    `_get_or_create_conn`). The context manager does NOT close the connection
+    on exit — call `close_thread_conn()` explicitly to release it. This
+    matches the request lifecycle: a Flask worker thread reuses one connection
+    across many queries, avoiding the per-call connect/PRAGMA cost.
+    """
+    path = db_path or DB_PATH
+    conn = _get_or_create_conn(path)
+    yield conn
+
+
+_UPSERTABLE_TABLES = frozenset(
+    {
+        # canonical (ADR 0011)
+        "raw_bars",
+        "clean_bars",
+        "feature_bars",
+        # compatibility shadows — removable one release after the rename
+        "raw_prices",
+        "clean_prices",
+        "processed_prices",
+        "market_review_prices",
+        "regime_log",
+        "data_quality_log",
+        "tracked_strategies",
+    }
+)
+
+# ── Canonical ↔ legacy table naming (transitional) ──────────────────
+# INVARIANT: each pair has an identical column set — enforced by
+# tests/test_canonical_tables.py, because the two families must stay
+# interchangeable for the compatibility window to be safe.
+CANONICAL_TABLES: dict[str, str] = {
+    "raw_prices": "raw_bars",
+    "clean_prices": "clean_bars",
+    "processed_prices": "feature_bars",
+}
+
+# WHY bidirectional: writes may arrive under either name during the window (old
+# call sites, tests seeding fixtures directly). Mirroring both ways keeps the two
+# families identical no matter which name a caller uses.
+_TABLE_SHADOWS: dict[str, str] = {
+    **CANONICAL_TABLES,
+    **{canonical: legacy for legacy, canonical in CANONICAL_TABLES.items()},
+}
+
+
+def canonical_table(name: str) -> str:
+    """Return the canonical table name for a legacy name (identity otherwise)."""
+    return CANONICAL_TABLES.get(name, name)
+
+
+def upsert_many(table: str, columns: Iterable[str], rows: Iterable[Iterable], db_path: str | None = None):
+    """Bulk-upsert *rows* into *table*, plus its shadow table if it has one.
+
+    CONSTRAINT: the table name is interpolated into SQL (values are still
+    parameterised), so it is validated against the known schema tables —
+    a typo or caller-supplied name fails fast instead of building a
+    malformed (or, with hostile input, malicious) statement.
+    TRADEOFF (transitional — one release): the canonical and pre-rename table
+    families are written together (see ``_TABLE_SHADOWS``) so that either name
+    can be read during the rename. The extra write is one more executemany over
+    the same small batches; drop it with the shadow tables.
+    """
+    if table not in _UPSERTABLE_TABLES:
+        raise ValueError(f"upsert_many: unknown table {table!r}; expected one of {sorted(_UPSERTABLE_TABLES)}")
+    rows = list(rows)
+    if not rows:
+        return
+    cols = list(columns)
+    placeholders = ",".join(["?"] * len(cols))
+    updates = ",".join([f"{c}=excluded.{c}" for c in cols if c not in ("ticker", "date", "frequency")])
+    targets = [table, *((_TABLE_SHADOWS[table],) if table in _TABLE_SHADOWS else ())]
+    statements = [
+        f"INSERT INTO {target} ({','.join(cols)}) VALUES ({placeholders}) ON CONFLICT DO UPDATE SET {updates}"
+        for target in targets
+    ]
+    conn = _get_or_create_conn(db_path or DB_PATH)
+    try:
+        conn.execute("BEGIN")
+        for sql in statements:
+            conn.executemany(sql, rows)
+        conn.execute("COMMIT")
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+
+
+def fetch_df(query: str, params: tuple = (), db_path: str | None = None):
+    import pandas as pd
+
+    conn = _get_or_create_conn(db_path or DB_PATH)
+    df = pd.read_sql_query(query, conn, params=params, parse_dates=["date"])  # type: ignore
+    # Only index by date when the query actually returned a 'date' column
+    # (aggregate queries like `SELECT MAX(date) as max_date` don't include it).
+    if not df.empty and "date" in df.columns:
+        df = df.sort_values("date").set_index("date")
+    return df

@@ -12,7 +12,7 @@ from typing import Any
 import pandas as pd
 
 from core import strategies as strategies_mod
-from data_pipeline.yf_client import fetch_option_chain
+from data_pipeline.providers.yf_client import fetch_option_chain
 from utils.api_errors import ApiError
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ def _vol_context(ticker: str, current_iv_pct: float | None) -> dict[str, Any]:
         from datetime import date, timedelta
 
         from core import signals as signals_mod
-        from data_pipeline.data_ops import DataService
+        from data_pipeline.read import DataService
 
         start = date.today() - timedelta(days=400)
         df = DataService.get_cleaned_daily(ticker, start=start)

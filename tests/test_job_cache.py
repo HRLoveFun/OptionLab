@@ -1,11 +1,11 @@
-"""Tests for data_pipeline/job_cache.py."""
+"""Tests for data_pipeline/orchestrate/job_cache.py."""
 
 import threading
 import time
 
 import pytest
 
-from data_pipeline import job_cache as jc
+from data_pipeline.orchestrate import job_cache as jc
 
 
 @pytest.fixture(autouse=True)
@@ -66,6 +66,25 @@ class TestCompute:
         assert jc.compute_or_get(job_id, "AAPL", "kind_a", fn_a) == "A"
         assert jc.compute_or_get(job_id, "AAPL", "kind_b", fn_b) == "B"
         assert calls == {"a": 1, "b": 1}
+
+    def test_variant_computes_independently(self):
+        """Same ticker + kind, different `variant` (a digest of the module's
+        toolbar params) must not share a cache entry — otherwise a frequency /
+        horizon change replays the first render for the whole job TTL."""
+        job_id = jc.create_job({}, ["AAPL"])
+        calls = []
+
+        def fn(_):
+            calls.append(1)
+            return {"n": len(calls)}
+
+        r1 = jc.compute_or_get(job_id, "AAPL", "stat", fn, variant="frequency=ME")
+        r2 = jc.compute_or_get(job_id, "AAPL", "stat", fn, variant="frequency=W")
+        r1_again = jc.compute_or_get(job_id, "AAPL", "stat", fn, variant="frequency=ME")
+        assert r1 == {"n": 1}
+        assert r2 == {"n": 2}
+        assert r1_again == {"n": 1}  # cached per variant
+        assert len(calls) == 2
 
     def test_unknown_job_raises(self):
         with pytest.raises(KeyError):

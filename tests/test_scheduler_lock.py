@@ -3,7 +3,7 @@
 import os
 import tempfile
 
-from data_pipeline.scheduler import acquire_scheduler_lock
+from data_pipeline.orchestrate.scheduler import acquire_scheduler_lock
 
 
 def test_first_acquire_succeeds_second_returns_none(monkeypatch):

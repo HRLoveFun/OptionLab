@@ -1,0 +1,14 @@
+{# Held fragment for a cold start: the readiness pass (batch B5) kicked this
+   module's dataset download at POST time and it is still running. The fragment
+   re-issues its own /render request until the data lands, capped by
+   data_pipeline.orchestrate.readiness.HOLD_SECONDS on the server side. #}
+<div id="tab-{{ kind_id }}-content"
+     class="loading-skeleton"
+     hx-get="/render/{{ kind }}?job={{ job_id }}&ticker={{ ticker }}"
+     hx-trigger="load delay:{{ retry_seconds }}s"
+     hx-swap="outerHTML">
+    <div class="empty-state">
+        <i class="fas fa-spinner fa-spin empty-icon"></i>
+        <p>正在准备 {{ kind.replace('_', ' ') }} 所需的历史数据，稍后自动重试…</p>
+    </div>
+</div>

@@ -60,10 +60,13 @@ templates/
 Heavy analysis no longer runs synchronously inside `POST /`. The flow is:
 
 ```
-Browser ── POST / (form data) ─────────────────► Flask
+Browser ── POST / (form data + module tokens) ──► Flask
                                                  │
-Flask creates a JobCache entry (job_id) and immediately renders
-`index.html` with `streaming_mode=True`. Each tab partial emits an
+Flask resolves the modules, runs the **readiness pass** (ADR 0012):
+plan the datasets those modules need, probe the DB once, kick anything
+missing on a daemon thread, warm the live option-chain preload — then
+creates a JobCache entry (job_id, carrying that plan) and immediately
+renders `index.html` with `streaming_mode=True`. Each tab partial emits an
 HTMX placeholder:
 
     <div hx-get="/render/market_review?job=…&ticker=…"
@@ -79,6 +82,7 @@ Browser fans out 4× /render/<kind> in parallel for each visible ticker:
    /render/assessment
    /render/options_chain
 
+Flask ── consults the job's readiness plan ─────► cold start? hold
 Flask ── compute_or_get(job_id, ticker, kind) ──► AnalysisService.*_slice
                                                   └─ memoised per (job, ticker, kind)
 
@@ -86,14 +90,29 @@ Flask ── HTML fragment ─────────────────�
 ```
 
 Key files:
-- `data_pipeline/job_cache.py` — in-process JobCache (TTL 90 s).
-- `app.py::_render_streaming_slice` — shared `/render/<kind>` handler.
+- `data_pipeline/orchestrate/job_cache.py` — in-process JobCache (TTL 90 s), carries the plan.
+- `data_pipeline/orchestrate/readiness.py` — dataset plan, coverage probe, backfill kicker.
+- `services/market/readiness.py` — services half (preload warm), called from `routes/core.py::index`.
+- `services/market/dispatch.py::render_streaming_slice` — shared `/render/<kind>` handler.
 - `services/market/analysis/facade.py::generate_*_slice` — per-tab compute.
 - `templates/partials/fragments/*.html` — rendered fragments.
 
 The browser-side HTMX library replaces each placeholder when its fragment
 arrives, so users see tabs populate as their data is ready instead of
 waiting for the slowest tab.
+
+**Cold start** (batch B5): if the readiness pass kicked this module's dataset, the ticker has no
+usable history yet *and* the backfill is still running, `/render/<kind>` returns
+`partials/fragments/readiness.html` — a self-re-firing "正在准备…" fragment (`hx-trigger="load
+delay:3s"`) — instead of rendering an empty chart. The hold is bounded by
+`readiness.HOLD_SECONDS` (30 s) **and** by backfill-thread liveness, so a failed download quickly
+falls through to the slice's own error rather than a permanent spinner.
+
+**Parameter ownership** (batch B7, per §8 Q1): the module tokens above (`market_review`,
+`statistical`, `assessment`, `options_chain`, `payoff_ratio`, `regime`, `simulation`,
+`option_pricing_matrix`) are the same vocabulary the readiness plan uses. Each module's parameters
+travel as **query args on its own `/render` call**, mirroring `/api/option_chain?ticker=…`; the
+persistent Parameters bar owns only `ticker`.
 
 ---
 
@@ -109,12 +128,14 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │  ├── Brand (icon + title + subtitle)                    │
 │  └── Ticker Badge (when analysis active)                │
 ├─────────────────────────────────────────────────────────┤
+│  Parameters bar  [ticker] [Run]  (collapse ▸/▾)          │  ← sticky, not a tab
+├─────────────────────────────────────────────────────────┤
 │  Sidebar      │  Main Panel                             │
 │  (tab-nav)    │  (tab-content)                          │
 │               │                                         │
-│  • Parameter  │  Tab 1: Parameter Form                  │
-│  • Market     │  Tab 2: Market Review Table/Chart       │
-│  • Statistics │  Tab 3: Statistical Analysis Charts     │
+│  • Market     │  Tab 1: Market Review Table/Chart       │
+│  • Statistics │  Tab 2: Statistical Analysis Charts     │
+│  • Portfolio  │  Tab 3: Positions / Portfolio Analysis  │
 │  • Assessment │  Tab 4: Assessment & Projections        │
 │  • Chain      │  Tab 5: Option Chain T-View             │
 │  • Volatility │  Tab 6: Volatility Analysis             │
@@ -122,6 +143,18 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 │               │                                         │
 └───────────────┴─────────────────────────────────────────┘
 ```
+
+The **Parameters bar** (`templates/partials/parameters_bar.html`, batch B6) renders
+between the header and `.app-body`, is `position: sticky` under the header, and owns
+exactly one visible input — `ticker` — plus the Run button and the ticker-validation
+badges. Every other parameter lives in its module's toolbar (batch B7); the bar
+also carries two hidden `start_time`/`end_time` inputs that `POST /` validates and
+uses to size the readiness prefetch, kept in sync by `state/marketParamsState.js`.
+It is **not** a tab: it survives tab switches. Collapsing it (the chevron toggle;
+state persisted per viewer under `localStorage['parametersBarCollapsed']`, guarded
+`try/catch`) hides the `#parameters-bar-body` fields group and the validation line,
+leaving the toggle, a one-line `▸ ^SPX` summary, and Run. The chevron is an inline
+SVG (Font Awesome is not loaded on this page) rotated by `[data-collapsed]`.
 
 ### Peek Sidebar
 
@@ -149,7 +182,7 @@ inline as before, since a hover-peek panel is unusable at that width.
 
 | Tab ID                     | Label                       | Data Source                      |
 | -------------------------- | --------------------------- | -------------------------------- |
-| `tab-parameter`            | Parameter                   | Static form                      |
+| `tab-portfolio`            | Portfolio                   | `POST /api/portfolio_analysis`   |
 | `tab-summary`              | 综合 (Multi-ticker summary) | `results.__综合__`               |
 | `tab-market-review`        | Market Review               | `market_review_table`            |
 | `tab-statistical-analysis` | Statistical Analysis        | `scatter_*`, `dynamics_*` charts |

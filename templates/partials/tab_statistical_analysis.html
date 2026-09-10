@@ -7,9 +7,27 @@
     </div>
 
     {% if streaming_mode and job_id and ticker %}
+    {# Module toolbar (batch B7) — horizon + frequency belong to this module. #}
+    <div class="module-toolbar" id="statistical-toolbar">
+        <span class="module-toolbar-title">Statistical settings</span>
+        <label class="sr-only" for="stat-from">From month</label>
+        <input type="month" id="stat-from" name="from">
+        <span class="range-separator">to</span>
+        <label class="sr-only" for="stat-to">To month</label>
+        <input type="month" id="stat-to" name="to" placeholder="latest">
+        <label class="sr-only" for="stat-frequency">Frequency</label>
+        <select id="stat-frequency" name="frequency">
+            <option value="D">Daily</option>
+            <option value="W">Weekly</option>
+            <option value="ME">Monthly</option>
+            <option value="QE">Quarterly</option>
+        </select>
+    </div>
+
     <div id="tab-statistical-analysis-content"
          class="loading-skeleton"
          hx-get="/render/statistical?job={{ job_id }}&ticker={{ ticker }}"
+         hx-include="#statistical-toolbar"
          hx-trigger="load"
          hx-swap="outerHTML">
         <div class="empty-state"><p>Loading statistical analysis…</p></div>

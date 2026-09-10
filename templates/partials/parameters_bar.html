@@ -1,0 +1,58 @@
+{# Persistent, collapsible Parameters bar (batch B6; B7 removed the last bridge).
+
+   Owns exactly ONE input that every data module shares: `ticker` — plus the Run
+   button and the ticker-validation badges. It is not a tab: it renders above
+   `.main-panel`, stays put while the user switches tabs, and collapses to a
+   one-line summary (persisted per viewer).
+
+   Batch B7 moved every other parameter to the module that owns it: the horizon
+   and frequency to the market tabs' toolbars, the Assessment knobs to the
+   Assessment toolbar, the chain filters to the Option Chain toolbar. The two
+   hidden inputs below are the only thing left of the old bridge, and they exist
+   for one reason: `POST /` validates the horizon and uses it to size the
+   readiness prefetch. `state/marketParamsState.js` keeps them in sync with the
+   toolbars, which are the visible source of truth. #}
+<form method="post" id="analysis-form" class="parameters-bar" data-collapsed="false"
+      {% if job_id %}data-job-id="{{ job_id }}"{% endif %}>
+    <div class="parameters-bar-main">
+        <button type="button" class="parameters-bar-toggle" id="parameters-bar-toggle"
+                aria-expanded="true" aria-controls="parameters-bar-body"
+                title="Collapse parameters">
+            {# Inline SVG, not a Font Awesome glyph — index.html does not load FA.
+               CSS rotates it by 90° when the bar is collapsed. #}
+            <svg class="parameters-bar-chevron" viewBox="0 0 16 16" width="14" height="14"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 6l4 4 4-4"/>
+            </svg>
+            <span class="sr-only">Toggle parameters</span>
+        </button>
+
+        {# Collapsed summary: the bar collapses to `▸ ^SPX` (see parametersBar.js).
+           Rendered before the fields so it takes their place when they hide. #}
+        <span class="parameters-bar-summary" id="parameters-bar-summary"></span>
+
+        {# The collapsible region (aria-controls target). Collapsed → hidden,
+           leaving only the toggle, the summary and Run. #}
+        <div class="parameters-bar-fields" id="parameters-bar-body">
+            <label class="parameters-bar-label" for="ticker">Ticker</label>
+            <input type="text" id="ticker" name="ticker" class="parameters-bar-ticker"
+                   value="{{ ticker or '' }}" placeholder="e.g. AAPL, SPY, ^SPX"
+                   autocomplete="off" required>
+            <div id="ticker-validation-container" class="ticker-badges"></div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="parameters-bar-run">Run</button>
+    </div>
+
+    {# Always visible, even when the bar is collapsed: a failed submit must not hide
+       its own error message. #}
+    {% if error %}
+    <div class="alert alert-error parameters-bar-alert"><span>{{ error }}</span></div>
+    {% endif %}
+    <div class="ticker-validation" id="ticker-validation"></div>
+
+    {# See the header comment: submit-only mirror of the marketParams store. #}
+    <input type="hidden" id="start_time" name="start_time">
+    <input type="hidden" id="end_time" name="end_time">
+</form>

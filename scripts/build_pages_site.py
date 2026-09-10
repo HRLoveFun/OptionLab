@@ -54,7 +54,7 @@ REDIRECTS = {
     "showcase/assessment.html": ("tab-market-assessment", "Assessment & Projections"),
     "showcase/volatility.html": ("tab-options-chain", "Volatility Analysis"),
     "showcase/regime.html": ("tab-regime", "Market Regime"),
-    "showcase/parameter.html": ("tab-parameter", "Parameters"),
+    "showcase/portfolio.html": ("tab-portfolio", "Portfolio"),
     "showcase/summary.html": ("", "Summary"),
 }
 
@@ -64,7 +64,7 @@ BANNER_HTML = """    <!-- PAGES DEMO BANNER (build-injected; not part of the Fla
                 border-bottom:1px solid #bfdbff; font-size:13px; text-align:center;">
         静态演示快照 <strong id="pages-demo-ticker">{ticker}</strong>（数据截至 {data_through}）——
         界面与交互同本地版一致；实时行情与分析运行需本地 <code>python app.py</code>。
-        <a href="#tab-parameter" style="color:#1e40af; text-decoration:underline; margin-left:8px;">去 Parameter 页</a>
+        <a href="#tab-portfolio" style="color:#1e40af; text-decoration:underline; margin-left:8px;">去 Portfolio 页</a>
     </div>
 """
 
@@ -383,7 +383,7 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
     assert 'hx-get="/render/' not in html, "streaming placeholders leaked into static build"
     assert '"/static/' not in html and "'/static/" not in html, "absolute /static/ paths break the /OptionLab/ subpath"
     for tab_id in (
-        "tab-parameter",
+        "tab-portfolio",
         "tab-market-review",
         "tab-statistical-analysis",
         "tab-market-assessment",
@@ -393,7 +393,6 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
         "tab-regime",
         "tab-simulation",
         "tab-option-pricing-matrix",
-        "tab-config",
     ):
         assert f'id="{tab_id}"' in html, f"missing tab body: {tab_id}"
     assert "./pages-shim.js" in html and "pages-demo-banner" in html

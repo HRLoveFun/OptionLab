@@ -10,7 +10,7 @@ Contracts:
 Dependencies UPWARD:
   - core._shared.dates (dte)
   - core.options.chain.analyzer (OptionsChainAnalyzer)
-  - data_pipeline.yf_client
+  - data_pipeline.providers.yf_client
 Dependencies DOWNWARD:
   - routes/options.py
 """
@@ -25,7 +25,7 @@ import pandas as pd
 
 from core._shared.dates import dte
 from core.options.chain.analyzer import OptionsChainAnalyzer
-from data_pipeline.yf_client import fetch_option_chain
+from data_pipeline.providers.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ CACHE_TTL_MINUTES = 15
 # CONSTRAINT: bound on the cache key space. Each payload is a full option
 # chain (up to MBs) and keys come from a public endpoint, so ticker
 # enumeration would otherwise grow memory without limit (mirrors
-# data_pipeline/data_ops/_globals.py::_cache_set).
+# data_pipeline/_state.py::_cache_set).
 _OPTION_CHAIN_CACHE_MAX = 128
 
 

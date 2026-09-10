@@ -1,9 +1,9 @@
 {# Fragment for /render/assessment.
-   Required vars: ticker, feat_projection_url, feat_projection_table, plot_url,
+   Required vars: ticker, feat_projection_url, feat_projection_table,
                   position_sizing, assessment_error.
 #}
 <div id="tab-market-assessment-content">
-    {% if feat_projection_url is defined or plot_url is defined %}
+    {% if feat_projection_url is defined %}
     <div class="charts-stack">
         {% if feat_projection_url %}
         <div class="content-card">
@@ -18,15 +18,6 @@
         <div class="content-card">
             <div class="content-card-title">Projection Values</div>
             <div class="table-wrapper">{{ feat_projection_table|safe }}</div>
-        </div>
-        {% endif %}
-
-        {% if plot_url %}
-        <div class="content-card">
-            <div class="content-card-title">Options Portfolio P&amp;L Analysis</div>
-            <div class="chart-wrapper">
-                <img src="data:image/png;base64,{{ plot_url }}" alt="Options P&L Chart" class="analysis-chart">
-            </div>
         </div>
         {% endif %}
 
@@ -62,7 +53,7 @@
         {% elif ticker is defined and ticker %}
         <p style="color:#b45309;">Projection analysis ran but no charts were generated. The selected time horizon may have insufficient data.</p>
         {% else %}
-        <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run</strong>.</p>
+        <p>Enter a ticker in the <strong>Parameters</strong> bar above and click <strong>Run</strong>.</p>
         {% endif %}
     </div>
     {% endif %}

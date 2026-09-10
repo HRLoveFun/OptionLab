@@ -100,6 +100,39 @@ objects.
 `transform/`, `read/`, `services/` or `core/`." The option-history caveats
 (no IV rank / percentile / backtests — ADR 0004) are unchanged.
 
+### Protocol shape — decision gate §8 Q5 (resolved 2026-09-10)
+
+`providers/base.py` was reviewed against **two** field maps before being written, so the
+protocol is not accidentally yfinance-shaped
+(`archive/futu_integration/field_mapping.md` is the second map):
+
+| Concern | yfinance | futu | Protocol decision |
+|---|---|---|---|
+| IV unit | decimal (`0.2436`) | percent (`24.359`) | canonical `iv` is a **decimal**; the provider normalises at its own boundary |
+| bid / ask | present per expiry | absent without an `ORDER_BOOK` subscription | canonical `bid`/`ask` are **nullable**; a provider must not invent a quote |
+| `inTheMoney` | present | absent (must be derived from strike vs spot) | **dropped** from the canonical leg — derivable, so not a contract |
+| Expiries | `tk.options` list | `get_option_expiration_date()` frame | canonical = `expiries: tuple[str, ...]` (ISO dates) |
+| Greeks | absent | native (`delta`/`gamma`/…) | out of scope for B1; the protocol has no Greek fields yet |
+| History | `yf.download` frame | `get_stock_quote` / history API | canonical `history()` returns `CANONICAL_BAR_COLUMNS` (`open…adj_close, volume`) |
+
+A provider id is also a first-class value (`MarketDataProvider.name`), because a second
+vendor means two providers coexist rather than one replacing the other.
+
+**Implementation status**: B1 (seam extraction, no behaviour change) landed 2026-09-10 —
+`data_pipeline/providers/{base,_log,_registry,yfinance_provider,yf_snapshot}.py`;
+`yf_client.py` is a compatibility shim and `downloader.py` no longer imports yfinance.
+Batch ledger: [`docs/plans/business_line_reorg.md`](../plans/business_line_reorg.md) §0.
+
+**Amendment (batch B2, 2026-09-10) — canonical tables are a name-only rename.** B2 landed
+`raw_bars` / `clean_bars` / `feature_bars` carrying *exactly* the column sets of the tables they
+replace, including the `ticker` column. Renaming `ticker` → `symbol` (and introducing a
+`symbol_map`) is deferred until a second provider actually needs a provider-native identifier:
+today it is a cross-cutting rename through `repos.py`, `data_ops/`, `services/` and the test
+fixtures with no consumer, which batch scope forbids riding along with. The target-state column
+lists in the Decision section above stay the reference for when that provider lands.
+Compatibility: the pre-rename names remain as shadow tables for one release (`upsert_many`
+writes both families) and `scripts/migrate_canonical_tables.py` backfills an existing DB.
+
 ## Consequences
 
 - Positive: a second provider is one file + one registry line + a field-map test.

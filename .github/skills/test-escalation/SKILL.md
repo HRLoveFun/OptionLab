@@ -63,7 +63,7 @@ def test_download_empty(mock_dl):
     assert result.ok  # Rows=0 is valid
     assert result.rows == 0
     # Verify no NaN filler rows were created
-    df = fetch_df("SELECT * FROM raw_prices WHERE ticker='NVDA'")
+    df = fetch_df("SELECT * FROM raw_bars WHERE ticker='NVDA'")
     assert df.empty
 ```
 
@@ -78,7 +78,7 @@ def test_full_pipeline_with_nan_data(tmp_path, monkeypatch):
 
     # Seed NaN-only filler rows (simulates failed download)
     upsert_many(
-        "raw_prices",
+        "raw_bars",
         ["ticker", "date", "open", "high", "low", "close"],
         [("NVDA", "2026-03-28", None, None, None, None)],
     )
@@ -86,8 +86,8 @@ def test_full_pipeline_with_nan_data(tmp_path, monkeypatch):
     # Run cleaning — should NOT propagate NaN rows
     result = clean_range("NVDA", dt.date(2026, 3, 28), dt.date(2026, 3, 28))
 
-    # Verify: clean_prices should be empty (NaN rows filtered)
-    df = fetch_df("SELECT * FROM clean_prices WHERE ticker='NVDA'")
+    # Verify: clean_bars should be empty (NaN rows filtered)
+    df = fetch_df("SELECT * FROM clean_bars WHERE ticker='NVDA'")
     assert df.empty or df["close"].notna().all()
 ```
 

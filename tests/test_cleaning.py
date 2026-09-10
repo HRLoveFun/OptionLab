@@ -1,11 +1,11 @@
-"""Tests for data_pipeline/cleaning.py — anomaly flags and business-day alignment."""
+"""Tests for data_pipeline/transform/cleaning.py — anomaly flags and business-day alignment."""
 
 import datetime as dt
 
 import numpy as np
 import pandas as pd
 
-from data_pipeline.cleaning import _flag_anomalies, _get_business_days
+from data_pipeline.transform.cleaning import _flag_anomalies, _get_business_days
 
 
 class TestGetBusinessDays:

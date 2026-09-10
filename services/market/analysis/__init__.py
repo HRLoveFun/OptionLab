@@ -1,4 +1,4 @@
-"""Market analysis — orchestrates market data analysis, charting, and cross-ticker summaries."""
+"""Market analysis — orchestrates market data analysis and per-tab chart slices."""
 
 from .facade import AnalysisService
 

@@ -25,8 +25,8 @@ patterns:
     resolved: false
     resolution_note: null
     related_files:
-      - data_pipeline/cleaning.py
-      - data_pipeline/downloader.py
+      - data_pipeline/transform/cleaning.py
+      - data_pipeline/ingest/ohlcv.py
       - core/price_dynamic.py
 
   empty-dataframe:
@@ -39,8 +39,8 @@ patterns:
     resolved: false
     resolution_note: null
     related_files:
-      - data_pipeline/downloader.py
-      - data_pipeline/processing.py
+      - data_pipeline/ingest/ohlcv.py
+      - data_pipeline/transform/processing.py
       - services/market/analysis/facade.py
 
   dtype-mismatch:
@@ -53,7 +53,7 @@ patterns:
     resolved: false
     resolution_note: null
     related_files:
-      - data_pipeline/db.py
+      - data_pipeline/store/db.py
       - core/options_greeks.py
       - core/market_analyzer.py
 
@@ -67,7 +67,7 @@ patterns:
     resolved: false
     resolution_note: null
     related_files:
-      - data_pipeline/downloader.py
+      - data_pipeline/ingest/ohlcv.py
       - utils/utils.py
 
   db-error:
@@ -80,7 +80,7 @@ patterns:
     resolved: false
     resolution_note: null
     related_files:
-      - data_pipeline/db.py
+      - data_pipeline/store/db.py
 
   greeks-edge-case:
     hook_regex: "greeks|black.?scholes|delta|gamma|theta|vega.*nan"

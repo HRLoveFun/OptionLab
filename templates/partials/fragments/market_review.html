@@ -4,8 +4,7 @@
    the meta-bar, the chart toolbar/canvas wrapper, and (when present) the
    collapsible data table.
 
-   Required vars: ticker, frequency_display | frequency, start_time, end_time,
-                  risk_threshold, side_bias, market_review_table.
+   Required vars: ticker, start_time, end_time, market_review_table.
    Used by: tab_market_review.html (synchronous mode) AND
             /render/market_review (streaming mode).
 #}
@@ -13,10 +12,7 @@
     {% if ticker %}
     <div class="meta-bar">
         <span class="meta-chip">{{ ticker }}</span>
-        <span class="meta-chip">{{ frequency_display or frequency }}</span>
         <span class="meta-chip">{{ start_time or '' }}{% if end_time %} to {{ end_time }}{% else %} to latest{% endif %}</span>
-        <span class="meta-chip">Threshold: {{ risk_threshold if risk_threshold is not none else 90 }}%</span>
-        <span class="meta-chip">{{ side_bias or 'Natural' }}</span>
     </div>
 
     <div class="content-card">
@@ -52,7 +48,7 @@
     {% else %}
     <div class="empty-state">
 
-        <p>Run an analysis first — go to <strong>Parameter</strong> and click <strong>Run Analysis</strong>.</p>
+        <p>Enter a ticker in the <strong>Parameters</strong> bar above and click <strong>Run</strong>.</p>
     </div>
     {% endif %}
 </div>

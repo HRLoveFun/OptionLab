@@ -11,7 +11,7 @@ import os
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from data_pipeline.repos import fetch_ticker_inventory
+from data_pipeline.store.repos import fetch_ticker_inventory
 
 _FRESHNESS_DAYS = int(os.environ.get("DATA_FRESHNESS_DAYS", "5"))
 
@@ -56,7 +56,7 @@ def overall_summary() -> dict[str, Any]:
 
     # Recent yfinance / pipeline failures from data_quality_log.
     try:
-        from data_pipeline.quality_log import failure_counts, recent_failures
+        from data_pipeline.store.quality_log import failure_counts, recent_failures
 
         failures_24h = failure_counts(hours=24)
         recent = recent_failures(hours=24, limit=20)

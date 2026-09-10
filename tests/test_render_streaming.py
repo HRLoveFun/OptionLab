@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from data_pipeline import job_cache as jc
+from data_pipeline.orchestrate import job_cache as jc
 
 
 @pytest.fixture(autouse=True)

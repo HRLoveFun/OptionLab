@@ -9,14 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Update `docs/` first, then mirror the summary here. `CODEBUDDY.md` and
 > `.github/copilot-instructions.md` are parallel AI-assistant guides kept in sync with this one.
 
-> **⚠ Active reorg (2026-09) — [ADR 0011](docs/decisions/0011-pluggable-data-provider-seam.md)
-> + [0012](docs/decisions/0012-parameter-ownership-and-prefetch.md), both Accepted.**
-> Before touching `data_pipeline/`, the parameter surfaces
-> (`templates/partials/tab_parameter.html`, `tab_config.html`, `static/main.js`
-> `FormManager`) or `routes/core.py::index`, read
-> **[`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md) §0**:
-> work the numbered batches (B1–B8) in order, one batch per PR, update its ledger
-> in the same commit, and do not re-litigate the Accepted ADRs.
+> **Business-line reorg (2026-09) — [ADR 0011](docs/decisions/0011-pluggable-data-provider-seam.md)
+> (provider seam + canonical schema) + [0012](docs/decisions/0012-parameter-ownership-and-prefetch.md)
+> (ticker-only Parameters bar + readiness prefetch), both Accepted.**
+> Batches B1–B9 **landed**; the architecture below reflects the end state. Only
+> deferred follow-ups remain — see [`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md)
+> §10 (risk-free-rate global setting, `market_review_prices` L5 → provider seam,
+> ADR 0011 `symbol` column). Do not re-litigate the Accepted ADRs.
 
 ## Commands
 
@@ -109,7 +108,9 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
   are legal; only the *layer* direction is policed.
 - **`core/`** — pure computation: no Flask, no DB, no network. Data in → numbers/DataFrames out.
   `core/` and `data_pipeline/` must never import `services/`, `routes/`, or `app.py`;
-  `data_pipeline/` must never import `core/`.
+  `data_pipeline/` must never import `core/`. **`core/` must not import `data_pipeline/` either**
+  (closed in batch B4 — enforced by `doc_guard` `import-direction` and
+  `tests/test_architecture_purity.py`; acquisition belongs in `services/`).
 - **`data_pipeline/`** — owns **every** I/O boundary: yfinance, SQLite, the scheduler.
 - **`utils/`** — leaf helpers only.
 
@@ -122,16 +123,21 @@ Always reference and import them package-qualified (`from core.options.greeks im
 ### The streaming / lazy-tab model (the key non-obvious flow)
 
 `POST /` computes **nothing**. `routes/core.py::index` normalises the form
-(`FormService.extract_form_data` → `ValidationService.validate_input_data`), registers a job via
-`data_pipeline/job_cache.py::create_job` (TTL default 90 s), and renders `templates/index.html`
-with `streaming_mode=True`. Each tab shell emits an HTMX placeholder
-(`hx-get="/render/<kind>?job=…&ticker=…" hx-trigger="load"`), and the browser fans out parallel requests.
+(`FormService.extract_form_data` → `ValidationService.validate_input_data`), resolves the requested
+modules (`FormService.extract_modules`), runs the **data-readiness pass**
+(`services/market/readiness.py` → `data_pipeline/orchestrate/readiness.py`: plan the datasets the
+modules need, probe the DB once, kick missing ranges on daemon threads, warm the live option-chain
+preload), registers a job via `data_pipeline/orchestrate/job_cache.py::create_job` (TTL default 90 s,
+carrying the readiness plan), and renders `templates/index.html` with `streaming_mode=True`. Each tab
+shell emits an HTMX placeholder (`hx-get="/render/<kind>?job=…&ticker=…" hx-trigger="load"`), and the
+browser fans out parallel requests.
 
 All `/render/<kind>` routes funnel into **`services/market/dispatch.py::render_streaming_slice`**, which:
 1. auto-bootstraps a synthetic job with defaults when `job` is missing (direct URL / refresh / bookmark) instead of erroring;
-2. dispatches via `_RENDER_KIND_SLICES` (kind → `(AnalysisService method name as a string, fragment template)`), late-bound with `getattr` so test monkey-patches are honoured;
-3. memoises per `(job_id, ticker, kind)` through `compute_or_get`;
-4. calls `close_thread_conn()` in `finally` to avoid leaking the thread-local SQLite connection.
+2. consults the job's readiness plan and, on a **cold start** (no usable history yet *and* the backfill still running), returns `partials/fragments/readiness.html` — a self-re-firing "正在准备…" fragment — instead of an empty chart (bounded by `readiness.HOLD_SECONDS` and by thread liveness);
+3. dispatches via `_RENDER_KIND_SLICES` (kind → `(AnalysisService method name as a string, fragment template)`), late-bound with `getattr` so test monkey-patches are honoured;
+4. memoises per `(job_id, ticker, kind)` through `compute_or_get`;
+5. calls `close_thread_conn()` in `finally` to avoid leaking the thread-local SQLite connection.
 
 Failures return `render_error_fragment` — usually **HTTP 200 on purpose** (expired job) so HTMX
 swaps a helpful message rather than a browser error toast.
@@ -146,19 +152,37 @@ chart-level memo keyed by `(ticker, chart name, params)` because PNG encoding is
 
 ### `data_pipeline/` specifics
 
-- **`data_ops/` — `DataService` (facade)** is the single read entry point. `ensure_range(ticker,
-  start, end)` is DB-first with a memo + in-flight de-duplication + TTL, which stops concurrent UI
-  requests from stampeding Yahoo. `_query.py` calls `_update`/`_range` module functions directly
-  (never the facade) to avoid an import cycle.
-- **`yf_client.py`** is the **only** module allowed to call yfinance (enforced by `doc_guard`
-  `single-yf-exit`; exceptions registered in `docs/architecture_review.md` §2). Every call goes
-  through `yf_throttle()` (token bucket, 5 req/s, burst 5). **Never** pass
-  `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently fails (ADR 0005).
-- **`db.py`** — `init_db()` uses `CREATE TABLE IF NOT EXISTS` (no migration framework).
-  `get_conn()` yields a **thread-local** WAL connection (`synchronous=NORMAL`,
-  `busy_timeout=5000`) and does **not** close on exit. `repos.py` is the only place that builds SQL.
-- **`cleaning.py` / `processing.py`** — align to business days, mark gaps NA with **no
-  interpolation** (invented prices are worse than missing ones), then engineer returns/MAs/HV.
+Re-homed in batch B3 of ADR 0011 into six one-way stages; the authoritative layer table is
+`docs/architecture_review.md` §3 and is enforced by `doc_guard` + `tests/test_architecture_purity.py`:
+
+- **`read/` — `DataService` (facade)** is the single read entry point above the package.
+  `ensure_range(ticker, start, end)` is DB-first with a memo + in-flight de-duplication + TTL, which
+  stops concurrent UI requests from stampeding Yahoo. The facade and `read/_query.py` call the
+  `orchestrate` drivers directly (never each other's facade) — `read → orchestrate` is why
+  `orchestrate` must not import `read` (no cycle).
+- **`providers/`** is the **only** package allowed to call yfinance (the chokepoint moved here from
+  `yf_client.py` in batch B1; enforced by `doc_guard` `single-yf-exit`, exceptions registered in
+  `docs/architecture_review.md` §2). It owns the mapping from the vendor's fields onto one canonical
+  schema (`providers/base.py`) — IV as a decimal, nullable bid/ask, no `inTheMoney`. Every call goes
+  through `yf_throttle()` (token bucket, 5 req/s, burst 5). `providers/yf_client.py` is a one-release
+  compatibility shim over the package; `_registry.py` is the `MARKET_DATA_PROVIDER` seam.
+  **Never** pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently fails
+  (ADR 0005).
+- **`store/`** — `db.py` (`init_db()` uses `CREATE TABLE IF NOT EXISTS`; no migration framework),
+  `repos.py` (the only place that builds SQL) and `quality_log.py`. Tables are named canonically
+  (`raw_bars` / `clean_bars` / `feature_bars`); the pre-rename names (`raw_prices` / `clean_prices` /
+  `processed_prices`) are kept as shadows for one release — every `upsert_many` writes both families,
+  and `scripts/migrate_canonical_tables.py` backfills an existing DB. `get_conn()` yields a
+  **thread-local** WAL connection (`synchronous=NORMAL`, `busy_timeout=5000`) and does **not** close
+  on exit.
+- **`ingest/ohlcv.py`** — business-day gap detection + `raw_bars` upsert; acquisition goes through
+  `providers.get_provider().history()`, so this module never names a vendor.
+- **`transform/cleaning.py` / `transform/processing.py`** — align to business days, mark gaps NA with
+  **no interpolation** (invented prices are worse than missing ones), then engineer returns/MAs/HV.
+  Never imports `providers/` (asserted by a test).
+- **`orchestrate/`** — `update.py` (incremental/full drivers), `backfill.py` (chunked coverage
+  repair), `job_cache.py` (streaming slice memo), `scheduler.py` (optional APScheduler).
+- **`_state.py`** — process-local query cache + update locks, shared by `read` and `orchestrate`.
 - No option-chain history exists from yfinance — no IV rank/percentile/backtests; HV percentile is
   the deliberate substitute (ADR 0004).
 
@@ -166,6 +190,8 @@ chart-level memo keyed by `(ticker, chart name, params)` because PNG encoding is
 
 `static/api.js` is the **only** `fetch` wrapper (owns aborting + `ApiError` normalisation) —
 components must not call `fetch` directly. `static/state/` holds tiny observable stores:
+`marketParamsState.js` / `assessmentParamsState.js` / `optionFilterState.js` own the module-scoped
+parameters (one `localStorage` key per group) and re-run exactly the modules that consume a change;
 `panelState.js` enforces the four-phase async contract (`idle → loading → loaded → empty|error`,
 no sixth state), `tabFlagsState.js` is the lazy-load guard, `abortRegistry.js` cancels in-flight
 requests on ticker switch. Charts are server PNGs except `static/market_review_chart.js` and
@@ -204,8 +230,8 @@ Pages-only. Rendered `site/index.html` / `site/static/` are build artefacts — 
 | Question | File |
 |---|---|
 | How does a request get served? | `routes/core.py` → `services/market/dispatch.py` |
-| Where does data come from? | `data_pipeline/data_ops/facade.py`, `_range.py`, `yf_client.py` |
-| Schema / SQL | `data_pipeline/db.py` (`init_db`), `repos.py` |
+| Where does data come from? | `data_pipeline/read/facade.py`, `orchestrate/backfill.py`, `providers/` |
+| Schema / SQL | `data_pipeline/store/db.py` (`init_db`), `store/repos.py` |
 | Chart / analysis maths | `core/market/analyzer.py`, `core/options/`, `core/strategies/` |
 | Frontend contract | `docs/frontend_architecture.md` |
 | Why is this weird? | `docs/constraints.md`, then `docs/decisions/` |

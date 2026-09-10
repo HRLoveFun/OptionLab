@@ -42,11 +42,15 @@ count can only go down without an explicit baseline update.
 Run `grep -rn "doc-guard: allow" --include='*.py' core services data_pipeline`
 for the live list. State at registration:
 
-### core-purity (core must not import data_pipeline) — 2 markers
+### core-purity (core must not import data_pipeline) — 0 markers
+
+**All registered core-purity debt is closed (batch B4, 2026-09-10).** `core/` has
+zero `data_pipeline` imports; `tests/test_architecture_purity.py` now refuses the
+suppression marker outright, and the layer table (§3) only allows `core → utils`.
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `core/market/data_context.py` (DataService, fetch_daily_ohlcv) | `build_data_context` *is* the DB-first read path; extracting it means inverting who constructs `DataContext` | `DataContext` becomes data-in/data-out; the fetch moves into a service factory |
+| `core/market/data_context.py` (DataService, fetch_daily_ohlcv) — **resolved 2026-09-10 (B4)** | `build_data_context` *was* the DB-first read path, so core did its own I/O | split: `core/market/data_context.py` keeps a pure `DataContext` + `refrequency` + the data-in/data-out `build_data_context(*, ticker, frequency, horizon, raw_data)`; acquisition moved to `services/market/data_context_fetch.py::fetch_data_context`. `MarketAnalyzer` / `CorrelationValidator` now take the context instead of building it (same pattern as `OptionsChainAnalyzer(snapshot=…)`) |
 | `core/market_review/fetch.py`, `core/market_review/__init__.py` (fetch_close_panel, get_conn) — **resolved 2026-09-03** | L1/L2/L3 cache ladder lived beside the computation it feeds | ladder moved to `services/market_review` (`fetch.py` + `facade.py`); `core/market_review` now receives panels via pure `build_review` / `build_timeseries` |
 | `core/options/chain/analyzer.py` — **resolved 2026-09-03** | former ticker-only constructor fetched yfinance internally | constructor now requires `snapshot=`; fetch lives in `services/options/chain._build_analyzer` |
 
@@ -54,40 +58,55 @@ for the live list. State at registration:
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `services/market/health.py` — **resolved 2026-09-03**, `services/portfolio/facade.py` — **resolved 2026-09-03** (`get_conn`) | ad-hoc health/inventory SQL predates `repos.py` coverage | queries moved into `data_pipeline/repos.py` |
-| `services/regime/facade.py`, `services/regime/ops/_bootstrap.py`, `services/regime/ops/_persistence.py` (`fetch_df`, `init_db`, `upsert_many`) — **resolved 2026-09-03** | regime log writes were split across service and ops modules | consolidated behind `data_pipeline/repos.py` (regime-log + clean-row ops) |
+| `services/market/health.py` — **resolved 2026-09-03**, `services/portfolio/facade.py` — **resolved 2026-09-03** (`get_conn`) | ad-hoc health/inventory SQL predates `repos.py` coverage | queries moved into `data_pipeline/store/repos.py` |
+| `services/regime/facade.py`, `services/regime/ops/_bootstrap.py`, `services/regime/ops/_persistence.py` (`fetch_df`, `init_db`, `upsert_many`) — **resolved 2026-09-03** | regime log writes were split across service and ops modules | consolidated behind `data_pipeline/store/repos.py` (regime-log + clean-row ops) |
 
-### single-yf-exit (only `yf_client.py` may import yfinance) — 1 marker
+### single-yf-exit (only `data_pipeline/providers/` may import yfinance) — 0 markers
+
+Rescoped in batch B1 of [ADR 0011](decisions/0011-pluggable-data-provider-seam.md)
+(2026-09-10): the chokepoint moved from `yf_client.py` into the provider package, and
+`yf_client.py` is now a compatibility shim that no longer imports yfinance.
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `data_pipeline/downloader.py` | DB-aware gap-detection bulk downloads; documented chokepoint alongside `yf_client` (see `yf_client` module docstring) | fold the gap logic into `yf_client` |
-| `data_pipeline/data_ops/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `yf_client.fetch_spot` |
+| `data_pipeline/ingest/ohlcv.py` — **resolved 2026-09-10 (B1)** | DB-aware gap-detection bulk downloads; it used to call `yf.download` directly as a registered second exit point | the download call moved to `providers/yfinance_provider.py::download_daily_frame`; `downloader.py` keeps only gap detection + `raw_bars` upsert, so it no longer imports yfinance |
+| `data_pipeline/read/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `fetch_spot` (provider, re-exported by `providers/yf_client.py`) |
 
 ### Watch list (pre-debt, no marker yet)
 
 | Location | Concern | Trigger to act |
 |---|---|---|
-| `services/market/analysis/summary.py` (fan-in 0, tracked as `dead_code_candidates=1` in baseline) | `generate_summary_analysis` lost its caller when the streaming refactor removed the server-rendered `summary_data` template variable; the Summary tab button is gated off in `templates/index.html` and `summary_pending` in `routes/core.py` is vestigial | any request to ship the multi-ticker Summary tab ⇒ add a `summary` slice to `_RENDER_KIND_SLICES` (aggregates across the job's tickers, not per-ticker) ; otherwise delete the module + `partials/tab_summary.html` + the `summary_pending` flag in the same commit and reset the baseline |
-| `data_pipeline/yf_client.py` (391 lines, fan-in 11) | 9 lines below the 400-line god-file threshold; the throttle wrapper itself already lives in `utils/network.py::yf_throttle`, but each new yfinance endpoint (option greeks feeds, dividends/splits, etc.) grows the file | any edit that pushes it past 400 lines ⇒ extract the option-chain section (~150 lines, `fetch_option_chain` + `_fetch_option_chain_serial` + `_OPT_NUMERIC_COLS`) into `data_pipeline/yf_option_chain.py` in the same commit |
+| ~~`services/market/analysis/summary.py` (fan-in 0, `dead_code_candidates=1`)~~ — **deleted 2026-09-11 (B9)** | `generate_summary_analysis` lost its caller in the streaming refactor; `summary_data` was never set, so `tab_summary.html`, the sidebar button, the correlation-heatmap JS and the `summary_pending` flag were all vestigial. A real multi-ticker Summary tab is a feature nobody requested | removed the module + `partials/tab_summary.html` + the sidebar button + `summary_pending` + `renderCorrelationHeatmap`/`corrToColor` in `market_review_chart.js`; `arch_baseline.json` `dead_code_candidates` reset 1 → 0 |
+| ~~`data_pipeline/providers/yf_client.py` (391 lines, fan-in 11)~~ — **resolved 2026-09-10 (B1)** | it sat 9 lines below the 400-line god-file threshold | the option-chain section was extracted pre-emptively, as prescribed, into `providers/yf_snapshot.py`; `yf_client.py` is now a ~35-line shim. The pressure moved to `providers/yf_snapshot.py` (≈340 lines) and `providers/yfinance_provider.py` (≈290 lines) — watch them before adding endpoints |
+| `static/sim/black_scholes.js` + `core/options/greeks` (risk-free rate) | the same constant is hard-coded in the client simulation **and** the server-side Greeks; changing one without the other makes the two pricings diverge silently | batch B8 retired the Config tab, so there is no global-setting surface to put it in; making it a parameter (store entry + form field + backend path) is a small feature — do it before anyone edits either constant |
+| `data_pipeline/providers/yf_client.py` (compat shim, ADR 0011 B1) | re-exports `fetch_spot` / `fetch_option_chain` / `fetch_close_panel` / `fetch_daily_ohlcv` with their old yfinance-shaped contracts; it was a **"one release"** bridge so importers did not have to change in the B1 PR | once `grep -rn "providers.yf_client\|yf_client import" services/ data_pipeline/read/` is empty (importers moved to the canonical `providers.get_provider()` shapes), delete `yf_client.py` and its re-exports from `providers/__init__.py` in one commit |
+| `services/market_review/fetch.py` → `market_review_prices` (L5 in plan §4.1) | a second acquisition path outside the provider seam: its own L1/L2/L3 close-panel ladder writes a `market_review_prices` table that `data_pipeline/orchestrate/readiness.py` does **not** plan, so the benchmark panel still lazy-fetches on the Market Review slice | fold the ladder into `providers` + a canonical `bars` read (ADR 0011's L5 exit); until then, add `market_review` benchmark tickers to `KIND_DATASETS` so the readiness pass warms them |
+| ~~`services/market/analysis/assessment.py` option overlay~~ — **retired 2026-09-11 (B9, plan §10 F5-a)** | B7 left the projection-vs-positions overlay + the sizing max-loss unfed (positions moved to the Portfolio tab) | removed: the `option_data` branches in `assessment.py`, `FormService.parse_option_data`, `MarketAnalyzer.analyze_options` / `MarketChartAssembly.analyze_options`, and `core/market/option_pnl.py` + `core/market/charts/option_pnl.py` (whole files). Assessment sizing is now debit-only; position P&L lives in the Portfolio tab |
 
 ## 3. Guardrails (how the score is kept)
 
 | Tool | Role | Run where |
 |---|---|---|
-| `scripts/doc_guard.py` | blocks violating edits: `import-direction`, `core-purity`, `db-access`, `single-yf-exit`, `sqlite-bypass`, `yfinance-throttle`, `yfinance-session-kwarg`, `tag-syntax`, `module-docstring`, ADR rules | pre-commit + CI, per changed file |
+| `scripts/doc_guard.py` | blocks violating edits: `import-direction` (sub-package aware since B3), `core-purity`, `db-access`, `single-yf-exit`, `sqlite-bypass`, `yfinance-throttle`, `yfinance-session-kwarg`, `tag-syntax`, `module-docstring`, ADR rules | pre-commit + CI, per changed file |
 | `scripts/arch_metrics.py` | trend metrics: layer-edge violations, import cycles (Tarjan), god files, dead-code candidates, fan-in/out Top-5; `--check` fails CI on regression vs `.github/data/arch_baseline.json` | CI, whole repo |
-| `tests/test_architecture_purity.py` | contract test re-asserting core purity at the test layer so suppressed markers stay visible in the test report | pytest |
+| `tests/test_architecture_purity.py` | contract tests at the test layer: core purity, the `data_pipeline/` layer graph, transform↛providers, and that the two copies of the layer table agree | pytest |
 
 **Layer allow-list** (single source of truth: `doc_guard.py::_ALLOWED_DEPS`,
-mirrored in `arch_metrics.py`):
+mirrored in `arch_metrics.py`; asserted equal by
+`tests/test_architecture_purity.py::test_layer_tables_are_in_sync`):
 
 ```
-app           → routes, services, core, data_pipeline, utils
-routes        → services, data_pipeline, utils          (never core directly)
-services      → core, data_pipeline, utils
-core          → utils (data_pipeline only via §2 markers)
-data_pipeline → utils
+app           → routes, services, core, data_pipeline, utils, read, orchestrate
+routes        → services, data_pipeline, utils, store, read, orchestrate   (never core directly)
+services      → core, data_pipeline, utils, providers, store, ingest, transform, read, orchestrate
+core          → utils                         (zero data_pipeline imports — closed in B4)
+data_pipeline → utils                          # root: PipelineResult (types) + _state.py
+  store       → (nothing upward)
+  providers   → store, utils                   # store = quality_log; see plan §8 B3
+  ingest      → data_pipeline, providers, store, utils
+  transform   → data_pipeline, store, utils     # never providers (asserted by test)
+  read        → data_pipeline, orchestrate, providers, store, utils
+  orchestrate → data_pipeline, ingest, store, transform, utils
 utils         → (leaf: nothing upward)
 ```
 
@@ -105,7 +124,8 @@ utils         → (leaf: nothing upward)
 5. Import cycle `data_ops/_query.py <-> facade.py` broken (query calls sibling
    modules, never the facade).
 6. Renames for D5: `market_analysis/{_service,_statistical,_assessment,
-   _sizing,_summary}.py` → `{facade,statistical,assessment,sizing,summary}.py`;
+   _sizing,_summary}.py` → `{facade,statistical,assessment,sizing,summary}.py`
+   (`summary.py` later deleted — B9 F5-a);
    same for `data_ops/_service.py` → `facade.py`. Dead code
    `core/_shared/validators.py` deleted; `correlation_validator.py` moved into
    `core/market/`.
@@ -115,7 +135,8 @@ utils         → (leaf: nothing upward)
    from the chart assembly. All chart-producing methods (`generate_scatter_plots`,
    `generate_high_low_scatter`, `generate_return_osc_high_low_chart`,
    `generate_volatility_dynamics`, `generate_oscillation_projection`,
-   `analyze_options`, plus the feature/projection primitives that feed them)
+   `analyze_options` (later removed — B9 F5-a), plus the feature/projection
+   primitives that feed them)
    moved into `core/market/charts/facade.py::MarketChartAssembly`. `MarketAnalyzer`
    is now a thin orchestrator that builds the `DataContext` and delegates rendering,
    mirroring the options-side facade. The chart-assembly fan-out (14) now lives in
@@ -133,7 +154,8 @@ utils         → (leaf: nothing upward)
 1. **§2 debt paydown** (easiest first): `_query.get_latest_spot` → `yf_client` — **done
    2026-09-03**; `health`/`portfolio` SQL → `repos.py` — **done 2026-09-03**; `market_review`
    cache ladder → `services/market_review` — **done 2026-09-03**; `regime` SQL consolidation →
-   `repos.py` — **done 2026-09-03**. All registered §2 debt is now resolved.
+   `repos.py` — **done 2026-09-03**. All registered §2 debt is now resolved, including the last
+   `core-purity` markers (`core/market/data_context.py` — **done 2026-09-10, batch B4**).
 3. **Frontend consolidation** (P3): move the eight loose root-level scripts in
    `static/` (`option-chain.js`, `position.js`, `regime.js`, `simulation.js`,
    `market_review.js`, …) into `static/features/`.

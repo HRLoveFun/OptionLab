@@ -26,8 +26,8 @@ from core.regime import (
     label_series,
     regime_transitions,
 )
-from data_pipeline.data_ops import DataService
-from data_pipeline.repos import fetch_regime_log_window
+from data_pipeline.read import DataService
+from data_pipeline.store.repos import fetch_regime_log_window
 from services.regime.ops._bootstrap import (
     BOOTSTRAP_DAYS,
     MIN_TRADING_ROWS,

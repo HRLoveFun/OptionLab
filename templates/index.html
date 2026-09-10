@@ -107,9 +107,11 @@
             </div>
             <div class="header-actions">
                 {% if ticker %}
+                {# Analysis parameters are per-module now (batch B7): frequency /
+                   horizon / side-bias differ per tab, so there is no single
+                   value to show here. The badge is just the active ticker. #}
                 <div class="header-badge">
                     <span class="badge-ticker">{{ ticker }}</span>
-                    <span class="badge-meta">{{ frequency_display or frequency }}, {{ side_bias or 'Natural' }}</span>
                 </div>
                 {% endif %}
                 <!-- Theme toggle: persistent in the top-right on desktop and
@@ -133,6 +135,10 @@
         </div>
     </header>
 
+    {# Persistent Parameters bar (batch B6): above the panes so it survives tab
+       switches. Owns `ticker` + Run; module params move to the tab toolbars in B7. #}
+    {% include 'partials/parameters_bar.html' %}
+
     <div class="app-body">
         <!-- Sidebar Tab Nav -->
         <aside class="sidebar" id="sidebar">
@@ -147,18 +153,8 @@
 
             <div class="sidebar-body" id="sidebar-body">
                 <nav class="tab-nav">
-                    <div class="tab-section-label">Setup</div>
-                    <button class="tab-btn {% if not streaming_mode %}active{% endif %}" data-tab="tab-parameter">
-                        <span>Parameter</span>
-                    </button>
-
                     <div class="tab-section-label">Overview</div>
-                    {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
-                    <button class="tab-btn" data-tab="tab-summary">
-                        <span>Summary</span>
-                    </button>
-                    {% endif %}
-                    <button class="tab-btn {% if market_review_table is defined and market_review_table %}active{% endif %}" data-tab="tab-market-review">
+                    <button class="tab-btn {% if not streaming_mode or (market_review_table is defined and market_review_table) %}active{% endif %}" data-tab="tab-market-review">
                         <span>Market Review</span>
                     </button>
                     <button class="tab-btn" data-tab="tab-statistical-analysis">
@@ -190,9 +186,9 @@
                         <span>Option Pricing Matrix</span>
                     </button>
 
-                    <div class="tab-section-label">System</div>
-                    <button class="tab-btn" data-tab="tab-config">
-                        <span>Config</span>
+                    <div class="tab-section-label">Portfolio</div>
+                    <button class="tab-btn" data-tab="tab-portfolio">
+                        <span>Portfolio</span>
                     </button>
                 </nav>
                 {% if tickers is defined and tickers|length > 1 %}
@@ -212,11 +208,11 @@
         <!-- Main Panel -->
         <main class="main-panel">
 
-            <!-- Tab 1: Parameter -->
-            {% include 'partials/tab_parameter.html' %}
-
-            <!-- Tab 2: Market Review -->
+            <!-- Tab 1: Market Review -->
             {% include 'partials/tab_market_review.html' %}
+
+            <!-- Portfolio (batch B6 / gate Q3) -->
+            {% include 'partials/tab_portfolio.html' %}
 
             <!-- Tab 3: Statistical Analysis -->
             {% include 'partials/tab_statistical_analysis.html' %}
@@ -242,15 +238,7 @@
             <!-- Tab: Option Pricing Matrix -->
             {% include 'partials/tab_option_pricing_matrix.html' %}
 
-            <!-- Tab: Config -->
-            {% include 'partials/tab_config.html' %}
-
         </main>
-
-        <!-- Summary Tab (only rendered for multi-ticker) -->
-        {% if summary_data is defined and summary_data %}
-        {% include 'partials/tab_summary.html' %}
-        {% endif %}
     </div>
 
     <!-- Probe: Alpine mounts x-data; HTMX fires hx-get on load. Both write to #scaffold-probe. -->
@@ -270,7 +258,15 @@
     <script src="{{ url_for('static', filename='state/abortRegistry.js') }}"></script>
     <script src="{{ url_for('static', filename='state/tabFlagsState.js') }}"></script>
     <script src="{{ url_for('static', filename='state/panelState.js') }}"></script>
+    {# Module-scoped parameter groups (batch B7): hydrated at parse time so the
+       first hx-include fan-out already carries the stored values. #}
+    <script src="{{ url_for('static', filename='state/paramsStore.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/marketParamsState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/assessmentParamsState.js') }}"></script>
+    <script src="{{ url_for('static', filename='state/optionFilterState.js') }}"></script>
+    <script src="{{ url_for('static', filename='moduleParams.js') }}"></script>
     <script src="{{ url_for('static', filename='utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='parametersBar.js') }}"></script>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <script src="{{ url_for('static', filename='position.js') }}"></script>
     <script src="{{ url_for('static', filename='option-chain.js') }}"></script>
@@ -332,7 +328,8 @@
         // ── Option data auto-refresh (configurable interval) ──
         (function() {
             function getRefreshMs() {
-                var intervalSec = parseInt((document.getElementById('cfg-refresh-interval') || {}).value, 10);
+                var _of = (window.appState && window.appState.optionFilter && window.appState.optionFilter.get()) || {};
+                var intervalSec = parseInt(_of.refresh_interval || '60', 10);
                 if (isNaN(intervalSec) || intervalSec < 10) intervalSec = 60;
                 return intervalSec * 1000;
             }
@@ -377,14 +374,6 @@
                 startAutoRefresh();
             }
         })();
-
-        {% if summary_data is defined and summary_data and summary_data.correlation_matrix %}
-        // Render correlation heatmap from server data
-        (function() {
-            var corrData = {{ summary_data.correlation_matrix | tojson }};
-            if (corrData) renderCorrelationHeatmap(corrData);
-        })();
-        {% endif %}
     </script>
 </body>
 </html>

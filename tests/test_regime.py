@@ -197,7 +197,7 @@ def test_label_series_empty_inputs_returns_structured_df():
 def test_fetch_df_aggregate_query_without_date_column():
     """Regression: ``fetch_df`` must not try to index by 'date' on queries
     that don't select a date column (e.g. ``SELECT MAX(date)``)."""
-    from data_pipeline.db import fetch_df, init_db
+    from data_pipeline.store.db import fetch_df, init_db
 
     init_db()
     df = fetch_df("SELECT MAX(date) as max_date FROM raw_prices WHERE ticker=?", ("DOES_NOT_EXIST",))

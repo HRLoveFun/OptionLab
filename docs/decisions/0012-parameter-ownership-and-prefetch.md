@@ -111,6 +111,37 @@ The **submit contract** — whether `POST /` carries a `modules` manifest with
 per-module params attached to each `/render` call, or the streaming tabs move fully
 to client-fired `/api/*` — is deferred to the implementation batch.
 
+> **Resolved (batch B5, 2026-09-10): manifest.** `POST /` carries the module tokens; each module's
+> parameters travel as query args on its own `/render` call, mirroring
+> `/api/option_chain?ticker=…`. Full client-fired was rejected because (a) this prefetch pass needs
+> the module list *at submit time*, (b) the four streaming slices return server-rendered HTML +
+> base64 PNG, so changing the transport would not change the product, and (c) the diff/revert surface
+> would span four templates plus four loaders. It would only win if the charts moved to client-side
+> rendering (ADR 0006 / 0008). See the plan §8 gate table and the B5 note.
+
+**Implementation status (B5)**: `data_pipeline/orchestrate/readiness.py` plans datasets per module,
+probes coverage (DB-only) and kicks missing ranges on a daemon thread;
+`services/market/readiness.py` adds the live-preload warm; the plan is stored on the job and
+`/render/<kind>` holds a cold-start tab with a self-re-firing readiness fragment (bounded by
+`HOLD_SECONDS` and by backfill-thread liveness). The per-module toolbars and the removal of
+`syncConfigToForm` remain B7's work.
+
+**Implementation status (B6)**: the Parameters tab is gone. A persistent, collapsible
+Parameters bar (`templates/partials/parameters_bar.html` + `static/parametersBar.js`,
+`localStorage` key `parametersBarCollapsed`) renders above `.main-panel`, is `position:
+sticky` under the header, and owns exactly one input — `ticker` — plus the Run button and the
+validation badges. Analysis settings that B7 will move to module toolbars stay in a collapsible
+group inside the same `<form>`, so the submit contract is untouched. The `positions` block moved
+to its own **Portfolio** tab (decision gate §8 Q3).
+
+**Implementation status (B7)**: the per-module toolbars are live and the bridge is gone. Each
+module's parameters travel as query args on its own `/render` call (or, for the client-fired chain,
+in the request `static/option-chain.js` builds from the `optionFilter` store); a change re-runs
+exactly the modules that consume that group. Three bugs were caught by the new tests while landing
+this — a shared-field clobber between toolbars, an `init()` that clobbered its own published global,
+and an `input`+`change` double-emit race — and are pinned by `tests/unit/paramsStore.test.js` and
+`tests/e2e/test_module_params.py`.
+
 ## Consequences
 
 - Positive: the always-visible surface is one field; module parameters are

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from data_pipeline.db import get_conn, init_db
+from data_pipeline.store.db import get_conn, init_db
 
 # ── Helpers ───────────────────────────────────────────────────────
 

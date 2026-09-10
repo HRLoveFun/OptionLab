@@ -32,7 +32,7 @@ Is the bug reproducible with a simple unit test?
 - **Symptom**: Empty charts, 0 historical data points
 - **Root cause**: NaN-only filler rows from failed download survive cleaning
 - **Effective level**: Level 2 (integration — needs real DB to reproduce the chain)
-- **Key assertion**: After pipeline, `processed_prices` has no NaN-only rows
+- **Key assertion**: After pipeline, `feature_bars` has no NaN-only rows
 
 ### Pattern B: yfinance Silent Failure
 - **Symptom**: Data appears stale, "No new data" in logs
