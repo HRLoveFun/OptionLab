@@ -22,6 +22,7 @@ from data_pipeline.orchestrate.job_cache import create_job
 from services.market.dispatch import render_streaming_slice
 from services.market.facade import MarketService
 from services.market.form import FormService
+from services.market.readiness import prepare_readiness
 from services.market.validation import ValidationService
 from utils.constants import (
     DEFAULT_FREQUENCY,
@@ -80,7 +81,20 @@ def index():
                 return render_template("index.html", error="Please enter at least one ticker symbol.")
 
             first_ticker = tickers[0]
-            job_id = create_job({**form_data, "ticker": first_ticker}, tickers)
+
+            # ── Data readiness (ADR 0012 / batch B5) ──
+            # CONSTRAINT: DB-only probes + daemon-thread prefetch, so this call
+            # cannot push POST / past the <1 s skeleton budget. See
+            # services/market/readiness.py for the layer split.
+            modules = FormService.extract_modules(request)
+            plan = prepare_readiness(
+                tickers,
+                modules,
+                start=form_data.get("parsed_start_time"),
+                end=form_data.get("parsed_end_time"),
+            )
+
+            job_id = create_job({**form_data, "ticker": first_ticker}, tickers, plan)
 
             template_data = {
                 **form_data,
@@ -89,6 +103,7 @@ def index():
                 "tickers_raw": ", ".join(tickers),
                 "streaming_mode": True,
                 "job_id": job_id,
+                "modules": modules,
                 "summary_pending": len(tickers) > 1,
             }
             return render_template("index.html", **template_data)

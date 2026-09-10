@@ -24,8 +24,37 @@ class FormService:
     """
     Service for handling form data extraction and processing from Flask request.
     - extract_form_data: Extracts and parses all dashboard form fields.
+    - extract_modules: Modules the client asked for (readiness planning).
     - parse_option_data: Parses option positions from JSON string.
     """
+
+    @staticmethod
+    def extract_modules(request) -> list[str]:
+        """Return the module tokens the client requested (ADR 0012 / batch B5).
+
+        Accepts either repeated fields (``modules=market_review&modules=statistical``)
+        or one comma-separated value. Unknown tokens are dropped rather than
+        rejected: an unrecognised module simply has no datasets to plan, and
+        failing the whole submit for a typo would be hostile.
+
+        WHY default to every known module: the frontend does not send this field
+        until batch B7, and the streaming tabs are rendered unconditionally — so
+        "everything" is the honest interpretation of a request that omits it.
+        """
+        from data_pipeline.orchestrate.readiness import ALL_MODULES
+
+        raw = request.form.getlist("modules")
+        tokens: list[str] = []
+        for item in raw:
+            tokens.extend(part.strip() for part in item.split(",") if part.strip())
+        if not tokens:
+            return list(ALL_MODULES)
+        known = [t for t in tokens if t in ALL_MODULES]
+        unknown = sorted(set(tokens) - set(ALL_MODULES))
+        if unknown:
+            logger.warning("extract_modules: ignoring unknown module token(s) %s", unknown)
+        # De-duplicate while preserving the caller's order.
+        return list(dict.fromkeys(known))
 
     @staticmethod
     def extract_form_data(request):

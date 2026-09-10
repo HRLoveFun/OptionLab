@@ -124,16 +124,21 @@ Always reference and import them package-qualified (`from core.options.greeks im
 ### The streaming / lazy-tab model (the key non-obvious flow)
 
 `POST /` computes **nothing**. `routes/core.py::index` normalises the form
-(`FormService.extract_form_data` → `ValidationService.validate_input_data`), registers a job via
-`data_pipeline/orchestrate/job_cache.py::create_job` (TTL default 90 s), and renders `templates/index.html`
-with `streaming_mode=True`. Each tab shell emits an HTMX placeholder
-(`hx-get="/render/<kind>?job=…&ticker=…" hx-trigger="load"`), and the browser fans out parallel requests.
+(`FormService.extract_form_data` → `ValidationService.validate_input_data`), resolves the requested
+modules (`FormService.extract_modules`), runs the **data-readiness pass**
+(`services/market/readiness.py` → `data_pipeline/orchestrate/readiness.py`: plan the datasets the
+modules need, probe the DB once, kick missing ranges on daemon threads, warm the live option-chain
+preload), registers a job via `data_pipeline/orchestrate/job_cache.py::create_job` (TTL default 90 s,
+carrying the readiness plan), and renders `templates/index.html` with `streaming_mode=True`. Each tab
+shell emits an HTMX placeholder (`hx-get="/render/<kind>?job=…&ticker=…" hx-trigger="load"`), and the
+browser fans out parallel requests.
 
 All `/render/<kind>` routes funnel into **`services/market/dispatch.py::render_streaming_slice`**, which:
 1. auto-bootstraps a synthetic job with defaults when `job` is missing (direct URL / refresh / bookmark) instead of erroring;
-2. dispatches via `_RENDER_KIND_SLICES` (kind → `(AnalysisService method name as a string, fragment template)`), late-bound with `getattr` so test monkey-patches are honoured;
-3. memoises per `(job_id, ticker, kind)` through `compute_or_get`;
-4. calls `close_thread_conn()` in `finally` to avoid leaking the thread-local SQLite connection.
+2. consults the job's readiness plan and, on a **cold start** (no usable history yet *and* the backfill still running), returns `partials/fragments/readiness.html` — a self-re-firing "正在准备…" fragment — instead of an empty chart (bounded by `readiness.HOLD_SECONDS` and by thread liveness);
+3. dispatches via `_RENDER_KIND_SLICES` (kind → `(AnalysisService method name as a string, fragment template)`), late-bound with `getattr` so test monkey-patches are honoured;
+4. memoises per `(job_id, ticker, kind)` through `compute_or_get`;
+5. calls `close_thread_conn()` in `finally` to avoid leaking the thread-local SQLite connection.
 
 Failures return `render_error_fragment` — usually **HTTP 200 on purpose** (expired job) so HTMX
 swaps a helpful message rather than a browser error toast.

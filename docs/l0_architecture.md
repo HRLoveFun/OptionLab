@@ -38,7 +38,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 | `routes/` | 909 lines · 8 files | 7 blueprints + `__init__.py` aggregate export; no business logic | good |
 | `services/` | 3 540 lines · 5 domain packages | `market` (incl. `analysis/` slice factory), `market_review`, `options`, `portfolio`, `regime` | good |
 | `core/` | 6 372 lines · 8 sub-packages + `_shared` | Pure computation — no Flask, no DB, no network | good |
-| `data_pipeline/` | 3 331 lines · 26 files | The only I/O boundary, re-homed into six one-way stages (ADR 0011, batch B3): `providers/` · `store/` · `ingest/` · `transform/` · `read/` · `orchestrate/` (+ `_state.py`) | good |
+| `data_pipeline/` | 3 618 lines · 27 files | The only I/O boundary, re-homed into six one-way stages (ADR 0011, batch B3): `providers/` · `store/` · `ingest/` · `transform/` · `read/` · `orchestrate/` (+ `_state.py`) | good |
 | `utils/` | 756 lines · 7 files | Leaf layer; highest fan-in (`ticker_utils.py` = 11) | good |
 | `templates/` | 1 546 lines · 17 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
 | `static/` | 5 473 lines · 31 JS/CSS | `state/` · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
@@ -78,17 +78,18 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 ## 2. Measured shape (`scripts/arch_metrics.py`)
 
-_Refreshed 2026-09-10 after batches B1 (provider seam), B2 (canonical table names) and B3 (data_pipeline re-home); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
+_Refreshed 2026-09-10 after batches B1 (provider seam), B2 (canonical table names), B3 (data_pipeline re-home), B4 (core purity) and B5 (readiness); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
 
 ```
-modules=156  import_edges=313
+modules=159  import_edges=324
 Layer-edge violations : (none)
 Import cycles         : 0
 God files (>400 lines): (none)
-Top fan-out  : core/market/charts/facade.py(14) · core/market/data_context.py(7)
-               routes/__init__.py(7) · routes/core.py(7) · app.py(6)
+Top fan-out  : core/market/charts/facade.py(14) · routes/core.py(8)
+               routes/__init__.py(7) · services/market/analysis/facade.py(7)
+               services/market/dispatch.py(7)
 Top fan-in   : core/_shared/plotting.py(13) · data_pipeline/providers/yf_client.py(11)
-               utils/ticker_utils.py(11) · data_pipeline/store/db.py(9)
+               utils/ticker_utils.py(11) · data_pipeline/store/db.py(10)
 Dead code    : services/market/analysis/summary.py  (only one; already on the
                watch list in docs/architecture_review.md §2)
 ```
@@ -124,7 +125,7 @@ data_pipeline/
   ingest/      GLUE      business-day gap detection + raw_bars upsert
   transform/   PROCESS   raw_bars → clean_bars → feature_bars (never imports providers)
   read/        SERVE     DataService facade + memoised queries
-  orchestrate/ DRIVERS   manual/seed update, chunked backfill, job cache, scheduler
+  orchestrate/ DRIVERS   manual/seed update, chunked backfill, readiness, job cache, scheduler
   _state.py              process-local shared state (query cache, update locks)
 ```
 

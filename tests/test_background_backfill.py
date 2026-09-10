@@ -18,10 +18,7 @@ import data_pipeline.read._query as _q
 from data_pipeline import PipelineResult
 from data_pipeline._state import _cache_get, _cache_invalidate
 from data_pipeline.orchestrate import backfill as _bf
-from data_pipeline.read._query import (
-    _join_backfills,
-    _kick_backfill,
-)
+from data_pipeline.orchestrate.readiness import join_backfills, kick_backfill
 from data_pipeline.store.db import init_db
 
 TICKER = "BGTEST1"
@@ -65,7 +62,7 @@ class TestBackgroundBackfill:
         assert df.empty, "no data seeded yet — partial read must be empty, not fabricated"
         # The backfill is still running in the background…
         assert calls["n"] >= 1, "background backfill was not kicked"
-        _join_backfills(timeout=10)
+        join_backfills(timeout=10)
         assert calls["n"] >= 2, "chunked backfill did not continue after the request returned"
 
     def test_partial_read_is_not_cached(self, monkeypatch):
@@ -83,7 +80,7 @@ class TestBackgroundBackfill:
 
         key = (TICKER, "clean", str(start), str(end))
         assert _cache_get(key) is None, "partial read must not be memoised"
-        _join_backfills(timeout=10)
+        join_backfills(timeout=10)
 
     def test_completed_backfill_becomes_visible_and_cached(self, monkeypatch):
         """After the background backfill finishes, the next request returns the
@@ -116,7 +113,7 @@ class TestBackgroundBackfill:
         start = dt.date(2026, 1, 1)
         end = dt.date(2026, 2, 1)
         df = _q.get_cleaned_daily(TICKER, start, end)
-        _join_backfills(timeout=10)
+        join_backfills(timeout=10)
         assert not df.empty
 
         _cache_invalidate(TICKER)  # mimic ensure_range's post-success invalidation
@@ -143,8 +140,8 @@ class TestBackgroundBackfill:
 
         start, end = dt.date(2021, 1, 1), dt.date.today()
         for _ in range(5):
-            _kick_backfill(TICKER + "-DEDUP", start, end)
-        _join_backfills(timeout=10)
+            kick_backfill(TICKER + "-DEDUP", start, end)
+        join_backfills(timeout=10)
         # ensure_range's own in-flight dedup collapses the kicked threads —
         # a single leader runs the chunked pipeline, not five. Chunks for a
         # 5.6-year range ≈ days/89, allow one boundary chunk.

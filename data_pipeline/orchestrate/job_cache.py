@@ -4,8 +4,10 @@ Architecture
 ------------
 The streaming render flow is:
 
-    POST /                       → JobCache.create_job(form_data, tickers)
-                                    returns job_id; render skeleton.
+    POST /                       → JobCache.create_job(form_data, tickers, plan)
+                                    returns job_id; render skeleton. `plan` is the
+                                    readiness status list (batch B5) so /render/*
+                                    knows whether its dataset is already covered.
     GET  /render/<kind>?job=…    → JobCache.compute_or_get(job_id, ticker, kind, fn)
                                     runs `fn` (the slice computation) under a
                                     per-(job, ticker, kind) lock; subsequent
@@ -51,6 +53,7 @@ class _JobEntry:
     __slots__ = (
         "form_data",
         "tickers",
+        "plan",
         "created_at",
         "last_access",
         "results",
@@ -59,9 +62,12 @@ class _JobEntry:
         "_master_lock",
     )
 
-    def __init__(self, form_data: dict, tickers: list[str]):
+    def __init__(self, form_data: dict, tickers: list[str], plan: list | None = None):
         self.form_data: dict = form_data
         self.tickers: list[str] = list(tickers)
+        # Readiness statuses computed at POST time (batch B5 / ADR 0012). Empty
+        # for jobs registered without a readiness pass (tests, legacy callers).
+        self.plan: list = list(plan or [])
         self.created_at: float = time.monotonic()
         # TTL counts from the LAST access, not creation: a slice that computes
         # longer than the TTL must not lose its result to a mid-compute
@@ -110,15 +116,17 @@ def _evict_expired(now: float | None = None) -> None:
         logger.debug("JobCache evicted %d stale job(s)", len(stale))
 
 
-def create_job(form_data: dict, tickers: list[str]) -> str:
+def create_job(form_data: dict, tickers: list[str], plan: list | None = None) -> str:
     """Register a new job and return its opaque id.
 
     `form_data` is shallow-copied so later mutations by the caller don't
-    leak into the cache.
+    leak into the cache. `plan` is the readiness status list from
+    ``orchestrate/readiness.py`` (optional — ``/render/*`` degrades to its
+    original behaviour when it is absent).
     """
     _evict_expired()
     job_id = uuid.uuid4().hex
-    entry = _JobEntry(form_data=dict(form_data), tickers=list(tickers))
+    entry = _JobEntry(form_data=dict(form_data), tickers=list(tickers), plan=plan)
     with _jobs_lock:
         _jobs[job_id] = entry
     logger.info("JobCache created job=%s tickers=%s", job_id[:8], tickers)

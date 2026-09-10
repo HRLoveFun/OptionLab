@@ -3,7 +3,6 @@
 import datetime as dt
 import logging
 import os
-import threading
 import time
 
 import pandas as pd
@@ -11,6 +10,7 @@ import pandas as pd
 from data_pipeline import _state as _g
 from data_pipeline.orchestrate import backfill as _bf
 from data_pipeline.orchestrate import update as _u
+from data_pipeline.orchestrate.readiness import kick_backfill as _kick_backfill
 from data_pipeline.store.db import fetch_df, init_db
 
 logger = logging.getLogger(__name__)
@@ -23,43 +23,11 @@ logger = logging.getLogger(__name__)
 # kicks), the request waits a short grace period so the common "one chunk
 # missing" case still returns full data, then reads whatever coverage exists.
 _BACKFILL_WAIT_SECONDS = float(os.environ.get("BACKFILL_WAIT_SECONDS", "8"))
-_backfill_lock = threading.Lock()
-_backfill_threads: dict[tuple, threading.Thread] = {}
 
-
-def _kick_backfill(ticker: str, start, end) -> None:
-    key = (ticker, str(start), str(end))
-    with _backfill_lock:
-        existing = _backfill_threads.get(key)
-        if existing is not None and existing.is_alive():
-            return
-        t = threading.Thread(target=_run_backfill, args=(ticker, start, end, key), daemon=True)
-        _backfill_threads[key] = t
-        t.start()
-    logger.info("background backfill kicked for %s [%s .. %s]", ticker, start, end)
-
-
-def _run_backfill(ticker, start, end, key) -> None:
-    try:
-        _bf.ensure_range(ticker, start, end)
-    except Exception as e:
-        logger.warning("background backfill failed for %s: %s", ticker, e)
-    finally:
-        # Daemon threads never re-run dispatch's finally-cleanups; drop this
-        # thread's SQLite connection so _all_conns doesn't grow per backfill.
-        from data_pipeline.store.db import close_thread_conn
-
-        close_thread_conn()
-        with _backfill_lock:
-            _backfill_threads.pop(key, None)
-
-
-def _join_backfills(timeout: float | None = None) -> None:
-    """Test helper: wait for all in-flight background backfills."""
-    with _backfill_lock:
-        threads = list(_backfill_threads.values())
-    for t in threads:
-        t.join(timeout=timeout)
+# NOTE: the kicker itself lives in ``orchestrate/readiness.py`` — batch B5 made it
+# shared between this per-slice path and the readiness pass on POST /. It is
+# re-exported (as ``_kick_backfill`` / ``_join_backfills``) at the top of this
+# module so existing callers and tests keep working.
 
 
 def _wait_for_coverage(ticker, start, end, timeout: float) -> bool:

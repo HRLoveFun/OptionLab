@@ -27,6 +27,7 @@ from typing import Any
 from flask import render_template, request
 
 from data_pipeline.orchestrate.job_cache import compute_or_get, get_job
+from data_pipeline.orchestrate.readiness import should_hold, status_for
 from data_pipeline.store.db import close_thread_conn
 from services.market.analysis import AnalysisService
 from utils.constants import (
@@ -50,6 +51,32 @@ _RENDER_KIND_SLICES: dict[str, tuple[str | None, str]] = {
     "assessment": ("generate_assessment_slice", "partials/fragments/assessment.html"),
     "options_chain": ("generate_options_chain_slice", "partials/fragments/options_chain.html"),
 }
+
+
+# DOMAIN: how long the held fragment waits before re-issuing itself. Short
+# enough that the user sees the tab fill in promptly, long enough not to hammer
+# the server.
+_RETRY_DELAY_SECONDS = 3
+
+
+def render_readiness_fragment(kind: str, job_id: str, ticker: str) -> tuple[str, int]:
+    """Fragment that says "preparing data" and re-issues its own request.
+
+    WHY HTTP 200: the job is alive and the request is being handled correctly —
+    the data just is not there yet. HTMX swaps the fragment, and the fragment's own
+    ``hx-trigger`` re-fires until the data is ready or ``HOLD_SECONDS`` elapses.
+    """
+    return (
+        render_template(
+            "partials/fragments/readiness.html",
+            kind=kind,
+            kind_id=kind.replace("_", "-"),
+            job_id=job_id,
+            ticker=ticker,
+            retry_seconds=_RETRY_DELAY_SECONDS,
+        ),
+        200,
+    )
 
 
 def render_streaming_slice(kind: str) -> Any:
@@ -107,6 +134,14 @@ def render_streaming_slice(kind: str) -> Any:
             # browser-default error toast — but include the job-expired hint so
             # the user knows to re-submit the form.
             return render_error_fragment(kind, "session expired (job no longer cached); please re-submit the form", 200)
+
+    # ── Batch B5: consult the job's readiness plan ──
+    # On a cold start (no rows at all for this ticker) the slice would render an
+    # empty chart; hold the tab with a self-re-firing fragment instead. Bounded by
+    # readiness.HOLD_SECONDS and stops as soon as the backfill thread exits —
+    # see readiness.should_hold.
+    if job is not None and should_hold(status_for(job.plan, ticker, kind)):
+        return render_readiness_fragment(kind, job_id, ticker)
 
     slice_fn_name, template = _RENDER_KIND_SLICES[kind]
 

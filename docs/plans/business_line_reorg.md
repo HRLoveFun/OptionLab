@@ -42,7 +42,7 @@
 | B2 — canonical raw store | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | gate §8 Q4 resolved (name-only rename). Actuals in §8; `symbol` column deferred (ADR 0011 amendment) |
 | B3 — package re-home | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | six stages + `_state.py`; first sub-layer guard table; `arch_baseline.json` **not** reset (no tracked drift). Actuals + deviations in §8 |
 | B4 — close L1 (`core-purity`) | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | zero core→data_pipeline edges; markers deleted and refused by test; `core` layer tightened to `{utils}` |
-| B5 — readiness plan + prefetch | ⬜ not started | — | — | gate: §8 Q1 |
+| B5 — readiness plan + prefetch | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (**manifest**, params as `/render` query args); readiness plan on the job; cold-start hold fragment. Actuals + deferrals in §8 |
 | B6 — `ticker`-only Parameters bar | ⬜ not started | — | — | gate: §8 Q3; depends on B5 |
 | B7 — module-scoped params | ⬜ not started | — | — | gate: §8 Q1; depends on B6 |
 | B8 — retire / repurpose Config tab | ⬜ not started | — | — | gate: §8 Q2 |
@@ -419,7 +419,7 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 
 | # | Question | Decision gate | Working lean |
 |---|---|---|---|
-| Q1 | **Submit contract** — does `POST /` carry a `modules` manifest with per-module params attached to each `/render` call, or do the streaming market tabs move fully to client-fired `/api/*` like Option Chain? Manifest keeps the streaming model; full client-fired is more uniform but a bigger diff. | before **B5** (locks how B7 wires params) | manifest |
+| Q1 | **Submit contract** — does `POST /` carry a `modules` manifest with per-module params attached to each `/render` call, or do the streaming market tabs move fully to client-fired `/api/*` like Option Chain? Manifest keeps the streaming model; full client-fired is more uniform but a bigger diff. | ✅ resolved 2026-09-10 (B5) — **manifest**, per-module params as query args on each `/render` call (sub-option A1) | **manifest.** Decisive reasons: (1) ADR 0012's readiness pass needs the module list *at submit time* — with no POST manifest, B5 would need an extra `/api/ready` protocol; (2) the four streaming slices return server-rendered HTML + base64 PNG, so client-firing changes only the transport, not the product; (3) the diff and the revert surface stay one batch wide. Full client-fired would only win if the charts moved to client-side rendering (ADR 0006/0008 territory). Params travel as query args (not `hx-post` JSON) to match the existing `/api/option_chain?ticker=…` shape and stay bookmark-reproducible — recorded in the B5 note below |
 | Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
 | Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | before **B6** | dedicated Portfolio panel |
 | Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | ✅ resolved 2026-09-10 (B2) | **minimal rename** — identical columns on both sides of each pair (structurally enforced: one column tuple per shape, used to create both names). The `adj_close` normalisation is already inside the provider (B1's `to_canonical_bars`), and ingest now consumes canonical bars, so no reshape is needed. ADR 0011's `symbol` column stays the target state but is deferred — see the B2 note below |
@@ -547,6 +547,43 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   full `pytest tests/e2e` → 38 passed; `ruff check` + `format --check` clean; `doc_guard.py` clean;
   `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 / dead 1 — no baseline reset);
   `grep -rn "allow=core-purity"` returns nothing.
+
+**B5 (2026-09-10) — readiness plan + prefetch on submit.**
+
+- **Q1 = manifest** (see the gate table above). `POST /` now resolves the module list
+  (`FormService.extract_modules`: repeated or comma-separated tokens; defaults to all known modules
+  until B7 sends the field; unknown tokens are dropped, not fatal) and stores the readiness plan on
+  the job. Per-module params still arrive on the existing hidden fields — B7 moves them onto each
+  `/render` call as query args.
+- **`orchestrate/readiness.py`** (new): `KIND_DATASETS` (module → datasets; live-only modules map to
+  `()`), `plan_datasets` (union over modules, one entry per `(ticker, dataset)`), `check_and_kick`
+  (one DB-only coverage probe per ticker+range, then a daemon-thread kick), plus `status_for` /
+  `hold_seconds_left` / `should_hold` / `is_backfill_running`.
+  The daemon-thread kicker moved here from `read/_query.py` so POST-time readiness and the per-slice
+  path share one implementation (and `read → orchestrate` keeps the graph acyclic).
+- **`services/market/readiness.py`** (new): the services half — calls the plan/kick, then warms
+  `services.options.preload` for the live-chain modules on daemon threads. The split exists because
+  `orchestrate` may not import `services`.
+- **Cold-start hold**: `/render/<kind>` consults the job's plan and, when the plan says "kicked" *and*
+  there is no usable history yet *and* the backfill thread is still alive, returns a self-re-firing
+  `partials/fragments/readiness.html` ("正在准备…") instead of an empty chart. Bounded by
+  `HOLD_SECONDS = 30` **and** by thread liveness — a review pass caught that the timer alone left a
+  *failed* download showing a spinner for 30 s and hiding the real error
+  (`tests/test_nvda_analysis.py::test_failed_download_shows_error`); the liveness check fixed it and
+  is pinned by `test_should_hold_stops_as_soon_as_the_backfill_is_gone`.
+- **Tests**: new `tests/test_readiness.py` (18 cases) — plan union / dedupe / live-only emptiness /
+  horizon defaults, kick decision + probe-failure resilience, hold window + thread-liveness,
+  `create_job` carrying the plan, and `extract_modules` parsing. `test_background_backfill.py` now
+  imports the kicker from `readiness`.
+- **Deferred to B6/B7 (recorded, not silently dropped)**: (a) the *client* half of "the browser
+  re-fires" — the held fragment self-refreshes, but the module **toolbars** and the per-module query
+  args are B7; (b) the market-review benchmark panel (`market_review_prices`, L5) is not in the
+  dataset map yet — its ladder lives in `services/market_review/fetch.py` and folds into the provider
+  seam later.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 493 passed / 5 skipped;
+  full `pytest tests/e2e` → 38 passed; `ruff check` + `format --check` clean; `doc_guard.py` clean;
+  `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 / dead 1 — no baseline reset);
+  `audit_tags.py` 16 vs baseline 16 after tagging two new domain constants.
 
 ---
 

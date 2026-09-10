@@ -60,10 +60,13 @@ templates/
 Heavy analysis no longer runs synchronously inside `POST /`. The flow is:
 
 ```
-Browser ── POST / (form data) ─────────────────► Flask
+Browser ── POST / (form data + module tokens) ──► Flask
                                                  │
-Flask creates a JobCache entry (job_id) and immediately renders
-`index.html` with `streaming_mode=True`. Each tab partial emits an
+Flask resolves the modules, runs the **readiness pass** (ADR 0012):
+plan the datasets those modules need, probe the DB once, kick anything
+missing on a daemon thread, warm the live option-chain preload — then
+creates a JobCache entry (job_id, carrying that plan) and immediately
+renders `index.html` with `streaming_mode=True`. Each tab partial emits an
 HTMX placeholder:
 
     <div hx-get="/render/market_review?job=…&ticker=…"
@@ -79,6 +82,7 @@ Browser fans out 4× /render/<kind> in parallel for each visible ticker:
    /render/assessment
    /render/options_chain
 
+Flask ── consults the job's readiness plan ─────► cold start? hold
 Flask ── compute_or_get(job_id, ticker, kind) ──► AnalysisService.*_slice
                                                   └─ memoised per (job, ticker, kind)
 
@@ -86,14 +90,29 @@ Flask ── HTML fragment ─────────────────�
 ```
 
 Key files:
-- `data_pipeline/orchestrate/job_cache.py` — in-process JobCache (TTL 90 s).
-- `app.py::_render_streaming_slice` — shared `/render/<kind>` handler.
+- `data_pipeline/orchestrate/job_cache.py` — in-process JobCache (TTL 90 s), carries the plan.
+- `data_pipeline/orchestrate/readiness.py` — dataset plan, coverage probe, backfill kicker.
+- `services/market/readiness.py` — services half (preload warm), called from `routes/core.py::index`.
+- `services/market/dispatch.py::render_streaming_slice` — shared `/render/<kind>` handler.
 - `services/market/analysis/facade.py::generate_*_slice` — per-tab compute.
 - `templates/partials/fragments/*.html` — rendered fragments.
 
 The browser-side HTMX library replaces each placeholder when its fragment
 arrives, so users see tabs populate as their data is ready instead of
 waiting for the slowest tab.
+
+**Cold start** (batch B5): if the readiness pass kicked this module's dataset, the ticker has no
+usable history yet *and* the backfill is still running, `/render/<kind>` returns
+`partials/fragments/readiness.html` — a self-re-firing "正在准备…" fragment (`hx-trigger="load
+delay:3s"`) — instead of rendering an empty chart. The hold is bounded by
+`readiness.HOLD_SECONDS` (30 s) **and** by backfill-thread liveness, so a failed download quickly
+falls through to the slice's own error rather than a permanent spinner.
+
+**Parameter ownership** (batch B7, per §8 Q1): the module tokens above (`market_review`,
+`statistical`, `assessment`, `options_chain`, `payoff_ratio`, `regime`, `simulation`,
+`option_pricing_matrix`) are the same vocabulary the readiness plan uses. Each module's parameters
+travel as **query args on its own `/render` call**, mirroring `/api/option_chain?ticker=…`; the
+persistent Parameters bar owns only `ticker`.
 
 ---
 
