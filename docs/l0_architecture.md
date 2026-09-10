@@ -38,7 +38,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 | `routes/` | 909 lines · 8 files | 7 blueprints + `__init__.py` aggregate export; no business logic | good |
 | `services/` | 3 540 lines · 5 domain packages | `market` (incl. `analysis/` slice factory), `market_review`, `options`, `portfolio`, `regime` | good |
 | `core/` | 6 372 lines · 8 sub-packages + `_shared` | Pure computation — no Flask, no DB, no network | good |
-| `data_pipeline/` | 2 645 lines · 12 files | The only I/O boundary: `yf_client`, `db`/`repos`, `data_ops`, `scheduler`, `job_cache` | good |
+| `data_pipeline/` | 3 154 lines · 22 files | The only I/O boundary: `providers/` (the yfinance seam, ADR 0011), `yf_client` (one-release shim), `db`/`repos`, `data_ops`, `scheduler`, `job_cache` | good |
 | `utils/` | 756 lines · 7 files | Leaf layer; highest fan-in (`ticker_utils.py` = 11) | good |
 | `templates/` | 1 546 lines · 17 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
 | `static/` | 5 473 lines · 31 JS/CSS | `state/` · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
@@ -78,8 +78,10 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 ## 2. Measured shape (`scripts/arch_metrics.py`)
 
+_Refreshed 2026-09-10 after batch B1 (provider seam extraction); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
+
 ```
-modules=146  import_edges=300
+modules=152  import_edges=312
 Layer-edge violations : (none)
 Import cycles         : 0
 God files (>400 lines): (none)

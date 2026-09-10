@@ -1,4 +1,22 @@
-"""Market data downloader: fetches raw price data from external sources."""
+"""Market data downloader: business-day gap detection + raw OHLCV upsert.
+
+Domain:    Data Pipeline — Ingest Glue
+Context:
+  - Acquisition itself lives in ``data_pipeline/providers/``. This module keeps
+    only the DB-aware parts: business-day gap detection, the auto-backfill cap,
+    and the ``raw_prices`` upsert. Batch B1 (see
+    docs/plans/business_line_reorg.md §6) moved the ``yf.download`` call behind
+    ``providers.yfinance_provider.download_daily_frame``, so this module no
+    longer imports yfinance.
+Contracts:
+  - ``upsert_raw_prices(ticker, start, end, days) -> PipelineResult`` — never
+    raises; degraded outcomes are reported through the ``PipelineResult``.
+  - ``find_missing_business_days(ticker, start, end) -> list[date]``
+Dependencies UPWARD:
+  - providers.yfinance_provider (download), .db (fetch_df / upsert_many)
+Dependencies DOWNWARD:
+  - data_pipeline/data_ops (_update / _range), services/regime/ops/_bootstrap.py
+"""
 
 import datetime as dt
 import logging
@@ -6,9 +24,8 @@ import os
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf  # doc-guard: allow=single-yf-exit
 
-from utils.network import yf_throttle
+from data_pipeline.providers.yfinance_provider import download_daily_frame
 
 from . import PipelineResult
 from .db import fetch_df, upsert_many
@@ -95,24 +112,16 @@ def find_missing_business_days(ticker: str, start: dt.date, end: dt.date) -> lis
 
 
 def _download_yf(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
-    # Test tickers never hit the network. Useful for unit tests + ad-hoc
-    # smoke tests under rate-limit conditions; see `_load_test_fixture`.
+    """Download daily OHLCV for ``[start, end]`` (inclusive), fixture-aware.
+
+    ``TEST_*`` tickers never hit the network (useful for unit tests + ad-hoc
+    smoke tests under rate-limit conditions; see ``_load_test_fixture``).
+    Everything else is delegated to the yfinance provider.
+    """
     if ticker.startswith("TEST_"):
         logger.info("Loading fixture data for test ticker %s (%s..%s)", ticker, start, end)
         return _load_test_fixture(ticker, start, end)
-    # yfinance 'end' is exclusive, so pass end + 1 day to include the requested end date
-    yf_end = end + dt.timedelta(days=1)
-    yf_throttle()
-    df = yf.download(ticker, start=start, end=yf_end, interval="1d", progress=False, auto_adjust=False)
-    if df is None or df.empty:
-        return pd.DataFrame()
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel(1)
-    cols = ["Open", "High", "Low", "Close", "Adj Close", "Volume"]
-    for c in cols:
-        if c not in df.columns:
-            df[c] = pd.NA
-    return df[cols].rename(columns={"Adj Close": "Adj_Close"})
+    return download_daily_frame(ticker, start, end)
 
 
 def upsert_raw_prices(

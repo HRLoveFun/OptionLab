@@ -108,8 +108,8 @@ class TestFindMissingBusinessDays:
 
 
 class TestUpsertRawPricesGapAware:
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_interior_gap_triggers_download(self, mock_throttle, mock_dl):
         """The NVDA regression: existing rows on edges + interior hole → must download."""
         start = dt.date(2024, 1, 1)
@@ -132,8 +132,8 @@ class TestUpsertRawPricesGapAware:
         # No remaining business-day gap after upsert.
         assert find_missing_business_days("NVDA_REGRESSION", start, end) == []
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_full_coverage_skips_download(self, mock_throttle, mock_dl):
         start = dt.date(2024, 1, 1)
         end = dt.date(2024, 1, 5)
@@ -146,8 +146,8 @@ class TestUpsertRawPricesGapAware:
         mock_dl.assert_not_called()
         mock_throttle.assert_not_called()
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_download_start_expanded_to_earliest_gap_within_request(self, mock_throttle, mock_dl):
         """When the requested window contains an earlier gap, the actual download
         `start` is widened to that gap (so we don't waste a round-trip on the tail)."""
@@ -172,8 +172,8 @@ class TestUpsertRawPricesGapAware:
 
 
 class TestManualUpdateGapScan:
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_old_gap_within_scan_window_triggers_download(self, mock_throttle, mock_dl):
         """`manual_update(days=7)` must still back-fill a gap older than 7 days
         when it falls within `GAP_SCAN_DAYS`."""
@@ -200,8 +200,8 @@ class TestManualUpdateGapScan:
         called_start = mock_dl.call_args.kwargs.get("start")
         assert called_start <= old_gap
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_no_gaps_no_download(self, mock_throttle, mock_dl):
         """When the gap-scan window is fully covered, `manual_update` skips the network."""
         end = dt.date.today()

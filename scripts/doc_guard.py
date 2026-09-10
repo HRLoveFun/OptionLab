@@ -76,6 +76,24 @@ def _is_suppressed(line: str, rule: str) -> bool:
     return rule in {x.strip() for x in m.group(1).split(",")}
 
 
+# ADR 0011: acquisition moved behind this package; yfinance stays the sole
+# implementation and the only import site.
+_PROVIDER_DIR = REPO_ROOT / "data_pipeline" / "providers"
+
+
+def _in_provider_seam(path: Path) -> bool:
+    """True when ``path`` lives under ``data_pipeline/providers/`` (ADR 0011).
+
+    INVARIANT: the provider package is the single place an external market-data
+    SDK is touched, and every call there is throttled by construction. Both the
+    ``yfinance-throttle`` and ``single-yf-exit`` rules are scoped to it.
+    """
+    try:
+        return path.resolve().is_relative_to(_PROVIDER_DIR)
+    except OSError:
+        return False
+
+
 # ── Rule: tag-syntax ─────────────────────────────────────────────
 def rule_tag_syntax(ctx: Context) -> None:
     for path in ctx.files:
@@ -108,18 +126,14 @@ _YF_CALL_RE = re.compile(r"\byf\.(download|Ticker)\s*\(")
 
 
 def rule_yfinance_throttle(ctx: Context) -> None:
-    """Each yf.download / yf.Ticker call outside yf_client.py and downloader.py
-    must have a yf_throttle() call within the previous 5 lines, OR be marked
-    with `# doc-guard: allow=yfinance-throttle`.
+    """Each yf.download / yf.Ticker call outside data_pipeline/providers/ must
+    have a yf_throttle() call within the previous 5 lines, OR be marked with
+    `# doc-guard: allow=yfinance-throttle`.
     """
-    allowed_files = {
-        REPO_ROOT / "data_pipeline" / "yf_client.py",
-        REPO_ROOT / "data_pipeline" / "downloader.py",
-    }
     for path in ctx.files:
         if path.suffix != ".py":
             continue
-        if path.resolve() in allowed_files:
+        if _in_provider_seam(path):
             continue
         if "tests/" in str(path):
             continue
@@ -332,15 +346,15 @@ def rule_db_access(ctx: Context) -> None:
 
 
 # ── Rule: single-yf-exit ─────────────────────────────────────────
-# INVARIANT: yf_client.py is the single module allowed to talk to yfinance, so
-# proxy setup and the token-bucket throttle can never be bypassed (ADR 0005).
+# INVARIANT: data_pipeline/providers/ is the single place yfinance is imported
+# (batch B1 of ADR 0011 moved the chokepoint here from yf_client.py), so proxy
+# setup and the token-bucket throttle can never be bypassed (ADR 0005).
 _YF_IMPORT_RE = re.compile(r"^\s*(import\s+yfinance\b|from\s+yfinance\b)")
-_YF_SINGLE_EXIT = REPO_ROOT / "data_pipeline" / "yf_client.py"
 
 
 def rule_single_yf_exit(ctx: Context) -> None:
     for path in ctx.files:
-        if path.suffix != ".py" or path.resolve() == _YF_SINGLE_EXIT:
+        if path.suffix != ".py" or _in_provider_seam(path):
             continue
         if "tests/" in str(path) or "scripts/" in str(path):
             continue
@@ -350,7 +364,8 @@ def rule_single_yf_exit(ctx: Context) -> None:
                     "single-yf-exit",
                     path,
                     i,
-                    "only data_pipeline/yf_client.py may import yfinance — see docs/constraints.md §2 / ADR 0005",
+                    "only data_pipeline/providers/ may import yfinance — "
+                    "see docs/constraints.md §2 / ADR 0005 / ADR 0011",
                 )
 
 

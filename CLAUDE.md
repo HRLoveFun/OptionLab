@@ -150,10 +150,14 @@ chart-level memo keyed by `(ticker, chart name, params)` because PNG encoding is
   start, end)` is DB-first with a memo + in-flight de-duplication + TTL, which stops concurrent UI
   requests from stampeding Yahoo. `_query.py` calls `_update`/`_range` module functions directly
   (never the facade) to avoid an import cycle.
-- **`yf_client.py`** is the **only** module allowed to call yfinance (enforced by `doc_guard`
-  `single-yf-exit`; exceptions registered in `docs/architecture_review.md` §2). Every call goes
-  through `yf_throttle()` (token bucket, 5 req/s, burst 5). **Never** pass
-  `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently fails (ADR 0005).
+- **`providers/`** is the **only** package allowed to call yfinance (the chokepoint moved here from
+  `yf_client.py` in batch B1 of ADR 0011; enforced by `doc_guard` `single-yf-exit`, exceptions
+  registered in `docs/architecture_review.md` §2). It owns the mapping from the vendor's fields onto
+  one canonical schema (`providers/base.py`) — IV as a decimal, nullable bid/ask, no `inTheMoney`.
+  Every call goes through `yf_throttle()` (token bucket, 5 req/s, burst 5). `yf_client.py` is a
+  one-release compatibility shim over the package and `downloader.py` keeps only gap detection +
+  upsert. **Never** pass `session=requests.Session()` — yfinance ≥0.2.50 uses curl_cffi and silently
+  fails (ADR 0005).
 - **`db.py`** — `init_db()` uses `CREATE TABLE IF NOT EXISTS` (no migration framework).
   `get_conn()` yields a **thread-local** WAL connection (`synchronous=NORMAL`,
   `busy_timeout=5000`) and does **not** close on exit. `repos.py` is the only place that builds SQL.

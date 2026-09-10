@@ -38,7 +38,7 @@
 | Batch | State | PR | Landed (commit · date) | Notes |
 |---|---|---|---|---|
 | — (planning + ADRs) | 🔨 in review (PR #7) | #7 | branch `worktree-business-line-reorg` · 2026-09-10 | plan, ADR 0011/0012 (Accepted), scaffolding (ledger, gates, AI-guide pointers, memory) |
-| B1 — provider seam extraction | ⬜ not started | — | — | delivers the "pluggable API" seam on its own |
+| B1 — provider seam extraction | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | delivers the "pluggable API" seam on its own. Actual shape / deviations recorded in §8; `_ALLOWED_DEPS` promotion of `providers` deferred to B3 |
 | B2 — canonical raw store | ⬜ not started | — | — | gate: §8 Q4 |
 | B3 — package re-home | ⬜ not started | — | — | resets `arch_baseline.json` |
 | B4 — close L1 (`core-purity`) | ⬜ not started | — | — | — |
@@ -423,7 +423,32 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
 | Q2 | **Config tab fate** — is there *any* genuine global setting to keep? Risk-free rate is the only candidate (hard-coded in `static/sim/` and again in `core/options/greeks`). Yes → tab shrinks to it; no → tab deleted. | before **B8** | keep risk-free rate, delete the rest |
 | Q3 | **`positions` block** — Portfolio Analysis is its only consumer. Move into a dedicated "Portfolio" panel/tab, or keep as a section the bar's Run ignores? | before **B6** | dedicated Portfolio panel |
 | Q4 | **Table rename vs. reshape** — `raw_prices`→`raw_bars` with identical columns (minimal), or also move the yfinance-ism `adj_close` handling into the provider during the rename? | before **B2** | minimal rename |
-| Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | before **B1** | design review of `base.py` against both field maps |
+| Q5 | **Second-provider protocol shape** — not in scope to *implement*, but `providers/base.py` (written in B1) must be sketched against *both* yfinance and `archive/futu_integration/field_mapping.md` so the protocol is not accidentally yfinance-shaped (IV unit, bid/ask availability, `inTheMoney` derivation all differ). | ✅ resolved 2026-09-10 (B1) — outcome table in ADR 0011 §"Protocol shape" | design review of `base.py` against both field maps: IV → decimal, bid/ask nullable, `inTheMoney` dropped (derivable), expiries ISO strings |
+
+### Batch notes (actuals + deviations, recorded as batches land)
+
+**B1 (2026-09-10) — provider seam extraction, no behaviour change.**
+
+- **Files**: `data_pipeline/providers/{__init__,base,_log,_registry,yfinance_provider,yf_snapshot}.py`.
+  Five modules instead of the three §6 named, for two reasons: (a) `yfinance_provider.py` would have
+  blown the 400-line god-file cap, so the option-chain section was extracted exactly as
+  `architecture_review.md` §2 had pre-registered — into `providers/yf_snapshot.py` (which also owns
+  the spot lookup, because `fetch_option_chain` calls it and a separate module would have created an
+  import cycle); (b) `_log.py` holds the best-effort failure-log wrapper that both provider modules
+  need and neither may import from the other.
+- **Compatibility**: `yf_client.py` is now a re-export shim; `downloader.py` keeps only gap detection
+  + `raw_prices` upsert and no longer imports yfinance. No `routes/` or `services/` file changed.
+- **`_ALLOWED_DEPS` deferred**: §6 B1 wanted `providers` added to `_ALLOWED_DEPS`, but promoting a
+  `data_pipeline/` subpackage to a layer needs `_layer_of` / `layer_of` sub-layer resolution in
+  **both** `doc_guard.py` and `arch_metrics.py`. That is B3's job (its §6 row already owns "new
+  layer-edge rules" + the layer-table rewrite). In B1 `providers/` stays inside the `data_pipeline`
+  layer; the new invariant that *does* hold now — "only `providers/` imports yfinance" — is enforced
+  by the rescoped `single-yf-exit` rule and pinned by `tests/test_provider_seam.py`.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 459 passed / 5 skipped;
+  `doc_guard.py` clean; `arch_metrics.py --check` ok (no baseline reset needed);
+  `audit_tags.py` unchanged (16 uncovered vs baseline 16). Production-code
+  `import yfinance` hits: exactly the two `providers/` modules. (`tests/test_yf_download.py` and
+  `tests/e2e/conftest.py` also import it as test doubles — `doc_guard` exempts `tests/` by design.)
 
 ---
 

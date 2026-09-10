@@ -57,19 +57,23 @@ for the live list. State at registration:
 | `services/market/health.py` — **resolved 2026-09-03**, `services/portfolio/facade.py` — **resolved 2026-09-03** (`get_conn`) | ad-hoc health/inventory SQL predates `repos.py` coverage | queries moved into `data_pipeline/repos.py` |
 | `services/regime/facade.py`, `services/regime/ops/_bootstrap.py`, `services/regime/ops/_persistence.py` (`fetch_df`, `init_db`, `upsert_many`) — **resolved 2026-09-03** | regime log writes were split across service and ops modules | consolidated behind `data_pipeline/repos.py` (regime-log + clean-row ops) |
 
-### single-yf-exit (only `yf_client.py` may import yfinance) — 1 marker
+### single-yf-exit (only `data_pipeline/providers/` may import yfinance) — 0 markers
+
+Rescoped in batch B1 of [ADR 0011](decisions/0011-pluggable-data-provider-seam.md)
+(2026-09-10): the chokepoint moved from `yf_client.py` into the provider package, and
+`yf_client.py` is now a compatibility shim that no longer imports yfinance.
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `data_pipeline/downloader.py` | DB-aware gap-detection bulk downloads; documented chokepoint alongside `yf_client` (see `yf_client` module docstring) | fold the gap logic into `yf_client` |
-| `data_pipeline/data_ops/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `yf_client.fetch_spot` |
+| `data_pipeline/downloader.py` — **resolved 2026-09-10 (B1)** | DB-aware gap-detection bulk downloads; it used to call `yf.download` directly as a registered second exit point | the download call moved to `providers/yfinance_provider.py::download_daily_frame`; `downloader.py` keeps only gap detection + `raw_prices` upsert, so it no longer imports yfinance |
+| `data_pipeline/data_ops/_query.py::get_latest_spot` — **resolved 2026-09-03** | former spot fast-path fetched yfinance internally | now routes through `fetch_spot` (provider, re-exported by `yf_client`) |
 
 ### Watch list (pre-debt, no marker yet)
 
 | Location | Concern | Trigger to act |
 |---|---|---|
 | `services/market/analysis/summary.py` (fan-in 0, tracked as `dead_code_candidates=1` in baseline) | `generate_summary_analysis` lost its caller when the streaming refactor removed the server-rendered `summary_data` template variable; the Summary tab button is gated off in `templates/index.html` and `summary_pending` in `routes/core.py` is vestigial | any request to ship the multi-ticker Summary tab ⇒ add a `summary` slice to `_RENDER_KIND_SLICES` (aggregates across the job's tickers, not per-ticker) ; otherwise delete the module + `partials/tab_summary.html` + the `summary_pending` flag in the same commit and reset the baseline |
-| `data_pipeline/yf_client.py` (391 lines, fan-in 11) | 9 lines below the 400-line god-file threshold; the throttle wrapper itself already lives in `utils/network.py::yf_throttle`, but each new yfinance endpoint (option greeks feeds, dividends/splits, etc.) grows the file | any edit that pushes it past 400 lines ⇒ extract the option-chain section (~150 lines, `fetch_option_chain` + `_fetch_option_chain_serial` + `_OPT_NUMERIC_COLS`) into `data_pipeline/yf_option_chain.py` in the same commit |
+| ~~`data_pipeline/yf_client.py` (391 lines, fan-in 11)~~ — **resolved 2026-09-10 (B1)** | it sat 9 lines below the 400-line god-file threshold | the option-chain section was extracted pre-emptively, as prescribed, into `providers/yf_snapshot.py`; `yf_client.py` is now a ~35-line shim. The pressure moved to `providers/yf_snapshot.py` (≈340 lines) and `providers/yfinance_provider.py` (≈290 lines) — watch them before adding endpoints |
 
 ## 3. Guardrails (how the score is kept)
 

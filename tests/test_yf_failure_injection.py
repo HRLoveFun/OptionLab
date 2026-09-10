@@ -99,8 +99,8 @@ class _FakeRateLimitError(Exception):
 class TestDownloadExceptions:
     """Network / yfinance exceptions must be caught and reported, not propagated."""
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_rate_limit_429_returns_failed_result(self, mock_throttle, mock_dl):
         mock_dl.side_effect = _FakeRateLimitError("429 Too Many Requests")
         # Use a far-past start so the staleness check can't short-circuit.
@@ -116,8 +116,8 @@ class TestDownloadExceptions:
         # Throttle must have been called once before the doomed download.
         assert mock_throttle.call_count == 1
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_connection_timeout_returns_failed_result(self, mock_throttle, mock_dl):
         mock_dl.side_effect = TimeoutError("Connection timed out")
         end = dt.date(2024, 1, 10)
@@ -130,8 +130,8 @@ class TestDownloadExceptions:
         assert "timed out" in (result.error or "").lower()
         assert result.rows == 0
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_generic_exception_does_not_crash(self, mock_throttle, mock_dl):
         mock_dl.side_effect = RuntimeError("yfinance internal boom")
         end = dt.date(2024, 1, 10)
@@ -150,8 +150,8 @@ class TestDownloadExceptions:
 
 
 class TestDownloadEmptyData:
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_empty_dataframe_records_warning_no_crash(self, mock_throttle, mock_dl):
         mock_dl.return_value = pd.DataFrame()
         end = dt.date(2024, 1, 10)
@@ -165,8 +165,8 @@ class TestDownloadEmptyData:
         assert result.rows == 0
         assert any("No new data" in w for w in result.warnings)
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_none_response_treated_as_empty(self, mock_throttle, mock_dl):
         mock_dl.return_value = None
         end = dt.date(2024, 1, 10)
@@ -183,8 +183,8 @@ class TestDownloadEmptyData:
 
 
 class TestStalenessSkip:
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_fresh_db_skips_download(self, mock_throttle, mock_dl):
         """If every business day in [start, end] is already in raw_prices, no yfinance call is made."""
         end = dt.date.today()
@@ -203,8 +203,8 @@ class TestStalenessSkip:
         mock_dl.assert_not_called()
         mock_throttle.assert_not_called()
 
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_stale_db_triggers_download(self, mock_throttle, mock_dl):
         """If DB only has very old data, the download proceeds (and gets rate-limited
         in this test, but that's fine — we only assert that yf.download was attempted)."""
@@ -225,8 +225,8 @@ class TestStalenessSkip:
 
 
 class TestDbSurvivesFailure:
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_existing_rows_survive_429(self, mock_throttle, mock_dl):
         """A 429 during update must NOT delete or corrupt existing DB rows."""
         end = dt.date.today()
@@ -262,8 +262,8 @@ class TestThrottleOrdering:
         parent.dl.return_value = _make_yf_frame(dt.date(2024, 1, 1), days=3)
 
         with (
-            patch("data_pipeline.downloader.yf_throttle", parent.throttle),
-            patch("data_pipeline.downloader.yf.download", parent.dl),
+            patch("data_pipeline.providers.yfinance_provider.yf_throttle", parent.throttle),
+            patch("data_pipeline.providers.yfinance_provider.yf.download", parent.dl),
         ):
             _download_yf("ORDER_TKR", dt.date(2024, 1, 1), dt.date(2024, 1, 5))
 
@@ -279,8 +279,8 @@ class TestThrottleOrdering:
 
 
 class TestManualUpdateGracefulFailure:
-    @patch("data_pipeline.downloader.yf.download")
-    @patch("data_pipeline.downloader.yf_throttle")
+    @patch("data_pipeline.providers.yfinance_provider.yf.download")
+    @patch("data_pipeline.providers.yfinance_provider.yf_throttle")
     def test_manual_update_returns_false_on_429(self, mock_throttle, mock_dl):
         """`DataService.manual_update` must report False, not raise, on a 429."""
         init_db()
