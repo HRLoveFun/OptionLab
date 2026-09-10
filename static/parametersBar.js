@@ -36,8 +36,9 @@
         var toggle = document.getElementById('parameters-bar-toggle');
         if (!toggle) return;
         toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-        var icon = toggle.querySelector('i');
-        if (icon) icon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+        // The chevron is an inline SVG rotated by CSS via [data-collapsed]; only
+        // the label needs updating here.
+        toggle.title = collapsed ? 'Expand parameters' : 'Collapse parameters';
     }
 
     function updateSummary(bar) {

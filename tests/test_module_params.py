@@ -141,3 +141,38 @@ class TestRenderSliceParameterPrecedence:
         captured = self._render("statistical", "", monkeypatch)
         assert captured["frequency"] == "ME"
         assert captured["parsed_start_time"] == dt.date(2020, 1, 1)
+
+    def test_a_param_change_recomputes_within_the_same_job(self, monkeypatch):
+        """Plan §10 F1: the job-cache slice memo is keyed by (ticker, kind); a
+        toolbar change re-fires ``/render/<kind>`` with new query args, so the
+        memo must fold them in or it replays the first render for the job TTL.
+        """
+        from app import app
+
+        from data_pipeline.orchestrate import job_cache
+        from services.market.analysis import AnalysisService
+        from services.market.dispatch import render_streaming_slice
+
+        seen: list[str] = []
+
+        def _fake_slice(form_data):
+            seen.append(form_data.get("frequency"))
+            return {}
+
+        monkeypatch.setattr(AnalysisService, "generate_statistical_slice", staticmethod(_fake_slice), raising=False)
+
+        job_cache._reset()
+        job_id = job_cache.create_job(
+            {"ticker": "AAPL", "frequency": "ME", "parsed_start_time": dt.date(2020, 1, 1), "parsed_end_time": None},
+            ["AAPL"],
+        )
+        base = f"/render/statistical?job={job_id}&ticker=AAPL&from=2020-01&to=2024-01"
+        with app.test_request_context(f"{base}&frequency=ME"):
+            render_streaming_slice("statistical")
+        with app.test_request_context(f"{base}&frequency=W"):
+            render_streaming_slice("statistical")
+        # A repeat of an already-computed variant still hits the cache.
+        with app.test_request_context(f"{base}&frequency=ME"):
+            render_streaming_slice("statistical")
+
+        assert seen == ["ME", "W"], seen

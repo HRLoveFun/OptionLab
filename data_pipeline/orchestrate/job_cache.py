@@ -73,18 +73,21 @@ class _JobEntry:
         # longer than the TTL must not lose its result to a mid-compute
         # eviction, and an active tab fan-out must not expire under load.
         self.last_access: float = self.created_at
-        # Memoised slice results, keyed by (ticker, kind).
-        self.results: dict[tuple[str, str], Any] = {}
+        # Memoised slice results, keyed by (ticker, kind, variant). `variant` is
+        # a digest of the module's own query-arg parameters (batch B7): without
+        # it a toolbar change (frequency, horizon, …) re-fires /render/<kind>
+        # but this cache serves the first render for the whole job TTL.
+        self.results: dict[tuple[str, str, str], Any] = {}
         # Error-dict results get their own short TTL so a transient failure
         # (yfinance hiccup) is not sticky for the whole job lifetime.
-        self.error_results: dict[tuple[str, str], tuple[float, Any]] = {}
+        self.error_results: dict[tuple[str, str, str], tuple[float, Any]] = {}
         # Per-key locks so concurrent /render/* calls for the same slice
         # collapse into a single computation (single-flight).
-        self.key_locks: dict[tuple[str, str], threading.Lock] = {}
+        self.key_locks: dict[tuple[str, str, str], threading.Lock] = {}
         # Mutex for `key_locks` and `results` dict-level mutations.
         self._master_lock = threading.Lock()
 
-    def _lock_for(self, key: tuple[str, str]) -> threading.Lock:
+    def _lock_for(self, key: tuple[str, str, str]) -> threading.Lock:
         with self._master_lock:
             lock = self.key_locks.get(key)
             if lock is None:
@@ -151,7 +154,7 @@ def get_job(job_id: str) -> _JobEntry | None:
     return entry
 
 
-def _fresh_error(entry: _JobEntry, key: tuple[str, str], now: float) -> Any | None:
+def _fresh_error(entry: _JobEntry, key: tuple[str, str, str], now: float) -> Any | None:
     """Return a still-fresh memoised error result, or None (and drop it if stale)."""
     hit = entry.error_results.get(key)
     if hit is None:
@@ -163,8 +166,14 @@ def _fresh_error(entry: _JobEntry, key: tuple[str, str], now: float) -> Any | No
     return result
 
 
-def compute_or_get(job_id: str, ticker: str, kind: str, compute_fn: Callable[[dict], Any]) -> Any:
-    """Memoised compute under a per-(ticker, kind) single-flight lock.
+def compute_or_get(job_id: str, ticker: str, kind: str, compute_fn: Callable[[dict], Any], *, variant: str = "") -> Any:
+    """Memoised compute under a per-(ticker, kind, variant) single-flight lock.
+
+    ``variant`` is a stable digest of any per-request parameters that change the
+    result (batch B7: a module toolbar sends its own ``?from=…&frequency=…`` on
+    each ``/render`` call). Two calls with the same ticker + kind but different
+    ``variant`` compute independently — otherwise the first render is served for
+    the whole job TTL and the toolbar change is silently ignored.
 
     Successful results are memoised for the full job TTL. Error-dict results
     (the slice methods' failure convention) are memoised only for
@@ -178,7 +187,7 @@ def compute_or_get(job_id: str, ticker: str, kind: str, compute_fn: Callable[[di
     if entry is None:
         raise KeyError(f"unknown or expired job_id={job_id!r}")
 
-    key = (ticker, kind)
+    key = (ticker, kind, variant)
     # Fast path: already computed successfully.
     cached = entry.results.get(key)
     if cached is not None:
@@ -224,10 +233,11 @@ def compute_or_get(job_id: str, ticker: str, kind: str, compute_fn: Callable[[di
                         elapsed,
                     )
         logger.info(
-            "JobCache computed job=%s ticker=%s kind=%s in %.2fs",
+            "JobCache computed job=%s ticker=%s kind=%s%s in %.2fs",
             job_id[:8],
             ticker,
             kind,
+            f" variant={variant}" if variant else "",
             elapsed,
         )
         return result

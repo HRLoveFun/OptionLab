@@ -60,6 +60,20 @@ _RENDER_KIND_SLICES: dict[str, tuple[str | None, str]] = {
 _RETRY_DELAY_SECONDS = 3
 
 
+def _params_variant(module_params: dict[str, Any]) -> str:
+    """Stable digest of a module's own params for the job-cache memo key.
+
+    WHY: ``compute_or_get`` memoises per ``(ticker, kind)``; without folding the
+    toolbar params into the key, changing ``frequency`` / the horizon re-fires
+    ``/render/<kind>`` but the cache serves the first render for the job's TTL
+    (batch B9 / plan §10 F1). Empty params ⇒ empty digest ⇒ same key as the
+    direct-URL / legacy path.
+    """
+    if not module_params:
+        return ""
+    return "|".join(f"{k}={module_params[k]}" for k in sorted(module_params))
+
+
 def render_readiness_fragment(kind: str, job_id: str, ticker: str) -> tuple[str, int]:
     """Fragment that says "preparing data" and re-issues its own request.
 
@@ -172,7 +186,9 @@ def render_streaming_slice(kind: str) -> Any:
             # No job in cache — compute directly with the synthetic form.
             result = _compute(fallback_form)
         else:
-            result = compute_or_get(job_id, ticker, kind, _compute)
+            # Memo key folds in the toolbar params so a frequency/horizon
+            # change actually recomputes instead of replaying the first render.
+            result = compute_or_get(job_id, ticker, kind, _compute, variant=_params_variant(module_params))
     except KeyError:
         return render_error_fragment(kind, "session expired", 200)
     except Exception as e:

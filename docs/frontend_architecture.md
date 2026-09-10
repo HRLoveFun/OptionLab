@@ -146,12 +146,15 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 
 The **Parameters bar** (`templates/partials/parameters_bar.html`, batch B6) renders
 between the header and `.app-body`, is `position: sticky` under the header, and owns
-exactly one input — `ticker` — plus the Run button and the ticker-validation badges.
-It is **not** a tab: it survives tab switches, and collapsing it (persisted per
-viewer under `localStorage['parametersBarCollapsed']`, guarded `try/catch`) leaves a
-one-line summary (`▸ ^SPX`). Analysis settings that have not yet moved to their
-module toolbars sit in a collapsible group inside the same `<form>`, so the POST
-contract is unchanged until B7.
+exactly one visible input — `ticker` — plus the Run button and the ticker-validation
+badges. Every other parameter lives in its module's toolbar (batch B7); the bar
+also carries two hidden `start_time`/`end_time` inputs that `POST /` validates and
+uses to size the readiness prefetch, kept in sync by `state/marketParamsState.js`.
+It is **not** a tab: it survives tab switches. Collapsing it (the chevron toggle;
+state persisted per viewer under `localStorage['parametersBarCollapsed']`, guarded
+`try/catch`) hides the `#parameters-bar-body` fields group and the validation line,
+leaving the toggle, a one-line `▸ ^SPX` summary, and Run. The chevron is an inline
+SVG (Font Awesome is not loaded on this page) rotated by `[data-collapsed]`.
 
 ### Peek Sidebar
 

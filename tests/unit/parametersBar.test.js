@@ -11,12 +11,15 @@ import { loadScript } from './_loadScript.js';
 
 const BAR_HTML = `
 <form id="analysis-form" class="parameters-bar" data-collapsed="false">
-  <button type="button" id="parameters-bar-toggle" aria-expanded="true">
-    <i class="fas fa-chevron-down"></i>
+  <button type="button" id="parameters-bar-toggle" aria-expanded="true"
+          aria-controls="parameters-bar-body" title="Collapse parameters">
+    <svg class="parameters-bar-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>
   </button>
-  <input id="ticker" value="">
   <span id="parameters-bar-summary"></span>
-  <div class="parameters-bar-body" id="parameters-bar-body"></div>
+  <div class="parameters-bar-fields" id="parameters-bar-body">
+    <label for="ticker">Ticker</label>
+    <input id="ticker" value="">
+  </div>
 </form>`;
 
 function bar() {
@@ -48,7 +51,15 @@ describe('parametersBar — collapse persistence', () => {
         expect(bar().dataset.collapsed).toBe('true');
         expect(window.localStorage.getItem('parametersBarCollapsed')).toBe('true');
         expect(document.getElementById('parameters-bar-toggle').getAttribute('aria-expanded')).toBe('false');
-        expect(document.querySelector('#parameters-bar-toggle i').className).toBe('fas fa-chevron-right');
+        expect(document.getElementById('parameters-bar-toggle').title).toBe('Expand parameters');
+    });
+
+    it('has a real element behind aria-controls (the collapsible fields)', () => {
+        mount();
+        const toggle = document.getElementById('parameters-bar-toggle');
+        const target = document.getElementById(toggle.getAttribute('aria-controls'));
+        expect(target).not.toBeNull();
+        expect(target.contains(document.getElementById('ticker'))).toBe(true);
     });
 
     it('restores the collapsed state on the next page load', () => {
