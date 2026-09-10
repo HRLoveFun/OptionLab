@@ -1,4 +1,4 @@
-"""Smoke tests: page loads, no JS errors, all 11 tabs render and switch."""
+"""Smoke tests: page loads, no JS errors, all 10 tabs render and switch."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from playwright.sync_api import Page, expect
 # All sidebar tab IDs (must match `data-tab` values in templates/index.html).
 TAB_IDS = [
     "tab-portfolio",
-    "tab-summary",
     "tab-market-review",
     "tab-statistical-analysis",
     "tab-market-assessment",
@@ -32,18 +31,14 @@ def test_index_loads_without_js_errors(page: Page, live_server: str, mock_apis, 
     expect(page.locator("#analysis-form")).to_be_visible()
     expect(page.locator("#ticker")).to_have_count(1)
 
-    # tab-summary only renders for multi-ticker; skip in single-ticker default GET.
-    for tab_id in [tid for tid in TAB_IDS if tid != "tab-summary"]:
+    for tab_id in TAB_IDS:
         button = page.locator(f'.tab-btn[data-tab="{tab_id}"]')
         expect(button).to_have_count(1)
 
     assert js_errors == [], f"JS errors on initial load: {js_errors}"
 
 
-@pytest.mark.parametrize(
-    "tab_id",
-    [tid for tid in TAB_IDS if tid != "tab-summary"],  # summary is hidden when single-ticker
-)
+@pytest.mark.parametrize("tab_id", TAB_IDS)
 def test_tab_switch_activates_panel(
     page: Page, live_server: str, mock_apis, js_errors: list[str], open_tab, tab_id: str
 ) -> None:

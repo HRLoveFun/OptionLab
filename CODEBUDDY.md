@@ -9,14 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Update `docs/` first, then mirror the summary here. `CODEBUDDY.md` and
 > `.github/copilot-instructions.md` are parallel AI-assistant guides kept in sync with this one.
 
-> **⚠ Active reorg (2026-09) — [ADR 0011](docs/decisions/0011-pluggable-data-provider-seam.md)
-> + [0012](docs/decisions/0012-parameter-ownership-and-prefetch.md), both Accepted.**
-> Before touching `data_pipeline/`, the parameter surfaces
-> (`templates/partials/parameters_bar.html`, the module toolbars in `tab_*.html`, `static/main.js`
-> `FormManager`) or `routes/core.py::index`, read
-> **[`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md) §0**:
-> work the numbered batches (B1–B8) in order, one batch per PR, update its ledger
-> in the same commit, and do not re-litigate the Accepted ADRs.
+> **Business-line reorg (2026-09) — [ADR 0011](docs/decisions/0011-pluggable-data-provider-seam.md)
+> (provider seam + canonical schema) + [0012](docs/decisions/0012-parameter-ownership-and-prefetch.md)
+> (ticker-only Parameters bar + readiness prefetch), both Accepted.**
+> Batches B1–B9 **landed**; the architecture below reflects the end state. Only
+> deferred follow-ups remain — see [`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md)
+> §10 (risk-free-rate global setting, `market_review_prices` L5 → provider seam,
+> ADR 0011 `symbol` column). Do not re-litigate the Accepted ADRs.
 
 ## Commands
 

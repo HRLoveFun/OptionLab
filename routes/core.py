@@ -98,7 +98,6 @@ def index():
                 "streaming_mode": True,
                 "job_id": job_id,
                 "modules": modules,
-                "summary_pending": len(tickers) > 1,
             }
             return render_template("index.html", **template_data)
 

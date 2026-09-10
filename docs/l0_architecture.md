@@ -90,8 +90,7 @@ Top fan-out  : core/market/charts/facade.py(14) · routes/core.py(8)
                services/market/dispatch.py(7)
 Top fan-in   : core/_shared/plotting.py(13) · data_pipeline/providers/yf_client.py(11)
                utils/ticker_utils.py(11) · data_pipeline/store/db.py(10)
-Dead code    : services/market/analysis/summary.py  (only one; already on the
-               watch list in docs/architecture_review.md §2)
+Dead code    : (none — summary.py deleted 2026-09-11, B9 F5-a)
 ```
 
 Static checks at snapshot time: `ruff check .` clean · `ruff format --check .`

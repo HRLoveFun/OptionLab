@@ -335,54 +335,6 @@ function toggleSummaryTable() {
 
 
 /* ============================================================
-   Module 5: Correlation Heatmap (SVG)
-   ============================================================ */
-
-function renderCorrelationHeatmap(corrData) {
-    const container = document.getElementById('correlation-heatmap-container');
-    if (!container || !corrData) return;
-    const { labels, values } = corrData;
-    const n = labels.length;
-    const cellSize = 60;
-    const margin = 80;
-    const totalSize = cellSize * n + margin + 20;
-
-    let svgCells = '';
-    for (let i = 0; i < n; i++) {
-        for (let j = 0; j < n; j++) {
-            const corr = values[i][j];
-            const color = corrToColor(corr);
-            const x = margin + j * cellSize;
-            const y = margin + i * cellSize;
-            svgCells += `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${color}" stroke="white" stroke-width="1"/>`;
-            svgCells += `<text x="${x + cellSize / 2}" y="${y + cellSize / 2 + 5}" text-anchor="middle" font-size="12" fill="${Math.abs(corr) > 0.5 ? 'white' : 'black'}">${corr.toFixed(2)}</text>`;
-        }
-    }
-
-    let axisLabels = labels.map((label, i) => {
-        const cx = margin + i * cellSize + cellSize / 2;
-        return `<text x="${cx}" y="${margin - 10}" text-anchor="middle" font-size="11" transform="rotate(-30,${cx},${margin - 10})">${label}</text>` +
-            `<text x="${margin - 10}" y="${margin + i * cellSize + cellSize / 2 + 5}" text-anchor="end" font-size="11">${label}</text>`;
-    }).join('');
-
-    container.innerHTML = `<svg viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg" style="max-width:${totalSize}px;">${axisLabels}${svgCells}</svg>`;
-}
-
-function corrToColor(corr) {
-    if (corr > 0) {
-        const r = Math.round(255 * (1 - corr));
-        const g = Math.round(255 * (1 - corr));
-        return `rgb(${r},${g},255)`;
-    } else {
-        const intensity = Math.abs(corr);
-        const g = Math.round(255 * (1 - intensity));
-        const b = Math.round(255 * (1 - intensity));
-        return `rgb(255,${g},${b})`;
-    }
-}
-
-
-/* ============================================================
    Multi-ticker context switcher
    ============================================================ */
 

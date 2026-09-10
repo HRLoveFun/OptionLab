@@ -154,11 +154,6 @@
             <div class="sidebar-body" id="sidebar-body">
                 <nav class="tab-nav">
                     <div class="tab-section-label">Overview</div>
-                    {% if tickers is defined and tickers|length > 1 and not streaming_mode %}
-                    <button class="tab-btn" data-tab="tab-summary">
-                        <span>Summary</span>
-                    </button>
-                    {% endif %}
                     <button class="tab-btn {% if not streaming_mode or (market_review_table is defined and market_review_table) %}active{% endif %}" data-tab="tab-market-review">
                         <span>Market Review</span>
                     </button>
@@ -244,11 +239,6 @@
             {% include 'partials/tab_option_pricing_matrix.html' %}
 
         </main>
-
-        <!-- Summary Tab (only rendered for multi-ticker) -->
-        {% if summary_data is defined and summary_data %}
-        {% include 'partials/tab_summary.html' %}
-        {% endif %}
     </div>
 
     <!-- Probe: Alpine mounts x-data; HTMX fires hx-get on load. Both write to #scaffold-probe. -->
@@ -384,14 +374,6 @@
                 startAutoRefresh();
             }
         })();
-
-        {% if summary_data is defined and summary_data and summary_data.correlation_matrix %}
-        // Render correlation heatmap from server data
-        (function() {
-            var corrData = {{ summary_data.correlation_matrix | tojson }};
-            if (corrData) renderCorrelationHeatmap(corrData);
-        })();
-        {% endif %}
     </script>
 </body>
 </html>

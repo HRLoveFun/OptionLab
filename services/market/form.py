@@ -6,7 +6,6 @@ Context:
   ad-hoc parsing logic.
 """
 
-import json
 import logging
 
 from utils.constants import (
@@ -25,7 +24,7 @@ class FormService:
     Service for handling form data extraction and processing from Flask request.
     - extract_form_data: Extracts and parses all dashboard form fields.
     - extract_modules: Modules the client asked for (readiness planning).
-    - parse_option_data: Parses option positions from JSON string.
+    - extract_module_params: One module's own query args → partial form_data.
     """
 
     @staticmethod
@@ -155,13 +154,6 @@ class FormService:
             rolling_window = DEFAULT_ROLLING_WINDOW
         side_bias = request.form.get("side_bias", DEFAULT_SIDE_BIAS)
         target_bias = None if side_bias == "Natural" else 0
-        # DORMANT (plan §10 F5): batch B7 moved option positions to the Portfolio
-        # tab, so `POST /` no longer carries `option_position` and this is always
-        # []. `assessment.py` still *reads* `option_data` (the projection-vs-
-        # positions overlay + sizing max-loss); that overlay is currently unfed —
-        # retire vs. re-feed is an open decision. Kept wired so re-adding a POST
-        # positions field would just work.
-        option_data = FormService.parse_option_data(request)
 
         # Position sizing (optional)
         acct_raw = request.form.get("account_size", "").strip()
@@ -190,43 +182,6 @@ class FormService:
             "rolling_window": rolling_window,
             "side_bias": side_bias,
             "target_bias": target_bias,
-            "option_data": option_data,
             "account_size": account_size,
             "max_risk_pct": max_risk_pct,
         }
-
-    @staticmethod
-    def parse_option_data(request):
-        """
-        Parse option positions from form data (JSON string in 'option_position').
-        Returns list of dicts with option_type, strike, quantity, premium.
-        """
-        option_data = []
-        option_position_str = request.form.get("option_position", "")
-        if option_position_str:
-            try:
-                option_rows = json.loads(option_position_str)
-                for row in option_rows:
-                    if row.get("option_type") and row.get("strike") and row.get("quantity") and row.get("premium"):
-                        try:
-                            option_entry = {
-                                "option_type": row["option_type"],
-                                "strike": float(row["strike"]),
-                                "quantity": int(row["quantity"]),
-                                "premium": float(row["premium"]),
-                            }
-                            if (
-                                option_entry["strike"] > 0
-                                and option_entry["quantity"] != 0
-                                and option_entry["premium"] > 0
-                            ):
-                                option_data.append(option_entry)
-                            else:
-                                logger.warning(f"Skipped invalid option values: {option_entry}")
-                        except (ValueError, TypeError) as e:
-                            logger.warning(f"Error converting option values: {row}, error: {e}")
-                    else:
-                        logger.warning(f"Skipped incomplete option row: {row}")
-            except (json.JSONDecodeError, ValueError, KeyError) as e:
-                logger.error(f"Error parsing option data: {e}")
-        return option_data

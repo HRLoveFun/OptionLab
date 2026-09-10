@@ -77,6 +77,3 @@ class MarketAnalyzer:
 
     def generate_oscillation_projection(self, percentile=0.90, target_bias=None):
         return self._charts.generate_oscillation_projection(percentile, target_bias)
-
-    def analyze_options(self, option_data):
-        return self._charts.analyze_options(option_data)

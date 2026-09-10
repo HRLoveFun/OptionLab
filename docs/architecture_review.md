@@ -76,12 +76,12 @@ Rescoped in batch B1 of [ADR 0011](decisions/0011-pluggable-data-provider-seam.m
 
 | Location | Concern | Trigger to act |
 |---|---|---|
-| `services/market/analysis/summary.py` (fan-in 0, tracked as `dead_code_candidates=1` in baseline) | `generate_summary_analysis` lost its caller when the streaming refactor removed the server-rendered `summary_data` template variable; the Summary tab button is gated off in `templates/index.html` and `summary_pending` in `routes/core.py` is vestigial | any request to ship the multi-ticker Summary tab ⇒ add a `summary` slice to `_RENDER_KIND_SLICES` (aggregates across the job's tickers, not per-ticker) ; otherwise delete the module + `partials/tab_summary.html` + the `summary_pending` flag in the same commit and reset the baseline |
+| ~~`services/market/analysis/summary.py` (fan-in 0, `dead_code_candidates=1`)~~ — **deleted 2026-09-11 (B9)** | `generate_summary_analysis` lost its caller in the streaming refactor; `summary_data` was never set, so `tab_summary.html`, the sidebar button, the correlation-heatmap JS and the `summary_pending` flag were all vestigial. A real multi-ticker Summary tab is a feature nobody requested | removed the module + `partials/tab_summary.html` + the sidebar button + `summary_pending` + `renderCorrelationHeatmap`/`corrToColor` in `market_review_chart.js`; `arch_baseline.json` `dead_code_candidates` reset 1 → 0 |
 | ~~`data_pipeline/providers/yf_client.py` (391 lines, fan-in 11)~~ — **resolved 2026-09-10 (B1)** | it sat 9 lines below the 400-line god-file threshold | the option-chain section was extracted pre-emptively, as prescribed, into `providers/yf_snapshot.py`; `yf_client.py` is now a ~35-line shim. The pressure moved to `providers/yf_snapshot.py` (≈340 lines) and `providers/yfinance_provider.py` (≈290 lines) — watch them before adding endpoints |
 | `static/sim/black_scholes.js` + `core/options/greeks` (risk-free rate) | the same constant is hard-coded in the client simulation **and** the server-side Greeks; changing one without the other makes the two pricings diverge silently | batch B8 retired the Config tab, so there is no global-setting surface to put it in; making it a parameter (store entry + form field + backend path) is a small feature — do it before anyone edits either constant |
 | `data_pipeline/providers/yf_client.py` (compat shim, ADR 0011 B1) | re-exports `fetch_spot` / `fetch_option_chain` / `fetch_close_panel` / `fetch_daily_ohlcv` with their old yfinance-shaped contracts; it was a **"one release"** bridge so importers did not have to change in the B1 PR | once `grep -rn "providers.yf_client\|yf_client import" services/ data_pipeline/read/` is empty (importers moved to the canonical `providers.get_provider()` shapes), delete `yf_client.py` and its re-exports from `providers/__init__.py` in one commit |
 | `services/market_review/fetch.py` → `market_review_prices` (L5 in plan §4.1) | a second acquisition path outside the provider seam: its own L1/L2/L3 close-panel ladder writes a `market_review_prices` table that `data_pipeline/orchestrate/readiness.py` does **not** plan, so the benchmark panel still lazy-fetches on the Market Review slice | fold the ladder into `providers` + a canonical `bars` read (ADR 0011's L5 exit); until then, add `market_review` benchmark tickers to `KIND_DATASETS` so the readiness pass warms them |
-| `services/market/analysis/assessment.py` option overlay (`form_data["option_data"]`) — **B7 regression, plan §10 F5-a** | batch B7 moved option positions to the Portfolio tab and dropped `option_position` from `POST /`, so the projection-vs-positions overlay chart and the sizing max-loss-per-contract are permanently unfed (they degrade silently — no error, chart absent, sizing assumes debit) | **retire** — delete the `option_data` branches in `assessment.py`, `FormService.parse_option_data`, and `core/market/{analyzer.analyze_options, option_pnl.py, charts/option_pnl.py}` if unused elsewhere (the Portfolio tab owns position P&L now) — **or** re-feed it via an Assessment-toolbar positions handle. Leaning retire; needs an explicit call |
+| ~~`services/market/analysis/assessment.py` option overlay~~ — **retired 2026-09-11 (B9, plan §10 F5-a)** | B7 left the projection-vs-positions overlay + the sizing max-loss unfed (positions moved to the Portfolio tab) | removed: the `option_data` branches in `assessment.py`, `FormService.parse_option_data`, `MarketAnalyzer.analyze_options` / `MarketChartAssembly.analyze_options`, and `core/market/option_pnl.py` + `core/market/charts/option_pnl.py` (whole files). Assessment sizing is now debit-only; position P&L lives in the Portfolio tab |
 
 ## 3. Guardrails (how the score is kept)
 
@@ -124,7 +124,8 @@ utils         → (leaf: nothing upward)
 5. Import cycle `data_ops/_query.py <-> facade.py` broken (query calls sibling
    modules, never the facade).
 6. Renames for D5: `market_analysis/{_service,_statistical,_assessment,
-   _sizing,_summary}.py` → `{facade,statistical,assessment,sizing,summary}.py`;
+   _sizing,_summary}.py` → `{facade,statistical,assessment,sizing,summary}.py`
+   (`summary.py` later deleted — B9 F5-a);
    same for `data_ops/_service.py` → `facade.py`. Dead code
    `core/_shared/validators.py` deleted; `correlation_validator.py` moved into
    `core/market/`.
@@ -134,7 +135,8 @@ utils         → (leaf: nothing upward)
    from the chart assembly. All chart-producing methods (`generate_scatter_plots`,
    `generate_high_low_scatter`, `generate_return_osc_high_low_chart`,
    `generate_volatility_dynamics`, `generate_oscillation_projection`,
-   `analyze_options`, plus the feature/projection primitives that feed them)
+   `analyze_options` (later removed — B9 F5-a), plus the feature/projection
+   primitives that feed them)
    moved into `core/market/charts/facade.py::MarketChartAssembly`. `MarketAnalyzer`
    is now a thin orchestrator that builds the `DataContext` and delegates rendering,
    mirroring the options-side facade. The chart-assembly fan-out (14) now lives in

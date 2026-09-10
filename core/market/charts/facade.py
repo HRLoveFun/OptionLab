@@ -18,13 +18,11 @@ Contracts:
   - generate_return_osc_high_low_chart(rolling_window=20, risk_threshold=90) -> str | None
   - generate_volatility_dynamics() -> str | None
   - generate_oscillation_projection(percentile=0.90, target_bias=None) -> (str|None, str|None)
-  - analyze_options(option_data) -> str | None
 Dependencies UPWARD:
-  - core.market.charts.{dynamics, projection, scatter_high_low, scatter_osc, volatility, option_pnl}
+  - core.market.charts.{dynamics, projection, scatter_high_low, scatter_osc, volatility}
   - core.market.charts._scales.format_projection_value
   - core.market.features.{osc, osc_high, osc_low, price_returns, _horizon, regime_segments, volatility}
   - core.market.projections.oscillation
-  - core.market.option_pnl
 Dependencies DOWNWARD:
   - core.market.analyzer
 """
@@ -35,7 +33,6 @@ import logging
 
 from core.market.charts._scales import format_projection_value
 from core.market.charts.dynamics import render_dynamics
-from core.market.charts.option_pnl import render_option_pnl
 from core.market.charts.projection import render_projection
 from core.market.charts.scatter_high_low import render_scatter_high_low
 from core.market.charts.scatter_osc import render_scatter_osc
@@ -44,7 +41,6 @@ from core.market.features import osc, osc_high, osc_low, price_returns
 from core.market.features._horizon import apply_horizon
 from core.market.features.regime_segments import bull_bear_segments
 from core.market.features.volatility import calculate_volatility
-from core.market.option_pnl import build_option_matrix
 from core.market.projections.oscillation import compute_oscillation_projection
 
 logger = logging.getLogger(__name__)
@@ -193,19 +189,6 @@ class MarketChartAssembly:
         except Exception as e:
             logger.error("Error generating oscillation projection: %s", e)
             return None, None
-
-    def analyze_options(self, option_data):
-        if not option_data:
-            return None
-        try:
-            current_price = self._ctx.current_price
-            if current_price is None:
-                return None
-            matrix_df = build_option_matrix(option_data, current_price)
-            return render_option_pnl(matrix_df, current_price, option_data)
-        except Exception as e:
-            logger.error("Error analyzing options: %s", e)
-            return None
 
 
 __all__ = ["MarketChartAssembly"]

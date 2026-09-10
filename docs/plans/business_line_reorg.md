@@ -4,11 +4,12 @@
 **ADRs**: [0011](../decisions/0011-pluggable-data-provider-seam.md) (data-provider seam + canonical schema — **Accepted**),
 [0012](../decisions/0012-parameter-ownership-and-prefetch.md) (parameter ownership + readiness prefetch — **Accepted**)
 
-> **Status: LANDED (2026-09-10).** All eight §6 batches are implemented on branch
-> `worktree-business-line-reorg`; the §0 ledger records what actually shipped,
-> including the deliberate deviations from the shape below. The batches are still
-> individually revertible — `git revert <batch-commit>` restores the previous
-> behaviour without touching the others.
+> **Status: LANDED (2026-09-10) + acceptance review B9 (2026-09-11).** All eight
+> §6 batches plus the B9 review-remediation shipped on branch
+> `worktree-business-line-reorg`; the §0 ledger records what actually shipped and
+> §10 the review findings. Only the deferred follow-ups in §10 remain (risk-free
+> global setting, `market_review_prices` L5, ADR 0011 `symbol` column). Batches
+> are individually revertible — `git revert <batch-commit>`.
 
 ---
 
@@ -48,7 +49,7 @@
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
 | B7 — module-scoped params | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). Backend query-arg contract + per-module allow-list; `state/*ParamsState.js`; module toolbars; bridge + hidden fields deleted; Config tab emptied (B8 decides its fate). See §8 B7 |
 | B8 — retire / repurpose Config tab | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q2 resolved (**deleted**). `grep tab_config` returns nothing; risk-free-rate follow-up on the watch list |
-| B9 — acceptance-review remediation | 🔨 F1–F4, F5-b/c, F6 landed | — | branch `worktree-business-line-reorg` · 2026-09-11 | §10 review. F1 (memo `variant` key), F2 (real collapse), F3 (SVG chevron), F4 (feature_bars self-heal), F5-b/c (stale UI), F6 (docstrings) done. **Open**: F5-a (retire-vs-refeed decision), F7c (merge to main). Watch-list: `summary.py` delete recommended, risk-free-rate + L5 deferred |
+| B9 — acceptance-review remediation | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-11 | §10 review: F1 (memo `variant` key), F2 (real collapse), F3 (SVG chevron), F4 (feature_bars self-heal), F5 a+b+c (a=retire option overlay per owner; b/c=stale UI), F6 (docstrings). Watch-list: `summary.py` deleted; risk-free-rate + L5 + `symbol` column deferred. **Open**: F7c (merge to main). |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
 Keep the row order; edit the row in place.
@@ -768,21 +769,29 @@ not blockers, and each is one small independent change.
   their imports. Four fragment empty-states + `tab_simulation.html`'s placeholder
   stop pointing at the deleted "Parameter" tab. `form.py` gets a DORMANT note on
   `option_data` (see F5-a below).
-- **F5-a is NOT dead code — it is a B7 regression, left for a decision.**
-  `services/market/analysis/assessment.py` still reads `form_data["option_data"]`
-  for (i) the projection-vs-positions option overlay chart and (ii) the sizing
-  max-loss-per-contract. B7 moved positions to the Portfolio tab and stopped
-  `POST /` carrying `option_position`, so that overlay is now **permanently
-  unfed** (it degrades gracefully — no error, the chart is just absent) and
-  sizing always assumes a debit strategy. Decision needed: **retire** the overlay
-  (delete the `option_data` branches in `assessment.py`, `parse_option_data`,
-  `core/market/{analyzer.analyze_options, option_pnl, charts/option_pnl}` if
-  unused elsewhere) — the Portfolio tab is the home for position P&L now — or
-  **re-feed** it (give the Assessment toolbar a positions handle). Leaning
-  retire. Tracked on `architecture_review.md` §2 watch list.
-- **Exit criteria (F4, F5)**: `pytest -m "not network" --ignore=tests/e2e` → exit
-  0 (+2: `TestFeatureBarsHeal`); `pytest tests/e2e` → exit 0; `ruff` +
-  `doc_guard` + `arch_metrics --check` clean.
+- **F5-a — RETIRED** (owner call 2026-09-11: retire, not re-feed). B7 left the
+  projection-vs-positions overlay and the sizing max-loss unfed (positions moved
+  to the Portfolio tab, which owns position P&L). Removed: the `option_data`
+  branches in `assessment.py`, `FormService.parse_option_data` + the `option_data`
+  key, `MarketAnalyzer.analyze_options` / `MarketChartAssembly.analyze_options`,
+  `core/market/option_pnl.py` and `core/market/charts/option_pnl.py` (whole files),
+  the `plot_url` block in `assessment.html`. Assessment sizing is now debit-only
+  (a `WHY` comment on the call site). `arch_metrics` fan-out of
+  `core/market/charts/facade.py` drops (one fewer renderer imported).
+
+**Delete `summary.py` — DONE** (watch-list follow-up, bundled into B9).
+`generate_summary_analysis` had fan-in 0; `summary_data` was never set, so
+`tab_summary.html`, its sidebar button, the `summary_pending` flag and the
+`renderCorrelationHeatmap` / `corrToColor` pair in `market_review_chart.js` were
+all vestigial. All removed; `arch_baseline.json` `dead_code_candidates` reset
+1 → 0; `test_smoke.py` `TAB_IDS` trimmed to 10; docs (`architecture_review.md`
+§2/§4, `l0_architecture.md` §2) updated.
+
+- **Exit criteria (F4, F5, summary delete)**: `pytest -m "not network"
+  --ignore=tests/e2e` → exit 0 (+2: `TestFeatureBarsHeal`); `pytest tests/e2e` →
+  exit 0; `npx vitest run` → 199 / 16; `ruff check` + `format --check` clean;
+  `doc_guard.py` clean; `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0
+  / **dead 0**); `audit_tags.py` 16 vs 16.
 
 ### Watch-list follow-ups — 2026-09-11 assessment
 
@@ -791,7 +800,7 @@ not blockers, and each is one small independent change.
 | **Risk-free rate** hard-coded (`r = 0.05` default in `static/sim/{analyze,stats}.js`, `core/options/greeks/portfolio.py`, `grid.js` `r_pct=5`) → true global setting | **Defer the setting; do the cheap consolidation if wanted.** | A *user-facing* setting needs a surface — B8 deliberately deleted the Config tab, so this means re-introducing one for a number that moves ~quarterly. The silent-divergence risk is cheaply killed by one shared constant (`utils/constants.RISK_FREE_RATE` + a `static/sim/` mirror + a parity test) without any UI. Full setting = wait until someone actually wants to tweak it. |
 | **`market_review_prices` (L5)** → fold into provider seam | **Defer to its own batch (B10).** | It is ADR 0011's stated L5 exit and it would let readiness prefetch the benchmark panel (closing the other half of F4's spirit), but it is a real refactor: benchmark tickers (SPY/QQQ/…) would route through `ensure_range`/`clean_bars` instead of the close-only ladder. ~1 day + tests. Not a bundle-in. |
 | **ADR 0011 `symbol` column** (ticker→symbol rename) | **Agree — stay deferred.** | Pure churn with one provider (`ticker == symbol` for yfinance). Do it *with* the second provider, when the mapping actually has two shapes to reconcile. |
-| **`services/market/analysis/summary.py`** (fan-in 0, `dead_code_candidates=1`) | **Delete now** (bundle into B9). | `summary_data` is never set anywhere; `tab_summary.html`, the correlation-heatmap JS, and the `summary_pending` flag are all vestigial. Building a real multi-ticker Summary tab is a feature nobody has asked for. Deleting the module + template + flag + sidebar button clears the standing `dead_code` finding. Pure removal, low risk. |
+| ~~**`services/market/analysis/summary.py`**~~ — **DELETED 2026-09-11 (B9)** | done | `summary_data` was never set; module + `tab_summary.html` + sidebar button + `summary_pending` + `renderCorrelationHeatmap`/`corrToColor` removed; `dead_code_candidates` baseline 1 → 0. |
 
 ---
 
@@ -826,7 +835,7 @@ Findings worked as **batch B9 (remediation)** under the §0 rules.
 | F2 | moderate — UX / a11y | ✅ **fixed (B9)** | The Parameters bar "collapse" was hollow after B7: `data-collapsed="true"` hid a non-existent `.parameters-bar-body` and revealed `▸ ^SPX` **beside the still-visible ticker input + label + Run** → ~zero visible effect; `aria-controls="parameters-bar-body"` was a dangling reference. | The label + input + badges are now wrapped in `<div class="parameters-bar-fields" id="parameters-bar-body">` (real `aria-controls` target); collapsed hides that div **and** `.ticker-validation`, leaving toggle + `▸ ^SPX` + Run on one line. Dead `.parameters-bar-body` / `-group-title` CSS removed. New vitest: "has a real element behind aria-controls". |
 | F3 | minor — UX | ✅ **fixed (B9)** | Collapse toggle icon was invisible — `<i class="fas fa-chevron-down">` with Font Awesome not loaded and no CSS fallback. | Inline SVG chevron (`.parameters-bar-chevron`) rotated `-90°` by `.parameters-bar[data-collapsed="true"]`; `parametersBar.js` drops the `<i>` class swap and updates `title` instead. |
 | F4 | minor — readiness gap | ✅ **fixed (B9)** | `needs_backfill` probed `clean_bars` only, so a DB with clean rows but stale/missing `feature_bars` (a past `process_frequencies` failure, or clean extended without a reprocess) was never healed — Statistical/Assessment read `feature_bars`. `process_frequencies` writes D/W/ME/QE together so a *new* frequency is not the trigger; the partial-failure state is. | `backfill._feature_bars_behind` (probe frequency='D', 1:1 with clean); `needs_backfill` returns True on feature lag; `_ensure_range_impl` reprocesses (no download) on the clean-covered short-circuit; `get_processed` self-heals like `get_cleaned_daily`. Tests: `TestFeatureBarsHeal`. |
-| F5 | mixed | 🔨 **b/c fixed (B9); a is a decision** | **(a) not dead code — a B7 regression:** `assessment.py` reads `form_data["option_data"]` (projection-vs-positions overlay + sizing max-loss); B7 stopped `POST /` carrying positions, so the overlay is permanently unfed (degrades gracefully). **(b/c) stale UI:** `routes/core.py` GET vars + `index.html` `badge-meta` + `market_review.html` meta-chips all showed POST-time defaults after B7 (`badge` always "Monthly, Neutral"). | **(a)** DORMANT note added; retire-vs-refeed decision open (§10 B9 note, §2 watch list) — leaning retire. **(b/c)** GET vars + imports removed; `badge-meta` dropped (ticker only); 3 stale `market_review` chips removed; 4 "Parameter tab" empty-state refs + `tab_simulation` placeholder fixed. |
+| F5 | mixed | ✅ **fixed (B9)** | **(a) was a B7 regression, not dead code:** `assessment.py` read `form_data["option_data"]` (projection-vs-positions overlay + sizing max-loss); B7 stopped `POST /` carrying positions, leaving the overlay permanently unfed. **(b/c) stale UI:** `routes/core.py` GET vars + `index.html` `badge-meta` + `market_review.html` meta-chips all showed POST-time defaults after B7 (`badge` always "Monthly, Neutral"). | **(a) retired** (owner call): removed the `option_data` branches, `parse_option_data`, `analyze_options` (both), `core/market/option_pnl.py` + `charts/option_pnl.py`, the `plot_url` block — Assessment sizing is debit-only. **(b/c)** GET vars + imports removed; `badge-meta` dropped (ticker only); 3 stale `market_review` chips removed; 4 "Parameter tab" empty-state refs + `tab_simulation` placeholder fixed. |
 | F6 | trivial — stale docstrings | ✅ **fixed (review commit `9691776`)** | `providers/base.py` "yf_option_chain.py" → `yf_snapshot.py`; `providers/yf_client.py` listed `core/market/data_context.py` as an importer (B4 removed it); `providers/__init__.py` + `yfinance_provider.py` said `downloader.py` (it is `ingest/ohlcv.py` since B3); §0 ledger planning-row status. | done |
 | F7 | housekeeping | 🔨 partial | (a) `providers/yf_client.py` "one-release" shim has no tracked removal trigger. (b) `market_review_prices` (L5) is still a parallel acquisition path outside the seam. (c) Branch is ahead of `origin/main`, unmerged. | (a)+(b) **added to `architecture_review.md` §2 watch list** (review commit); (c) push + merge still pending. |
 
