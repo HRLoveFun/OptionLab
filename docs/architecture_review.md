@@ -42,11 +42,15 @@ count can only go down without an explicit baseline update.
 Run `grep -rn "doc-guard: allow" --include='*.py' core services data_pipeline`
 for the live list. State at registration:
 
-### core-purity (core must not import data_pipeline) — 2 markers
+### core-purity (core must not import data_pipeline) — 0 markers
+
+**All registered core-purity debt is closed (batch B4, 2026-09-10).** `core/` has
+zero `data_pipeline` imports; `tests/test_architecture_purity.py` now refuses the
+suppression marker outright, and the layer table (§3) only allows `core → utils`.
 
 | Location | Why it exists | Exit condition |
 |---|---|---|
-| `core/market/data_context.py` (DataService, fetch_daily_ohlcv) | `build_data_context` *is* the DB-first read path; extracting it means inverting who constructs `DataContext` | `DataContext` becomes data-in/data-out; the fetch moves into a service factory |
+| `core/market/data_context.py` (DataService, fetch_daily_ohlcv) — **resolved 2026-09-10 (B4)** | `build_data_context` *was* the DB-first read path, so core did its own I/O | split: `core/market/data_context.py` keeps a pure `DataContext` + `refrequency` + the data-in/data-out `build_data_context(*, ticker, frequency, horizon, raw_data)`; acquisition moved to `services/market/data_context_fetch.py::fetch_data_context`. `MarketAnalyzer` / `CorrelationValidator` now take the context instead of building it (same pattern as `OptionsChainAnalyzer(snapshot=…)`) |
 | `core/market_review/fetch.py`, `core/market_review/__init__.py` (fetch_close_panel, get_conn) — **resolved 2026-09-03** | L1/L2/L3 cache ladder lived beside the computation it feeds | ladder moved to `services/market_review` (`fetch.py` + `facade.py`); `core/market_review` now receives panels via pure `build_review` / `build_timeseries` |
 | `core/options/chain/analyzer.py` — **resolved 2026-09-03** | former ticker-only constructor fetched yfinance internally | constructor now requires `snapshot=`; fetch lives in `services/options/chain._build_analyzer` |
 
@@ -91,7 +95,7 @@ mirrored in `arch_metrics.py`; asserted equal by
 app           → routes, services, core, data_pipeline, utils, read, orchestrate
 routes        → services, data_pipeline, utils, store, read, orchestrate   (never core directly)
 services      → core, data_pipeline, utils, providers, store, ingest, transform, read, orchestrate
-core          → utils, read, providers        (data_pipeline* only via §2 markers; B4 removes both)
+core          → utils                         (zero data_pipeline imports — closed in B4)
 data_pipeline → utils                          # root: PipelineResult (types) + _state.py
   store       → (nothing upward)
   providers   → store, utils                   # store = quality_log; see plan §8 B3
@@ -144,7 +148,8 @@ utils         → (leaf: nothing upward)
 1. **§2 debt paydown** (easiest first): `_query.get_latest_spot` → `yf_client` — **done
    2026-09-03**; `health`/`portfolio` SQL → `repos.py` — **done 2026-09-03**; `market_review`
    cache ladder → `services/market_review` — **done 2026-09-03**; `regime` SQL consolidation →
-   `repos.py` — **done 2026-09-03**. All registered §2 debt is now resolved.
+   `repos.py` — **done 2026-09-03**. All registered §2 debt is now resolved, including the last
+   `core-purity` markers (`core/market/data_context.py` — **done 2026-09-10, batch B4**).
 3. **Frontend consolidation** (P3): move the eight loose root-level scripts in
    `static/` (`option-chain.js`, `position.js`, `regime.js`, `simulation.js`,
    `market_review.js`, …) into `static/features/`.

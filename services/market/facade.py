@@ -9,8 +9,8 @@ Context:
 import datetime as dt
 import logging
 
-from core.market.data_context import build_data_context
 from data_pipeline.providers.yf_client import fetch_spot as _fetch_spot
+from services.market.data_context_fetch import fetch_data_context
 from services.market_review import market_review, market_review_timeseries
 from utils.date_helpers import exclusive_month_end
 from utils.ticker_utils import is_valid_ticker_format
@@ -38,7 +38,7 @@ class MarketService:
         if not is_valid_ticker_format(ticker):
             return False, "invalid_ticker_or_no_data_available"
         try:
-            ctx = build_data_context(ticker, dt.date.today() - dt.timedelta(days=30), "D")
+            ctx = fetch_data_context(ticker, dt.date.today() - dt.timedelta(days=30), "D")
             is_valid = ctx.is_valid()
             message = "valid_ticker" if is_valid else "invalid_ticker_or_no_data_available"
             return is_valid, message

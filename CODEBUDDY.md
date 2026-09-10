@@ -109,7 +109,9 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
   are legal; only the *layer* direction is policed.
 - **`core/`** — pure computation: no Flask, no DB, no network. Data in → numbers/DataFrames out.
   `core/` and `data_pipeline/` must never import `services/`, `routes/`, or `app.py`;
-  `data_pipeline/` must never import `core/`.
+  `data_pipeline/` must never import `core/`. **`core/` must not import `data_pipeline/` either**
+  (closed in batch B4 — enforced by `doc_guard` `import-direction` and
+  `tests/test_architecture_purity.py`; acquisition belongs in `services/`).
 - **`data_pipeline/`** — owns **every** I/O boundary: yfinance, SQLite, the scheduler.
 - **`utils/`** — leaf helpers only.
 

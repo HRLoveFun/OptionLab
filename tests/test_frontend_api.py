@@ -6,7 +6,7 @@ dashboard tab, verifying that:
   - The /api/option_chain endpoint handles valid/invalid inputs
   - Config-driven filter parameters (DTE, moneyness) are respected
   - MarketAnalyzer features_df is non-empty with adequate data
-  - build_data_context normalizes futu-format tickers to yahoo format
+  - fetch_data_context normalizes futu-format tickers to yahoo format
 """
 
 import datetime as dt
@@ -185,43 +185,33 @@ class TestFeaturesDF:
             index=dates,
         )
 
-    def test_features_df_nonempty_with_synthetic_data(self, monkeypatch):
+    def test_features_df_nonempty_with_synthetic_data(self):
         """features_df should have rows when data context has adequate data."""
         from core.market.analyzer import MarketAnalyzer
-        from core.market.data_context import DataContext, Horizon
+        from core.market.data_context import Horizon, build_data_context
 
         fake_df = self._make_price_df(60)
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
-        def _mock_build(ticker, start_date, frequency="D", end_date=None):
-            df = fake_df.copy()
-            df["LastClose"] = df["Close"].shift(1)
-            df["LastAdjClose"] = df["Adj Close"].shift(1)
-            return DataContext(
-                ticker=ticker,
-                frequency=frequency,
-                horizon=Horizon(
-                    start=start_date,
-                    end=end_date or end,
-                    user_provided_end=end_date is not None,
-                    frequency=frequency,
-                ),
-                bars=df,
-                daily_bars=fake_df.copy(),
-            )
+        # WHY the pure builder: core/ must not fetch (ADR 0001 / batch B4), so
+        # the context is assembled here from synthetic bars and injected.
+        ctx = build_data_context(
+            ticker="TEST",
+            frequency="D",
+            horizon=Horizon(start=start, end=end, user_provided_end=True, frequency="D"),
+            raw_data=fake_df,
+        )
 
-        monkeypatch.setattr("core.market.analyzer.build_data_context", _mock_build)
-
-        analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
+        analyzer = MarketAnalyzer(ctx)
         assert not analyzer.features_df.empty, f"features_df should not be empty, shape={analyzer.features_df.shape}"
         assert len(analyzer.features_df) >= 50, f"Expected >=50 rows, got {len(analyzer.features_df)}"
         assert set(analyzer.features_df.columns) == {"Oscillation", "Osc_high", "Osc_low", "Returns", "Difference"}
 
-    def test_features_df_tolerates_partial_nan(self, monkeypatch):
+    def test_features_df_tolerates_partial_nan(self):
         """features_df should retain rows even when one column has NaN at a few spots."""
         from core.market.analyzer import MarketAnalyzer
-        from core.market.data_context import DataContext, Horizon
+        from core.market.data_context import Horizon, build_data_context
 
         fake_df = self._make_price_df(60)
         # Introduce NaN in High for a few rows (osc_high will be NaN there)
@@ -230,35 +220,23 @@ class TestFeaturesDF:
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
-        def _mock_build(ticker, start_date, frequency="D", end_date=None):
-            df = fake_df.copy()
-            df["LastClose"] = df["Close"].shift(1)
-            df["LastAdjClose"] = df["Adj Close"].shift(1)
-            return DataContext(
-                ticker=ticker,
-                frequency=frequency,
-                horizon=Horizon(
-                    start=start_date,
-                    end=end_date or end,
-                    user_provided_end=end_date is not None,
-                    frequency=frequency,
-                ),
-                bars=df,
-                daily_bars=fake_df.copy(),
-            )
+        ctx = build_data_context(
+            ticker="TEST",
+            frequency="D",
+            horizon=Horizon(start=start, end=end, user_provided_end=True, frequency="D"),
+            raw_data=fake_df,
+        )
 
-        monkeypatch.setattr("core.market.analyzer.build_data_context", _mock_build)
-
-        analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
+        analyzer = MarketAnalyzer(ctx)
         # With dropna(how='all'), rows with partial NaN are kept
         assert not analyzer.features_df.empty
         # At least most rows should survive — only first row (shift NaN) removed
         assert len(analyzer.features_df) >= 50
 
-    def test_features_df_empty_when_all_nan(self, monkeypatch):
+    def test_features_df_empty_when_all_nan(self):
         """features_df should have 0 rows when all data is NaN."""
         from core.market.analyzer import MarketAnalyzer
-        from core.market.data_context import DataContext, Horizon
+        from core.market.data_context import Horizon, build_data_context
 
         fake_df = self._make_price_df(10)
         fake_df["Adj Close"] = np.nan
@@ -268,61 +246,48 @@ class TestFeaturesDF:
         start = fake_df.index[0].date()
         end = fake_df.index[-1].date()
 
-        def _mock_build(ticker, start_date, frequency="D", end_date=None):
-            df = fake_df.copy()
-            df["LastClose"] = df["Close"].shift(1)
-            df["LastAdjClose"] = df["Adj Close"].shift(1)
-            return DataContext(
-                ticker=ticker,
-                frequency=frequency,
-                horizon=Horizon(
-                    start=start_date,
-                    end=end_date or end,
-                    user_provided_end=end_date is not None,
-                    frequency=frequency,
-                ),
-                bars=df,
-                daily_bars=fake_df.copy(),
-            )
+        ctx = build_data_context(
+            ticker="TEST",
+            frequency="D",
+            horizon=Horizon(start=start, end=end, user_provided_end=True, frequency="D"),
+            raw_data=fake_df,
+        )
 
-        monkeypatch.setattr("core.market.analyzer.build_data_context", _mock_build)
-
-        analyzer = MarketAnalyzer("TEST", start, "D", end_date=end)
+        analyzer = MarketAnalyzer(ctx)
         assert analyzer.features_df.empty
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 5. build_data_context ticker normalization
+# 5. fetch_data_context ticker normalization
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 class TestDataContextTickerNorm:
+    """Normalisation lives in services/market/data_context_fetch.py (batch B4)."""
+
+    def _ctx_for(self, monkeypatch, ticker: str):
+        # WHY the fetch stub: normalisation happens before the DB/provider hop,
+        # so stubbing the raw fetch keeps these tests offline and fast.
+        monkeypatch.setattr(
+            "services.market.data_context_fetch._fetch_raw_data",
+            lambda t, start, freq: (None, t),
+        )
+
+        from services.market.data_context_fetch import fetch_data_context
+
+        return fetch_data_context(ticker, dt.date(2024, 1, 1))
+
     def test_futu_format_normalized(self, monkeypatch):
-        """build_data_context('US.NVDA', ...) should normalize to 'NVDA'."""
-        monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
-
-        from core.market.data_context import build_data_context
-
-        ctx = build_data_context("US.NVDA", dt.date(2024, 1, 1))
-        assert ctx.ticker == "NVDA"
+        """fetch_data_context('US.NVDA', ...) should normalize to 'NVDA'."""
+        assert self._ctx_for(monkeypatch, "US.NVDA").ticker == "NVDA"
 
     def test_yahoo_format_unchanged(self, monkeypatch):
-        """build_data_context('NVDA', ...) should keep ticker as 'NVDA'."""
-        monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
-
-        from core.market.data_context import build_data_context
-
-        ctx = build_data_context("NVDA", dt.date(2024, 1, 1))
-        assert ctx.ticker == "NVDA"
+        """fetch_data_context('NVDA', ...) should keep ticker as 'NVDA'."""
+        assert self._ctx_for(monkeypatch, "NVDA").ticker == "NVDA"
 
     def test_hk_format_normalized(self, monkeypatch):
-        """build_data_context('HK.00700', ...) should normalize to '0700.HK'."""
-        monkeypatch.setattr("core.market.data_context._fetch_raw_data", lambda ticker, start, freq: (None, ticker))
-
-        from core.market.data_context import build_data_context
-
-        ctx = build_data_context("HK.00700", dt.date(2024, 1, 1))
-        assert ctx.ticker == "0700.HK"
+        """fetch_data_context('HK.00700', ...) should normalize to '0700.HK'."""
+        assert self._ctx_for(monkeypatch, "HK.00700").ticker == "0700.HK"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

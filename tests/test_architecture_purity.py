@@ -102,6 +102,27 @@ def test_core_subpackage_has_no_io_or_framework_imports(pkg):
     assert not offenders, "core/ purity violated (fetch upstream and pass data in, ADR 0001):\n" + "\n".join(offenders)
 
 
+def test_core_has_zero_data_pipeline_imports():
+    """B4 exit criterion: no suppression markers, no core→data_pipeline edge left.
+
+    Stricter than ``test_core_subpackage_has_no_io_or_framework_imports`` above:
+    that one honours ``# doc-guard: allow=core-purity`` for registered debt. Batch
+    B4 closed the debt, so this test refuses the marker entirely — re-introducing
+    one fails here even if doc_guard would accept it.
+    """
+    guard = _load_script("doc_guard")
+    offenders: list[str] = []
+    for py in sorted(CORE.rglob("*.py")):
+        if "__pycache__" in py.parts:
+            continue
+        for lineno, head in guard._imported_heads(py):
+            if head == "data_pipeline" or head in guard.DATA_PIPELINE_SUBLAYERS:
+                offenders.append(f"{py.relative_to(REPO_ROOT)}:{lineno} imports {head}")
+    assert not offenders, (
+        "core/ must not import data_pipeline (fetch upstream and pass data in, ADR 0001):\n" + "\n".join(offenders)
+    )
+
+
 def test_data_pipeline_import_graph_matches_declared_layers():
     """Every data_pipeline/ import must point at an allowed layer.
 

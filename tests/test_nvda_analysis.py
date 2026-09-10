@@ -65,6 +65,18 @@ def _seed_clean_bars(ticker: str, n_rows: int = 30, *, nan_only: bool = False):
         conn.commit()
 
 
+def _analyzer(ticker: str, start: dt.date, frequency: str = "D"):
+    """Build a MarketAnalyzer the way production does: services fetch, core wraps.
+
+    WHY: since batch B4 ``core/`` never fetches (ADR 0001), so the DataContext
+    has to be built in the service layer and injected.
+    """
+    from core.market.analyzer import MarketAnalyzer
+    from services.market.data_context_fetch import fetch_data_context
+
+    return MarketAnalyzer(fetch_data_context(ticker, start, frequency))
+
+
 @pytest.fixture()
 def _patch_downloads(monkeypatch):
     """Disable all real yfinance download paths for unit tests."""
@@ -79,8 +91,8 @@ def _patch_downloads(monkeypatch):
     # Block the ensure_range → chunked backfill path (same dual patching).
     monkeypatch.setattr(DataService, "ensure_range", staticmethod(lambda *a, **kw: True))
     monkeypatch.setattr("data_pipeline.orchestrate.backfill.ensure_range", lambda *a, **kw: True)
-    # Block the data_context fallback to yfinance
-    monkeypatch.setattr("core.market.data_context._download_data", lambda *a, **kw: None)
+    # Block the data_context fallback to the provider
+    monkeypatch.setattr("services.market.data_context_fetch._download_data", lambda *a, **kw: None)
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +106,7 @@ class TestFeaturesDF:
     def test_good_data_produces_nonempty_features(self, _patch_downloads):
         """With 30 rows of price data, features_df should have ~29 rows."""
         _seed_clean_bars("NVDA", 30)
-        from core.market.analyzer import MarketAnalyzer
-
-        analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
+        analyzer = _analyzer("NVDA", dt.date(2026, 1, 1))
         assert analyzer.is_data_valid()
         assert analyzer.features_df.shape[0] >= 20
         assert set(analyzer.features_df.columns) == {"Oscillation", "Osc_high", "Osc_low", "Returns", "Difference"}
@@ -104,18 +114,14 @@ class TestFeaturesDF:
     def test_nan_only_filler_rows_produce_empty_features(self, _patch_downloads):
         """NaN-only filler rows from clean_range should not fool is_valid."""
         _seed_clean_bars("NVDA", 5, nan_only=True)
-        from core.market.analyzer import MarketAnalyzer
-
-        analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
+        analyzer = _analyzer("NVDA", dt.date(2026, 1, 1))
         assert not analyzer.is_data_valid()
         assert analyzer.features_df.empty
 
     def test_empty_db_no_download(self, _patch_downloads):
         """Empty DB + failed download → proper error, no crash."""
         init_db()
-        from core.market.analyzer import MarketAnalyzer
-
-        analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
+        analyzer = _analyzer("NVDA", dt.date(2026, 1, 1))
         assert not analyzer.is_data_valid()
         assert analyzer.features_df.empty
 
@@ -144,9 +150,7 @@ class TestFeaturesDF:
                     )
             conn.commit()
 
-        from core.market.analyzer import MarketAnalyzer
-
-        analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
+        analyzer = _analyzer("NVDA", dt.date(2026, 1, 1))
         assert analyzer.is_data_valid()
         # 7 real rows → shift(1) eats 1 → 6 feature rows
         assert analyzer.features_df.shape[0] == 6
@@ -154,18 +158,16 @@ class TestFeaturesDF:
     def test_single_row_produces_empty_features(self, _patch_downloads):
         """Only 1 row of data → shift(1) creates NaN → no valid features."""
         _seed_clean_bars("NVDA", 1)
-        from core.market.analyzer import MarketAnalyzer
-
-        analyzer = MarketAnalyzer("NVDA", dt.date(2026, 1, 1), "D")
+        analyzer = _analyzer("NVDA", dt.date(2026, 1, 1))
         # 1 row is valid data, but after shift(1) → 0 feature rows
         assert analyzer.features_df.shape[0] == 0
 
     def test_futu_format_ticker_normalized(self, _patch_downloads):
-        """build_data_context normalizes US.NVDA → NVDA for DB lookup."""
+        """fetch_data_context normalizes US.NVDA → NVDA for DB lookup."""
         _seed_clean_bars("NVDA", 10)
-        from core.market.data_context import build_data_context
+        from services.market.data_context_fetch import fetch_data_context
 
-        ctx = build_data_context("US.NVDA", dt.date(2026, 1, 1), "D")
+        ctx = fetch_data_context("US.NVDA", dt.date(2026, 1, 1), "D")
         assert ctx.ticker == "NVDA"
         assert ctx.is_valid()
 

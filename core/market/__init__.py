@@ -1,7 +1,7 @@
 """Market Analysis Domain.
 
 Dependency graph (flows downward):
-    data_context          # PriceDynamic — data fetching & resampling
+    data_context          # pure data container + resampling (no I/O — ADR 0001)
     features/             # Pure numeric feature computation
     ├── osc.py
     ├── returns.py

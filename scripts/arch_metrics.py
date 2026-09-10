@@ -66,7 +66,7 @@ ALLOWED_DEPS: dict[str, set[str]] = {
         "read",
         "orchestrate",
     },
-    "core": {"data_pipeline", "utils", "read", "providers"},
+    "core": {"utils"},
     "data_pipeline": {"utils"},
     "store": set(),
     "providers": {"store", "utils"},

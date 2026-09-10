@@ -41,7 +41,7 @@
 | B1 — provider seam extraction | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | delivers the "pluggable API" seam on its own. Actual shape / deviations recorded in §8; `_ALLOWED_DEPS` promotion of `providers` deferred to B3 |
 | B2 — canonical raw store | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | gate §8 Q4 resolved (name-only rename). Actuals in §8; `symbol` column deferred (ADR 0011 amendment) |
 | B3 — package re-home | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | six stages + `_state.py`; first sub-layer guard table; `arch_baseline.json` **not** reset (no tracked drift). Actuals + deviations in §8 |
-| B4 — close L1 (`core-purity`) | ⬜ not started | — | — | — |
+| B4 — close L1 (`core-purity`) | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | zero core→data_pipeline edges; markers deleted and refused by test; `core` layer tightened to `{utils}` |
 | B5 — readiness plan + prefetch | ⬜ not started | — | — | gate: §8 Q1 |
 | B6 — `ticker`-only Parameters bar | ⬜ not started | — | — | gate: §8 Q3; depends on B5 |
 | B7 — module-scoped params | ⬜ not started | — | — | gate: §8 Q1; depends on B6 |
@@ -520,6 +520,33 @@ batch starts coding (§0 rule 5). Until then the batch stays `⬜ not started`.
   `arch_metrics.py --check` ok — layer violations 0, cycles 0, god files 0, dead code 1, so
   **no baseline reset was needed** (the §6 row anticipated one); `audit_tags.py` regenerated
   (`--update-baseline`) because the uncovered-constant *paths* moved while the count stayed 16.
+
+**B4 (2026-09-10) — close L1 (`core-purity`).**
+
+- **Split**: the fetch half of `core/market/data_context.py` moved to
+  `services/market/data_context_fetch.py::fetch_data_context`. `core` keeps the pure
+  `DataContext`, `refrequency()` (was `_refrequency`), a data-in/data-out
+  `build_data_context(*, ticker, frequency, horizon, raw_data)`, and `empty_data_context()`
+  for failed acquisitions. The two `# doc-guard: allow=core-purity` markers are gone.
+- **Who fetches is now inverted** (the §2 row's exit condition): `MarketAnalyzer(data_context)`
+  and `CorrelationValidator(price_data=…)` receive the context instead of building it — the same
+  pattern the 2026-09 remediation applied to `OptionsChainAnalyzer(snapshot=…)`.
+  `CorrelationValidator` now raises a `ValueError` explaining where to build one instead of
+  quietly fetching. A public `MarketAnalyzer.data_context` property replaced the
+  `analyzer._ctx` reach-through in `services/market/analysis/statistical.py`.
+- **Guard tightened**: §3's table had allowed `core → {read, providers}` in B3 (a transitional
+  concession); it is now `core → {utils}` in `doc_guard._ALLOWED_DEPS` **and**
+  `arch_metrics.ALLOWED_DEPS`. `tests/test_architecture_purity.py` gained
+  `test_core_has_zero_data_pipeline_imports`, which deliberately ignores the suppression marker —
+  re-introducing one now fails the test even though `doc_guard` would accept it.
+- **Tests migrated**: `test_frontend_api.py` builds contexts with the pure builder (three closures
+  deleted), `test_nvda_analysis.py` gained an `_analyzer()` helper (5 sites) and stubs the
+  provider at its new path, `test_chart_time_range.py` / `test_ticker_format_integration.py` follow
+  the same pattern — the latter also lost its `MarketAnalyzer.__init__` monkeypatch hack.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → 473 passed / 5 skipped;
+  full `pytest tests/e2e` → 38 passed; `ruff check` + `format --check` clean; `doc_guard.py` clean;
+  `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 / dead 1 — no baseline reset);
+  `grep -rn "allow=core-purity"` returns nothing.
 
 ---
 

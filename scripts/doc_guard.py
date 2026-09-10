@@ -241,11 +241,10 @@ _ALLOWED_DEPS: dict[str, set[str]] = {
         "read",
         "orchestrate",
     },
-    # TRADEOFF: core→data_pipeline* is directionally legal but breaks core's
-    # purity contract. It is policed by the separate ``core-purity`` rule so the
-    # two concerns (direction vs. purity) can be whitelisted and paid down at
-    # different paces. B4 removes these two edges entirely.
-    "core": {"data_pipeline", "utils", "read", "providers"},
+    # INVARIANT (closed in batch B4): core/ has ZERO data_pipeline imports, so
+    # the entry above is gone. The ``core-purity`` rule remains as the second
+    # line of defence and the test layer asserts the same thing.
+    "core": {"utils"},
     # data_pipeline/ root: shared types (PipelineResult) + process-local state.
     "data_pipeline": {"utils"},
     "store": set(),
