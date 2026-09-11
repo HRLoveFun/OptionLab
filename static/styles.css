@@ -149,7 +149,7 @@ body {
     top: 0;
     z-index: 200;
     background: var(--slate-900);
-    height: var(--header-h);
+    min-height: var(--header-h);
     display: flex;
     align-items: center;
     box-shadow: 0 1px 0 rgba(255, 255, 255, .06), var(--shadow-md);
@@ -159,11 +159,12 @@ body {
     width: 100%;
     max-width: 1600px;
     margin: 0 auto;
-    padding: 0 1.5rem;
+    padding: .6rem 1.5rem;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: .6rem 1rem;
 }
 
 .header-brand {
@@ -200,29 +201,12 @@ body {
     font-weight: 400;
 }
 
-.header-badge {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-}
-
-.badge-ticker {
-    background: var(--blue);
-    color: #fff;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: .8rem;
-    font-weight: 700;
-    letter-spacing: .04em;
-}
-
 .badge-meta {
     font-size: .7rem;
     color: var(--slate-300);
 }
 
-/* ── Header actions (ticker badge + theme toggle) ── */
+/* ── Header actions (theme toggle) ── */
 .header-actions {
     display: flex;
     align-items: center;
@@ -1130,6 +1114,13 @@ body {
 
     .badge-meta {
         display: none;
+    }
+
+    /* Brand + theme toggle share the first line; the ticker form (flex-basis
+       100%) is forced onto its own line below, same as the old separate bar. */
+    .parameters-bar {
+        order: 3;
+        flex-basis: 100%;
     }
 }
 
@@ -3174,63 +3165,30 @@ textarea:focus-visible,
 
 
 /* ============================================================
-   Parameters bar (batch B6) — persistent `ticker` bar above the panes.
-   Not a tab: it stays put across tab switches (sticky under the header)
-   and collapses to a one-line summary (`▸ ^SPX`). Tokens only, so the
-   Onyx override layer below themes it for free.
+   Parameters bar — the `ticker` input, lives inside the header
+   (.site-header is dark in both themes, see the Onyx override layer),
+   so its controls use light-on-dark styling rather than the page's
+   light-theme tokens. Not a tab: it stays put across tab switches, and
+   it is always visible — no collapse toggle.
    ============================================================ */
 .parameters-bar {
-    position: sticky;
-    top: var(--header-h);
-    z-index: 100;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 10px 1.5rem;
-    background: var(--slate-50);
-    border-bottom: 1px solid var(--slate-200);
+    gap: 4px;
+    flex: 1 1 320px;
+    min-width: 0;
     font-family: var(--font);
 }
 
 .parameters-bar-main {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-}
-
-.parameters-bar-toggle {
-    display: inline-flex;
-    align-items: center;
-    background: transparent;
-    border: 1px solid var(--slate-200);
-    border-radius: var(--radius-sm);
-    color: var(--slate-700);
-    cursor: pointer;
-    padding: 5px 9px;
-    line-height: 1;
-}
-
-.parameters-bar-chevron {
-    display: block;
-    transition: transform .15s ease;
-}
-
-.parameters-bar[data-collapsed="true"] .parameters-bar-chevron {
-    transform: rotate(-90deg);
-}
-
-/* The collapsible region: label + ticker input + validation badges. */
-.parameters-bar-fields {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
 }
 
 .parameters-bar-label {
-    color: var(--slate-700);
+    color: var(--slate-300);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: .02em;
@@ -3238,34 +3196,34 @@ textarea:focus-visible,
 }
 
 .parameters-bar-ticker {
-    flex: 0 1 320px;
-    min-width: 180px;
+    flex: 1 1 220px;
+    min-width: 140px;
+    max-width: 320px;
     padding: 6px 10px;
-    border: 1px solid var(--slate-200);
+    border: 1px solid rgb(255 255 255 / .25);
     border-radius: var(--radius-sm);
+    background: rgb(255 255 255 / .08);
+    color: #fff;
     font-family: inherit;
     font-size: 14px;
 }
 
-.parameters-bar-summary {
-    color: var(--slate-500);
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
+.parameters-bar-ticker::placeholder {
+    color: var(--slate-400);
 }
 
-/* Collapsed → only the toggle, the one-line summary and Run remain. Expanded →
-   the input already shows the ticker, so the summary is redundant. */
-.parameters-bar[data-collapsed="true"] .parameters-bar-fields,
-.parameters-bar[data-collapsed="true"] .ticker-validation {
-    display: none;
-}
-
-.parameters-bar[data-collapsed="false"] .parameters-bar-summary {
-    display: none;
+.parameters-bar-ticker:focus {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+    background: rgb(255 255 255 / .12);
 }
 
 .parameters-bar-alert {
     margin: 0;
+}
+
+.parameters-bar .ticker-validation {
+    color: var(--slate-300);
 }
 
 .parameters-bar .btn-primary {
@@ -3415,11 +3373,6 @@ textarea:focus-visible,
     background: transparent;
     color: var(--blue);
     border: 1px solid var(--blue-muted);
-}
-
-:root:not([data-theme="light"]) .badge-ticker {
-    background: var(--blue);
-    color: #0a0a0a;
 }
 
 /* All surfaces that were hardcoded #fff → onyx surface-1 */

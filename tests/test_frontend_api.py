@@ -65,8 +65,8 @@ class TestIndexPage:
         resp = client.get("/")
         html = resp.data.decode()
         assert 'class="parameters-bar"' in html
-        assert 'id="parameters-bar-toggle"' in html
-        assert 'id="parameters-bar-summary"' in html
+        assert 'id="ticker"' in html
+        assert 'id="parameters-bar-run"' in html
 
     def test_post_missing_ticker(self, client):
         """POST without ticker should show error."""

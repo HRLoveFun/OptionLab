@@ -126,9 +126,8 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 ┌─────────────────────────────────────────────────────────┐
 │  Header (site-header)                                   │
 │  ├── Brand (icon + title + subtitle)                    │
-│  └── Ticker Badge (when analysis active)                │
-├─────────────────────────────────────────────────────────┤
-│  Parameters bar  [ticker] [Run]  (collapse ▸/▾)          │  ← sticky, not a tab
+│  ├── Parameters bar  [ticker] [Run]                     │  ← not a tab, always visible
+│  └── Theme toggle                                       │
 ├─────────────────────────────────────────────────────────┤
 │  Sidebar      │  Main Panel                             │
 │  (tab-nav)    │  (tab-content)                          │
@@ -144,17 +143,17 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 └───────────────┴─────────────────────────────────────────┘
 ```
 
-The **Parameters bar** (`templates/partials/parameters_bar.html`, batch B6) renders
-between the header and `.app-body`, is `position: sticky` under the header, and owns
-exactly one visible input — `ticker` — plus the Run button and the ticker-validation
-badges. Every other parameter lives in its module's toolbar (batch B7); the bar
-also carries two hidden `start_time`/`end_time` inputs that `POST /` validates and
-uses to size the readiness prefetch, kept in sync by `state/marketParamsState.js`.
-It is **not** a tab: it survives tab switches. Collapsing it (the chevron toggle;
-state persisted per viewer under `localStorage['parametersBarCollapsed']`, guarded
-`try/catch`) hides the `#parameters-bar-body` fields group and the validation line,
-leaving the toggle, a one-line `▸ ^SPX` summary, and Run. The chevron is an inline
-SVG (Font Awesome is not loaded on this page) rotated by `[data-collapsed]`.
+The **Parameters bar** (`templates/partials/parameters_bar.html`, batch B6; folded into
+the header post-B10) renders inside `.site-header`, between the brand and the theme
+toggle, and owns exactly one visible input — `ticker` — plus the Run button and the
+ticker-validation badges. Every other parameter lives in its module's toolbar (batch
+B7); the bar also carries two hidden `start_time`/`end_time` inputs that `POST /`
+validates and uses to size the readiness prefetch, kept in sync by
+`state/marketParamsState.js`. It is **not** a tab: it survives tab switches, and it is
+always visible — there is no collapse toggle. Because `.site-header` stays dark in both
+themes, the bar's own controls (label, input) use light-on-dark styling rather than the
+page's light-theme tokens; the ticker-validation badges and the error alert keep their
+own self-contained colors, so they read the same as before.
 
 ### Peek Sidebar
 
