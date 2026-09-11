@@ -1,8 +1,8 @@
 # Exploration: futu-api as a Second Data Provider
 
 **Date**: 2026-09-11, updated 2026-09-11 (Part F + mainstream-vs-plan pass;
-§3.6 module-split pass) | **Owner**: repo owner | **Status**: EXPLORATION —
-no futu code, no new ADR
+§3.6 module-split pass; §2.5 HV-field check) | **Owner**: repo owner |
+**Status**: EXPLORATION — no futu code, no new ADR
 
 > **Update**: the business-line reorg's batches **B1–B10 have since landed**
 > (merged to `main`, see `business_line_reorg.md` §0/§10) — `providers/base.py`,
@@ -37,6 +37,7 @@ current codebase and the now-landed ADR 0011 canonical schema.
 | Biggest blocker | **OpenD is a stateful, authenticated, GUI-oriented local daemon.** It breaks ADR 0002's "works out of the box / zero infra" property and cannot be dropped onto a headless VPS without the Linux headless build + a login ceremony + crash supervision. |
 | Which modules need both stock price *and* option data? | Only **two call sites**, both the same pattern (HV percentile from ~1y of daily closes vs. current option IV, per ADR 0004): the Volatility Analysis tab's "Vol Premium" block and the Strategy Builder's `vol_context`. Everywhere else is cleanly price-only or option-only already — see §3.6. |
 | Can futu's option data also give us stock price info (e.g. latest price)? | The underlying's `subscribe`+`get_stock_quote` call (already needed to resolve `spot`, §3.3) returns a full current-session quote — last price, today's OHLC, prev close, volume — not just "last price". But it's a **snapshot, not a series**, so it cannot feed the two "both" modules' HV calc; their price leg stays on yfinance regardless. |
+| Does futu's option data include an HV time series? | **No** — none of the three option-chain calls (§2.1–§2.3) carry HV, and futu's standard kline indicators (MA/MACD/RSI/BOLL/KDJ/…) don't include it either. The one place "HV" exists at all is a *different*, fundamentals-family endpoint (`get_financials_earnings_price_move`) that returns `option_iv`/`option_hv` only in windows around past earnings dates — not a continuous series, not comparable to this project's HV convention without verification, and not part of the option-chain surface this doc scopes. See §2.5. |
 
 ---
 
@@ -171,6 +172,62 @@ contract:
 | `inTheMoney` | — | computed from `strike` vs `spot` |
 | `contractSymbol` | `code` | optional, only if a consumer starts needing it |
 | `spot` | see §3.3 | **not** from futu for US without a Nasdaq Basic quote card |
+
+### 2.5 Does the option data include an HV time series? No — with one narrow, unrelated exception
+
+Added 2026-09-11, checked against the official docs because §3.6 leans on "the
+price leg of the two 'both' modules must stay on yfinance" — worth confirming
+that isn't leaving a futu capability on the table.
+
+**The three option-chain calls above (§2.1–§2.3) — no HV, no such field at
+all.** Every field in `get_option_expiration_date`, `get_option_chain`,
+`get_stock_quote` (for a contract or the underlying), and `get_market_snapshot`
+is enumerated in §2.1–§2.3 and `archive/futu_integration/field_mapping.md`;
+none of them carry historical volatility, and none return a series — every
+call in this family is a point-in-time snapshot or static metadata, by
+construction.
+
+**Futu's standard technical-indicator set doesn't have it either.** The
+indicators attachable to any kline (MA, MACD, RSI, BOLL, KDJ, EMA, SAR, WMSR,
+BIAS, CCI, PSY, VR, OSC, 九转/"nine turns") do not include HV — it isn't a
+general "attach to a candlestick series" indicator in futu's system.
+
+**The one exception lives in a different API family and doesn't help here.**
+`get_financials_earnings_price_move`(获取财报日前后价格涨跌幅表现) — a
+**fundamentals/earnings** endpoint, not a quote/option-chain one — takes
+`code` + `periodCount` (past earnings cycles, default 10, max 50) and returns
+one `PricePerformanceRow` per trading day in the window around **each**
+historical earnings date, and each row carries both `option_iv` and
+`option_hv` (percent). So there genuinely is an "HV time series with options
+context" in futu's API surface — but:
+
+- it's **earnings-window-anchored** (`day_offset` relative to each past
+  earnings publish date), not a continuous series over an arbitrary
+  `[start, end]` — it cannot stand in for the rolling ~250-trading-day window
+  `core/signals/hv.py::hv_percentile` needs;
+- `option_hv`'s computation window is **undocumented** — this project's HV is
+  a specific, stated convention (20-day HV, 252-day percentile lookback,
+  `docs/constraints.md` §5); futu's number is not known to match, so the two
+  are not safely comparable without independent verification;
+- it is a **fourth** futu API surface beyond the three in §2.1–§2.3
+  (expiration dates / static chain / subscribed quotes), with its own
+  undocumented permissions and rate limits — adopting it would widen the
+  provider's `import futu` surface, not narrow it.
+
+**Conclusion: no change to §3.6.** The price leg of the two "both" modules
+stays on yfinance/`DataService` regardless; nothing in futu's option-adjacent
+APIs is a substitute for a continuous historical series.
+
+**But it's worth flagging as its own, unrelated opportunity.** `option_iv` +
+`option_hv` across *many past earnings events* for one ticker is something
+yfinance cannot do at all — ADR 0004 exists precisely because yfinance's
+option chain has no history, so there's no way to look at IV/HV around last
+quarter's earnings, let alone the last 10. A future "IV/HV behaviour around
+earnings" feature would be a genuine futu-only capability, not a yfinance
+substitute — but it is a **different project** from "replace the option chain
+with futu" (a different endpoint, different fields, different question being
+answered) and should be scoped separately if ever pursued, not folded into
+this seam.
 
 ---
 
@@ -369,7 +426,9 @@ where a price series and an option snapshot must both be present at once.
   time series; a richer point-in-time quote (even with today's OHLC) is still
   one data point. The price leg of ①② must stay on yfinance regardless of
   which provider serves the option leg — "futu gives us the latest price too"
-  does not let these two modules drop their yfinance dependency.
+  does not let these two modules drop their yfinance dependency. Nor is there
+  an HV series hiding elsewhere in futu's option-adjacent APIs to fall back
+  on — confirmed none exists (§2.5).
 - **One thing to actively avoid**: a future refactor "simplifying" ①/② by
   reusing the spot/OHLC that a futu `option_chain()` call already fetched,
   instead of a separate `get_cleaned_daily` call. That would silently swap a
@@ -564,6 +623,7 @@ in place.
 | Q-d | Python/dep drift: base conda is 3.13 + numpy 2.x + yfinance 0.2.66, `requirements.txt` pins 3.12 + numpy 1.26 + yfinance 0.2.61, `.venv` is missing numpy entirely. Resolve **before** adding another dep. | F0 (and independent) |
 | Q-e | Does the account here hold a Nasdaq Basic quote card (or equivalent HK pack)? Determines whether futu US spot/quotes work **at all**, independent of time of day. Needs the §1.3 smoke test — a card-less account will time out even during market hours. | F1 |
 | Q-f | §6 below: is a per-request `OpenQuoteContext` (this doc's F2 sketch) acceptable, or does the shared subscription quota / quote-tier force a **singleton gateway process** owning the futu connection? | F2/F3 |
+| Q-g | (§2.5) `get_financials_earnings_price_move`'s `option_iv`/`option_hv` across past earnings is a real futu-only capability yfinance cannot replicate (ADR 0004's gap). Worth a **separate** exploration as its own feature, not folded into this provider seam? | out of scope for this doc |
 
 ---
 
@@ -612,3 +672,12 @@ in place.
   (`get_market_snapshot` times out for US symbols without a paid Nasdaq Basic
   quote card — confirms and corrects §1.4/§3.3's original "off-hours"
   attribution)
+- HV field check (§2.5, 2026-09-11): official docs —
+  [获取财报日前后价格涨跌幅表现](https://openapi.futunn.com/futu-api-doc/quote/get-financials-earnings-price-move.html)
+  (`option_iv` / `option_hv` per trading day around each past earnings date —
+  the one place "HV" appears anywhere in futu's API, and it's a fundamentals
+  endpoint, not a quote/option-chain one),
+  [获取指标列表](https://openapi.futunn.com/futu-api-doc/quote/get-indicator-list.html);
+  富途牛牛 [技术指标](https://support.futunn.com/topic68) (the standard
+  kline-indicator set — MA/MACD/RSI/BOLL/KDJ/EMA/SAR/WMSR/BIAS/CCI/PSY/VR/OSC/
+  九转 — confirms HV is not a general-purpose indicator in futu's system)
