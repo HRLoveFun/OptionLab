@@ -292,19 +292,20 @@ Sketch for `providers/base.py` (the Q5 deliverable), checked against both:
 class MarketDataProvider(Protocol):
     name: str
 
-    def supports(self, symbol: str, dataset: Literal["ohlcv","spot","option_chain"]) -> bool: ...
+    def supports(self, symbol: str, dataset: Literal["ohlcv", "spot", "option_chain"]) -> bool: ...
 
     def history(self, symbol: str, start: date, end: date) -> list[CanonicalBar]: ...
     def spot(self, symbol: str) -> float | None: ...
     def option_chain(self, symbol: str) -> OptionChainSnapshot | None: ...
 
+
 @dataclass(frozen=True)
 class CanonicalOptionQuote:
     strike: float
     last: float | None
-    bid: float | None          # yfinance: yes | futu: None  → Optional, not assumed present
+    bid: float | None  # yfinance: yes | futu: None  → Optional, not assumed present
     ask: float | None
-    iv: float | None           # ALWAYS decimal — provider normalizes (futu ÷100)
+    iv: float | None  # ALWAYS decimal — provider normalizes (futu ÷100)
     open_interest: float
     volume: float
     in_the_money: bool | None  # yfinance: given | futu: derived | None if spot unknown
