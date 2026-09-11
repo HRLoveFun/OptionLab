@@ -22,6 +22,38 @@ management on top of Chart.js / Alpine.js.
 
 ---
 
+## Status & known limitations
+
+**Status:** Usable, under active development by a single maintainer; no
+tagged releases yet — track `main` for the current state.
+**Last verified:** 2026-09-11, by cross-checking the defaults and behaviour
+documented below against the current source (`app.py`, `data_pipeline/`,
+`.env.example`).
+
+**Known limitations**
+
+- **yfinance is the only live data source.** There's no fallback provider if
+  Yahoo blocks or rate-limits a request; the ADR 0011 provider seam makes a
+  second provider pluggable, but none is wired in yet.
+- **No option-chain history.** Yahoo doesn't expose historical chains, so
+  there's no IV rank/percentile or options backtesting — HV percentile is
+  used as the deliberate substitute (see `docs/decisions/`, ADR 0004).
+- **Proxy fallback is silent.** If `YF_PROXY` is set but unreachable, the app
+  falls back to a direct connection with no user-visible warning; in regions
+  where Yahoo is blocked (e.g. mainland China) this can silently degrade to
+  failed data fetches instead of an obvious error.
+- **SQLite only, no migration framework.** Schema changes are additive
+  (`CREATE TABLE IF NOT EXISTS`); backfilling an existing DB after a schema
+  change requires a one-off script (see `scripts/migrate_canonical_tables.py`).
+- **The GitHub Pages demo is a frozen static snapshot** (one ticker, one
+  date) — form submission is intercepted rather than fetching live data. Run
+  the Flask app locally for live analysis.
+- **Two reorg follow-ups are intentionally deferred**: a global risk-free-rate
+  setting, and renaming the ADR 0011 `symbol` column (both wait on a second
+  data provider) — see [`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md) §10.
+
+---
+
 ## Architecture
 
 > **Single source of truth**: the standing architecture record lives in
@@ -346,7 +378,7 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `MARKET_DB_PATH` | SQLite path | `./market_data.sqlite` |
+| `MARKET_DB_PATH` | SQLite path | `./data/market_data.sqlite` |
 | `YF_PROXY` | HTTP/SOCKS proxy for yfinance (curl_cffi) | `http://127.0.0.1:1087` (recommended; required behind VPN) |
 | `AUTO_UPDATE_TICKERS` | Comma-separated tickers for daily backfill (requires `APScheduler`) | unset |
 | `SCHED_TZ` | Timezone for scheduler cron | `UTC` |
