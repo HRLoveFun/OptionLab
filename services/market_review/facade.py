@@ -1,10 +1,10 @@
 """Market review orchestration facade.
 
-Thin glue: fetch the close-price panel via the cache ladder, then hand it to
-the pure ``core.market_review`` builders. The historical
-``(instrument, start, end)`` signature is preserved so routes / services /
-tests call these the same way they called the old ``core.market_review``
-functions.
+Thin glue: fetch the close-price panel (L1 cache over
+``DataService.get_close_panel``), then hand it to the pure
+``core.market_review`` builders. The historical ``(instrument, start, end)``
+signature is preserved so routes / services / tests call these the same way
+they called the old ``core.market_review`` functions.
 
 Dependencies:
   - core.market_review (build_review, build_timeseries)

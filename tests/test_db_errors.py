@@ -23,7 +23,8 @@ class TestInitDb:
         assert "raw_prices" in tables
         assert "clean_prices" in tables
         assert "processed_prices" in tables
-        assert "market_review_prices" in tables
+        # B10: market_review_prices dropped — benchmarks live in clean_bars now
+        assert "market_review_prices" not in tables
 
     def test_idempotent(self, tmp_path):
         db_path = str(tmp_path / "test.sqlite")

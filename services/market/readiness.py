@@ -16,7 +16,8 @@ Contracts:
   - ``prepare_readiness(tickers, modules, *, start, end) -> list[ReadinessStatus]``
   - ``warm_live_snapshots(tickers) -> None`` — fire-and-forget
 Dependencies UPWARD:
-  - data_pipeline.orchestrate.readiness (plan + kick), services.options.preload
+  - data_pipeline.orchestrate.readiness (plan + kick), services.options.preload,
+    core.market_review.constants (benchmark symbol list — batch B10)
 Dependencies DOWNWARD:
   - routes/core.py
 """
@@ -41,6 +42,15 @@ logger = logging.getLogger(__name__)
 # preload cache.
 LIVE_CHAIN_MODULES = frozenset({"options_chain", "payoff_ratio"})
 
+# WHY (batch B10): the Market Review slice renders the entered ticker *plus* a
+# fixed benchmark panel (SPX / US10Y / Gold / …). Since B10 those benchmark
+# symbols are ordinary ``clean_bars`` tickers, so the readiness pass can kick
+# them alongside the user's ticker instead of letting the slice cold-fetch
+# them. ``data_pipeline.orchestrate`` may not import ``core``, so the benchmark
+# list is expanded here (a ``services`` module) rather than inside
+# ``plan_datasets``.
+_BENCHMARK_MODULE = "market_review"
+
 
 def prepare_readiness(
     tickers: list[str],
@@ -55,12 +65,33 @@ def prepare_readiness(
     ``/render/<kind>`` can tell "covered" from "still downloading".
     """
     plan = plan_datasets(tickers, modules, start=start, end=end)
+    plan = _augment_with_benchmarks(plan, modules, start=start, end=end)
     if not plan:
         logger.info("readiness: no stored dataset required for modules=%s", modules)
     statuses = check_and_kick(plan)
     if LIVE_CHAIN_MODULES & set(modules):
         warm_live_snapshots(tickers)
     return statuses
+
+
+def _augment_with_benchmarks(plan, modules, *, start, end):
+    """Add the Market Review benchmark symbols to the plan (batch B10).
+
+    A no-op unless ``market_review`` is one of the requested modules. Benchmark
+    entries the base plan already carries (a user who typed a benchmark ticker)
+    are not duplicated.
+    """
+    if _BENCHMARK_MODULE not in modules:
+        return plan
+    from core.market_review.constants import BENCHMARKS
+
+    have = {(r.ticker, r.dataset) for r in plan}
+    extra = [
+        r
+        for r in plan_datasets(list(BENCHMARKS.values()), [_BENCHMARK_MODULE], start=start, end=end)
+        if (r.ticker, r.dataset) not in have
+    ]
+    return plan + extra
 
 
 def warm_live_snapshots(tickers: list[str]) -> None:

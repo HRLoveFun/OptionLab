@@ -8,8 +8,8 @@ Context:
     *make data ready* is delegated to ``orchestrate``.
 Contracts:
   - ``DataService`` staticmethods — initialize, manual_update, seed_history,
-    has_data_for_date, ensure_range, get_cleaned_daily, get_processed,
-    get_processed_data, get_latest_spot.
+    has_data_for_date, ensure_range, get_cleaned_daily, get_close_panel,
+    get_processed, get_processed_data, get_latest_spot.
 Dependencies UPWARD:
   - store (db), orchestrate (backfill / update)
 Dependencies DOWNWARD:
@@ -72,6 +72,11 @@ class DataService:
     @staticmethod
     def get_cleaned_daily(ticker: str, start=None, end=None):
         return _q.get_cleaned_daily(ticker, start, end)
+
+    @staticmethod
+    def get_close_panel(symbols: list[str], start=None, end=None):
+        """Wide close-price panel over ``clean_bars`` (market review, ADR 0011 L5)."""
+        return _q.get_close_panel(symbols, start, end)
 
     @staticmethod
     def get_processed(ticker: str, frequency: str = "D", start=None, end=None):

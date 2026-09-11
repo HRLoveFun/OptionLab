@@ -112,45 +112,15 @@ def update_tracked_strategy_closed(position_id: int, closed_date: str, closed_va
         return cur.rowcount
 
 
-# ── Market review (benchmark / instrument close panel) ────────────
+# ── Schema bootstrap ─────────────────────────────────────────────
 def ensure_schema() -> None:
     """Bootstrap the SQLite schema (idempotent). Safe to call before any read."""
     init_db()
 
 
-def fetch_market_review_latest_dates(tickers: list[str]) -> dict[str, str | None]:
-    """Return ``{ticker: latest date string | None}`` from ``market_review_prices``."""
-    out: dict[str, str | None] = {}
-    with get_conn() as conn:
-        for t in tickers:
-            row = conn.execute("SELECT MAX(date) FROM market_review_prices WHERE ticker = ?", (t,)).fetchone()
-            out[t] = row[0] if row and row[0] else None
-    return out
-
-
-def upsert_market_review_prices(rows: Iterable[tuple[str, str, float]]) -> None:
-    """Insert or replace ``(ticker, date, close)`` rows in ``market_review_prices``."""
-    rows = list(rows)
-    if not rows:
-        return
-    with get_conn() as conn:
-        conn.executemany(
-            "INSERT INTO market_review_prices (ticker, date, close) "
-            "VALUES (?, ?, ?) ON CONFLICT(ticker, date) DO UPDATE SET close=excluded.close",
-            rows,
-        )
-        conn.commit()
-
-
-def fetch_market_review_panel(range_start: str) -> pd.DataFrame:
-    """Return ``market_review_prices`` rows with ``date >= range_start`` as a DataFrame."""
-    with get_conn() as conn:
-        return pd.read_sql_query(
-            "SELECT ticker, date, close FROM market_review_prices WHERE date >= ? ORDER BY date",
-            conn,
-            params=(range_start,),
-            parse_dates=["date"],
-        )
+# NOTE (batch B10): the market-review benchmark panel no longer has its own
+# table / ladder here — benchmark symbols flow through ``clean_bars`` like any
+# other ticker and are read via ``DataService.get_close_panel`` (ADR 0011 L5).
 
 
 # ── Regime log ───────────────────────────────────────────────────
