@@ -1,7 +1,8 @@
 # Exploration: futu-api as a Second Data Provider
 
-**Date**: 2026-09-11, updated 2026-09-11 (Part F + mainstream-vs-plan pass) |
-**Owner**: repo owner | **Status**: EXPLORATION — no futu code, no new ADR
+**Date**: 2026-09-11, updated 2026-09-11 (Part F + mainstream-vs-plan pass;
+§3.6 module-split pass) | **Owner**: repo owner | **Status**: EXPLORATION —
+no futu code, no new ADR
 
 > **Update**: the business-line reorg's batches **B1–B10 have since landed**
 > (merged to `main`, see `business_line_reorg.md` §0/§10) — `providers/base.py`,
@@ -34,6 +35,8 @@ current codebase and the now-landed ADR 0011 canonical schema.
 | How does it map to our format? | Two live shapes: the canonical `OptionChainSnapshot`/`OptionLeg` dataclasses (`providers/base.py`, landed but currently uncalled), and the legacy `{ticker, spot, expiries, chain{exp:{calls:DataFrame, puts:DataFrame}}}` dict every real consumer still uses. Mapping is 1:1 either way except: IV `/= 100`, `inTheMoney`/`in_the_money` computed from strike vs spot, `bid`/`ask` left empty. Ticker conversion already exists (`utils/ticker_utils.py`). A futu provider should target the canonical shape and migrate the consumers — see §3.1. |
 | How to avoid contention with yfinance? | Four seams: (1) `provider` column as a real DB discriminator; (2) a **separate** throttle — never share `yf_throttle()`; (3) explicit provider selection (env default + per-market routing), not "whoever answers first"; (4) live option data is not persisted (ADR 0004), so cache-key by `(ticker, provider)` and there is no row-level race. |
 | Biggest blocker | **OpenD is a stateful, authenticated, GUI-oriented local daemon.** It breaks ADR 0002's "works out of the box / zero infra" property and cannot be dropped onto a headless VPS without the Linux headless build + a login ceremony + crash supervision. |
+| Which modules need both stock price *and* option data? | Only **two call sites**, both the same pattern (HV percentile from ~1y of daily closes vs. current option IV, per ADR 0004): the Volatility Analysis tab's "Vol Premium" block and the Strategy Builder's `vol_context`. Everywhere else is cleanly price-only or option-only already — see §3.6. |
+| Can futu's option data also give us stock price info (e.g. latest price)? | The underlying's `subscribe`+`get_stock_quote` call (already needed to resolve `spot`, §3.3) returns a full current-session quote — last price, today's OHLC, prev close, volume — not just "last price". But it's a **snapshot, not a series**, so it cannot feed the two "both" modules' HV calc; their price leg stays on yfinance regardless. |
 
 ---
 
@@ -291,6 +294,17 @@ market hours" is not a fix. Resolution order for a futu provider:
    instead of crashing (the archived code chose this; the analyzer contract
    would need a small softening — a follow-up, not blocking).
 
+**This resolution step is richer than "just a price".** Subscribing to the
+*underlying* stock code (not an option contract) through the same
+`subscribe`+`get_stock_quote` call returns a full current-session quote —
+`last_price`, `open_price`/`high_price`/`low_price` (today's OHLC),
+`prev_close_price`, `volume`, `turnover`, `turnover_rate`, `amplitude` — not
+merely the last trade. That's enough for any *point-in-time* need (display
+spot, moneyness, ITM classification, "today's range"). It is **still only a
+snapshot**, not a time series, so it cannot feed anything that needs history
+— see §3.6 for exactly which modules that rules out, and why it doesn't
+matter for most of them.
+
 ### 3.4 OHLCV mapping (recommendation: don't)
 
 Futu history (`request_history_kline`) is heavily quota-limited for non-paying
@@ -309,6 +323,58 @@ low, close, adj_close, volume` and futu klines map 1:1 (`time_key`→`date`,
 keep the yahoo form. A futu provider consumes the futu form from the same tuple.
 Futures (`GC=F`) and most `^`-indices have **no** futu equivalent — the provider
 must declare which symbols it can serve (see §4.2).
+
+### 3.6 Module split: price-only / option-only / both
+
+Added 2026-09-11, answering "given options move to futu and OHLCV stays on
+yfinance, does splitting modules by data dependency help, and which modules
+need both?" This is a grep-verified classification of the current tree, not a
+guess — see the actual import/call sites cited per row.
+
+| Split | Modules | Why this matters for the futu swap |
+|---|---|---|
+| **Price-only** | Market Review, Statistical Analysis, Assessment & Projections, Market Regime, Simulation (spot lookup only) | Never touch `fetch_option_chain`/`OptionsChainAnalyzer`. Zero exposure to an option-provider swap — this is most of the app. |
+| **Option-only** | Option Chain tab, Payoff Ratio, `core/decision/candidate.py` (delta/DTE candidate matrix), `core/decision/market_data.py` (IV rank/percentile **across the chain's own term structure**, not across time — not an ADR 0004 violation), the IV-smile/surface/skew/term-structure/PCR/OI charts | `spot` here is **not** a second data source — `fetch_option_chain()` resolves it internally and bundles it into the one snapshot dict (today via yfinance's own `fetch_spot`; a futu provider does the equivalent per §3.3). One provider call in, one snapshot out; a futu swap is a same-shape, local change. |
+| **Both — exactly 2 call sites** | ① `services/options/chain.py::generate_options_chain_analysis` (Volatility Analysis tab's "Vol Premium" block); ② `services/options/builder.py::_vol_context` (Strategy Builder) | See below. |
+
+**The two "both" sites, precisely:**
+
+```
+① services/options/chain.py L230-244  (feeds oc_vol_premium)
+   build_data_context(ticker, 365d, "D")        ← yfinance/DataService, a daily-bar series
+        + atm_iv from analyzer.chain[nearest]["puts"]   ← option chain, one snapshot value
+        → core.signals.hv.vol_premium_context(close_series, atm_iv)
+
+② services/options/builder.py L94-136  (feeds the built strategy's vol_context)
+   DataService.get_cleaned_daily(ticker, 400d)  ← yfinance/DataService, a daily-bar series
+        + avg_iv_pct across the built legs           ← option chain, snapshot values
+        → hv_pct / hv_percentile → cheap/fair/rich label
+```
+
+Both are the same shape: HV percentile (needs **≥250 trading days** of daily
+closes) compared against current option IV — the ADR 0004 "HV percentile
+substitutes for IV rank" pattern is, concretely, the one place in the app
+where a price series and an option snapshot must both be present at once.
+
+**Why the split helps, and what it doesn't fix:**
+
+- **It already exists at the code level.** Both call sites fetch price-history
+  and option-chain through two independent function calls and merge only the
+  *derived scalars* (an HV-percentile number, an IV-percent number) — never a
+  shared DataFrame or a shared fetch. Swapping the option side to futu touches
+  neither call's price leg; `DataService.get_cleaned_daily` /
+  `build_data_context` keep running against yfinance unchanged. No new
+  plumbing is needed to keep these two decoupled — don't introduce any.
+- **futu's underlying-quote snapshot (§3.3) cannot close this gap.** HV needs a
+  time series; a richer point-in-time quote (even with today's OHLC) is still
+  one data point. The price leg of ①② must stay on yfinance regardless of
+  which provider serves the option leg — "futu gives us the latest price too"
+  does not let these two modules drop their yfinance dependency.
+- **One thing to actively avoid**: a future refactor "simplifying" ①/② by
+  reusing the spot/OHLC that a futu `option_chain()` call already fetched,
+  instead of a separate `get_cleaned_daily` call. That would silently swap a
+  252-day history for a single day's bar and produce a nonsensical HV number.
+  Keep the two fetches structurally separate, as they are today.
 
 ---
 
@@ -343,6 +409,13 @@ Routing table (proposed):
 
 The value futu actually adds is **HK/CN options** and **Greeks** — not competing
 with yfinance on US equities.
+
+This table's "OHLCV history" and "Spot" rows are not routing choices in the
+usual sense — per §3.6, every module that touches historical prices
+(price-only *and* the price leg of the two "both" modules) is hard-wired to
+yfinance/`DataService` regardless of the option-side provider; there is no
+symbol class where futu's history/spot would be *selected*. The routing that
+actually matters is the "Option chain" row alone.
 
 ### 4.2 `MarketDataProvider` protocol must not be yfinance-shaped
 
@@ -508,6 +581,12 @@ in place.
   §3.1): `core/options/chain/analyzer.py::OptionsChainAnalyzer`,
   `services/options/chain.py`, `services/options/preload.py`,
   `services/options/builder.py`, `core/decision/candidate.py`
+- Module split (§3.6) — the two price+option merge points:
+  `services/options/chain.py::generate_options_chain_analysis` (L230-244),
+  `services/options/builder.py::_vol_context` (L94-136),
+  `core/signals/hv.py` (`hv_pct`, `hv_percentile`, `vol_premium_context`),
+  `core/decision/market_data.py` (option-only: term-structure IV rank, not a
+  time-history metric — not the ADR 0004 kind)
 - Ticker conversion: `utils/ticker_utils.py` (`normalize_ticker`, `yahoo_to_futu`)
 - Seam target: [ADR 0011](../decisions/0011-pluggable-data-provider-seam.md),
   [ADR 0012](../decisions/0012-parameter-ownership-and-prefetch.md),
