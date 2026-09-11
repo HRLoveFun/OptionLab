@@ -2,7 +2,8 @@
    index.html header comment).
 
    Owns exactly ONE input that every data module shares: `ticker` — plus the Run
-   button and the ticker-validation badges. It is not a tab: it renders inside
+   button and a validity icon (✅/❌ per ticker, static/main.js::validateTicker)
+   rendered to the input's right. It is not a tab: it renders inside
    `.site-header`, so it stays put while the user switches tabs and never hides.
 
    Batch B7 moved every other parameter to the module that owns it: the horizon
@@ -19,7 +20,7 @@
         <input type="text" id="ticker" name="ticker" class="parameters-bar-ticker"
                value="{{ ticker or '' }}" placeholder="e.g. AAPL, SPY, ^SPX"
                autocomplete="off" required>
-        <div id="ticker-validation-container" class="ticker-badges"></div>
+        <div id="ticker-badges" class="ticker-badges" aria-live="polite"></div>
 
         <button type="submit" class="btn-primary" id="parameters-bar-run">Run</button>
     </div>
@@ -28,7 +29,6 @@
     {% if error %}
     <div class="alert alert-error parameters-bar-alert"><span>{{ error }}</span></div>
     {% endif %}
-    <div class="ticker-validation" id="ticker-validation"></div>
 
     {# See the header comment: submit-only mirror of the marketParams store. #}
     <input type="hidden" id="start_time" name="start_time">
