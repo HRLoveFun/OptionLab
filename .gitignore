@@ -4,6 +4,11 @@
 # Per-task git worktrees (ADR 0009) — task checkouts live here, never in main workspace
 .worktrees/
 
+# Claude Code harness worktrees (EnterWorktree tool) — separate from ADR 0009's
+# .worktrees/ above; each is its own git checkout and must never be tracked as a
+# gitlink in the parent repo (git add -A here has bitten main more than once).
+.claude/worktrees/
+
 # Python
 __pycache__/
 *.pyc
