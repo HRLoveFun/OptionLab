@@ -21,6 +21,7 @@ Dependencies UPWARD:
 from __future__ import annotations
 
 import datetime as dt
+import threading
 
 import pytest
 
@@ -186,14 +187,36 @@ def test_kick_backfill_populates_the_db():
     assert len(df.index) > 0, "cold-start kick did not populate clean_bars"
 
 
-def test_kick_backfill_dedupes_an_in_flight_range():
-    """Two kicks for the same range must collapse into one thread."""
+def test_kick_backfill_dedupes_an_in_flight_range(monkeypatch):
+    """Two kicks for the same range must collapse into one thread.
+
+    WHY the block-on-Event: `kick_backfill` only dedupes while the first
+    thread is still alive (`existing.is_alive()`), and `_run_backfill` pops
+    itself from `_backfill_threads` the moment `ensure_range` returns. Against
+    the real `TEST_*` fixture path (no network, synchronous, fast) that return
+    can beat this test back to its second `kick_backfill` call on a quick CI
+    runner, so the first thread is already gone and a second (different)
+    thread starts — a real "no longer in flight" case, not a dedup bug, but
+    one this test must not race against. Blocking `ensure_range` behind an
+    `Event` makes "still in flight" deterministic instead of timing-dependent.
+    """
     init_db()
     ticker = "TEST_AAPL"
     end = dt.date.today()
     start = end - dt.timedelta(days=30)
 
+    entered = threading.Event()
+    release = threading.Event()
+
+    def _blocking_ensure_range(*_args, **_kwargs):
+        entered.set()
+        release.wait(timeout=5)
+        return True
+
+    monkeypatch.setattr(_bf, "ensure_range", _blocking_ensure_range)
+
     readiness.kick_backfill(ticker, start, end)
+    assert entered.wait(timeout=5), "backfill thread did not start in time"
     with readiness._backfill_lock:
         first = readiness._backfill_threads[(ticker, str(start), str(end))]
     readiness.kick_backfill(ticker, start, end)
@@ -201,6 +224,7 @@ def test_kick_backfill_dedupes_an_in_flight_range():
         second = readiness._backfill_threads.get((ticker, str(start), str(end)))
     assert first is second
 
+    release.set()
     readiness.join_backfills(timeout=60)
 
 

@@ -125,9 +125,8 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Header (site-header)                                   │
-│  ├── Brand (icon + title + subtitle)                    │
-│  ├── Parameters bar  [ticker] [Run]                     │  ← not a tab, always visible
-│  └── Theme toggle                                       │
+│  Brand (icon+title, left) [ticker] [✅/❌] [Run] (center) │  ← not a tab, always visible
+│                                        Theme toggle (right)│
 ├─────────────────────────────────────────────────────────┤
 │  Sidebar      │  Main Panel                             │
 │  (tab-nav)    │  (tab-content)                          │
@@ -144,16 +143,31 @@ The application uses a **single-page template** (`index.html`) with tab-based na
 ```
 
 The **Parameters bar** (`templates/partials/parameters_bar.html`, batch B6; folded into
-the header post-B10) renders inside `.site-header`, between the brand and the theme
-toggle, and owns exactly one visible input — `ticker` — plus the Run button and the
-ticker-validation badges. Every other parameter lives in its module's toolbar (batch
-B7); the bar also carries two hidden `start_time`/`end_time` inputs that `POST /`
-validates and uses to size the readiness prefetch, kept in sync by
-`state/marketParamsState.js`. It is **not** a tab: it survives tab switches, and it is
-always visible — there is no collapse toggle. Because `.site-header` stays dark in both
-themes, the bar's own controls (label, input) use light-on-dark styling rather than the
-page's light-theme tokens; the ticker-validation badges and the error alert keep their
-own self-contained colors, so they read the same as before.
+the header post-B10) renders inside `.site-header` and owns exactly one visible input —
+`ticker` — plus the Run button and a validity icon per ticker. `.header-inner` is a
+3-column grid (`1fr auto 1fr`: brand / bar / actions); the bar sits in the `auto` middle
+column, so it is truly centered on the row regardless of how wide the brand or the theme
+toggle are, not just left-packed next to the brand.
+`.parameters-bar-main` (the label + input + validity icons + Run) is deliberately
+`flex-wrap: nowrap`: a multi-line flex container's intrinsic width is only its widest
+single child, not the sum, which would starve the grid column of the width it needs —
+wrapping only comes back below the 768px breakpoint, where the bar is stretched to the
+header's full width by `grid-template-areas` instead of being intrinsically sized, so
+wrapping there is safe.
+
+Every other parameter lives in its module's toolbar (batch B7); the bar also carries two
+hidden `start_time`/`end_time` inputs that `POST /` validates and uses to size the
+readiness prefetch, kept in sync by `state/marketParamsState.js`. It is **not** a tab: it
+survives tab switches, and it is always visible — there is no collapse toggle. Because
+`.site-header` stays dark in both themes, the bar's own controls (label, input) use
+light-on-dark styling rather than the page's light-theme tokens.
+
+**Ticker validity feedback** (`#ticker-badges`, `static/main.js::validateTicker`) is a
+single ✅/❌ glyph per parsed ticker, rendered immediately to the right of the input —
+not the pre-existing pill badges (ticker + price, colored background) and not the
+`▸ N ticker(s) valid` sentence that used to sit below the input; both are gone. The glyph
+carries the ticker (and price, if valid) as its `title` tooltip. Debounced 500ms after
+input, same as before.
 
 ### Peek Sidebar
 
