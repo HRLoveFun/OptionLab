@@ -1,0 +1,69 @@
+{# Portfolio tab (batch B6 of the reorg; decision gate §8 Q3).
+
+   The Positions table + "Portfolio Analysis" workflow used to live inside the
+   Parameters tab, which conflated two different jobs: the streaming submit
+   (`POST /`) and the client-fired `POST /api/portfolio_analysis`. It gets its own
+   tab so the position workflow is discoverable and no longer rides on the
+   analysis form. Handlers (`addPositionRow`, `runPortfolioAnalysis`,
+   `initializeOptionsTable`) are global and unchanged; `#positions-tbody` is still
+   present in the DOM on every page load. #}
+<div class="tab-content" id="tab-portfolio">
+    <div class="panel-header">
+        <h2>Portfolio</h2>
+        <p class="panel-desc">Optional option positions — Greeks, P&amp;L at expiration, theta decay and risk metrics.</p>
+    </div>
+
+    <div class="form-card" id="positions-card">
+        <div class="form-card-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Positions</span>
+            <button type="button" class="btn-primary" id="portfolio-analysis-btn" onclick="runPortfolioAnalysis()">
+                Portfolio Analysis
+            </button>
+        </div>
+        <div class="options-table-container">
+            <table id="positions-table" class="options-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Type</th>
+                        <th>Expiry</th>
+                        <th>Strike</th>
+                        <th>Side</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="positions-tbody"></tbody>
+            </table>
+            <div class="add-row-container">
+                <button type="button" class="btn-ghost" onclick="addPositionRow()">
+                    Add Position
+                </button>
+            </div>
+        </div>
+        <!-- Portfolio analysis results panel -->
+        <div id="portfolio-results-panel" style="display:none;">
+            <div class="content-card" style="margin-top:1rem;">
+                <div class="content-card-title">Greeks Summary</div>
+                <div id="greeks-summary-card"></div>
+            </div>
+            <div class="content-card" style="margin-top:1rem;">
+                <div class="content-card-title">P&amp;L at Expiration</div>
+                <div class="chart-wrapper"><img id="pnl-chart-img" class="analysis-chart" style="display:none;"></div>
+            </div>
+            <div class="content-card" style="margin-top:1rem;">
+                <div class="content-card-title">Theta Decay Path</div>
+                <div class="chart-wrapper"><img id="theta-decay-chart-img" class="analysis-chart" style="display:none;"></div>
+            </div>
+            <div id="breakeven-card" class="content-card" style="margin-top:1rem;display:none;">
+                <div class="content-card-title">Breakeven Points</div>
+                <div id="breakeven-values"></div>
+            </div>
+            <div id="var-card" class="content-card" style="margin-top:1rem;display:none;">
+                <div class="content-card-title">Risk Metrics</div>
+                <div id="var-values"></div>
+            </div>
+        </div>
+    </div>
+</div>

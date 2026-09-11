@@ -16,12 +16,12 @@ from typing import Any
 
 from core.portfolio import Position, aggregate_greeks, attribute_pnl
 from core.strategies import Leg
-from data_pipeline.repos import (
+from data_pipeline.providers.yf_client import fetch_spots_bulk
+from data_pipeline.store.repos import (
     insert_tracked_strategy,
     select_tracked_strategies,
     update_tracked_strategy_closed,
 )
-from data_pipeline.yf_client import fetch_spots_bulk
 from utils.api_errors import ApiError
 
 logger = logging.getLogger(__name__)

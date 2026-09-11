@@ -1,4 +1,11 @@
-"""Tests for core.market_review — data processing, caching, and output format."""
+"""Tests for services.market_review — L1 cache + output format.
+
+Batch B10 folded the benchmark close panel into the provider seam: the ladder
+no longer owns a ``market_review_prices`` table, it calls
+``DataService.get_close_panel`` (which reads ``clean_bars``). These tests stub
+that call and focus on the L1 cache behaviour and the shape of what
+``core.market_review`` produces from a panel.
+"""
 
 import datetime as dt
 from unittest.mock import patch
@@ -6,13 +13,12 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from data_pipeline.db import get_conn, init_db
-
 # ── Helpers ───────────────────────────────────────────────────────
 
 
-def _make_benchmark_prices(tickers: list[str], days: int = 60) -> pd.DataFrame:
-    """Generate synthetic close prices for multiple tickers."""
+def _make_close_panel(tickers: list[str], days: int = 120) -> pd.DataFrame:
+    """A synthetic wide close-price panel, date-indexed, one column per ticker —
+    the shape ``DataService.get_close_panel`` returns."""
     dates = pd.bdate_range(end=dt.date.today(), periods=days)
     rng = np.random.default_rng(42)
     data = {}
@@ -22,21 +28,16 @@ def _make_benchmark_prices(tickers: list[str], days: int = 60) -> pd.DataFrame:
     return pd.DataFrame(data, index=dates)
 
 
-def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
-    """Seed the market_review_prices table with synthetic data."""
-    init_db()
-    df = _make_benchmark_prices(tickers, days)
-    rows = []
-    for t in tickers:
-        for date_idx, val in df[t].items():
-            rows.append((t, date_idx.strftime("%Y-%m-%d"), float(val)))
-    with get_conn() as conn:
-        conn.executemany(
-            "INSERT INTO market_review_prices (ticker, date, close) "
-            "VALUES (?, ?, ?) ON CONFLICT(ticker, date) DO UPDATE SET close=excluded.close",
-            rows,
-        )
-        conn.commit()
+def _patch_panel(primary: str):
+    """Patch ``DataService.get_close_panel`` to return a panel covering
+    *primary* + every benchmark."""
+    from services.market_review import BENCHMARKS
+
+    panel = _make_close_panel([primary] + list(BENCHMARKS.values()))
+    return patch(
+        "services.market_review.fetch.DataService.get_close_panel",
+        return_value=panel,
+    )
 
 
 # ── Cache tests ──────────────────────────────────────────────────
@@ -44,35 +45,31 @@ def _seed_market_review_prices(tickers: list[str], days: int = 60) -> None:
 
 class TestMarketReviewCache:
     def test_cache_hit_avoids_refetch(self, clear_mr_cache):
-        """After first fetch, second call should use L1 cache."""
-        from services.market_review import BENCHMARKS, _fetch_market_data
+        """After first fetch, the second call uses the L1 cache and never
+        re-enters the read layer."""
+        from services.market_review import _fetch_market_data
 
-        all_tickers = ["AAPL"] + list(BENCHMARKS.values())
-        _seed_market_review_prices(all_tickers, days=60)
         clear_mr_cache()
+        with _patch_panel("AAPL") as mocked:
+            data1, _ret1, disp1 = _fetch_market_data("AAPL")
+            data2, _ret2, disp2 = _fetch_market_data("AAPL")
 
-        with patch("services.market_review.fetch_close_panel"):
-            # First call — should use DB (not yfinance since we seeded)
-            data1, ret1, disp1 = _fetch_market_data("AAPL")
-            # Second call — should hit L1 cache
-            data2, ret2, disp2 = _fetch_market_data("AAPL")
-            assert data1.shape == data2.shape
-            assert disp1 == disp2
+        assert data1.shape == data2.shape
+        assert disp1 == disp2
+        assert mocked.call_count == 1, "second call must be served from the L1 cache"
 
     def test_cache_returns_copy(self, clear_mr_cache):
-        """Cached data should be a copy — mutations don't affect cache."""
-        from services.market_review import BENCHMARKS, _fetch_market_data
+        """Cached data is a copy — mutating a result must not corrupt the cache."""
+        from services.market_review import _fetch_market_data
 
-        all_tickers = ["MSFT"] + list(BENCHMARKS.values())
-        _seed_market_review_prices(all_tickers, days=60)
         clear_mr_cache()
-
-        with patch("services.market_review.fetch_close_panel"):
+        with _patch_panel("MSFT"):
             data1, _, _ = _fetch_market_data("MSFT")
             original_shape = data1.shape
             data1.drop(data1.index[:10], inplace=True)
             data2, _, _ = _fetch_market_data("MSFT")
-            assert data2.shape == original_shape
+
+        assert data2.shape == original_shape
 
 
 # ── market_review output format tests ────────────────────────────
@@ -80,30 +77,24 @@ class TestMarketReviewCache:
 
 class TestMarketReviewOutput:
     def test_returns_dataframe(self, clear_mr_cache):
-        """market_review() returns a DataFrame with MultiIndex columns."""
-        from services.market_review import BENCHMARKS, market_review
+        from services.market_review import market_review
 
-        all_tickers = ["GOOGL"] + list(BENCHMARKS.values())
-        _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
-
-        with patch("services.market_review.fetch_close_panel"):
+        with _patch_panel("GOOGL"):
             result = market_review("GOOGL")
-            assert isinstance(result, pd.DataFrame)
-            assert isinstance(result.columns, pd.MultiIndex)
-            assert len(result) > 0
 
-    def test_result_contains_expected_assets(self, clear_mr_cache):
-        """Result index should contain the primary ticker and benchmark names."""
-        from services.market_review import BENCHMARKS, market_review
+        assert isinstance(result, pd.DataFrame)
+        assert isinstance(result.columns, pd.MultiIndex)
+        assert len(result) > 0
 
-        all_tickers = ["TSLA"] + list(BENCHMARKS.values())
-        _seed_market_review_prices(all_tickers, days=100)
+    def test_result_contains_primary_ticker(self, clear_mr_cache):
+        from services.market_review import market_review
+
         clear_mr_cache()
-
-        with patch("services.market_review.fetch_close_panel"):
+        with _patch_panel("TSLA"):
             result = market_review("TSLA")
-            assert "TSLA" in result.index
+
+        assert "TSLA" in result.index
 
 
 # ── market_review_timeseries tests ───────────────────────────────
@@ -111,31 +102,25 @@ class TestMarketReviewOutput:
 
 class TestMarketReviewTimeseries:
     def test_returns_dict_structure(self, clear_mr_cache):
-        """market_review_timeseries() returns dict with expected keys."""
-        from services.market_review import BENCHMARKS, market_review_timeseries
+        from services.market_review import market_review_timeseries
 
-        all_tickers = ["AMZN"] + list(BENCHMARKS.values())
-        _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
-
-        with patch("services.market_review.fetch_close_panel"):
+        with _patch_panel("AMZN"):
             result = market_review_timeseries("AMZN")
-            assert "dates" in result
-            assert "assets" in result
-            assert "instrument" in result
-            assert len(result["dates"]) > 0
+
+        assert "dates" in result
+        assert "assets" in result
+        assert "instrument" in result
+        assert len(result["dates"]) > 0
 
     def test_assets_have_expected_fields(self, clear_mr_cache):
-        """Each asset entry should have prices, cum_return, rolling_vol."""
-        from services.market_review import BENCHMARKS, market_review_timeseries
+        from services.market_review import market_review_timeseries
 
-        all_tickers = ["META"] + list(BENCHMARKS.values())
-        _seed_market_review_prices(all_tickers, days=100)
         clear_mr_cache()
-
-        with patch("services.market_review.fetch_close_panel"):
+        with _patch_panel("META"):
             result = market_review_timeseries("META")
-            for _asset_name, asset_data in result["assets"].items():
-                assert "prices" in asset_data
-                assert "cum_returns" in asset_data
-                assert "rolling_vol" in asset_data
+
+        for _asset_name, asset_data in result["assets"].items():
+            assert "prices" in asset_data
+            assert "cum_returns" in asset_data
+            assert "rolling_vol" in asset_data

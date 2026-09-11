@@ -23,26 +23,26 @@ Classify the user's report:
 | Symptom | Likely Layer |
 |---------|-------------|
 | Empty chart panels | core/ (PriceDynamic) or data_pipeline/ (NaN filler rows) |
-| "No data for TICKER" message | data_pipeline/downloader.py (download failed) |
+| "No data for TICKER" message | data_pipeline/ingest/ohlcv.py (download failed) |
 | Stale prices (dates from days ago) | data_pipeline/data_service.py (cooldown blocking refresh) |
 | 429 / timeout errors | yfinance rate-limiting or proxy issue |
-| Wrong values in analysis | data_pipeline/cleaning.py or processing.py |
+| Wrong values in analysis | data_pipeline/transform/cleaning.py or processing.py |
 
 ### Step 2: Check DB State
 
 Query the database for the target ticker using the terminal:
 ```sql
--- Check raw_prices for recent data
-SELECT ticker, date, close FROM raw_prices WHERE ticker='{TICKER}' ORDER BY date DESC LIMIT 5;
+-- Check raw_bars for recent data
+SELECT ticker, date, close FROM raw_bars WHERE ticker='{TICKER}' ORDER BY date DESC LIMIT 5;
 
 -- Check for NaN-only filler rows (the root cause of empty charts)
-SELECT count(*) FROM raw_prices WHERE ticker='{TICKER}' AND open IS NULL AND high IS NULL AND low IS NULL AND close IS NULL;
+SELECT count(*) FROM raw_bars WHERE ticker='{TICKER}' AND open IS NULL AND high IS NULL AND low IS NULL AND close IS NULL;
 
--- Check clean_prices status
-SELECT ticker, date, missing_any, price_jump_flag FROM clean_prices WHERE ticker='{TICKER}' ORDER BY date DESC LIMIT 5;
+-- Check clean_bars status
+SELECT ticker, date, missing_any, price_jump_flag FROM clean_bars WHERE ticker='{TICKER}' ORDER BY date DESC LIMIT 5;
 
--- Check processed_prices
-SELECT ticker, date, frequency FROM processed_prices WHERE ticker='{TICKER}' ORDER BY date DESC LIMIT 5;
+-- Check feature_bars
+SELECT ticker, date, frequency FROM feature_bars WHERE ticker='{TICKER}' ORDER BY date DESC LIMIT 5;
 ```
 
 ### Step 3: Check yfinance Connectivity
@@ -66,10 +66,10 @@ print(df.tail() if not df.empty else "EMPTY - download failed")
 
 Follow the data through each stage, checking for where it breaks. See [pipeline stages reference](./references/pipeline-stages.md) for expected inputs/outputs at each stage.
 
-1. **downloader.py** → `upsert_raw_prices()` → writes to `raw_prices`
-2. **cleaning.py** → `clean_range()` → reads `raw_prices`, writes to `clean_prices`
-3. **processing.py** → `build_features()` → reads `clean_prices`, writes to `processed_prices`
-4. **core/price_dynamic.py** → `_fetch_daily_from_db()` → reads `processed_prices`
+1. **downloader.py** → `upsert_raw_prices()` → writes to `raw_bars`
+2. **cleaning.py** → `clean_range()` → reads `raw_bars`, writes to `clean_bars`
+3. **processing.py** → `build_features()` → reads `clean_bars`, writes to `feature_bars`
+4. **core/price_dynamic.py** → `_fetch_daily_from_db()` → reads `feature_bars`
 5. **core/market_analyzer.py** → uses PriceDynamic features for charts
 6. **services/market/analysis/facade.py** → calls chart methods, returns base64 images
 
@@ -78,7 +78,7 @@ Follow the data through each stage, checking for where it breaks. See [pipeline 
 Common root causes:
 | Root Cause | Evidence | Fix |
 |-----------|----------|-----|
-| NaN-only filler rows from failed download | `raw_prices` has NULL in all price columns | Re-download with `yf_throttle()`, delete filler rows |
+| NaN-only filler rows from failed download | `raw_bars` has NULL in all price columns | Re-download with `yf_throttle()`, delete filler rows |
 | 60s cooldown blocking retry | Download skipped, log says "No new data" | Wait 60s or reset cooldown in `DataService._ticker_locks` |
 | Proxy unreachable | `curl: (28) Operation timed out` | Check `YF_PROXY` in `.env`, verify proxy is running |
 | yfinance 429 rate limit | `YFRateLimitError` in logs | Wait 30s, ensure `yf_throttle()` is called everywhere |

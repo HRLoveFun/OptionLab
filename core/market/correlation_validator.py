@@ -2,6 +2,17 @@
 
 Rolling correlation computation lives here (domain-specific logic);
 rendering is delegated to core.market.charts.correlation.
+
+Domain:    Market Analysis — Correlation Validation
+Context:
+  - INVARIANT (ADR 0001; batch B4): this module does **not** fetch. The bars
+    arrive via the injected ``price_data`` (a ``DataContext``, or anything
+    exposing ``bars``); callers use
+    ``services.market.data_context_fetch.fetch_data_context``.
+Dependencies UPWARD:
+  - core.market.charts.correlation, core.market.features._horizon
+Dependencies DOWNWARD:
+  - services.market.analysis.statistical
 """
 
 from __future__ import annotations
@@ -13,7 +24,6 @@ import numpy as np
 import pandas as pd
 
 from core.market.charts.correlation import render_correlation
-from core.market.data_context import build_data_context
 from core.market.features._horizon import apply_horizon, compute_effective_end
 
 logger = logging.getLogger(__name__)
@@ -36,16 +46,18 @@ class CorrelationValidator:
         self.user_end_date = end_date or dt.date.today()
         self._user_provided_end = end_date is not None
 
-        # Duck-type support: injected object may be DataContext (has bars)
-        # or any object exposing a `_data` attribute that returns a DataFrame.
-        if price_data is not None:
-            self._raw_data = getattr(price_data, "_data", None) or getattr(price_data, "bars", None)
-            is_valid_fn = getattr(price_data, "is_valid", None)
-            self._is_valid = bool(is_valid_fn()) if is_valid_fn else self._raw_data is not None
-        else:
-            ctx = build_data_context(ticker, start_date, frequency, end_date)
-            self._raw_data = ctx.bars
-            self._is_valid = ctx.is_valid()
+        if price_data is None:
+            # WHY raise instead of fetching: the fetch used to live here, which
+            # made core/ depend on data_pipeline (architecture_review.md §2).
+            raise ValueError(
+                "CorrelationValidator requires price_data=<DataContext>; core/ must not fetch — "
+                "build it with services.market.data_context_fetch.fetch_data_context()"
+            )
+        # Duck-type support: the injected object may be a DataContext (has
+        # `bars`) or any object exposing a `_data` attribute.
+        self._raw_data = getattr(price_data, "_data", None) or getattr(price_data, "bars", None)
+        is_valid_fn = getattr(price_data, "is_valid", None)
+        self._is_valid = bool(is_valid_fn()) if is_valid_fn else self._raw_data is not None
 
         self.data = self._build_data()
 

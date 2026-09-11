@@ -61,7 +61,7 @@ Verify the fix uses the correct error pattern for its layer:
 For each changed production file, check that a corresponding test exists:
 ```bash
 # Map production file to test file
-# data_pipeline/downloader.py → tests/test_yf_download.py or tests/test_processing.py
+# data_pipeline/ingest/ohlcv.py → tests/test_yf_download.py or tests/test_processing.py
 # core/market_analyzer.py → tests/test_market_review.py
 # services/market/validation.py → tests/test_validation.py
 ```

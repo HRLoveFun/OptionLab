@@ -1,9 +1,9 @@
-"""Tests for data_pipeline/quality_log.py."""
+"""Tests for data_pipeline/store/quality_log.py."""
 
 from __future__ import annotations
 
-from data_pipeline.db import init_db
-from data_pipeline.quality_log import failure_counts, log_failure, recent_failures
+from data_pipeline.store.db import init_db
+from data_pipeline.store.quality_log import failure_counts, log_failure, recent_failures
 
 
 def test_log_and_query_recent():
@@ -27,7 +27,7 @@ def test_failure_counts_aggregates_by_class():
 
 def test_log_failure_swallows_db_errors(monkeypatch):
     """Logging path must never raise — caller is in an except block."""
-    import data_pipeline.quality_log as ql
+    import data_pipeline.store.quality_log as ql
 
     def boom(*a, **kw):
         raise RuntimeError("db down")

@@ -94,7 +94,7 @@ def _generate_statistical_analysis(analyzer, form_data):
                 start_date=form_data["parsed_start_time"],
                 frequency=form_data["frequency"],
                 end_date=form_data.get("parsed_end_time"),
-                price_data=analyzer._ctx,
+                price_data=analyzer.data_context,
             )
 
             if correlation_validator.is_data_valid():
@@ -111,7 +111,7 @@ def _generate_statistical_analysis(analyzer, form_data):
         all_none = all(v is None for k, v in results.items() if k != "statistical_error")
         if all_none and analyzer.is_data_valid():
             fdf = analyzer.features_df
-            ctx = getattr(analyzer, "_ctx", None)
+            ctx = getattr(analyzer, "data_context", None)
             bars = getattr(ctx, "bars", None)
             actual_min = actual_max = None
             if bars is not None and not bars.empty:

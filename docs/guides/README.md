@@ -50,7 +50,7 @@ services/              # 请求编排层（按业务域分包）
     facade.py          #     状态标注与持久化
     ops/               #     历史回填 + regime_log 写入
 data_pipeline/         # 数据管道（下载 → 清洗 → 加工 → 服务）
-  downloader.py        #   通过 yfinance 下载 OHLCV 并写入 raw_prices
+  downloader.py        #   通过 yfinance 下载 OHLCV 并写入 raw_bars
   cleaning.py          #   对齐交易日、标记异常（5σ 波动、成交量异常）、前向填充
   processing.py        #   日/周/月级聚合及衍生指标（收益率、振幅、Parkinson/GK 方差、动量等）
   data_service.py      #   数据门面：初始化 DB，按需 7 日增量刷新，60s 并发节流
@@ -64,7 +64,7 @@ tests/                 # 回归测试
 ## 数据管道
 
 ```
-Yahoo Finance ──▶ downloader (upsert raw_prices)
+Yahoo Finance ──▶ downloader (upsert raw_bars)
                      │
                      ▼
               cleaning (对齐交易日, 异常标记, 前向填充)

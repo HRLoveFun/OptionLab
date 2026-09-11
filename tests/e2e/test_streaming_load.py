@@ -54,7 +54,7 @@ def test_first_ticker_validation_under_5s(
     primarily measures DOM hydration + Alpine init + event-handler latency.
     """
     page.goto(live_server, wait_until="domcontentloaded")
-    open_tab("tab-parameter")
+    # The Parameters bar is always visible (batch B6).
 
     t0 = time.monotonic()
     page.fill("#ticker", "TEST_AAPL")

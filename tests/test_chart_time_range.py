@@ -48,11 +48,10 @@ _TEST_CASES = [
 
 def _run_single_case(test_case: dict) -> None:
     """Assert that a single test case produces sufficient data points and charts."""
+    from services.market.data_context_fetch import fetch_data_context
+
     analyzer = MarketAnalyzer(
-        ticker=test_case["ticker"],
-        start_date=test_case["start"],
-        frequency=test_case["frequency"],
-        end_date=test_case["end"],
+        fetch_data_context(test_case["ticker"], test_case["start"], test_case["frequency"], test_case["end"])
     )
 
     assert analyzer.is_data_valid(), f"{test_case['description']}: No valid data returned"

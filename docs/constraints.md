@@ -12,6 +12,11 @@ is usually a workaround for one of the items below.
 ## 1. yfinance is the only data source
 
 - **Constraint**: This is a personal-use research tool. We do not pay for Bloomberg / Polygon / Tradier.
+- **Amended by [ADR 0011](decisions/0011-pluggable-data-provider-seam.md) (2026-09-10)**: yfinance is
+  the only data-source **implementation**, not the only possible one. It lives behind the provider
+  seam in `data_pipeline/providers/` and maps its fields onto one canonical internal schema, so a
+  second vendor is one provider module + one registry line. The option-history caveats below are
+  unchanged — a second vendor does not conjure option history that no free API publishes.
 - **Implications**:
   - No SLA, no support, no stable schema. yfinance can break on any release.
   - Aggressive rate limiting (HTTP 429) — see §2.
@@ -24,22 +29,22 @@ is usually a workaround for one of the items below.
 - **Do NOT pass `session=requests.Session()`** to any yfinance call — it silently fails to make the request.
 - Proxy must be set via `HTTP_PROXY` / `HTTPS_PROXY` env vars; we read `YF_PROXY` and propagate to both. See [utils/network.py](../utils/network.py) `init_yf_proxy`.
 - **Dead-proxy poisoning**: an unreachable proxy makes curl_cffi hang. We TCP-probe before activating; falls back to direct connect.
-- **Global throttle**: token-bucket limiter (default 5 req/s, burst 5) in [utils/network.py](../utils/network.py)::`yf_throttle`. Every yfinance call MUST be routed through `data_pipeline/yf_client.py` (the single chokepoint) rather than calling `yf_throttle()` directly at each call site — see ADR 0005.
-- **DB-first pattern**: never re-download data already in `clean_prices`. The 60-second cooldown in `DataService` exists to prevent thundering herd from concurrent UI requests.
-- **Single yfinance exit point**: only `data_pipeline/yf_client.py` may `import yfinance`. Any other module needs a `# doc-guard: allow=single-yf-exit` marker, which is tracked as architecture debt (see [architecture_review.md](architecture_review.md) §2). Enforced by `scripts/doc_guard.py` rules `single-yf-exit`, `import-direction`, `core-purity` and `db-access`; trend-gated in CI by `scripts/arch_metrics.py --check`.
+- **Global throttle**: token-bucket limiter (default 5 req/s, burst 5) in [utils/network.py](../utils/network.py)::`yf_throttle`. Every yfinance call MUST be routed through `data_pipeline/providers/` (the single chokepoint since batch B1 of ADR 0011) rather than calling `yf_throttle()` directly at each call site — see ADR 0005.
+- **DB-first pattern**: never re-download data already in `clean_bars`. The 60-second cooldown in `DataService` exists to prevent thundering herd from concurrent UI requests.
+- **Single yfinance exit point**: only `data_pipeline/providers/` may `import yfinance`. The chokepoint moved there from `yf_client.py` in batch B1; `yf_client.py` is now a one-release compatibility shim over the provider package. Any other module needs a `# doc-guard: allow=single-yf-exit` marker (tracked as architecture debt — see [architecture_review.md](architecture_review.md) §2). `tests/` and `scripts/` are exempt by design (test doubles patch `yfinance.download` on the module object). Enforced by `scripts/doc_guard.py` rules `single-yf-exit`, `import-direction`, `core-purity` and `db-access`; trend-gated in CI by `scripts/arch_metrics.py --check`.
 
 ## 3. SQLite, single-machine deployment
 
 - **Constraint**: this app runs on one developer machine, occasionally a small VPS. Postgres is overkill.
 - **WAL mode + `synchronous=NORMAL`**: chosen for read concurrency. Do not switch to `FULL` (latency) or remove WAL (locks block reads during scheduler writes).
-- **Thread-local connections** (`data_pipeline/db.py`): SQLite connections are not thread-safe to share, but per-query reconnects are wasteful. We cache one connection per (thread, path) and apply PRAGMAs once.
+- **Thread-local connections** (`data_pipeline/store/db.py`): SQLite connections are not thread-safe to share, but per-query reconnects are wasteful. We cache one connection per (thread, path) and apply PRAGMAs once.
 - **No migration framework**: schemas are created via `CREATE TABLE IF NOT EXISTS`. Breaking changes require manual `.sqlite` migration scripts in `scripts/`.
 
 ## 4. The machine is not 24/7
 
 - Snapshot cadence (scheduler) **will have gaps**: laptop sleeps, weekends off, network outages.
 - Any feature that consumes time-series data must tolerate **sparse, non-contiguous days**. Do NOT assume daily continuity.
-- `data_pipeline/cleaning.py` aligns to business days and marks missing days as NA — **no interpolation**, by design. Filling gaps would invent prices that didn't trade.
+- `data_pipeline/transform/cleaning.py` aligns to business days and marks missing days as NA — **no interpolation**, by design. Filling gaps would invent prices that didn't trade.
 
 ## 5. Financial domain "magic numbers" are intentional
 
@@ -55,7 +60,7 @@ These are NOT magic numbers — they encode domain knowledge. Do not "DRY" them 
 ## 6. Computation must finish in one HTTP request
 
 - **No background job queue** (no Celery, no RQ). The Flask process serves the UI and runs the scheduler in-thread.
-- **APScheduler is optional and lazily imported.** The scheduler only starts when `AUTO_UPDATE_TICKERS` is set, and `data_pipeline/scheduler.py` imports APScheduler inside `UpdateScheduler.__init__` (plus a lazy `CronTrigger` import) so the rest of the app — and `acquire_scheduler_lock`'s unit tests — run without the package installed. **Do not move that import back to module scope**: an optional feature must not become a hard startup dependency.
+- **APScheduler is optional and lazily imported.** The scheduler only starts when `AUTO_UPDATE_TICKERS` is set, and `data_pipeline/orchestrate/scheduler.py` imports APScheduler inside `UpdateScheduler.__init__` (plus a lazy `CronTrigger` import) so the rest of the app — and `acquire_scheduler_lock`'s unit tests — run without the package installed. **Do not move that import back to module scope**: an optional feature must not become a hard startup dependency.
 - Long-running computations either:
   - Run inside a request and respond synchronously (fine for <2s), or
   - Are pre-computed by the scheduler and read from DB.

@@ -4,6 +4,7 @@ import gc
 import logging
 
 from core.market.analyzer import MarketAnalyzer
+from services.market.data_context_fetch import fetch_data_context
 from services.market.facade import MarketService
 from services.options.chain import OptionsChainService
 from utils.date_helpers import exclusive_month_end
@@ -12,6 +13,22 @@ from .assessment import _generate_assessment
 from .statistical import _generate_statistical_analysis
 
 logger = logging.getLogger(__name__)
+
+
+def _build_analyzer(form_data, end_exclusive) -> MarketAnalyzer:
+    """Build the DataContext (services own I/O) and wrap it in a MarketAnalyzer.
+
+    WHY here and not in core: constructing a context reads the DB and may hit
+    the provider — see ADR 0001 and the closed `core-purity` row in
+    docs/architecture_review.md §2 (batch B4).
+    """
+    ctx = fetch_data_context(
+        form_data["ticker"],
+        form_data["parsed_start_time"],
+        form_data["frequency"],
+        end_exclusive,
+    )
+    return MarketAnalyzer(ctx)
 
 
 class AnalysisService:
@@ -29,12 +46,7 @@ class AnalysisService:
         try:
             end_exclusive = exclusive_month_end(form_data.get("parsed_end_time"))
 
-            analyzer = MarketAnalyzer(
-                ticker=form_data["ticker"],
-                start_date=form_data["parsed_start_time"],
-                frequency=form_data["frequency"],
-                end_date=end_exclusive,
-            )
+            analyzer = _build_analyzer(form_data, end_exclusive)
 
             if not analyzer.is_data_valid():
                 return {"error": f"Failed to download data for {form_data['ticker']}. Please check the ticker symbol."}
@@ -60,12 +72,7 @@ class AnalysisService:
     def _build_analyzer_or_error(form_data):
         """Helper: build a MarketAnalyzer or return ({"error": …}, None)."""
         end_exclusive = exclusive_month_end(form_data.get("parsed_end_time"))
-        analyzer = MarketAnalyzer(
-            ticker=form_data["ticker"],
-            start_date=form_data["parsed_start_time"],
-            frequency=form_data["frequency"],
-            end_date=end_exclusive,
-        )
+        analyzer = _build_analyzer(form_data, end_exclusive)
         if not analyzer.is_data_valid():
             return (
                 {"error": f"Failed to download data for {form_data['ticker']}. Please check the ticker symbol."},

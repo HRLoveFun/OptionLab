@@ -12,7 +12,7 @@ from core.options.chain.analyzer import (
     liquidity_score,
 )
 from core.options.chain.filters import filter_option_chain
-from data_pipeline.yf_client import fetch_option_chain
+from data_pipeline.providers.yf_client import fetch_option_chain
 
 logger = logging.getLogger(__name__)
 
@@ -227,10 +227,10 @@ class OptionsChainService:
         try:
             import datetime as dt
 
-            from core.market.data_context import build_data_context
             from core.signals.hv import vol_premium_context
+            from services.market.data_context_fetch import fetch_data_context
 
-            ctx = build_data_context(ticker, dt.date.today() - dt.timedelta(days=365), "D")
+            ctx = fetch_data_context(ticker, dt.date.today() - dt.timedelta(days=365), "D")
             if ctx.is_valid() and ctx.daily_bars is not None:
                 # Get nearest-expiry ATM IV
                 atm_iv = None

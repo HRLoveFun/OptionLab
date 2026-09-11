@@ -113,7 +113,7 @@ class OptionsChainAnalyzer:
     """Analyses an option chain snapshot.
 
     INVARIANT: this class performs no I/O. Callers fetch the snapshot upstream
-    (``data_pipeline.yf_client.fetch_option_chain``) and inject it via
+    (``data_pipeline.providers.yf_client.fetch_option_chain``) and inject it via
     ``snapshot=``. WHY: keeping ``core/`` pure means the analyzer can be driven
     entirely by fixture data in tests, and every network call stays behind the
     single yfinance exit point where proxy setup and throttling are enforced.
@@ -123,7 +123,7 @@ class OptionsChainAnalyzer:
         if snapshot is None:
             raise ValueError(
                 "OptionsChainAnalyzer requires snapshot=... — fetch it upstream via "
-                "data_pipeline.yf_client.fetch_option_chain (core/ must stay pure)"
+                "data_pipeline.providers.yf_client.fetch_option_chain (core/ must stay pure)"
             )
         self.ticker = ticker
         self._init_from_snapshot(snapshot)

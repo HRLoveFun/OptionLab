@@ -54,7 +54,7 @@ REDIRECTS = {
     "showcase/assessment.html": ("tab-market-assessment", "Assessment & Projections"),
     "showcase/volatility.html": ("tab-options-chain", "Volatility Analysis"),
     "showcase/regime.html": ("tab-regime", "Market Regime"),
-    "showcase/parameter.html": ("tab-parameter", "Parameters"),
+    "showcase/portfolio.html": ("tab-portfolio", "Portfolio"),
     "showcase/summary.html": ("", "Summary"),
 }
 
@@ -64,7 +64,7 @@ BANNER_HTML = """    <!-- PAGES DEMO BANNER (build-injected; not part of the Fla
                 border-bottom:1px solid #bfdbff; font-size:13px; text-align:center;">
         静态演示快照 <strong id="pages-demo-ticker">{ticker}</strong>（数据截至 {data_through}）——
         界面与交互同本地版一致；实时行情与分析运行需本地 <code>python app.py</code>。
-        <a href="#tab-parameter" style="color:#1e40af; text-decoration:underline; margin-left:8px;">去 Parameter 页</a>
+        <a href="#tab-portfolio" style="color:#1e40af; text-decoration:underline; margin-left:8px;">去 Portfolio 页</a>
     </div>
 """
 
@@ -258,14 +258,15 @@ def _refresh_api_fixtures(ticker: str) -> None:
     }
     (FIXTURES_DIR / "regime_history.json").write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
 
-    # -- validate_tickers: NVDA + benchmark tickers, latest closes from DB
+    # -- validate_tickers: NVDA + benchmark tickers, latest closes from DB.
+    # B10: benchmark closes now live in clean_bars alongside every other ticker.
     print("[snapshot] validate_tickers fixture …")
     conn = sqlite3.connect(REPO_ROOT / "market_data.sqlite")
-    tickers = [r[0] for r in conn.execute("SELECT DISTINCT ticker FROM market_review_prices")]
+    tickers = [r[0] for r in conn.execute("SELECT DISTINCT ticker FROM clean_bars")]
     results = {}
     for t in tickers:
         row = conn.execute(
-            "SELECT close FROM market_review_prices WHERE ticker=? ORDER BY date DESC LIMIT 1", (t,)
+            "SELECT close FROM clean_bars WHERE ticker=? AND close IS NOT NULL ORDER BY date DESC LIMIT 1", (t,)
         ).fetchone()
         price = round(float(row[0]), 2) if row and row[0] is not None else None
         results[t] = {"valid": price is not None, "price": price, "message": "demo snapshot"}
@@ -383,7 +384,7 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
     assert 'hx-get="/render/' not in html, "streaming placeholders leaked into static build"
     assert '"/static/' not in html and "'/static/" not in html, "absolute /static/ paths break the /OptionLab/ subpath"
     for tab_id in (
-        "tab-parameter",
+        "tab-portfolio",
         "tab-market-review",
         "tab-statistical-analysis",
         "tab-market-assessment",
@@ -393,7 +394,6 @@ def assemble(out_dir: Path, ticker: str = DEMO_TICKER) -> Path:
         "tab-regime",
         "tab-simulation",
         "tab-option-pricing-matrix",
-        "tab-config",
     ):
         assert f'id="{tab_id}"' in html, f"missing tab body: {tab_id}"
     assert "./pages-shim.js" in html and "pages-demo-banner" in html

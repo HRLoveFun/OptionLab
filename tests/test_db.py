@@ -1,11 +1,11 @@
-"""Tests for data_pipeline/db.py — init, get_conn, upsert, fetch."""
+"""Tests for data_pipeline/store/db.py — init, get_conn, upsert, fetch."""
 
 import sqlite3
 import threading
 
 import pytest
 
-from data_pipeline.db import close_thread_conn, fetch_df, get_conn, init_db, upsert_many
+from data_pipeline.store.db import close_thread_conn, fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:
@@ -14,6 +14,11 @@ class TestInitDb:
         init_db(db)
         with sqlite3.connect(db) as conn:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        # canonical store (ADR 0011)
+        assert "raw_bars" in tables
+        assert "clean_bars" in tables
+        assert "feature_bars" in tables
+        # compatibility shadows — removable one release after the rename
         assert "raw_prices" in tables
         assert "clean_prices" in tables
         assert "processed_prices" in tables

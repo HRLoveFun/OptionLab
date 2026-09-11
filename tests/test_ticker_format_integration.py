@@ -216,45 +216,23 @@ class TestMarketAnalyzerFeaturesNotEmpty:
     """features_df must have rows when the horizon contains sufficient data."""
 
     def _build_analyzer_with_mock_data(self, start_date, end_date=None, frequency="D", data_days=60):
-        """Create a MarketAnalyzer with mocked price data routed through the canonical DataContext path."""
+        """Create a MarketAnalyzer from synthetic bars — no I/O (batch B4).
+
+        WHY the pure builder: ``core/`` no longer fetches (ADR 0001), so the
+        context is assembled from the fixture frame and injected.
+        """
         from core.market.analyzer import MarketAnalyzer
-        from core.market.data_context import DataContext
-        from core.market.models import Horizon
+        from core.market.data_context import Horizon, build_data_context
 
         fake_df = _make_daily_ohlcv(days=data_days, start="2025-12-01")
-
-        with patch.object(
-            MarketAnalyzer,
-            "__init__",
-            lambda self, *a, **kw: None,
-        ):
-            analyzer = MarketAnalyzer.__new__(MarketAnalyzer)
-
-        # Replicate _refrequency for D
-        resampled = fake_df.copy()
-        resampled["LastClose"] = resampled["Close"].shift(1)
-        resampled["LastAdjClose"] = resampled["Adj Close"].shift(1)
-
         horizon = Horizon(
             start=start_date,
             end=end_date or dt.date.today(),
             user_provided_end=end_date is not None,
             frequency=frequency,
         )
-        ctx = DataContext(
-            ticker="TEST",
-            frequency=frequency,
-            horizon=horizon,
-            bars=resampled,
-            daily_bars=fake_df,
-        )
-
-        analyzer._ctx = ctx
-        analyzer.ticker = "TEST"
-        analyzer.frequency = frequency
-        analyzer.end_date = end_date
-        analyzer.features_df = ctx.features_df
-        return analyzer
+        ctx = build_data_context(ticker="TEST", frequency=frequency, horizon=horizon, raw_data=fake_df)
+        return MarketAnalyzer(ctx)
 
     def test_features_not_empty_two_month_daily(self):
         """2-month daily horizon should produce a non-empty features_df."""

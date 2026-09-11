@@ -24,7 +24,7 @@ def test_assemble_matches_flask_partials(tmp_path):
 
     # every tab body from templates/index.html must survive the static render
     for tab_id in (
-        "tab-parameter",
+        "tab-portfolio",
         "tab-market-review",
         "tab-statistical-analysis",
         "tab-market-assessment",
@@ -34,7 +34,6 @@ def test_assemble_matches_flask_partials(tmp_path):
         "tab-regime",
         "tab-simulation",
         "tab-option-pricing-matrix",
-        "tab-config",
     ):
         assert f'id="{tab_id}"' in html, tab_id
 
@@ -46,7 +45,13 @@ def test_assemble_matches_flask_partials(tmp_path):
     # Pages delta: shim + demo banner + prefilled demo ticker
     assert "./pages-shim.js" in html
     assert "pages-demo-banner" in html
-    assert 'id="ticker" name="ticker" value="NVDA"' in html
+    # The demo snapshot pre-fills the Parameters bar's ticker input. Match the
+    # attributes independently: the assertion must not depend on their order
+    # (batch B6 inserted a class between `name` and `value`).
+    ticker_input = re.search(r'<input[^>]*id="ticker"[^>]*>', html)
+    assert ticker_input, "ticker input missing from the static build"
+    assert 'name="ticker"' in ticker_input.group(0)
+    assert 'value="NVDA"' in ticker_input.group(0)
 
     # snapshot content baked in (real analysis artefacts, not empty states)
     assert "data:image/png;base64," in html

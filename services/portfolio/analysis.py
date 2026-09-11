@@ -241,7 +241,7 @@ def _calc_var(positions, spots, greeks_totals, confidence=0.95):
 def _get_spots(positions: list) -> dict:
     tickers = list({p["ticker"] for p in positions})
     try:
-        from data_pipeline.yf_client import fetch_spots_bulk
+        from data_pipeline.providers.yf_client import fetch_spots_bulk
 
         return fetch_spots_bulk(tickers)
     except Exception as e:

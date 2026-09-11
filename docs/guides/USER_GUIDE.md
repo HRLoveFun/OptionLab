@@ -615,7 +615,7 @@ The combined regime is the cartesian product (e.g. *"High vol / Down"*). The her
 | `GET /api/regime/history` | Full labelled time-series |
 | `POST /api/regime/backfill` | Recompute and persist the series |
 
-Computation lives in the `core/regime/` package (`classify.py`, `series.py`, `models.py`); persistence goes through `data_pipeline/repos.py`.
+Computation lives in the `core/regime/` package (`classify.py`, `series.py`, `models.py`); persistence goes through `data_pipeline/store/repos.py`.
 
 ---
 

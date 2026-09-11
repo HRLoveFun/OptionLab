@@ -10,7 +10,7 @@ Two interception strategies are supported:
      The Flask process runs every route normally, but `yfinance.Ticker`,
      `yf.download`, and `fast_info` are monkey-patched in the backend
      process to return synthetic data. Combined with the existing
-     `TEST_*` ticker fixture mechanism in `data_pipeline.downloader`, this
+     `TEST_*` ticker fixture mechanism in `data_pipeline.ingest.ohlcv`, this
      lets e2e tests exercise real form submission, real DataService
      pipeline, real chart rendering — without network.
 
@@ -69,11 +69,11 @@ def _e2e_db(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
     """
     db_file = str(tmp_path_factory.mktemp("e2e-db") / "market.sqlite")
     os.environ["MARKET_DB_PATH"] = db_file
-    # Patch the module attr in case data_pipeline.db was already imported
+    # Patch the module attr in case data_pipeline.store.db was already imported
     # by a previous test module in the same pytest session (DB_PATH is
     # captured at import time).
     try:
-        import data_pipeline.db as db_mod
+        import data_pipeline.store.db as db_mod
 
         db_mod.DB_PATH = db_file
         # Ensure schema exists at the new path even if app was pre-imported.
@@ -91,14 +91,14 @@ def _e2e_db(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 # → /api/option_chain → /api/validate_tickers) opt in by using the `yf_stub`
 # fixture *instead of* `mock_apis`. The patch covers:
 #
-#   * `yfinance.download`              — used by data_pipeline.downloader and
+#   * `yfinance.download`              — used by data_pipeline.ingest.ohlcv and
 #                                        core.market_review
 #   * `yfinance.Ticker(...).fast_info` — used for spot price lookups
 #   * `yfinance.Ticker(...).options`   — option expirations list
 #   * `yfinance.Ticker(...).option_chain(exp)` — calls/puts DataFrames
 #
 # Combined with the existing `TEST_*` ticker bypass in
-# `data_pipeline.downloader._download_yf`, real `TEST_AAPL` form submissions
+# `data_pipeline.ingest.ohlcv.download_bars`, real `TEST_AAPL` form submissions
 # never hit the network.
 # ---------------------------------------------------------------------------
 def _synthetic_ohlcv(ticker: str, start: dt.date, end: dt.date):
@@ -221,7 +221,7 @@ def seed_test_data(_e2e_db: str, yf_stub: None) -> Iterator[None]:
     Uses the production downloader's `TEST_*` fixture branch — no network.
     """
     try:
-        from data_pipeline.data_ops import DataService
+        from data_pipeline.read import DataService
 
         # `manual_update` will route to the synthetic fixture for TEST_*
         DataService.manual_update("TEST_AAPL", days=120)

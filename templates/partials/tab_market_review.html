@@ -7,10 +7,23 @@
     </div>
 
     {% if streaming_mode and job_id and ticker %}
+    {# Module toolbar (batch B7): the module owns its parameters. `hx-include`
+       carries them on the /render call; a later change is re-issued by
+       static/moduleParams.js for THIS module only. #}
+    <div class="module-toolbar" id="market-toolbar">
+        <span class="module-toolbar-title">Market Review settings</span>
+        <label class="sr-only" for="mr-from">From month</label>
+        <input type="month" id="mr-from" name="from">
+        <span class="range-separator">to</span>
+        <label class="sr-only" for="mr-to">To month</label>
+        <input type="month" id="mr-to" name="to" placeholder="latest">
+    </div>
+
     {# HTMX streaming: skeleton fires on load and is replaced by /render/market_review. #}
     <div id="tab-market-review-content"
          class="loading-skeleton"
          hx-get="/render/market_review?job={{ job_id }}&ticker={{ ticker }}"
+         hx-include="#market-toolbar"
          hx-trigger="load"
          hx-swap="outerHTML">
         <div class="empty-state"><p>Loading market review…</p></div>

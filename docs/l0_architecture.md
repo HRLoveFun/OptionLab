@@ -38,10 +38,10 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 | `routes/` | 909 lines · 8 files | 7 blueprints + `__init__.py` aggregate export; no business logic | good |
 | `services/` | 3 540 lines · 5 domain packages | `market` (incl. `analysis/` slice factory), `market_review`, `options`, `portfolio`, `regime` | good |
 | `core/` | 6 372 lines · 8 sub-packages + `_shared` | Pure computation — no Flask, no DB, no network | good |
-| `data_pipeline/` | 2 645 lines · 12 files | The only I/O boundary: `yf_client`, `db`/`repos`, `data_ops`, `scheduler`, `job_cache` | good |
+| `data_pipeline/` | 3 618 lines · 27 files | The only I/O boundary, re-homed into six one-way stages (ADR 0011, batch B3): `providers/` · `store/` · `ingest/` · `transform/` · `read/` · `orchestrate/` (+ `_state.py`) | good |
 | `utils/` | 756 lines · 7 files | Leaf layer; highest fan-in (`ticker_utils.py` = 11) | good |
-| `templates/` | 1 546 lines · 17 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
-| `static/` | 5 473 lines · 31 JS/CSS | `state/` · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
+| `templates/` | 1 676 lines · 19 files | `index.html` skeleton + `partials/fragments/*` (HTMX swap targets) | good |
+| `static/` | 6 287 lines · 35 JS + 1 CSS | `state/` (now incl. the module parameter groups) · `sim/` · `components/` · `features/` + tab entry files | fair (see §4 P3-1) |
 
 ### B. Dependencies & configuration
 
@@ -68,7 +68,7 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 | Item | State | Note |
 |---|---|---|
-| `market_data.sqlite` (11.7 MB) | git-ignored, still in repo root | code default is now `data/market_data.sqlite` (`data_pipeline/db.py:27`); the local `.env` overrides it back to the root file — move the file into `data/` whenever convenient |
+| `market_data.sqlite` (11.7 MB) | git-ignored, still in repo root | code default is now `data/market_data.sqlite` (`data_pipeline/store/db.py:27`); the local `.env` overrides it back to the root file — move the file into `data/` whenever convenient. Schema: canonical `raw_bars` / `clean_bars` / `feature_bars`, plus the one-release shadows `raw_prices` / `clean_prices` / `processed_prices` — see [ADR 0011](decisions/0011-pluggable-data-provider-seam.md) |
 | `site/` | **inputs committed (9 files) · build output ignored** | tracked: `fixtures/` (7) · `snapshot/snapshot.json` · `pages-shim.js`; ignored: `index.html`, 5 feature + 6 showcase redirects, `static/**` (42 generated files) — see §5 P1-1 |
 | `archive/` (8 files · 1 070 lines) | committed | retired code still in tree — P3-3 |
 | `test.ipynb` (58 lines) | git-ignored | leftover scratch file — P2-2 |
@@ -78,17 +78,19 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 ## 2. Measured shape (`scripts/arch_metrics.py`)
 
+_Refreshed 2026-09-10 after batches B1 (provider seam), B2 (canonical table names), B3 (data_pipeline re-home), B4 (core purity), B5 (readiness), B6 (Parameters bar) and B7 (module-scoped params); the L1 inventory in §1 above is otherwise the 2026-09-08 snapshot._
+
 ```
-modules=146  import_edges=300
+modules=159  import_edges=324
 Layer-edge violations : (none)
 Import cycles         : 0
 God files (>400 lines): (none)
-Top fan-out  : core/market/charts/facade.py(14) · core/market/data_context.py(7)
-               routes/__init__.py(7) · routes/core.py(7) · app.py(6)
-Top fan-in   : core/_shared/plotting.py(13) · data_pipeline/yf_client.py(11)
-               utils/ticker_utils.py(11) · data_pipeline/db.py(9)
-Dead code    : services/market/analysis/summary.py  (only one; already on the
-               watch list in docs/architecture_review.md §2)
+Top fan-out  : core/market/charts/facade.py(14) · routes/core.py(8)
+               routes/__init__.py(7) · services/market/analysis/facade.py(7)
+               services/market/dispatch.py(7)
+Top fan-in   : core/_shared/plotting.py(13) · data_pipeline/providers/yf_client.py(11)
+               utils/ticker_utils.py(11) · data_pipeline/store/db.py(10)
+Dead code    : (none — summary.py deleted 2026-09-11, B9 F5-a)
 ```
 
 Static checks at snapshot time: `ruff check .` clean · `ruff format --check .`
@@ -111,6 +113,31 @@ OptionLab/
 ├─ site/                       # ONLY fixtures/ · snapshot/ · pages-shim.js tracked
 ├─ data/                       # market_data.sqlite moves out of the source root
 └─ archive/                    # mark read-only or move out
+```
+
+### Inside `data_pipeline/` — the six stages (ADR 0011, achieved in B3)
+
+```
+data_pipeline/
+  providers/   ACQUIRE   yfinance adapter + canonical schema + registry — the ONLY `import yfinance`
+  store/       SERVE     schema, the only SQL, the failure log
+  ingest/      GLUE      business-day gap detection + raw_bars upsert
+  transform/   PROCESS   raw_bars → clean_bars → feature_bars (never imports providers)
+  read/        SERVE     DataService facade + memoised queries
+  orchestrate/ DRIVERS   manual/seed update, chunked backfill, readiness, job cache, scheduler
+  _state.py              process-local shared state (query cache, update locks)
+```
+
+Call direction (same allow-list in `scripts/doc_guard.py` and
+`scripts/arch_metrics.py`):
+
+```
+services → read → {store, orchestrate, providers}
+services → orchestrate → {ingest, transform, store}
+ingest   → {providers, store}
+transform→ store
+providers→ {store, utils}        # store = the failure log, see plan §8 B3
+read     → orchestrate           # the read path triggers refreshes
 ```
 
 ---

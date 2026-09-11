@@ -22,6 +22,23 @@
         </div>
     </div>
 
+    <!-- Option filter toolbar (batch B7). Owned by the Option Chain module;
+         Payoff Ratio reads the same `optionFilter` store. Client-fired tab, so
+         a change here reloads the chain directly (no /render round trip). -->
+    <div class="module-toolbar" id="option-toolbar">
+        <span class="module-toolbar-title">Option filter</span>
+        <label for="oc-max-dte">Max DTE</label>
+        <input type="number" id="oc-max-dte" name="max_dte" min="1" max="730" step="1">
+        <label for="oc-moneyness-low">Moneyness low</label>
+        <input type="number" id="oc-moneyness-low" name="moneyness_low" min="0.01" max="1" step="0.01">
+        <label for="oc-moneyness-high">Moneyness high</label>
+        <input type="number" id="oc-moneyness-high" name="moneyness_high" min="1" max="5" step="0.01">
+        <label for="oc-max-contracts">Max contracts</label>
+        <input type="number" id="oc-max-contracts" name="max_contracts" min="10" max="5000" step="10">
+        <label for="oc-refresh-interval">Refresh <span class="label-unit">s</span></label>
+        <input type="number" id="oc-refresh-interval" name="refresh_interval" min="10" max="300" step="10">
+    </div>
+
     <!-- Loading banner — P2 four-state machine, role=status for SR announcement -->
     <div class="panel-banner panel-banner--loading" role="status" aria-live="polite"
          x-show="phase === 'loading'" x-cloak>
@@ -83,7 +100,7 @@
     <!-- Empty / idle -->
     <div class="empty-state" role="status" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
 
-        <p x-show="phase === 'idle'">Set a ticker in <strong>Parameter</strong> tab — option chain data loads automatically when you switch to this tab.</p>
+        <p x-show="phase === 'idle'">Set a ticker in the <strong>Parameters</strong> bar — option chain data loads automatically when you switch to this tab.</p>
         <p x-show="phase === 'empty'" x-text="message || 'No option chain data available for this ticker.'"></p>
     </div>
 </div>

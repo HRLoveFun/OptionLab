@@ -13,7 +13,7 @@ import os
 
 from flask import Blueprint, jsonify, request
 
-from data_pipeline.data_ops import DataService
+from data_pipeline.read import DataService
 from services.market.health import overall_summary
 from utils.rate_limit import client_ip, rate_limit
 from utils.ticker_utils import normalize_ticker

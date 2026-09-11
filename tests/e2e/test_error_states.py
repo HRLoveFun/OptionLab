@@ -18,7 +18,7 @@ def test_option_chain_500_renders_error_banner(
     page.goto(live_server, wait_until="domcontentloaded")
 
     # Activate parameter tab so #ticker becomes interactive.
-    open_tab("tab-parameter")
+    # The Parameters bar is always visible (batch B6), so #ticker is interactive already.
 
     # Provide a ticker so loadOptionChain has something to query.
     page.fill("#ticker", "TEST_AAPL")

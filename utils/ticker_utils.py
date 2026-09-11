@@ -32,7 +32,7 @@ _RE_YAHOO_FUTURES = re.compile(r"^[A-Z]+=F$")
 
 # Syntactic whitelist for any ticker we are willing to forward to yfinance / DB.
 # WHY: Without this, validate_ticker() accepts arbitrary strings (including XSS
-# payloads and SQL fragments) and persists rows for them in clean_prices —
+# payloads and SQL fragments) and persists rows for them in clean_bars —
 # turning the DB into an attacker-writable surface and a yfinance request
 # amplifier. The pattern intentionally permits the formats that yfinance/our
 # code actually use:

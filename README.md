@@ -82,17 +82,14 @@ app.py                       Flask entry point — registers blueprints, middlew
     ├── decision/                Put-selling candidate scoring pipeline
     ├── correlation_validator.py Rolling pairwise correlations
     └── _shared/                 Plotting helpers, types, validators
-└── data_pipeline/           Download · clean · process · persist
-    ├── data_ops/              DataService facade (DB-first cache, 60 s freshness)
-    ├── db.py                  SQLite context manager (WAL, synchronous=NORMAL)
-    ├── repos.py               SQL builders (prices, regime, positions, …)
-    ├── yf_client.py           Single chokepoint for yfinance (token-bucket throttle, proxy)
-    ├── downloader.py          Raw bar / chain fetch with gap detection
-    ├── cleaning.py            Time-series alignment; gaps marked NA (no interpolation)
-    ├── processing.py          Feature engineering (returns, MAs, HV)
-    ├── scheduler.py           APScheduler daily + monthly correlation refresh
-    ├── job_cache.py           In-process TTL cache for /render/<kind> payloads
-    └── quality_log.py         Pipeline anomaly persistence
+└── data_pipeline/           Acquire · process · serve (six one-way stages, ADR 0011)
+    ├── providers/             The ONLY `import yfinance`: vendor adapter + canonical schema + registry
+    ├── store/                 Canonical schema, the only SQL, the failure log
+    ├── ingest/                Business-day gap detection + raw_bars upsert
+    ├── transform/             Alignment + anomaly flags + feature engineering (provider-agnostic)
+    ├── read/                  DataService facade (DB-first cache, 60 s freshness)
+    ├── orchestrate/           Update/backfill drivers, job cache, optional scheduler
+    └── _state.py              Process-local query cache + update locks
 └── utils/                   Shared helpers (ticker normalisation, error envelopes, …)
     ├── constants.py           Domain defaults (DEFAULT_TICKER, FREQUENCY_DISPLAY, …)
     ├── date_helpers.py        parse_month_str, exclusive_month_end
@@ -146,12 +143,12 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
 | File | Role | Pulls from |
 |---|---|---|
 | [`services/market/facade.py`](services/market/facade.py) | Ticker validation + market-review summary for `/api/validate_*` and `/render/market_review`. | `core/market_review`, `core/market.data_context` |
-| [`services/market/analysis/facade.py`](services/market/analysis/facade.py) | Top-level "run a full market analysis" facade for `/render/statistical` and `/render/assessment`. | `core/market.analyzer`, `core/market.correlation_validator`, `data_pipeline/data_ops` |
-| [`services/market/charts.py`](services/market/charts.py) | Builds matplotlib figures and returns base64 PNGs; caches by `(ticker, kind, params)`. | `core/*`, `data_pipeline/data_ops` |
-| [`services/market/signals.py`](services/market/signals.py) | Wraps `core/signals` over DB-cached daily bars for `/api/signals`. | `core/signals`, `data_pipeline/data_ops` |
+| [`services/market/analysis/facade.py`](services/market/analysis/facade.py) | Top-level "run a full market analysis" facade for `/render/statistical` and `/render/assessment`. | `core/market.analyzer`, `core/market.correlation_validator`, `data_pipeline/read` |
+| [`services/market/charts.py`](services/market/charts.py) | Builds matplotlib figures and returns base64 PNGs; caches by `(ticker, kind, params)`. | `core/*`, `data_pipeline/read` |
+| [`services/market/signals.py`](services/market/signals.py) | Wraps `core/signals` over DB-cached daily bars for `/api/signals`. | `core/signals`, `data_pipeline/read` |
 | [`services/market/form.py`](services/market/form.py) | Extracts and normalises POST form fields, applying defaults from `utils/constants.py`. | `utils/constants`, `utils/date_helpers` |
 | [`services/market/validation.py`](services/market/validation.py) | Pure form-value validation rules (date ranges, frequency, …). | (none) |
-| [`services/market/health.py`](services/market/health.py) | Aggregates DB freshness / row-count / NaN metrics for `/health/*`. | `data_pipeline/db`, `data_pipeline/repos` |
+| [`services/market/health.py`](services/market/health.py) | Aggregates DB freshness / row-count / NaN metrics for `/health/*`. | `data_pipeline/store` |
 | [`services/market/dispatch.py`](services/market/dispatch.py) | Shared `/render/<kind>` handler: job lookup, memoisation, fragment render. | `services/market/analysis`, `services/options/chain` |
 
 **`services/options/`**
@@ -168,15 +165,15 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
 
 | File | Role | Pulls from |
 |---|---|---|
-| [`services/portfolio/facade.py`](services/portfolio/facade.py) | CRUD for tracked positions in SQLite; computes live P&L via `data_pipeline/repos`. | `core/portfolio`, `data_pipeline/repos` |
+| [`services/portfolio/facade.py`](services/portfolio/facade.py) | CRUD for tracked positions in SQLite; computes live P&L via `data_pipeline/store/repos`. | `core/portfolio`, `data_pipeline/store/repos` |
 | [`services/portfolio/analysis.py`](services/portfolio/analysis.py) | Stateless "analyse this basket of legs" endpoint backing `/api/portfolio_analysis`. | `core/options/greeks/portfolio`, `core/strategies` |
 
 **`services/regime/`**
 
 | File | Role | Pulls from |
 |---|---|---|
-| [`services/regime/facade.py`](services/regime/facade.py) | Labels & persists market regimes; serves `/api/regime/*`. | `core/regime`, `data_pipeline/repos` |
-| [`services/regime/ops/`](services/regime/ops/) | History bootstrap + `regime_log` read/write helpers. | `data_pipeline/db`, `data_pipeline/downloader` |
+| [`services/regime/facade.py`](services/regime/facade.py) | Labels & persists market regimes; serves `/api/regime/*`. | `core/regime`, `data_pipeline/store/repos` |
+| [`services/regime/ops/`](services/regime/ops/) | History bootstrap + `regime_log` read/write helpers. | `data_pipeline/store/db`, `data_pipeline/downloader` |
 
 ### `core/` — pure computation (no Flask, no I/O)
 
@@ -201,16 +198,12 @@ Packaged by business domain; each package exposes a `facade.py` entry point.
 
 | File | Role |
 |---|---|
-| [`data_pipeline/yf_client.py`](data_pipeline/yf_client.py) | Single chokepoint for `yfinance` calls: token-bucket throttle, proxy probe, error mapping. |
-| [`data_pipeline/downloader.py`](data_pipeline/downloader.py) | Uses `yf_client` to fetch raw bars / option chains, with gap detection against the DB. |
-| [`data_pipeline/cleaning.py`](data_pipeline/cleaning.py) | Aligns to business days and drops broken rows; missing gaps are marked NA — never interpolated. |
-| [`data_pipeline/processing.py`](data_pipeline/processing.py) | Feature engineering (returns, MAs, HV) on cleaned bars. |
-| [`data_pipeline/data_ops/`](data_pipeline/data_ops/) | `DataService` facade — DB-first cache with a 60 s freshness window, the single read entry-point. |
-| [`data_pipeline/db.py`](data_pipeline/db.py) | `get_conn()` context manager, schema bootstrap, WAL pragmas, thread-local connection pooling. |
-| [`data_pipeline/repos.py`](data_pipeline/repos.py) | Repository wrappers — the only modules that build SQL. |
-| [`data_pipeline/scheduler.py`](data_pipeline/scheduler.py) | APScheduler wrapper: daily backfill + monthly correlation refresh, gated by a leader-lock file. APScheduler is imported lazily — it is optional and only needed when `AUTO_UPDATE_TICKERS` is set. |
-| [`data_pipeline/job_cache.py`](data_pipeline/job_cache.py) | TTL'd in-process map keyed by `job_id`; lets `/render/<kind>` partials share the same form payload. |
-| [`data_pipeline/quality_log.py`](data_pipeline/quality_log.py) | Persists pipeline anomalies for `/health/data`. |
+| [`data_pipeline/providers/`](data_pipeline/providers/) | The single chokepoint for `yfinance` (adapter + canonical mapping + registry) and the token-bucket throttle / proxy probe. |
+| [`data_pipeline/ingest/`](data_pipeline/ingest/) | Business-day gap detection and the `raw_bars` upsert, acquisition via `providers.get_provider()`. |
+| [`data_pipeline/transform/`](data_pipeline/transform/) | Business-day alignment, anomaly flags (gaps NA — never interpolated) and feature engineering (returns, MAs, HV). |
+| [`data_pipeline/read/`](data_pipeline/read/) | `DataService` facade — DB-first cache with a 60 s freshness window, the single read entry-point. |
+| [`data_pipeline/store/`](data_pipeline/store/) | `db.py` (`get_conn()`, schema bootstrap, WAL pragmas, thread-local pooling), `repos.py` (the only SQL), `quality_log.py`. |
+| [`data_pipeline/orchestrate/`](data_pipeline/orchestrate/) | Update/seed drivers, chunked backfill, the `/render/<kind>` TTL cache, and the optional APScheduler wrapper (lazy import; only needed when `AUTO_UPDATE_TICKERS` is set). |
 
 ### `utils/`
 
@@ -369,7 +362,7 @@ See [`.env.example`](.env.example) for the full list. The most relevant ones:
   with a token bucket (default 5 req/s, burst 5) and uses a DB-first cache to avoid
   redundant downloads. Do not pass `session=requests.Session()` — yfinance
   uses `curl_cffi` and silently breaks otherwise.
-- **DB layer**: always go through `data_pipeline/db.py::get_conn()`; it
+- **DB layer**: always go through `data_pipeline/store/db.py::get_conn()`; it
   enables WAL mode, sets `synchronous=NORMAL`, and is safe to share across
   threads.
 - **Logging**: use `logging.getLogger(__name__)`; no `print()` in production

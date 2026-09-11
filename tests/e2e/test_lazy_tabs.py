@@ -19,8 +19,7 @@ def test_option_chain_lazy_loads_on_activation(
 
     page.goto(live_server, wait_until="networkidle")
 
-    # Activate parameter tab and fill the ticker so loadOptionChain() fires.
-    open_tab("tab-parameter")
+    # The Parameters bar is always visible (batch B6), so #ticker is interactive already.
     page.fill("#ticker", "TEST_AAPL")
     page.locator("#ticker").blur()
 
@@ -53,8 +52,7 @@ def test_option_chain_handles_api_error_gracefully(
 
     page.goto(live_server, wait_until="networkidle")
 
-    # Activate parameter tab and provide a ticker so loadOptionChain() fires.
-    open_tab("tab-parameter")
+    # The Parameters bar is always visible (batch B6), so #ticker is interactive already.
     page.fill("#ticker", "TEST_AAPL")
     page.locator("#ticker").blur()
 

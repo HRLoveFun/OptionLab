@@ -1,4 +1,4 @@
-"""Tests for data_pipeline.db — error scenarios and edge cases."""
+"""Tests for data_pipeline.store.db — error scenarios and edge cases."""
 
 import os
 import sqlite3
@@ -6,7 +6,7 @@ import sqlite3
 import pandas as pd
 import pytest
 
-from data_pipeline.db import fetch_df, get_conn, init_db, upsert_many
+from data_pipeline.store.db import fetch_df, get_conn, init_db, upsert_many
 
 
 class TestInitDb:
@@ -15,10 +15,16 @@ class TestInitDb:
         init_db(db_path)
         with sqlite3.connect(db_path) as conn:
             tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        # canonical store (ADR 0011)
+        assert "raw_bars" in tables
+        assert "clean_bars" in tables
+        assert "feature_bars" in tables
+        # compatibility shadows — removable one release after the rename
         assert "raw_prices" in tables
         assert "clean_prices" in tables
         assert "processed_prices" in tables
-        assert "market_review_prices" in tables
+        # B10: market_review_prices dropped — benchmarks live in clean_bars now
+        assert "market_review_prices" not in tables
 
     def test_idempotent(self, tmp_path):
         db_path = str(tmp_path / "test.sqlite")

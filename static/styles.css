@@ -3174,6 +3174,177 @@ textarea:focus-visible,
 
 
 /* ============================================================
+   Parameters bar (batch B6) — persistent `ticker` bar above the panes.
+   Not a tab: it stays put across tab switches (sticky under the header)
+   and collapses to a one-line summary (`▸ ^SPX`). Tokens only, so the
+   Onyx override layer below themes it for free.
+   ============================================================ */
+.parameters-bar {
+    position: sticky;
+    top: var(--header-h);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 10px 1.5rem;
+    background: var(--slate-50);
+    border-bottom: 1px solid var(--slate-200);
+    font-family: var(--font);
+}
+
+.parameters-bar-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.parameters-bar-toggle {
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    color: var(--slate-700);
+    cursor: pointer;
+    padding: 5px 9px;
+    line-height: 1;
+}
+
+.parameters-bar-chevron {
+    display: block;
+    transition: transform .15s ease;
+}
+
+.parameters-bar[data-collapsed="true"] .parameters-bar-chevron {
+    transform: rotate(-90deg);
+}
+
+/* The collapsible region: label + ticker input + validation badges. */
+.parameters-bar-fields {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.parameters-bar-label {
+    color: var(--slate-700);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.parameters-bar-ticker {
+    flex: 0 1 320px;
+    min-width: 180px;
+    padding: 6px 10px;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.parameters-bar-summary {
+    color: var(--slate-500);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Collapsed → only the toggle, the one-line summary and Run remain. Expanded →
+   the input already shows the ticker, so the summary is redundant. */
+.parameters-bar[data-collapsed="true"] .parameters-bar-fields,
+.parameters-bar[data-collapsed="true"] .ticker-validation {
+    display: none;
+}
+
+.parameters-bar[data-collapsed="false"] .parameters-bar-summary {
+    display: none;
+}
+
+.parameters-bar-alert {
+    margin: 0;
+}
+
+.parameters-bar .btn-primary {
+    margin-left: auto;
+}
+
+/* ============================================================
+   Module toolbars (batch B7) — each module owns its parameters.
+   They sit under the panel header; the values travel on the module's
+   /render call via hx-include, so a change re-runs only that module.
+   ============================================================ */
+.module-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin-bottom: .75rem;
+    padding: 8px 12px;
+    background: var(--slate-100);
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+}
+
+.module-toolbar-title {
+    color: var(--slate-500);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.module-toolbar label {
+    color: var(--slate-700);
+    font-size: 12px;
+}
+
+.module-toolbar input[type="number"] {
+    width: 88px;
+}
+
+.module-toolbar input[type="month"] {
+    width: 140px;
+}
+
+.module-toolbar input,
+.module-toolbar select {
+    padding: 4px 8px;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.module-toolbar-details {
+    flex: 1 1 100%;
+}
+
+.module-toolbar-details > summary {
+    cursor: pointer;
+    color: var(--slate-700);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.module-toolbar-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-top: 8px;
+}
+
+.config-moved-list {
+    margin: 0 0 8px 1.1rem;
+    color: var(--slate-700);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* ============================================================
    Onyx Theme — minimalist black with gold + purple accents.
    Append-only override layer. Reassigns design tokens from the
    :root block at the top of this file; nothing above is edited.

@@ -6,7 +6,7 @@ applyTo: "data_pipeline/**"
 # Data Pipeline Rules
 
 ## DB Access
-- Always use `get_conn()` context manager from `data_pipeline/db.py` — never raw `sqlite3.connect()`
+- Always use `get_conn()` context manager from `data_pipeline/store/db.py` — never raw `sqlite3.connect()`
 - Use `fetch_df()` for reads, `upsert_many()` for writes
 - Convert DB-sourced columns with `pd.to_numeric(col, errors='coerce')` before any math — SQLite returns `object` dtype
 

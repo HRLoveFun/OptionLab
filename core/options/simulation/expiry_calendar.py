@@ -9,7 +9,7 @@ Context:
     day) series for the short end, plus a *weekly* listed series on every
     Friday for the longer maturities. When a Friday is an exchange holiday the
     expiration rolls back to the previous business day (usually Thursday).
-  - The project otherwise ignores exchange holidays (see data_pipeline/cleaning
+  - The project otherwise ignores exchange holidays (see data_pipeline/transform/cleaning
     for the "B" frequency), but the listed-expiration rules *require* them, so
     we ship a self-contained NYSE approximation here rather than depending on
     an external calendar package.
