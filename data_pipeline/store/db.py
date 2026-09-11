@@ -210,17 +210,9 @@ def init_db(db_path: str | None = None):
     _create_table(cur, "raw_prices", _BARS_COLUMNS)
     _create_table(cur, "clean_prices", _CLEAN_BARS_COLUMNS)
     _create_table(cur, "processed_prices", _FEATURE_BARS_COLUMNS)
-    # Market review benchmark close prices
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS market_review_prices (
-            ticker TEXT NOT NULL,
-            date TEXT NOT NULL,
-            close REAL,
-            PRIMARY KEY (ticker, date)
-        )
-        """
-    )
+    # NOTE (batch B10): the market-review benchmark panel dropped its own
+    # ``market_review_prices`` table — benchmark symbols are stored in
+    # ``clean_bars`` like any other ticker (ADR 0011 L5).
     # Market regime daily log (see core.regime)
     cur.execute(
         """
@@ -308,7 +300,6 @@ _UPSERTABLE_TABLES = frozenset(
         "raw_prices",
         "clean_prices",
         "processed_prices",
-        "market_review_prices",
         "regime_log",
         "data_quality_log",
         "tracked_strategies",

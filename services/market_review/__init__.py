@@ -1,10 +1,11 @@
 """Market review — I/O orchestration package.
 
-Owns the L1/L2/L3 cache ladder (in-memory TTL → SQLite ``market_review_prices``
-→ yfinance) that produces the close-price panel, then delegates the pure
-computation to ``core.market_review``. This is the layer permitted to touch
-``data_pipeline`` for market review (ADR 0003 / architecture review §2
-`core-purity`).
+Assembles the benchmark close-price panel (via ``DataService.get_close_panel``,
+which reads ``clean_bars`` and heals coverage through ``ensure_range`` —
+ADR 0011 L5) behind a 5-minute L1 in-memory cache, then delegates the pure
+computation to ``core.market_review``. Batch B10 retired the standalone
+``market_review_prices`` ladder; benchmark symbols now flow through the
+provider seam like any other ticker.
 
 Public entry points keep the historical ``(instrument, start, end)`` signature
 so routes / services / tests call them the same way they called the old
@@ -17,7 +18,6 @@ from services.market_review.fetch import (
     _fetch_market_data,
     _mr_cache,
     _mr_cache_lock,
-    fetch_close_panel,
     fetch_market_data,
 )
 
@@ -29,5 +29,4 @@ __all__ = [
     "BENCHMARKS",
     "_mr_cache",
     "_mr_cache_lock",
-    "fetch_close_panel",
 ]

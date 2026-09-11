@@ -12,10 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **Business-line reorg (2026-09) — [ADR 0011](docs/decisions/0011-pluggable-data-provider-seam.md)
 > (provider seam + canonical schema) + [0012](docs/decisions/0012-parameter-ownership-and-prefetch.md)
 > (ticker-only Parameters bar + readiness prefetch), both Accepted.**
-> Batches B1–B9 **landed**; the architecture below reflects the end state. Only
+> Batches B1–B10 **landed**; the architecture below reflects the end state. Two
 > deferred follow-ups remain — see [`docs/plans/business_line_reorg.md`](docs/plans/business_line_reorg.md)
-> §10 (risk-free-rate global setting, `market_review_prices` L5 → provider seam,
-> ADR 0011 `symbol` column). Do not re-litigate the Accepted ADRs.
+> §10: the risk-free-rate global setting and the ADR 0011 `symbol` column
+> (ticker→symbol rename, waits for a real second provider). Do not re-litigate
+> the Accepted ADRs.
 
 ## Commands
 

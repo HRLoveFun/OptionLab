@@ -151,6 +151,11 @@ writes both families) and `scripts/migrate_canonical_tables.py` backfills an exi
   update `docs/constraints.md` §1, `docs/l0_architecture.md`,
   `docs/architecture_review.md` §2, and `scripts/doc_guard.py::_ALLOWED_DEPS`
   in the same batches.
+- Landed 2026-09-11 (batch B10): L5 closed. `services/market_review/fetch.py`'s
+  parallel ladder and the `market_review_prices` table are gone — the benchmark
+  close panel is now `DataService.get_close_panel` over `clean_bars`, so every
+  acquisition path runs through `providers/`. Deferred still: the `symbol` column
+  (ticker→symbol rename), which waits for a real second provider.
 
 ## References
 

@@ -76,6 +76,72 @@ def get_cleaned_daily(ticker: str, start: dt.date | None = None, end: dt.date | 
     return df
 
 
+# DOMAIN: default lookback for the market-review close panel when the caller
+# passes no explicit range. Matches the 400-day window the old
+# market_review_prices ladder used (services/market_review/fetch.py).
+_PANEL_LOOKBACK_DAYS = 400
+
+
+def get_close_panel(
+    symbols: list[str],
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+) -> pd.DataFrame:
+    """Wide close-price panel from ``clean_bars`` for *symbols* (ADR 0011, L5).
+
+    Replaces the old ``market_review_prices`` acquisition path: every symbol —
+    the primary ticker and each benchmark — is coverage-healed through the same
+    ``needs_backfill`` / background ``ensure_range`` machinery the rest of the
+    read layer uses, then its ``close`` series is read from ``clean_bars``.
+
+    Missing ranges are kicked once up front and then awaited **together** for a
+    single short grace window, so a cold panel costs ~one grace period, not one
+    per symbol. Whatever coverage exists at the end of that window is returned;
+    the background backfills keep filling and the next call sees the rest.
+
+    Returns a date-indexed frame with one column per symbol that had any data
+    (input order), or an empty frame when nothing is available.
+    """
+    start = start or (dt.date.today() - dt.timedelta(days=_PANEL_LOOKBACK_DAYS))
+    end = end or dt.date.today()
+    init_db()
+
+    kicked: list[str] = []
+    for sym in symbols:
+        try:
+            _u.manual_update(sym, days=7)
+            if _bf.needs_backfill(sym, start, end):
+                _kick_backfill(sym, start, end)
+                kicked.append(sym)
+            else:
+                _bf.ensure_range(sym, start, end)
+        except Exception as exc:  # noqa: BLE001 — one bad symbol must not sink the panel
+            logger.warning("close-panel coverage check failed for %s: %s", sym, exc)
+
+    if kicked:
+        deadline = time.monotonic() + _BACKFILL_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            if not any(_bf.needs_backfill(s, start, end) for s in kicked):
+                break
+            time.sleep(0.25)
+
+    series: dict[str, pd.Series] = {}
+    for sym in symbols:
+        # fetch_df indexes by date when the column is present.
+        df = fetch_df(
+            "SELECT date, close FROM clean_bars WHERE ticker=? AND date>=? AND date<=? ORDER BY date",
+            (sym, start.isoformat(), end.isoformat()),
+        )
+        if df.empty or "close" not in df.columns:
+            continue
+        s = df["close"].dropna()
+        if not s.empty:
+            series[sym] = s
+    if not series:
+        return pd.DataFrame()
+    return pd.DataFrame(series).sort_index()
+
+
 def get_processed(
     ticker: str, frequency: str = "D", start: dt.date | None = None, end: dt.date | None = None
 ) -> pd.DataFrame:

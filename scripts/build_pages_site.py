@@ -258,14 +258,15 @@ def _refresh_api_fixtures(ticker: str) -> None:
     }
     (FIXTURES_DIR / "regime_history.json").write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
 
-    # -- validate_tickers: NVDA + benchmark tickers, latest closes from DB
+    # -- validate_tickers: NVDA + benchmark tickers, latest closes from DB.
+    # B10: benchmark closes now live in clean_bars alongside every other ticker.
     print("[snapshot] validate_tickers fixture …")
     conn = sqlite3.connect(REPO_ROOT / "market_data.sqlite")
-    tickers = [r[0] for r in conn.execute("SELECT DISTINCT ticker FROM market_review_prices")]
+    tickers = [r[0] for r in conn.execute("SELECT DISTINCT ticker FROM clean_bars")]
     results = {}
     for t in tickers:
         row = conn.execute(
-            "SELECT close FROM market_review_prices WHERE ticker=? ORDER BY date DESC LIMIT 1", (t,)
+            "SELECT close FROM clean_bars WHERE ticker=? AND close IS NOT NULL ORDER BY date DESC LIMIT 1", (t,)
         ).fetchone()
         price = round(float(row[0]), 2) if row and row[0] is not None else None
         results[t] = {"valid": price is not None, "price": price, "message": "demo snapshot"}

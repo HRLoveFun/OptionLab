@@ -1,20 +1,21 @@
-"""Market review data fetching — I/O owner.
+"""Market review data fetching — panel assembly over the provider seam.
 
-Domain:    Market Review — Data Fetching (L1/L2/L3 cache ladder)
+Domain:    Market Review — Data Fetching
 Context:
-  - L1 in-memory cache (5-min TTL)
-  - L2 SQLite market_review_prices table
-  - L3 yfinance incremental download
-
-This module is the *only* place in ``core``/``services`` that builds the
-market-review panel, so WAL pragmas and the throttle apply uniformly. It is
-legal for a ``services`` module to import ``data_pipeline`` (ADR 0003 /
-architecture review §2 `core-purity`).
+  - L1 in-memory cache (5-min TTL) over the assembled (data, returns, display)
+    triple.
+  - The close-price panel itself comes from ``DataService.get_close_panel``,
+    which reads ``clean_bars`` and heals coverage through the same
+    ``ensure_range`` machinery every other read uses (ADR 0011, L5). Batch B10
+    removed the old ``market_review_prices`` ladder (its own L2 table + a
+    parallel yfinance download) so benchmark symbols now flow through the
+    provider seam like any other ticker and the submit-time readiness pass can
+    prefetch them.
 
 Contracts:
   - fetch_market_data(instrument, start_date, end_date) -> tuple[pd.DataFrame, pd.DataFrame, list]
 Dependencies:
-  - data_pipeline.providers.yf_client, data_pipeline.store.db
+  - data_pipeline.read.facade.DataService
   - core.market_review.constants (BENCHMARKS)
 """
 
@@ -28,13 +29,7 @@ import time
 import pandas as pd
 
 from core.market_review.constants import BENCHMARKS
-from data_pipeline.providers.yf_client import fetch_close_panel
-from data_pipeline.store.repos import (
-    ensure_schema,
-    fetch_market_review_latest_dates,
-    fetch_market_review_panel,
-    upsert_market_review_prices,
-)
+from data_pipeline.read.facade import DataService
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +41,9 @@ _MR_CACHE_TTL = 300
 
 # Bound on distinct cache keys (each holds a full multi-ticker price panel).
 _MR_CACHE_MAX = 64
+
+# DOMAIN: default lookback when the caller passes no explicit start date.
+_DEFAULT_LOOKBACK_DAYS = 400
 
 
 def fetch_market_data(instrument: str, start_date=None, end_date=None):
@@ -77,47 +75,16 @@ def fetch_market_data(instrument: str, start_date=None, end_date=None):
         display_names = [instrument] + list(BENCHMARKS.keys())
     ticker_to_display = dict(zip(all_tickers, display_names, strict=False))
 
-    ensure_schema()
-    today_str = dt.date.today().isoformat()
     range_start = (
-        start_date.isoformat()
-        if isinstance(start_date, dt.date)
-        else (dt.date.today() - dt.timedelta(days=400)).isoformat()
+        start_date if isinstance(start_date, dt.date) else (dt.date.today() - dt.timedelta(days=_DEFAULT_LOOKBACK_DAYS))
     )
+    range_end = end_date if isinstance(end_date, dt.date) else dt.date.today()
 
-    latest_map = fetch_market_review_latest_dates(all_tickers)
-    tickers_needing_download = [t for t in all_tickers if latest_map.get(t) is None or latest_map[t] < today_str]
-
-    if tickers_needing_download:
-        try:
-            download_start = range_start
-            for t in tickers_needing_download:
-                latest = latest_map.get(t)
-                if latest is None:
-                    download_start = range_start
-                    break
-                elif latest < download_start:
-                    download_start = latest
-            close_data = fetch_close_panel(tickers_needing_download, start=download_start, end=today_str)
-            if not close_data.empty:
-                rows = []
-                for t in tickers_needing_download:
-                    if t in close_data.columns:
-                        series = close_data[t].dropna()
-                        for date_idx, val in series.items():
-                            rows.append((t, date_idx.strftime("%Y-%m-%d"), float(val)))
-                if rows:
-                    upsert_market_review_prices(rows)
-        except Exception as e:
-            logger.warning("Market review yfinance download failed: %s", e)
-
-    df = fetch_market_review_panel(range_start)
-    if df.empty:
-        logger.warning("No market review data in DB, falling back to yfinance")
-        raw = fetch_close_panel(all_tickers, period="400d")
-        data = raw.ffill() if raw is not None and not raw.empty else pd.DataFrame()
-    else:
-        data = df.pivot(index="date", columns="ticker", values="close").sort_index().ffill()
+    panel = DataService.get_close_panel(all_tickers, range_start, range_end)
+    # ffill across the panel: benchmarks trade on different calendars, so a US
+    # holiday leaves a NaN in one column that we carry forward rather than
+    # dropping the whole row.
+    data = panel.sort_index().ffill() if not panel.empty else pd.DataFrame()
 
     valid_tickers = [t for t in all_tickers if t in data.columns and data[t].notna().any()]
     if instrument not in valid_tickers:

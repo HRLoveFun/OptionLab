@@ -209,3 +209,103 @@ class TestFeatureBarsHeal:
         feat = fetch_df("SELECT frequency, COUNT(*) AS n FROM feature_bars WHERE ticker='FEATHEAL2' GROUP BY frequency")
         assert not feat.empty, "feature_bars must be populated after the heal"
         assert _bf.needs_backfill("FEATHEAL2", start, end) is False
+
+
+class TestGetClosePanel:
+    """``get_close_panel`` — the ADR 0011 L5 replacement for the old
+    ``market_review_prices`` ladder (batch B10)."""
+
+    @pytest.fixture(autouse=True)
+    def _no_incremental_update(self, monkeypatch):
+        # The per-symbol freshness poke is not under test here and would hit
+        # the network; every case exercises only the coverage/read path.
+        monkeypatch.setattr("data_pipeline.orchestrate.update.manual_update", lambda *a, **k: False)
+
+    @staticmethod
+    def _seed_clean(ticker, start, end, base=100.0):
+        from data_pipeline.store.db import upsert_many
+
+        days = pd.bdate_range(start, end)
+        rows = [
+            (
+                ticker,
+                d.date().isoformat(),
+                base,
+                base + 1,
+                base - 1,
+                base + i * 0.1,
+                base + i * 0.1,
+                1_000_000,
+                1,
+                0,
+                0,
+                0,
+                0,
+            )
+            for i, d in enumerate(days)
+        ]
+        upsert_many(
+            "clean_bars",
+            [
+                "ticker",
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "adj_close",
+                "volume",
+                "is_trading_day",
+                "missing_any",
+                "price_jump_flag",
+                "vol_anom_flag",
+                "ohlc_inconsistent",
+            ],
+            rows,
+        )
+
+    def test_reads_close_series_per_symbol_from_clean_bars(self, monkeypatch):
+        init_db()
+        start, end = dt.date(2024, 1, 1), dt.date(2024, 6, 28)
+        self._seed_clean("PANELA", start, end, base=50.0)
+        self._seed_clean("PANELB", start, end, base=200.0)
+        # coverage already satisfied — the panel must not kick a backfill
+        monkeypatch.setattr(_bf, "needs_backfill", lambda *a, **k: False)
+        kicks = {"n": 0}
+        monkeypatch.setattr(_q, "_kick_backfill", lambda *a, **k: kicks.__setitem__("n", kicks["n"] + 1))
+
+        panel = _q.get_close_panel(["PANELA", "PANELB"], start, end)
+
+        assert list(panel.columns) == ["PANELA", "PANELB"]
+        assert not panel.empty
+        assert kicks["n"] == 0
+        assert panel["PANELA"].iloc[0] == 50.0
+        assert panel["PANELB"].iloc[0] == 200.0
+
+    def test_missing_symbols_are_kicked_once_and_awaited_together(self, monkeypatch):
+        init_db()
+        start, end = dt.date(2024, 1, 1), dt.date(2024, 6, 28)
+        monkeypatch.setattr(_bf, "needs_backfill", lambda *a, **k: True)
+        kicked: list[str] = []
+        monkeypatch.setattr(_q, "_kick_backfill", lambda t, s, e: kicked.append(t))
+
+        t0 = time.monotonic()
+        panel = _q.get_close_panel(["MISS1", "MISS2", "MISS3"], start, end)
+        elapsed = time.monotonic() - t0
+
+        assert kicked == ["MISS1", "MISS2", "MISS3"], "one kick per symbol"
+        # _fast_grace sets the wait to 0.5s; the wait is shared, not per-symbol
+        assert elapsed < 1.2, f"grace window was not shared across symbols ({elapsed:.2f}s)"
+        assert panel.empty
+
+    def test_one_unavailable_symbol_does_not_sink_the_panel(self, monkeypatch):
+        init_db()
+        start, end = dt.date(2024, 1, 1), dt.date(2024, 6, 28)
+        self._seed_clean("GOODSYM", start, end, base=75.0)
+        monkeypatch.setattr(_bf, "needs_backfill", lambda t, *a, **k: t != "GOODSYM")
+        monkeypatch.setattr(_q, "_kick_backfill", lambda *a, **k: None)
+
+        panel = _q.get_close_panel(["GOODSYM", "NODATA"], start, end)
+
+        assert list(panel.columns) == ["GOODSYM"]
+        assert not panel.empty

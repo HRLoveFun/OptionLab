@@ -4,12 +4,12 @@
 **ADRs**: [0011](../decisions/0011-pluggable-data-provider-seam.md) (data-provider seam + canonical schema — **Accepted**),
 [0012](../decisions/0012-parameter-ownership-and-prefetch.md) (parameter ownership + readiness prefetch — **Accepted**)
 
-> **Status: LANDED (2026-09-10) + acceptance review B9 (2026-09-11).** All eight
-> §6 batches plus the B9 review-remediation shipped on branch
-> `worktree-business-line-reorg`; the §0 ledger records what actually shipped and
-> §10 the review findings. Only the deferred follow-ups in §10 remain (risk-free
-> global setting, `market_review_prices` L5, ADR 0011 `symbol` column). Batches
-> are individually revertible — `git revert <batch-commit>`.
+> **Status: LANDED.** All eight §6 batches, the B9 acceptance-review
+> remediation, and B10 (market-review L5 → provider seam) shipped and merged to
+> `main` (B1–B9 via PR #10 / `1c9f49e`; B10 on its own PR). The §0 ledger
+> records what actually shipped and §10 the review findings. Only two deferred
+> follow-ups in §10 remain: the risk-free-rate global setting and the ADR 0011
+> `symbol` column. Batches are individually revertible — `git revert <batch-commit>`.
 
 ---
 
@@ -49,7 +49,8 @@
 | B6 — `ticker`-only Parameters bar | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q3 resolved (dedicated Portfolio tab); bar + collapse persisted; transitional settings group inside the bar's form until B7. Actuals in §8 |
 | B7 — module-scoped params | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q1 resolved (manifest). Backend query-arg contract + per-module allow-list; `state/*ParamsState.js`; module toolbars; bridge + hidden fields deleted; Config tab emptied (B8 decides its fate). See §8 B7 |
 | B8 — retire / repurpose Config tab | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-10 | Q2 resolved (**deleted**). `grep tab_config` returns nothing; risk-free-rate follow-up on the watch list |
-| B9 — acceptance-review remediation | ✅ landed | — | branch `worktree-business-line-reorg` · 2026-09-11 | §10 review: F1 (memo `variant` key), F2 (real collapse), F3 (SVG chevron), F4 (feature_bars self-heal), F5 a+b+c (a=retire option overlay per owner; b/c=stale UI), F6 (docstrings). Watch-list: `summary.py` deleted; risk-free-rate + L5 + `symbol` column deferred. **Open**: F7c (merge to main). |
+| B9 — acceptance-review remediation | ✅ landed | #10 | `main` (`1c9f49e`) · 2026-09-11 | §10 review: F1 (memo `variant` key), F2 (real collapse), F3 (SVG chevron), F4 (feature_bars self-heal), F5 a+b+c (a=retire option overlay per owner; b/c=stale UI), F6 (docstrings). Watch-list: `summary.py` deleted; risk-free-rate + L5 + `symbol` column deferred. F7c: B1–B9 (15 commits) merged to `main`. |
+| B10 — market-review L5 → provider seam | ✅ landed | — | branch `b10-market-review-seam` · 2026-09-11 | `market_review_prices` table + ladder deleted; benchmark closes read from `clean_bars` via new `DataService.get_close_panel` (heals through `ensure_range`); `services/market/readiness.py` expands the readiness plan with the benchmark symbols so `POST /` prefetches them. `services/market_review/fetch.py` keeps only its 5-min L1 memo. §2 watch-list L5 row resolved. New tests: `TestGetClosePanel`, `test_market_readiness.py`. |
 
 States: `⬜ not started` → `🔨 in progress (PR #n)` → `✅ landed` → (`↩ reverted`).
 Keep the row order; edit the row in place.
@@ -93,7 +94,7 @@ snapshot / none), two compute paths (streaming `/render/<kind>` vs. client-fired
 |---|---|---|---|
 | Parameter | — (form only) | — | — |
 | Summary *(dormant)* | multi-ticker aggregate | tickers | `services/market/analysis/summary.py` — fan-in 0, on the §2 watch list |
-| Market Review | `clean_prices` + `market_review_prices` close panel | `ticker`, `start_time`, `end_time` | streaming `generate_market_review_slice` |
+| Market Review | `clean_prices` + `market_review_prices` close panel *(B10: benchmark closes moved into `clean_bars`; `market_review_prices` deleted)* | `ticker`, `start_time`, `end_time` | streaming `generate_market_review_slice` |
 | Statistical Analysis | `processed_prices` | `ticker`, `parsed_start_time`, `frequency` | streaming `generate_statistical_slice` |
 | Assessment & Projections | `processed_prices` | `ticker`, `parsed_start_time`, `frequency`, `risk_threshold`, `rolling_window`, `side_bias`→`target_bias`, `account_size`, `max_risk_pct` | streaming `generate_assessment_slice` |
 | Market Regime | `regime_log` + live `^VIX` / `SPY` | `days` (30/180/365/1095) | client → `/api/regime/{current,history,backfill}` |
@@ -203,6 +204,11 @@ and call `/api/*` directly.
 | L4 | No canonical schema — `raw_prices` **is** yfinance's column set | `downloader._download_yf` only renames `Adj Close`→`Adj_Close`; `raw_prices.provider` column exists but is never a discriminator | — (new: ADR 0011) |
 | L5 | Second acquisition path outside `data_ops` | `services/market_review/fetch.py` writes `market_review_prices` on its own ladder | fold into the provider seam |
 | L6 | Live option/spot data has no persistence contract | `services/options/preload.py` + in-process `_option_chain_cache` only; deliberate per ADR 0004 (no option history) | keep, but make the "live vs. stored" split explicit in the seam |
+
+> This table is the plan-time diagnosis. Resolution: L1 → B4, L2 → B1, L3 → B5
+> (`orchestrate/`), L4 → B1/B2 (canonical schema), **L5 → B10** (benchmark closes
+> now read from `clean_bars` via `DataService.get_close_panel`;
+> `market_review_prices` deleted), L6 → B1 (`providers` snapshots vs. stored bars).
 
 ### 4.2 Prefetch / readiness today
 
@@ -318,8 +324,11 @@ providers→ (leaf: only utils + the external SDK)
   `fetch_data_context(...)` (a thin thing in `services/market/`, allowed to call
   `read/`) that produces a pure `DataContext`, and `core` keeps only the
   data-in/data-out container. Removes both `core-purity` markers.
-- L5: `services/market_review/fetch.py`'s ladder becomes a `read/` function over a
-  canonical `bars` table (no separate `market_review_prices` shape — see §5.3).
+- L5 (**done, B10**): `services/market_review/fetch.py`'s ladder became
+  `DataService.get_close_panel` — a `read/` function over `clean_bars` (no
+  separate `market_review_prices` shape). Benchmark symbols heal through
+  `ensure_range` like any ticker, and `services/market/readiness.py` adds them to
+  the `POST /` readiness plan.
 
 ### 5.3 Canonical internal schema + provider mapping
 
@@ -793,12 +802,51 @@ all vestigial. All removed; `arch_baseline.json` `dead_code_candidates` reset
   `doc_guard.py` clean; `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0
   / **dead 0**); `audit_tags.py` 16 vs 16.
 
+**B10 — market-review L5 → provider seam, 2026-09-11.** (ADR 0011's L5 exit;
+watch-list item / F7b.)
+
+- **The ladder is gone.** `services/market_review/fetch.py` no longer owns an
+  acquisition path: `market_review_prices` (table + `fetch_market_review_latest_dates`
+  / `upsert_market_review_prices` / `fetch_market_review_panel`) is deleted, and
+  the module now calls **`DataService.get_close_panel(symbols, start, end)`** — a
+  new `read/_query.py` function that reads `close` from `clean_bars` per symbol
+  and heals coverage through the same `needs_backfill` → background `ensure_range`
+  machinery every other read uses. Missing symbols are kicked once up front and
+  awaited **together** for one short grace window (not one per symbol). The 5-min
+  L1 in-memory memo over the assembled `(data, returns, display)` triple stays —
+  it is a compute cache, not an acquisition path.
+- **Benchmarks are first-class tickers now.** SPX / US10Y / Gold / … flow through
+  `providers.history()` → `raw_bars` → `clean_bars` → `feature_bars` like any
+  ticker (they already passed `is_valid_ticker_format`). The feature columns are
+  computed and ignored by market review, which is a small, cached, once-daily
+  cost — the price of not having a second schema.
+- **Readiness prefetches the panel.** `data_pipeline.orchestrate` may not import
+  `core`, so `services/market/readiness.py::_augment_with_benchmarks` expands the
+  `POST /` plan with `BENCHMARKS.values()` whenever `market_review` is a requested
+  module. `check_and_kick` then warms them on daemon threads alongside the user's
+  ticker — closing the other half of F4's spirit (the benchmark panel used to
+  cold-fetch on the slice).
+- **Docs**: `architecture_review.md` §2 watch-list L5 row → resolved; §4.1 / §5.2
+  resolution notes; `db.py` + `repos.py` carry a B10 NOTE where the table was;
+  `scripts/build_pages_site.py` demo fixture reads `clean_bars`.
+- **Tests**: `test_background_backfill.py::TestGetClosePanel` (reads seeded
+  `clean_bars`; one shared grace window across missing symbols; one bad symbol
+  does not sink the panel); `test_market_readiness.py` (benchmark expansion fires
+  only for `market_review`, no dup when the ticker *is* a benchmark,
+  `prepare_readiness` kicks them); `test_market_review.py` rewritten to stub
+  `get_close_panel` instead of seeding the dropped table; `test_db_errors.py`
+  asserts `market_review_prices` is **absent**.
+- **Exit criteria**: `pytest -m "not network" --ignore=tests/e2e` → exit 0;
+  `pytest tests/e2e` → exit 0; `npx vitest run` unchanged; `ruff` clean;
+  `doc_guard.py` clean; `arch_metrics.py --check` ok (layer 0 / cycles 0 / god 0 /
+  dead 0); `audit_tags.py` 16 vs 16; `grep -rn market_review_prices` → docs only.
+
 ### Watch-list follow-ups — 2026-09-11 assessment
 
 | Item | Call | Why |
 |---|---|---|
 | **Risk-free rate** hard-coded (`r = 0.05` default in `static/sim/{analyze,stats}.js`, `core/options/greeks/portfolio.py`, `grid.js` `r_pct=5`) → true global setting | **Defer the setting; do the cheap consolidation if wanted.** | A *user-facing* setting needs a surface — B8 deliberately deleted the Config tab, so this means re-introducing one for a number that moves ~quarterly. The silent-divergence risk is cheaply killed by one shared constant (`utils/constants.RISK_FREE_RATE` + a `static/sim/` mirror + a parity test) without any UI. Full setting = wait until someone actually wants to tweak it. |
-| **`market_review_prices` (L5)** → fold into provider seam | **Defer to its own batch (B10).** | It is ADR 0011's stated L5 exit and it would let readiness prefetch the benchmark panel (closing the other half of F4's spirit), but it is a real refactor: benchmark tickers (SPY/QQQ/…) would route through `ensure_range`/`clean_bars` instead of the close-only ladder. ~1 day + tests. Not a bundle-in. |
+| ~~**`market_review_prices` (L5)** → fold into provider seam~~ — **DONE 2026-09-11 (B10)** | done | benchmark closes now read from `clean_bars` via `DataService.get_close_panel` (heals through `ensure_range`); `market_review_prices` + its three repo functions deleted; `services/market/readiness.py` expands the `POST /` readiness plan with the benchmark symbols. `services/market_review/fetch.py` keeps only its 5-min L1 memo. See the B10 section below. |
 | **ADR 0011 `symbol` column** (ticker→symbol rename) | **Agree — stay deferred.** | Pure churn with one provider (`ticker == symbol` for yfinance). Do it *with* the second provider, when the mapping actually has two shapes to reconcile. |
 | ~~**`services/market/analysis/summary.py`**~~ — **DELETED 2026-09-11 (B9)** | done | `summary_data` was never set; module + `tab_summary.html` + sidebar button + `summary_pending` + `renderCorrelationHeatmap`/`corrToColor` removed; `dead_code_candidates` baseline 1 → 0. |
 
@@ -837,5 +885,5 @@ Findings worked as **batch B9 (remediation)** under the §0 rules.
 | F4 | minor — readiness gap | ✅ **fixed (B9)** | `needs_backfill` probed `clean_bars` only, so a DB with clean rows but stale/missing `feature_bars` (a past `process_frequencies` failure, or clean extended without a reprocess) was never healed — Statistical/Assessment read `feature_bars`. `process_frequencies` writes D/W/ME/QE together so a *new* frequency is not the trigger; the partial-failure state is. | `backfill._feature_bars_behind` (probe frequency='D', 1:1 with clean); `needs_backfill` returns True on feature lag; `_ensure_range_impl` reprocesses (no download) on the clean-covered short-circuit; `get_processed` self-heals like `get_cleaned_daily`. Tests: `TestFeatureBarsHeal`. |
 | F5 | mixed | ✅ **fixed (B9)** | **(a) was a B7 regression, not dead code:** `assessment.py` read `form_data["option_data"]` (projection-vs-positions overlay + sizing max-loss); B7 stopped `POST /` carrying positions, leaving the overlay permanently unfed. **(b/c) stale UI:** `routes/core.py` GET vars + `index.html` `badge-meta` + `market_review.html` meta-chips all showed POST-time defaults after B7 (`badge` always "Monthly, Neutral"). | **(a) retired** (owner call): removed the `option_data` branches, `parse_option_data`, `analyze_options` (both), `core/market/option_pnl.py` + `charts/option_pnl.py`, the `plot_url` block — Assessment sizing is debit-only. **(b/c)** GET vars + imports removed; `badge-meta` dropped (ticker only); 3 stale `market_review` chips removed; 4 "Parameter tab" empty-state refs + `tab_simulation` placeholder fixed. |
 | F6 | trivial — stale docstrings | ✅ **fixed (review commit `9691776`)** | `providers/base.py` "yf_option_chain.py" → `yf_snapshot.py`; `providers/yf_client.py` listed `core/market/data_context.py` as an importer (B4 removed it); `providers/__init__.py` + `yfinance_provider.py` said `downloader.py` (it is `ingest/ohlcv.py` since B3); §0 ledger planning-row status. | done |
-| F7 | housekeeping | 🔨 partial | (a) `providers/yf_client.py` "one-release" shim has no tracked removal trigger. (b) `market_review_prices` (L5) is still a parallel acquisition path outside the seam. (c) Branch is ahead of `origin/main`, unmerged. | (a)+(b) **added to `architecture_review.md` §2 watch list** (review commit); (c) push + merge still pending. |
+| F7 | housekeeping | ✅ **done** | (a) `providers/yf_client.py` "one-release" shim has no tracked removal trigger. (b) `market_review_prices` (L5) is still a parallel acquisition path outside the seam. (c) Branch is ahead of `origin/main`, unmerged. | (a) **on `architecture_review.md` §2 watch list** with a grep trigger (still pending — shim importers not yet moved). (b) **resolved in B10** — L5 folded into the seam. (c) B1–B9 merged via PR #10 (`1c9f49e`, 2026-09-11). |
 
