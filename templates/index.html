@@ -105,20 +105,18 @@
                     <p class="subtitle">Options Strategy &amp; Market Analysis</p>
                 </div>
             </div>
+
+            {# The `ticker` input lives in the header now: it is the one input
+               every data module shares, plus Run and validation feedback. Not
+               a tab, so it survives tab switches; always visible — no collapse
+               toggle. Module params moved to the tab toolbars in B7. #}
+            {% include 'partials/parameters_bar.html' %}
+
             <div class="header-actions">
-                {% if ticker %}
-                {# Analysis parameters are per-module now (batch B7): frequency /
-                   horizon / side-bias differ per tab, so there is no single
-                   value to show here. The badge is just the active ticker. #}
-                <div class="header-badge">
-                    <span class="badge-ticker">{{ ticker }}</span>
-                </div>
-                {% endif %}
                 <!-- Theme toggle: persistent in the top-right on desktop and
-                     mobile (outside the conditional header-badge). Icons show
-                     the CURRENT theme (dark → moon, light → sun; CSS swaps
-                     them per theme), while the aria-label describes the
-                     action. -->
+                     mobile. Icons show the CURRENT theme (dark → moon, light →
+                     sun; CSS swaps them per theme), while the aria-label
+                     describes the action. -->
                 <button type="button" id="theme-toggle" class="theme-toggle"
                         aria-label="Switch to light mode" title="Switch to light mode">
                     <svg class="theme-toggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -134,10 +132,6 @@
             </div>
         </div>
     </header>
-
-    {# Persistent Parameters bar (batch B6): above the panes so it survives tab
-       switches. Owns `ticker` + Run; module params move to the tab toolbars in B7. #}
-    {% include 'partials/parameters_bar.html' %}
 
     <div class="app-body">
         <!-- Sidebar Tab Nav -->
@@ -266,7 +260,6 @@
     <script src="{{ url_for('static', filename='state/optionFilterState.js') }}"></script>
     <script src="{{ url_for('static', filename='moduleParams.js') }}"></script>
     <script src="{{ url_for('static', filename='utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='parametersBar.js') }}"></script>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
     <script src="{{ url_for('static', filename='position.js') }}"></script>
     <script src="{{ url_for('static', filename='option-chain.js') }}"></script>

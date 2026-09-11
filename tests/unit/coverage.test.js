@@ -26,7 +26,6 @@ import '../../static/utils.js';
 import '../../static/cache.js';
 import '../../static/simulation.js';
 import '../../static/theme.js';
-import '../../static/parametersBar.js';
 import '../../static/state/paramsStore.js';
 import '../../static/state/marketParamsState.js';
 import '../../static/state/assessmentParamsState.js';
@@ -52,7 +51,6 @@ const _snapshot = {
     loadSimulationTab: window.loadSimulationTab,
     runSimulation: window.runSimulation,
     themeManager: window.themeManager,
-    parametersBar: window.parametersBar,
     marketParams: window.appState.marketParams,
     assessmentParams: window.appState.assessmentParams,
     optionFilter: window.appState.optionFilter,
@@ -92,12 +90,6 @@ describe('coverage smoke — every module publishes its surface', () => {
     it('utils functions are global', () => {
         expect(typeof window.escapeHtml).toBe('function');
         expect(typeof window.parseTickers).toBe('function');
-    });
-
-    it('parameters bar published its window surface', () => {
-        expect(window.parametersBar).toBeDefined();
-        expect(typeof window.parametersBar.init).toBe('function');
-        expect(window.parametersBar.STORAGE_KEY).toBe('parametersBarCollapsed');
     });
 
     it('module parameter groups published their window surface', () => {
