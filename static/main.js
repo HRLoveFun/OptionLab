@@ -103,14 +103,14 @@ const FormManager = {
     }
 };
 
+// Validity feedback is a single ✅/❌ icon per ticker, rendered to the right
+// of the input (#ticker-badges) — no separate status sentence.
 let validationTimeout;
 function validateTicker() {
     const rawInput = document.getElementById('ticker').value.trim().toUpperCase();
-    const validationDiv = document.getElementById('ticker-validation');
     const badgesDiv = document.getElementById('ticker-badges');
 
     if (!rawInput) {
-        if (validationDiv) validationDiv.innerHTML = '';
         if (badgesDiv) badgesDiv.innerHTML = '';
         currentPrice = null;
         return;
@@ -120,10 +120,12 @@ function validateTicker() {
     validationTimeout = setTimeout(() => {
         const tickers = parseTickers(rawInput);
         if (tickers.length === 0) {
-            if (validationDiv) validationDiv.innerHTML = 'No valid symbols';
+            if (badgesDiv) {
+                badgesDiv.innerHTML = '<span class="ticker-badge invalid" title="No valid symbols">❌</span>';
+            }
             return;
         }
-        if (validationDiv) validationDiv.innerHTML = 'Validating...';
+        if (badgesDiv) badgesDiv.innerHTML = '';
 
         fetch('/api/validate_tickers', {
             method: 'POST',
@@ -137,24 +139,14 @@ function validateTicker() {
                     if (badgesDiv) {
                         badgesDiv.innerHTML = Object.entries(results).map(([t, info]) => {
                             const cls = info.valid ? 'ticker-badge valid' : 'ticker-badge invalid';
+                            const symbol = info.valid ? '✅' : '❌';
                             const priceTxt = info.valid && info.price ? ` $${info.price.toFixed(2)}` : '';
-                            return `<span class="${cls}">${escapeHtml(t)}${priceTxt}</span>`;
-                        }).join(' ');
+                            const title = `${escapeHtml(t)}${priceTxt}`;
+                            return `<span class="${cls}" title="${title}">${symbol}</span>`;
+                        }).join('');
                     }
                     const firstValid = Object.entries(results).find(([, info]) => info.valid);
                     currentPrice = firstValid ? firstValid[1].price : null;
-
-                    const validCount = Object.values(results).filter(r => r.valid).length;
-                    const totalCount = Object.keys(results).length;
-                    if (validationDiv) {
-                        if (validCount === totalCount) {
-                            validationDiv.innerHTML = `${validCount} ticker(s) valid`;
-                            validationDiv.className = 'ticker-validation valid';
-                        } else {
-                            validationDiv.innerHTML = `${validCount}/${totalCount} valid`;
-                            validationDiv.className = 'ticker-validation warning';
-                        }
-                    }
 
                     const validTickers = Object.entries(results)
                         .filter(([, info]) => info.valid)
@@ -163,9 +155,8 @@ function validateTicker() {
                 }
             })
             .catch(() => {
-                if (validationDiv) {
-                    validationDiv.innerHTML = 'Error';
-                    validationDiv.className = 'ticker-validation warning';
+                if (badgesDiv) {
+                    badgesDiv.innerHTML = '<span class="ticker-badge invalid" title="Error checking ticker validity">❌</span>';
                 }
                 currentPrice = null;
             });
