@@ -187,9 +187,10 @@ class OptionLeg:
     bid: float | None = None
     ask: float | None = None
     last: float | None = None
-    iv: float | None = None            # decimal — provider normalizes
+    iv: float | None = None  # decimal — provider normalizes
     open_interest: float | None = None
     volume: float | None = None
+
 
 @dataclass(frozen=True)
 class OptionChainSnapshot:
