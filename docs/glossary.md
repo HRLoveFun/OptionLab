@@ -34,7 +34,7 @@ HV today ranked against its own 252-day history. **This is what we use** when th
 - **Vega**: ∂Price/∂σ (per 1%)
 - **Rho**: ∂Price/∂r (per 1%)
 - All vectorised in `core/options/greeks/black_scholes.py`. Scalars and NumPy arrays both supported.
-- We assume **European exercise**. American early-exercise premium is ignored — acceptable for index options and short-dated equity options.
+- We assume **European exercise**. American early-exercise premium is ignored — acceptable for index options and short-dated equity options. The one exception is the option-portfolio simulator (`core/optsim/`, ADR 0013), which can price American exercise.
 
 ### Option Chain
 The full set of calls + puts at every strike for a given expiry. yfinance returns this via `yf.Ticker(t).option_chain(expiry)` — **snapshot only**, no history.
@@ -121,3 +121,11 @@ A hypothetical-input calculator (no market data, no network): given `price` / `I
 - **Sigma reference**: the column the row-header σ multiple is computed for — the one closest to 30D (`REF_DTE_DEFAULT`) by default. There is no `select`: clicking anywhere in a column (data cell or header) picks it; from a focused header (`tabindex="0"`), Enter / Space activate and ArrowLeft / ArrowRight walk the date axis with roving focus, clamped at the edges. The picked header carries `aria-current="true"` plus a persistent `.is-ref` mark on both the `<col>` and the `<th>`; the mark is a `box-shadow` bar, because that header is an opaque sticky mask — a translucent fill would let scrolled rows show through.
 - **Crosshair**: hovering a column tints it (via its `<col>`, so one class write beats 41); hovering (or focusing) never rewrites values. Only a click, Enter / Space, or an arrow key moves the sigma reference.
 - **Price basis**: mid is the Black-Scholes value; the fill moves off it by `max(mid × spreadPct / 200, $0.01)` (`buy` → ask, `sell` → bid). Both perspectives share the same rate formulas, so a seller's rate is always the lower one.
+
+### Option Portfolio Simulator (optsim)
+A pure-computation package (`core/optsim/`, ADR 0013) plus a CLI (`scripts/optsim.py`) that revalues a **hypothetical** multi-leg position on a spot × day × IV-shift grid and reports value, P&L, position Greeks and margin. No market data is read; inputs come from a TOML file (examples in `docs/optsim/examples/`).
+- **Exercise style**: `european` (Black-Scholes-Merton with a dividend yield) or `american` (CRR binomial tree, 200 steps, European control variate); one switch for the whole position.
+- **Sticky-strike**: every leg keeps its own IV as spot and time move; IV scenarios are parallel shifts in vol points.
+- **BPR (buying-power reduction)**: the capital a position ties up beyond the premium it received — the unit both margin regimes report in.
+- **Reg-T**: strategy-based margin. Naked short = premium + max(15% (index/ETF) or 20% (equity) of spot − OTM amount, 10% floor); a spread or condor = largest expiry loss − net credit.
+- **PM (portfolio margin)**: risk-based; the worst loss over 10 equidistant spot shocks (−8%/+6% for broad indexes and their ETFs, ±15% for equities), floored at $0.375 × multiplier per contract. A proxy for OCC TIMS without vol shocks or broker add-ons.
