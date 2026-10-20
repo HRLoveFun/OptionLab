@@ -1,0 +1,30 @@
+# Hypothetical SPY-like short 30-delta put, 45 DTE, American, physically settled ETF.
+name = "SPY-like short 30-delta put"
+style = "american"
+product = "etf"
+multiplier = 100
+
+[market]
+spot = 600.0
+rate = 0.045
+div_yield = 0.013
+
+[smile]
+atm_iv = 0.16
+skew = -0.77
+curvature = 1.0
+floor = 0.08
+
+[[legs]]
+type = "put"
+side = "short"
+qty = 1
+dte = 45
+delta = -0.30
+strike_step = 1
+
+[grid]
+spot_range = 0.15
+n_spots = 61
+iv_shifts = [-0.05, 0.0, 0.05]
+margin = "pm"

@@ -3591,3 +3591,146 @@ textarea:focus-visible,
         padding: .85rem .85rem 1rem;
     }
 }
+
+/* ============================================================
+   Position Simulator (optsim) — hypothetical multi-leg position
+   over spot × time × IV (templates/partials/tab_optsim.html).
+   ============================================================ */
+:root {
+    /* Date ramp: one hue, entry (light) → last expiry (dark); validated ordinal on #fff. */
+    --optsim-day-1: #86b6ef;
+    --optsim-day-2: #5598e7;
+    --optsim-day-3: #2a78d6;
+    --optsim-day-4: #1c5cab;
+    --optsim-day-5: #104281;
+    /* IV shifts are diverging: two hues around an ink midpoint. Orange = elevated vol (P3). */
+    --optsim-iv-down: #2a78d6;
+    --optsim-iv-flat: #1f2937;
+    --optsim-iv-up: #d97706;
+}
+
+:root:not([data-theme="light"]) {
+    /* Onyx: the same ramp in the gold accent, dim (entry) → bright (last expiry) on #141414. */
+    --optsim-day-1: #6e5b22;
+    --optsim-day-2: #937a2e;
+    --optsim-day-3: #b8973a;
+    --optsim-day-4: #d4af37;
+    --optsim-day-5: #f2d27a;
+    --optsim-iv-down: #a855f7;
+    --optsim-iv-flat: #e5e5e5;
+    --optsim-iv-up: #d97706;
+}
+
+.optsim-card-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+}
+
+.optsim-preset {
+    padding: .3rem .5rem;
+    border: 1.5px solid var(--slate-200);
+    border-radius: var(--radius-sm);
+    font-size: .8rem;
+    font-family: var(--font);
+    background: #fff;
+    color: #000;
+}
+
+.optsim-preset:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+}
+
+/* Keep the leg controls legible on phones; the table scrolls inside its card. */
+.optsim-legs select {
+    min-width: 5.5rem;
+}
+
+.optsim-legs input[type="number"] {
+    min-width: 5rem;
+}
+
+#tab-optsim .add-row-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1rem;
+}
+
+.optsim-switches {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem 2rem;
+    margin: 0 0 1rem;
+}
+
+.optsim-switch {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+
+.optsim-switch__label {
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.optsim-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 1rem;
+}
+
+.optsim-chart-wrapper {
+    height: 320px;
+}
+
+/* WHY: .app-body aligns its items to flex-start, so on phones the main panel is
+   only as wide as its content's minimum. A Chart.js canvas keeps its last pixel
+   width and a table its column widths; both would stretch the page sideways.
+   Containing their inline size lets the tables scroll inside their wrappers and
+   the charts follow the panel width. */
+#tab-optsim .optsim-chart-wrapper,
+#tab-optsim .table-wrapper {
+    position: relative;
+    contain: inline-size;
+}
+
+.sim-detail th.optsim-binding,
+.sim-detail td.optsim-binding {
+    font-weight: 700;
+    color: var(--slate-900);
+}
+
+/* .sim-detail td sets its own color, which would otherwise mask the P&L tones. */
+#tab-optsim .sim-detail td.semantic-pos {
+    color: var(--success);
+}
+
+#tab-optsim .sim-detail td.semantic-neg {
+    color: var(--error);
+}
+
+#optsim-resolved .sim-detail th:nth-child(2),
+#optsim-resolved .sim-detail td:nth-child(2) {
+    text-align: left;
+}
+
+@media (max-width: 1100px) {
+    .optsim-chart-grid {
+        /* minmax(0, …): a 1fr track's floor is its content, and a Chart.js canvas
+           keeps its last pixel width, so the column could never shrink. */
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 720px) {
+    .optsim-chart-wrapper {
+        height: 280px;
+    }
+}

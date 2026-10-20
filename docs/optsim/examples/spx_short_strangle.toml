@@ -1,0 +1,39 @@
+# Hypothetical SPX-like short 16-delta strangle, 45 DTE, European, cash-settled index.
+name = "SPX-like short 16-delta strangle"
+style = "european"      # european | american
+product = "index"       # index | etf | index_small | equity  (margin class)
+multiplier = 100
+
+[market]
+spot = 6000.0
+rate = 0.045
+div_yield = 0.013
+
+# IV(K) = atm_iv + skew * ln(K/S) + 0.5 * curvature * ln(K/S)^2, floored
+[smile]
+atm_iv = 0.16
+skew = -0.77
+curvature = 1.0
+floor = 0.08
+
+[[legs]]
+type = "put"
+side = "short"
+qty = 1
+dte = 45
+delta = -0.16           # or give strike = 5600
+strike_step = 5
+
+[[legs]]
+type = "call"
+side = "short"
+qty = 1
+dte = 45
+delta = 0.16
+strike_step = 5
+
+[grid]
+spot_range = 0.15       # ±15% around spot
+n_spots = 61
+iv_shifts = [-0.05, 0.0, 0.05]
+margin = "regt"         # binding regime in the summary: regt | pm

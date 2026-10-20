@@ -196,6 +196,11 @@
         if (path === '/api/portfolio_analysis') {
             return jsonResponse({ status: 'error', code: 'demo_unavailable', message: 'Portfolio Analysis 需要本地 Flask（实时定价）。本站为静态演示快照。' }, 200);
         }
+        // The Position Simulator revalues positions server-side (core/optsim):
+        // same honest failure, on the panel's own error path.
+        if (path === '/api/optsim') {
+            return jsonResponse({ status: 'error', code: 'demo_unavailable', message: 'Position Simulator 需要本地 Flask（服务端计算）。本站为静态演示快照。' }, 503);
+        }
         return null;
     }
 

@@ -195,10 +195,12 @@ components must not call `fetch` directly. `static/state/` holds tiny observable
 parameters (one `localStorage` key per group) and re-run exactly the modules that consume a change;
 `panelState.js` enforces the four-phase async contract (`idle → loading → loaded → empty|error`,
 no sixth state), `tabFlagsState.js` is the lazy-load guard, `abortRegistry.js` cancels in-flight
-requests on ticker switch. Charts are server PNGs except `static/market_review_chart.js` and
-`static/components/payoff_chart.js` (JSON → Chart.js). The **Simulation** and **Option Pricing
-Matrix** tabs are pure client-side (`static/sim/`, zero I/O) and also run standalone on GitHub
-Pages. Frontend deps are CDN-only — **no build step**, no React/Vue (ADR 0006). UI changes must
+requests on ticker switch. Charts are server PNGs except `static/market_review_chart.js`,
+`static/components/payoff_chart.js` and `static/optsim.js` (JSON → Chart.js). The **Simulation** and
+**Option Pricing Matrix** tabs are pure client-side (`static/sim/`, zero I/O) and also run standalone
+on GitHub Pages; the **Position Simulator** tab posts a hypothetical position to `POST /api/optsim`
+(`core/optsim`, ADR 0013), so on Pages it only shows a demo notice. Frontend deps are CDN-only —
+**no build step**, no React/Vue (ADR 0006). UI changes must
 satisfy the P1–P5 contract in `docs/frontend_architecture.md`.
 
 The GitHub Pages mirror (`site/`) reuses `templates/` and `static/` verbatim; only

@@ -69,3 +69,6 @@ site/option-chain/index.html
 site/option-pricing-matrix/index.html
 site/sim/index.html
 site/showcase/*.html
+
+# optsim CLI output (scripts/optsim.py)
+data/optsim/
