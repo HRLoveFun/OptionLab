@@ -236,5 +236,6 @@ Pages-only. Rendered `site/index.html` / `site/static/` are build artefacts — 
 | Where does data come from? | `data_pipeline/read/facade.py`, `orchestrate/backfill.py`, `providers/` |
 | Schema / SQL | `data_pipeline/store/db.py` (`init_db`), `store/repos.py` |
 | Chart / analysis maths | `core/market/analyzer.py`, `core/options/`, `core/strategies/` |
+| Option position simulator (optsim): what exists, what's next? | `docs/plans/optsim.md` → `core/optsim/` |
 | Frontend contract | `docs/frontend_architecture.md` |
 | Why is this weird? | `docs/constraints.md`, then `docs/decisions/` |
