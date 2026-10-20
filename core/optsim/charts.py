@@ -14,7 +14,7 @@ Contracts:
 Dependencies UPWARD:
   - matplotlib, numpy, core._shared.plotting, core.optsim.engine
 Dependencies DOWNWARD:
-  - scripts/optsim.py, tests
+  - scripts/optsim.py, services.options.optsim (chart_days), tests
 """
 
 from __future__ import annotations

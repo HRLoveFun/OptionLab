@@ -25,6 +25,7 @@ import '../../static/state/panelState.js';
 import '../../static/utils.js';
 import '../../static/cache.js';
 import '../../static/simulation.js';
+import '../../static/optsim.js';
 import '../../static/theme.js';
 import '../../static/state/paramsStore.js';
 import '../../static/state/marketParamsState.js';
@@ -50,6 +51,8 @@ const _snapshot = {
     toggleSizingSection: window.toggleSizingSection,
     loadSimulationTab: window.loadSimulationTab,
     runSimulation: window.runSimulation,
+    loadOptsimTab: window.loadOptsimTab,
+    runOptsim: window.runOptsim,
     themeManager: window.themeManager,
     marketParams: window.appState.marketParams,
     assessmentParams: window.appState.assessmentParams,
@@ -103,6 +106,8 @@ describe('coverage smoke — every module publishes its surface', () => {
     it('simulation tab published its window surface', () => {
         expect(typeof window.loadSimulationTab).toBe('function');
         expect(typeof window.runSimulation).toBe('function');
+        expect(typeof window.loadOptsimTab).toBe('function');
+        expect(typeof window.runOptsim).toBe('function');
     });
 
     it('theme manager published its window surface', () => {

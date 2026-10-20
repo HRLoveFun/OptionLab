@@ -12,12 +12,12 @@ Contracts:
   - Market(spot, rate, div_yield)
   - Smile(atm_iv, skew, curvature, floor).iv(strike, spot) -> float
   - Position(legs, style, multiplier, product, name)
-  - make_leg(kind, side, strike, dte, market, smile|iv, qty, style) -> Leg
+  - make_leg(kind, side, strike, dte, market, smile|iv, qty, style, steps) -> Leg
   - strike_for_delta(kind, delta, dte, market, smile, step) -> float
 Dependencies UPWARD:
   - core.strategies.models, core.optsim.pricing
 Dependencies DOWNWARD:
-  - core.optsim.engine, core.optsim.margin, scripts/optsim.py, tests
+  - core.optsim.engine, scripts/optsim.py, services.options.optsim, tests
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from core.optsim.pricing import european, option_greeks
+from core.optsim.pricing import DEFAULT_STEPS, european, option_greeks
 from core.strategies.models import Leg
 
 STYLES = ("european", "american")
@@ -82,13 +82,20 @@ def make_leg(
     iv: float | None = None,
     qty: int = 1,
     style: str = "european",
+    steps: int = DEFAULT_STEPS,
 ) -> Leg:
-    """Build a Leg whose IV comes from ``iv`` or ``smile`` and whose premium is the model price."""
+    """Build a Leg whose IV comes from ``iv`` or ``smile`` and whose premium is the model price.
+
+    Pass the same ``steps`` the scenario grid will use, so an American leg's P&L
+    at entry is exactly zero.
+    """
     if iv is None:
         if smile is None:
             raise ValueError("give either iv or smile")
         iv = smile.iv(strike, market.spot)
-    price = option_greeks(kind, market.spot, strike, dte / 365.0, market.rate, market.div_yield, iv, style)["price"]
+    price = option_greeks(kind, market.spot, strike, dte / 365.0, market.rate, market.div_yield, iv, style, steps)[
+        "price"
+    ]
     return Leg(side=side, option_type=kind, strike=float(strike), premium=float(price), qty=qty, dte=dte, iv=float(iv))
 
 

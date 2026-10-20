@@ -1,7 +1,7 @@
 # 0013. optsim：假设头寸的 scenario engine（spot × time × IV）
 
 - **Status**: Proposed
-- **Date**: 2026-10-19
+- **Date**: 2026-10-19（2026-10-20 追加 Web 入口）
 - **Deciders**: repo owner
 
 ## Context
@@ -15,7 +15,8 @@ margin 占用，如何随 spot、时间和 IV 变化。现有模块都不覆盖�
 
 用户约束：European 与 American 同等重要、整个头寸一键切换；Reg-T 与 portfolio margin
 同等重要、一键切换；首要场景是 multi-week VRP 结构（short put / strangle、credit spread、
-iron condor）；输入是假设期权，不读行情；先不做网页。
+iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付，随后（2026-10-20）按用户要求
+加入前端标签页。
 
 ## Options Considered
 
@@ -43,8 +44,19 @@ iron condor）；输入是假设期权，不读行情；先不做网页。
 - 到期后的腿按 intrinsic 计价，并退出 margin 计算。
 - 两种 margin 都以 **BPR**（buying-power reduction，扣除已收 premium 之后占用的资金）报告。
 - PM 只在每天的 entry spot 处计算（11 个 revaluation 点），控制 American 的计算量。
-- CLI 读 TOML，打印摘要，写 PNG + JSON 到 `data/optsim/`（已 gitignore）。不接 `services/`、
-  `routes/`、UI。
+- CLI 读 TOML，打印摘要，写 PNG + JSON 到 `data/optsim/`（已 gitignore）。
+
+**Web 入口（2026-10-20）**：Position Simulator 标签页（`templates/partials/tab_optsim.html` +
+`static/optsim.js`）→ `POST /api/optsim`（`routes/strategies.py`）→ `services/options/optsim.py`
+→ `core/optsim`，与 Simulation tab 的服务端路径（ADR 0008）同一分层。
+
+- 服务端只有一份定价与 margin 逻辑，没有 JS twin；GitHub Pages 镜像没有后端，
+  `site/pages-shim.js` 对该接口返回 demo 提示。
+- 为保持交互，Web 网格做了裁剪：日期切片约 8 个（外加各到期日）；IV shift 只在 entry 重估；
+  American 树用 100 steps（最大误差约 0.02 / 100 strike，CLI 的 200 steps 约 0.007）。
+  4 腿 American 一次请求约 1 s，European 约 0.03 s。
+- Margin 开关只重绘（两种 margin 每次都返回），exercise 开关重新请求。
+- Strike 可直接给，或按 |Δ| 从 smile 反解，取整到约 0.1% spot 的 tick。
 
 ## Consequences
 
@@ -53,12 +65,16 @@ iron condor）；输入是假设期权，不读行情；先不做网页。
   - Margin 是近似值：没有 broker house add-on、concentration charge、TIMS vol shock 和
     class group offset；Reg-T 不检查 long leg 到期日是否晚于 short leg（reverse calendar 会被低估）。
   - 没有 skew dynamics、term structure 和 event vol；IV 只做平行移动。
-  - American 网格每个情景约 1–3 s（61 spots × ~8 days × 3 IV shifts），European 约 0.01 s。
-- Follow-up（按需）：`services/` + UI tab；variance-swap level 校准接口；MC 路径分析。
+  - CLI 全网格的 American 较慢：单腿 45 DTE 约 2 s，4 腿 iron condor 约 6 s，365 DTE 约 50 s；
+    European 约 0.01–0.05 s。Web 路径靠上面的裁剪控制在约 1 s。
+- Follow-up（按需）：variance-swap level 校准接口；MC 路径分析。
 
 ## References
 
-- Code：`core/optsim/`、`scripts/optsim.py`、`tests/test_optsim.py`、`docs/optsim/examples/`
+- Code：`core/optsim/`、`scripts/optsim.py`、`services/options/optsim.py`、`static/optsim.js`、
+  `templates/partials/tab_optsim.html`、`docs/optsim/examples/`
+- Tests：`tests/test_optsim.py`、`tests/test_optsim_api.py`、`tests/unit/optsim.test.js`、
+  `tests/e2e/test_optsim.py`
 - Related ADR：0008
 - External：Cboe Margin Manual（strategy-based margin）；FINRA Rule 4210(g) 与 Cboe customer
   portfolio margin（OCC TIMS）

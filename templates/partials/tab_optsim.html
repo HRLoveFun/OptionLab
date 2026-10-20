@@ -1,0 +1,233 @@
+<div class="tab-content" id="tab-optsim" x-data="panelState('optsim')"
+     role="region" aria-labelledby="optsim-heading">
+    <div class="toolbar">
+        <div class="panel-header" style="margin:0;">
+            <h2 id="optsim-heading">Position Simulator</h2>
+            <p class="panel-desc">
+                Value, Greeks and margin of a hypothetical multi-leg position as spot,
+                time and implied volatility change. Strikes are set directly or picked
+                by delta from the IV smile; every leg keeps its own IV (sticky strike).
+                No market data is loaded.
+            </p>
+        </div>
+        <div class="toolbar-actions">
+            <button type="button" class="btn-primary" data-action="optsim-run"
+                    aria-label="Run the position simulation"
+                    :disabled="phase === 'loading'">
+                <template x-if="phase !== 'loading'"><span>Run</span></template>
+                <template x-if="phase === 'loading'"><span>Running…</span></template>
+            </button>
+        </div>
+    </div>
+
+    <!-- Legs editor -->
+    <div class="content-card">
+        <div class="content-card-title optsim-card-title">
+            <span>Legs</span>
+            <select id="optsim-preset" class="optsim-preset" aria-label="Load a preset position">
+                <option value="">Load preset…</option>
+                <option value="short_put">Short put 30Δ</option>
+                <option value="short_strangle">Short strangle 16Δ</option>
+                <option value="iron_condor">Iron condor 16Δ / 8Δ</option>
+                <option value="put_spread">Put credit spread 30Δ / 16Δ</option>
+                <option value="call_calendar">Call calendar ATM 30 / 60 DTE</option>
+                <option value="long_call">Long call 50Δ</option>
+            </select>
+        </div>
+        <div class="table-wrapper">
+            <table class="options-table optsim-legs" aria-label="Position legs">
+                <thead>
+                    <tr>
+                        <th scope="col">Type</th>
+                        <th scope="col">Side</th>
+                        <th scope="col">Qty</th>
+                        <th scope="col">DTE</th>
+                        <th scope="col">Strike by</th>
+                        <th scope="col">Strike / |Δ|</th>
+                        <th scope="col" aria-label="Remove leg"></th>
+                    </tr>
+                </thead>
+                <tbody id="optsim-legs-body"></tbody>
+            </table>
+            <div class="add-row-container">
+                <button type="button" class="btn-ghost" data-action="optsim-add-leg">Add leg</button>
+                <span class="field-hint">Up to 6 legs. |Δ| is the absolute delta, e.g. 0.16.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Market, smile and grid inputs -->
+    <div class="content-card">
+        <div class="content-card-title">Market &amp; IV smile</div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="optsim-spot">Spot</label>
+                <input type="number" id="optsim-spot" value="600" step="0.01" min="0.01">
+            </div>
+            <div class="form-group">
+                <label for="optsim-rate">Risk-free %</label>
+                <input type="number" id="optsim-rate" value="4.5" step="0.1" min="-5" max="50">
+            </div>
+            <div class="form-group">
+                <label for="optsim-div">Dividend yield %</label>
+                <input type="number" id="optsim-div" value="1.3" step="0.1" min="0" max="20">
+            </div>
+            <div class="form-group">
+                <label for="optsim-product">Margin class</label>
+                <select id="optsim-product">
+                    <option value="index">Broad index (SPX)</option>
+                    <option value="etf" selected>Broad-index ETF (SPY)</option>
+                    <option value="index_small">Other broad index (RUT)</option>
+                    <option value="equity">Single stock</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="optsim-atm-iv">ATM IV %</label>
+                <input type="number" id="optsim-atm-iv" value="16" step="0.1" min="1" max="300">
+            </div>
+            <div class="form-group">
+                <label for="optsim-skew">Skew</label>
+                <input type="number" id="optsim-skew" value="-0.77" step="0.01" min="-5" max="5">
+                <span class="field-hint">IV change per unit ln(K/S).</span>
+            </div>
+            <div class="form-group">
+                <label for="optsim-curvature">Curvature</label>
+                <input type="number" id="optsim-curvature" value="1" step="0.1" min="-20" max="50">
+                <span class="field-hint">IV = ATM + skew·k + ½·curvature·k².</span>
+            </div>
+            <div class="form-group">
+                <label for="optsim-multiplier">Multiplier</label>
+                <input type="number" id="optsim-multiplier" value="100" step="1" min="1">
+            </div>
+            <div class="form-group">
+                <label for="optsim-spot-range">Spot range ±%</label>
+                <input type="number" id="optsim-spot-range" value="15" step="1" min="5" max="50">
+            </div>
+            <div class="form-group">
+                <label for="optsim-iv-shift">IV shift ± vol pts</label>
+                <input type="number" id="optsim-iv-shift" value="5" step="1" min="0" max="20">
+            </div>
+        </div>
+    </div>
+
+    <!-- One-click switches: exercise style re-runs, margin regime re-renders -->
+    <div class="optsim-switches">
+        <div class="optsim-switch">
+            <span class="optsim-switch__label" id="optsim-style-label">Exercise</span>
+            <div class="btn-group" role="group" aria-labelledby="optsim-style-label">
+                <button type="button" class="btn-toggle active" data-optsim-style="european"
+                        aria-pressed="true">European</button>
+                <button type="button" class="btn-toggle" data-optsim-style="american"
+                        aria-pressed="false">American</button>
+            </div>
+        </div>
+        <div class="optsim-switch">
+            <span class="optsim-switch__label" id="optsim-margin-label">Margin</span>
+            <div class="btn-group" role="group" aria-labelledby="optsim-margin-label">
+                <button type="button" class="btn-toggle active" data-optsim-margin="regt"
+                        aria-pressed="true">Reg-T</button>
+                <button type="button" class="btn-toggle" data-optsim-margin="pm"
+                        aria-pressed="false">Portfolio margin</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading banner — P2 four-state machine -->
+    <div class="panel-banner panel-banner--loading" role="status" aria-live="polite"
+         x-show="phase === 'loading'" x-cloak>
+        <span x-text="message || 'Revaluing the position...'"></span>
+    </div>
+
+    <!-- Error banner -->
+    <div class="panel-banner panel-banner--error" role="alert" aria-live="assertive"
+         x-show="phase === 'error'" x-cloak>
+        <span x-text="message"></span>
+    </div>
+
+    <!-- Loaded content -->
+    <div x-show="phase === 'loaded'" x-cloak aria-live="polite">
+        <!-- P1 — primary metric: what the position collects or costs at entry. -->
+        <div class="sim-hero-row">
+            <div class="metric-hero">
+                <div class="metric-hero__label" id="optsim-hero-label">Net credit</div>
+                <div class="metric-hero__value" id="optsim-hero-value">—</div>
+                <div class="metric-hero__sub" id="optsim-hero-sub">—</div>
+            </div>
+            <section class="kpi-strip sim-kpi-strip" aria-label="Position key metrics">
+                <div class="kpi-card">
+                    <span class="kpi-card__label" id="optsim-kpi-margin-label">Margin</span>
+                    <span class="kpi-card__value" id="optsim-kpi-margin">—</span>
+                    <span class="kpi-card__sub" id="optsim-kpi-margin-sub">—</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-card__label" id="optsim-kpi-be-label">Breakevens</span>
+                    <span class="kpi-card__value" id="optsim-kpi-be">—</span>
+                    <span class="kpi-card__sub">spot, IV unchanged</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-card__label">Theta at entry</span>
+                    <span class="kpi-card__value" id="optsim-kpi-theta">—</span>
+                    <span class="kpi-card__sub">per calendar day</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-card__label">Vega at entry</span>
+                    <span class="kpi-card__value" id="optsim-kpi-vega">—</span>
+                    <span class="kpi-card__sub">per vol point</span>
+                </div>
+            </section>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title">Resolved legs at entry</div>
+            <div class="table-wrapper" id="optsim-resolved"></div>
+        </div>
+
+        <div class="optsim-chart-grid">
+            <div class="content-card">
+                <div class="content-card-title">P&amp;L by date</div>
+                <div class="chart-wrapper optsim-chart-wrapper">
+                    <canvas id="optsim-chart-pnl" role="img"
+                            aria-label="Position P&L versus spot on several dates"></canvas>
+                </div>
+            </div>
+            <div class="content-card">
+                <div class="content-card-title">P&amp;L at entry under IV shifts</div>
+                <div class="chart-wrapper optsim-chart-wrapper">
+                    <canvas id="optsim-chart-iv" role="img"
+                            aria-label="Position P&L at entry versus spot for parallel IV shifts"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title optsim-card-title">
+                <span>Greeks by date</span>
+                <div class="btn-group" role="group" aria-label="Greek to chart">
+                    <button type="button" class="btn-toggle active" data-optsim-greek="delta"
+                            aria-pressed="true">Delta</button>
+                    <button type="button" class="btn-toggle" data-optsim-greek="gamma"
+                            aria-pressed="false">Gamma</button>
+                    <button type="button" class="btn-toggle" data-optsim-greek="theta"
+                            aria-pressed="false">Theta</button>
+                    <button type="button" class="btn-toggle" data-optsim-greek="vega"
+                            aria-pressed="false">Vega</button>
+                </div>
+            </div>
+            <div class="chart-wrapper optsim-chart-wrapper">
+                <canvas id="optsim-chart-greek" role="img"
+                        aria-label="Position Greek versus spot on several dates"></canvas>
+            </div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title">Over time at the entry spot (IV unchanged)</div>
+            <div class="table-wrapper" id="optsim-profile"></div>
+        </div>
+    </div>
+
+    <!-- Empty / idle -->
+    <div class="empty-state" role="status" x-show="phase === 'idle' || phase === 'empty'" x-cloak>
+        <p x-show="phase === 'idle'">Pick a preset or edit the legs, then press <strong>Run</strong>.</p>
+        <p x-show="phase === 'empty'" x-text="message || 'No output for these inputs.'"></p>
+    </div>
+</div>

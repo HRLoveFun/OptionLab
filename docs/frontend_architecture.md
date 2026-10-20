@@ -203,6 +203,7 @@ inline as before, since a hover-peek panel is unusable at that width.
 | `tab-option-chain`         | Option Chain                | `oc_chain`, `oc_*` analysis      |
 | `tab-options-chain`        | Volatility Analysis         | `oc_*` metrics and charts        |
 | `tab-payoff-ratio`         | Payoff Ratio                | `payoff_ratio_chart`             |
+| `tab-optsim`               | Position Simulator          | `POST /api/optsim` (hypothetical position, ADR 0013) |
 
 ---
 
@@ -366,6 +367,7 @@ FormManager.clearState()  // After successful submission
 | `/api/expiry_probability`               | POST     | Payoff Ratio tab (dormant) | Touch probability + IV per expiry  |
 | `/api/portfolio_analysis`                | POST     | `runPortfolioAnalysis()`  | Portfolio metrics                   |
 | `/api/regime/{current,history,backfill}` | GET/POST | Regime tab                | Macro regime data                   |
+| `/api/optsim`                            | POST     | `runOptsim()`             | Position Simulator grid (value, Greeks, Reg-T / PM over spot × date × IV) |
 
 ---
 

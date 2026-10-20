@@ -123,7 +123,7 @@ A hypothetical-input calculator (no market data, no network): given `price` / `I
 - **Price basis**: mid is the Black-Scholes value; the fill moves off it by `max(mid × spreadPct / 200, $0.01)` (`buy` → ask, `sell` → bid). Both perspectives share the same rate formulas, so a seller's rate is always the lower one.
 
 ### Option Portfolio Simulator (optsim)
-A pure-computation package (`core/optsim/`, ADR 0013) plus a CLI (`scripts/optsim.py`) that revalues a **hypothetical** multi-leg position on a spot × day × IV-shift grid and reports value, P&L, position Greeks and margin. No market data is read; inputs come from a TOML file (examples in `docs/optsim/examples/`).
+A pure-computation package (`core/optsim/`, ADR 0013) that revalues a **hypothetical** multi-leg position on a spot × day × IV-shift grid and reports value, P&L, position Greeks and margin. No market data is read. Two entry points share it: the CLI (`scripts/optsim.py`, TOML in — examples in `docs/optsim/examples/`) and the **Position Simulator** tab (`static/optsim.js` → `POST /api/optsim` → `services/options/optsim.py`), whose grid is trimmed to stay interactive (≈8 date slices, IV shifts at entry only, a 100-step tree for American legs).
 - **Exercise style**: `european` (Black-Scholes-Merton with a dividend yield) or `american` (CRR binomial tree, 200 steps, European control variate); one switch for the whole position.
 - **Sticky-strike**: every leg keeps its own IV as spot and time move; IV scenarios are parallel shifts in vol points.
 - **BPR (buying-power reduction)**: the capital a position ties up beyond the premium it received — the unit both margin regimes report in.

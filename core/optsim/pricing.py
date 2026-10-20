@@ -18,7 +18,7 @@ Contracts:
 Dependencies UPWARD:
   - numpy, scipy.special
 Dependencies DOWNWARD:
-  - core.optsim.engine, core.optsim.margin, tests
+  - core.optsim.engine, core.optsim.models, tests
 """
 
 from __future__ import annotations

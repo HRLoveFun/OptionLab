@@ -4,6 +4,7 @@ Routes:
   GET  /api/strategies
   POST /api/strategy/analyze
   POST /api/strategy/build_from_chain
+  POST /api/optsim
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from services.options.builder import build_from_chain
+from services.options.optsim import run_optsim
 from services.options.strategies import analyze
 from services.options.strategies import list_strategies as _list
 from utils.api_errors import ApiError
@@ -63,3 +65,14 @@ def build_strategy_from_chain():
             qty=int(data.get("qty", 1) or 1),
         )
     )
+
+
+@bp.route("/api/optsim", methods=["POST"])
+def optsim_route():
+    """Value, Greeks and margin of a hypothetical multi-leg position over spot × time × IV.
+
+    Body: {spot, rate?, div_yield?, atm_iv?, skew?, curvature?, style?, product?,
+           multiplier?, spot_range?, iv_shift?, legs: [{type, side, qty, dte, strike | delta}]}
+    """
+    data = request.get_json(silent=True) or {}
+    return jsonify(run_optsim(data))

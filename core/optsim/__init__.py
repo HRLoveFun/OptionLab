@@ -17,7 +17,7 @@ Dependencies UPWARD:
   - core.optsim.models, core.optsim.pricing, core.optsim.margin,
     core.optsim.engine, core.optsim.charts
 Dependencies DOWNWARD:
-  - scripts/optsim.py, tests
+  - scripts/optsim.py, services.options.optsim, tests
 """
 
 from core.optsim.charts import render_grid_png

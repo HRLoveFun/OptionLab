@@ -179,6 +179,9 @@
                     <button class="tab-btn" data-tab="tab-option-pricing-matrix">
                         <span>Option Pricing Matrix</span>
                     </button>
+                    <button class="tab-btn" data-tab="tab-optsim">
+                        <span>Position Simulator</span>
+                    </button>
 
                     <div class="tab-section-label">Portfolio</div>
                     <button class="tab-btn" data-tab="tab-portfolio">
@@ -232,6 +235,9 @@
             <!-- Tab: Option Pricing Matrix -->
             {% include 'partials/tab_option_pricing_matrix.html' %}
 
+            <!-- Tab: Position Simulator (optsim, ADR 0013) -->
+            {% include 'partials/tab_optsim.html' %}
+
         </main>
     </div>
 
@@ -269,6 +275,7 @@
     <script src="{{ url_for('static', filename='regime.js') }}"></script>
     <script src="{{ url_for('static', filename='simulation.js') }}"></script>
     <script src="{{ url_for('static', filename='option_pricing_matrix.js') }}"></script>
+    <script src="{{ url_for('static', filename='optsim.js') }}"></script>
     <script>
         document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -304,6 +311,10 @@
                 // Auto-load Option Pricing Matrix on tab switch (pure client-side, no market data)
                 if (target === 'tab-option-pricing-matrix' && !window.appState.tabFlags.isLoaded('option_pricing_matrix')) {
                     if (typeof loadOptionPricingMatrix === 'function') { loadOptionPricingMatrix(); window.appState.tabFlags.markLoaded('option_pricing_matrix'); }
+                }
+                // Auto-run the Position Simulator on first visit (hypothetical inputs, POST /api/optsim)
+                if (target === 'tab-optsim' && !window.appState.tabFlags.isLoaded('optsim')) {
+                    if (typeof loadOptsimTab === 'function') { loadOptsimTab(); window.appState.tabFlags.markLoaded('optsim'); }
                 }
             });
         });

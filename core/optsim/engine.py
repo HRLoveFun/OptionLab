@@ -17,7 +17,7 @@ Contracts:
 Dependencies UPWARD:
   - numpy, core.optsim.pricing, core.optsim.margin, core.optsim.models
 Dependencies DOWNWARD:
-  - core.optsim.charts, scripts/optsim.py, tests
+  - core.optsim.charts, scripts/optsim.py, services.options.optsim, tests
 """
 
 from __future__ import annotations
