@@ -75,6 +75,7 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
   `templates/partials/tab_optsim.html`、`docs/optsim/examples/`
 - Tests：`tests/test_optsim.py`、`tests/test_optsim_api.py`、`tests/unit/optsim.test.js`、
   `tests/e2e/test_optsim.py`
+- Plan：[`docs/plans/optsim.md`](../plans/optsim.md)（现状、API 契约、路线图）；[`docs/plans/optsim_design.md`](../plans/optsim_design.md)（v0.3 长期设计，参考用）
 - Related ADR：0008
 - External：Cboe Margin Manual（strategy-based margin）；FINRA Rule 4210(g) 与 Cboe customer
   portfolio margin（OCC TIMS）
