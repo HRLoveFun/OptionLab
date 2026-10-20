@@ -40,7 +40,8 @@
   - 测试：`pytest -m "not network" --ignore=tests/e2e`、`npx vitest run`（动了 JS 时）、
     `pytest tests/e2e/test_optsim.py`（动了标签页时）
   - 检查：`ruff check .`、`ruff format --check .`、`python scripts/doc_guard.py`、
-    `python scripts/arch_metrics.py --check`、`python scripts/audit_tags.py`
+    `python scripts/arch_metrics.py --check`、`python scripts/audit_tags.py`。
+    ruff 0.16 的 `format` 也会检查 Markdown 里的 Python 代码块，只改文档时同样要跑
   - 文档：新模块边界 → ADR（或在 0013 追加）+ `scripts/regen_adr_index.py`；新术语 → `docs/glossary.md`；
     本文 §1（现状）和 §7（变更记录）同步更新
 

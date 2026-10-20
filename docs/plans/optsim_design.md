@@ -637,12 +637,15 @@ t₀ 的曲面由场景给出。声明的溢价决定相对于它的 real-world 
 **口径接口**
 
 ```python
-class AtmIv:        # 已实现：默认锚点
+class AtmIv:  # 已实现：默认锚点
     name = "atm_iv"
+
     def value(self, surface, tau): ...  # σ_ATM(τ)
+
 
 class VarSwapLevel:  # 预留：调用即抛出 NotImplementedError
     name = "var_swap"
+
     def value(self, surface, tau): ...
 ```
 
