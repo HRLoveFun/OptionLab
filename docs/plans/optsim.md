@@ -1,6 +1,6 @@
 # Development Plan: optsim — 期权组合情景模拟（Position Simulator）
 
-**Status**: 核心 + 标签页已合并（PR #19，2026-10-20，merge `b4458e9`）｜ **ADR**: [0013](../decisions/0013-optsim-scenario-engine.md)（Proposed）｜ **长期设计**: [optsim_design.md](optsim_design.md)（v0.3，参考用，不是工单）
+**Status**: 核心 + 标签页已合并（PR #19，2026-10-20，merge `b4458e9`）；ticker 模式与 break-even IV 图（2026-10-21）｜ **ADR**: [0013](../decisions/0013-optsim-scenario-engine.md)（Accepted）｜ **长期设计**: [optsim_design.md](optsim_design.md)（v0.3，参考用，不是工单）
 
 > 给接手的开发者 / Claude Code：先读 §0，再从 §5 挑下一个 PR。§1–§4 是现状，动代码前对照；
 > §6 是开工前要先问用户的问题。
@@ -22,11 +22,13 @@
 | 1 | European 与 American 同等重要，一键切换 | 已实现（grid） |
 | 2 | 首要研究周期：multi-week VRP 结构 | 已实现：日期按周切片；MC 未做 |
 | 3 | Reg-T 与 portfolio margin 同等重要，一键切换 | 已实现（grid） |
-| 4 | futu bid/ask 快照延后；模拟器分析假设的期权 | 已实现：输入全部由用户给定 |
+| 4 | futu bid/ask 快照延后；模拟器分析假设的期权 | 已实现：默认输入全部由用户给定；futu 仍延后，ticker 模式（#9）读的是 yfinance 当前链 |
 | 5 | 作为 OptionLab 子功能 | 已实现：`core/optsim` + service + route + tab |
 | 6 | VRP 校准口径：ATM IV 优先，variance-swap level 留接口 | 未实现（随 MC 一起做，§5 M4） |
 | 7 | **先实现核心功能**——用户明确反馈过设计"越写越复杂" | 工作方式，见 §0.3 |
 | 8 | 需要前端标签页 | 已实现：Position Simulator |
+| 9 | 一个开关，让整页计算改为基于 header 的 ticker（2026-10-21） | 已实现：Market 开关（Hypothetical / Ticker），§1.4 |
+| 10 | 按日期的 break-even IV 图：x 为 spot（价格 / 相对百分比两行标签），y 为 IV，多腿时每条腿分开显示（2026-10-21） | 已实现：Break-even IV by date（每腿一张小图 + 表） |
 
 ### 0.3 工作方式
 
@@ -53,15 +55,16 @@
 
 | 文件 | 职责 | 主要契约 |
 |---|---|---|
-| `core/optsim/pricing.py` | European：BSM + dividend yield q；American：CRR tree + European control variate，Greeks 取自 lattice，vega 用 ±1 vol pt bump | `european(kind, S, K, T, r, q, sigma)`、`american(..., steps=200)`、`option_greeks(..., style, steps)` → dict(price, delta, gamma, theta, vega) |
+| `core/optsim/pricing.py` | European：BSM + dividend yield q；American：CRR tree + European control variate，Greeks 取自 lattice，vega 用 ±1 vol pt bump；两种 style 的 implied vol | `european(kind, S, K, T, r, q, sigma)`、`american(..., steps=200)`、`option_greeks(..., style, steps)` → dict(price, delta, gamma, theta, vega)；`implied_vol(kind, price, S, K, T, r, q, style, steps)` → σ（0.5–300 vol pts 内无解为 NaN） |
 | `core/optsim/models.py` | 输入数据结构；按 delta 选 strike | `Market(spot, rate, div_yield)`、`Smile(atm_iv, skew, curvature, floor).iv(K, S)`、`Position(legs, style, multiplier, product, name)`、`make_leg(..., steps)`、`strike_for_delta(kind, delta, dte, market, smile, step)` |
 | `core/optsim/margin.py` | Reg-T（defined_risk / naked / conservative）与 PM（TIMS-style 10 点 spot shock） | `PRODUCTS`、`regt_bpr(...) -> (bpr, method)`、`pm_offsets(product)`、`pm_bpr(...)` |
-| `core/optsim/engine.py` | spot × day × IV shift 网格上的 value、P&L、Greeks、两种 margin | `scenario_grid(position, market, *, spot_range, n_spots, days, iv_shifts, steps) -> Grid`、`time_profile(grid, iv_shift)`、`breakevens(spots, pnl)`、`default_days(position, step)` |
+| `core/optsim/engine.py` | spot × day × IV shift 网格上的 value、P&L、Greeks、两种 margin；每条腿的 break-even IV | `scenario_grid(position, market, *, spot_range, n_spots, days, iv_shifts, steps) -> Grid`、`time_profile(grid, iv_shift)`、`breakevens(spots, pnl)`、`default_days(position, step)`、`breakeven_iv(position, market, spots, days, *, steps)` → 每腿 `{iv[day][spot], expiry_breakeven}` |
+| `core/optsim/market.py` | ticker 模式：把期权链快照整理成上市到期日、strike、双边报价和每个到期日的 IV 曲线（纯计算） | `listed_market(ticker, spot, chain, *, today, as_of)`、`nearest_expiry(listed, dte)`、`nearest_quote(quotes, strike)`、`iv_curve(expiry, market)`（`.iv(K, S)` 与 `Smile` 同签名）、`leg_iv(kind, quote, expiry, market, curve, style, steps)` → `(iv, "mid" \| "curve")` |
 | `core/optsim/charts.py` | CLI 用的 6 panel PNG（matplotlib） | `render_grid_png(grid)`、`chart_days(days, max_lines=5)` |
 | `scripts/optsim.py` | CLI：TOML → 摘要 + PNG + JSON（`data/optsim/`，已 gitignore） | `python scripts/optsim.py <config.toml> [--style] [--product] [--margin] [--out]` |
-| `services/options/optsim.py` | `POST /api/optsim` 的校验与 Web 网格裁剪 | `run_optsim(payload) -> dict`、`strike_tick(spot)` |
+| `services/options/optsim.py` | `POST /api/optsim` 的校验与 Web 网格裁剪；ticker 模式经 `services/options/preload.py` 的期权链缓存取链 | `run_optsim(payload) -> dict`、`strike_tick(spot)` |
 | `routes/strategies.py` | 路由 `POST /api/optsim` | — |
-| `templates/partials/tab_optsim.html` + `static/optsim.js` | Position Simulator 标签页 | `window.loadOptsimTab`、`window.runOptsim`、`window.optsimDebug` |
+| `templates/partials/tab_optsim.html` + `static/optsim.js` | Position Simulator 标签页（Market / Exercise / Margin 三个开关，每腿 break-even IV 小图） | `window.loadOptsimTab`、`window.runOptsim`、`window.optsimDebug` |
 | `static/styles.css`（末尾 optsim 段） | 标签页样式与图表颜色 token（`--optsim-day-1..5`、`--optsim-iv-*`，两套主题） | — |
 | `site/pages-shim.js` | Pages 镜像对 `/api/optsim` 返回 demo 提示 | — |
 | `docs/optsim/examples/*.toml` | CLI 示例：SPX-like strangle（European）、SPY-like short put（American） | — |
@@ -80,11 +83,16 @@ Web:  tab_optsim.html / static/optsim.js
         → api.post('/api/optsim')                       （static/api.js，key 'optsim'）
         → routes/strategies.py::optsim_route
         → services/options/optsim.py::run_optsim         （校验、按 |Δ| 选 strike、网格裁剪）
+            market=ticker：services/options/preload.py   （期权链缓存，15 分钟；miss 时现取）
+                         → core.optsim.market            （上市到期日、strike、mid / 曲线 IV）
         → core.optsim.scenario_grid × 2                  （全日期 × IV 不变；entry × IV shifts）
-        → JSON → hero / KPI / Chart.js 三张图 / 逐日表
+        → core.optsim.breakeven_iv                       （每腿，图表日期 × spot）
+        → JSON → hero / KPI / Chart.js 三张图 + 每腿 break-even IV 小图 / 逐日表
 ```
 
-Margin 开关只重绘（两种 margin 每次都返回）；exercise 开关重新请求。
+Margin 开关只重绘（两种 margin 每次都返回）；Market 与 exercise 开关重新请求。header ticker 变化后，
+ticker 模式的标签页在屏幕上就立即重算，否则下次打开时重算（两条 ticker 变化路径都会重置 `optsim` 的
+tab flag）。
 
 ### 1.3 约定与单位
 
@@ -104,9 +112,11 @@ Margin 开关只重绘（两种 margin 每次都返回）；exercise 开关重�
 | IV shift | `iv_shifts = [-0.05, 0.0, 0.05]` | `iv_shift = 5`（vol points，对称） |
 | delta | 带符号（put 为 −0.16） | 绝对值 \|Δ\|（0.16，符号由 type 决定） |
 | smile floor | `[smile] floor` 可配（示例 0.08） | 固定为 `Smile` 默认 0.05 |
-| 每腿 IV 覆盖 | `iv = …` 可选 | 不支持（§5 M3 需要） |
-| 日期切片 | 全部周切片，可用 `days` 指定 | 约 8 个切片（`MAX_SLICES`）+ 各到期日 |
+| 每腿 IV 覆盖 | `iv = …` 可选 | 不支持显式覆盖（ticker 模式取链上 IV；§5 M3 需要） |
+| 日期切片 | 全部周切片，可用 `days` 指定 | 最多 8 个等距切片（`MAX_SLICES`，步长 `max(7, ⌈最长 DTE / 8⌉)`）+ 各到期日 |
 | American 树 | 200 steps | 100 steps（`WEB_TREE_STEPS`） |
+| 市场来源 | 只有假设输入 | `market`：`hypothetical`（默认）或 `ticker`（+ `ticker`） |
+| ATM strike | 无 | `strike: "atm"` |
 
 ### 1.4 `POST /api/optsim` 契约
 
@@ -114,25 +124,38 @@ Margin 开关只重绘（两种 margin 每次都返回）；exercise 开关重�
 
 | 字段 | 默认 | 范围 / 说明 |
 |---|---|---|
-| `spot` | 必填 | 0.01–1e7 |
+| `market` | `hypothetical` | `hypothetical` / `ticker` |
+| `ticker` | ticker 模式必填 | 最多 20 个字符、不含空白；按 `normalize_ticker` 规范化 |
+| `spot` | 必填（hypothetical） | 0.01–1e7；ticker 模式忽略，用链上 spot |
 | `rate`、`div_yield` | 4.5、0 | %；−5–50、0–20 |
-| `atm_iv`、`skew`、`curvature` | 20、0、0 | atm_iv 为 %（1–300）；skew −5–5；curvature −20–50 |
+| `atm_iv`、`skew`、`curvature` | 20、0、0 | atm_iv 为 %（1–300）；skew −5–5；curvature −20–50；ticker 模式忽略 |
 | `style` | `european` | `european` / `american` |
 | `product` | `index` | `index` / `etf` / `index_small` / `equity`（决定 Reg-T 比例与 PM 区间） |
 | `multiplier` | 100 | 1–10000 |
 | `spot_range`、`iv_shift` | 15、5 | %（5–50）；vol points（0–20，0 表示只算 IV 不变） |
-| `legs` | 必填 | 1–6 条：`type`、`side`（默认 long）、`qty`（1–1000）、`dte`（1–730）、`strike`（0.2–3 × spot）或 `delta`（\|Δ\| 0.01–0.99），二选一 |
+| `legs` | 必填 | 1–6 条：`type`、`side`（默认 long）、`qty`（1–1000）、`dte`（1–730）、`strike`（0.2–3 × spot，或 `"atm"`）或 `delta`（\|Δ\| 0.01–0.99），二选一。ticker 模式：`dte` 换成最近的上市到期日（平手取更晚的），strike 吸附到最近的上市 strike |
 
-响应：`status`、`style`、`product`、`multiplier`、`spot`、`tree_steps`（American 为 100，European 为 null）、
-`legs[]`（解析后的 strike、iv、premium、每股 delta）、`entry_value`（负数为净 credit）、`spots`（61 个）、
-`days`、`chart_days`（≤ 5 个下标）、`pnl_by_day[day][spot]`、`greeks_by_day.{delta,gamma,theta,vega}[day][spot]`、
-`iv_shifts`、`pnl_by_iv_at_entry[shift][spot]`、`breakevens`（最后一个日期）、
-`profile[]`（entry spot 处逐日：day、value、pnl、Greeks、regt、regt_method、pm）。
+响应：`status`、`market`、`style`、`product`、`multiplier`、`spot`、`tree_steps`（American 为 100，European 为 null）、
+`legs[]`（解析后的 strike、iv、premium、每股 delta，以及 `expiry`、`iv_source`、`bid`、`ask`、`mid`）、
+`entry_value`（负数为净 credit）、`spots`（61 个）、`days`、`chart_days`（≤ 5 个下标）、`pnl_by_day[day][spot]`、
+`greeks_by_day.{delta,gamma,theta,vega}[day][spot]`、`iv_shifts`、`pnl_by_iv_at_entry[shift][spot]`、
+`breakevens`（最后一个日期）、`profile[]`（entry spot 处逐日：day、value、pnl、Greeks、regt、regt_method、pm）、
+`breakeven_iv`。
 
-错误：HTTP 400 + `{"status": "error", "code", "message"}`。code 有 `spot_required`、`legs_required`、
+- `market`：hypothetical 为 `{"source": "hypothetical"}`；ticker 为 `{"source": "ticker", "ticker", "spot", "as_of"
+  （链的抓取时间，UTC ISO 8601）, "atm_expiry", "atm_iv"（第一条腿到期日的 IV 曲线在 spot 处的值，小数）}`。
+- `legs[]` 的 ticker 字段：`expiry`（YYYY-MM-DD）、`iv_source`（`mid` = 由该合约 mid 反解；`curve` = 没有双边报价，
+  读该到期日的 IV 曲线）、`bid` / `ask` / `mid`（没有时为 null）。hypothetical 下 `expiry`、报价为 null，`iv_source` 为 `smile`。
+- `breakeven_iv`：`days`（`chart_days` 对应的日期去掉 0）、`legs[]`：`iv[day][spot]`（小数；null = 0.5%–300% 内无解，
+  或该腿已到期）、`at_spot[day]`（entry spot 处）、`expiry_breakeven`（`strike ± premium`）。
+
+错误：`{"status": "error", "code", "message"}`。HTTP 400 的 code 有 `spot_required`、`legs_required`、
 `too_many_legs`、`invalid_leg`、`invalid_qty`、`invalid_dte`、`invalid_strike`、`invalid_delta`、`invalid_style`、
 `invalid_product`、`invalid_spot`、`invalid_rate`、`invalid_div_yield`、`invalid_iv`、`invalid_smile`、
-`invalid_multiplier`、`invalid_spot_range`、`invalid_iv_shift`。
+`invalid_multiplier`、`invalid_spot_range`、`invalid_iv_shift`、`invalid_market`、`ticker_required`、`invalid_ticker`。
+Ticker 模式取不到可用的链时返回 HTTP 502：`chain_unavailable`（取链失败、没有 spot、没有一天以上的到期日）、
+`iv_unavailable`（某个到期日没有可用 IV）、`strike_unavailable`（该到期日没有这一类型的合约）。请求和各腿的格式校验
+在取链之前完成，格式错误的请求不会触发 provider 调用；只有 strike 的取值范围（0.2–3 × spot）要等拿到链上的 spot 再校验。
 
 ### 1.5 实测性能与精度
 
@@ -142,6 +165,10 @@ Margin 开关只重绘（两种 margin 每次都返回）；exercise 开关重�
 | Web，American，1 腿 / 4 腿（45–365 DTE） | 约 0.25 s / 约 1 s |
 | CLI 全网格，American，1 腿 45 DTE | 约 2 s |
 | CLI 全网格，American，4 腿 45 / 120 / 365 DTE | 约 6 s / 17 s / 49 s |
+| Web，ticker 模式，链已缓存，European 2–3 腿 | 约 0.03–0.05 s |
+| Web，ticker 模式，American 3 腿（含 break-even IV） | 约 0.75 s |
+| Web，ticker 模式，链未缓存 | 再加 yfinance 取全链的时间（逐个到期日、2 个线程、每次约 2 s）；header 校验 ticker 时通常已预热 |
+| Break-even IV（61 spots × ≤ 4 个日期） | European 每腿 < 0.01 s；American 每腿约 0.05–0.1 s |
 
 American 精度（400 个随机状态，对 2000-step 树，按行权价 100 计）：100 steps 最大误差 0.018、平均 0.0027；
 200 steps 最大 0.0069、平均 0.0013（put）；call ≤ 0.0003。European 与 `greeks_vectorized` 一致到 1e-10。
@@ -150,13 +177,15 @@ American 精度（400 个随机状态，对 2000-step 树，按行权价 100 计
 
 | 文件 | 数量 | 覆盖 |
 |---|---|---|
-| `tests/test_optsim.py` | 24 | pricing（parity、American 界限与收敛、到期）、Reg-T / PM 规则、网格不变量、style 切换、`strike_for_delta`、PNG、CLI |
-| `tests/test_optsim_api.py` | 20 | route 正常路径、Reg-T 规则、American ≥ European、零 IV shift、长期限切片、11 种 400 错误、strike tick |
-| `tests/unit/optsim.test.js` | 10 | payload、渲染、margin 开关不重算、style 开关重算、Greek 切换、腿编辑、preset、错误态 |
-| `tests/e2e/test_optsim.py` | 3 | 首次打开自动运行、两个开关、服务端校验错误 |
+| `tests/test_optsim.py` | 37 | pricing（parity、American 界限与收敛、到期）、implied vol（两种 style 往返、无解为 NaN）、break-even IV（重新定价到 premium、随时间上升）、上市市场（到期日 / 报价解析、平手规则、IV 曲线还原已知 smile、报价 IV 回退、mid 定价）、Reg-T / PM 规则、网格不变量、style 切换、`strike_for_delta`、PNG、CLI |
+| `tests/test_optsim_api.py` | 34 | route 正常路径、Reg-T 规则、American ≥ European、零 IV shift、长期限切片、18 个 400 错误用例、strike tick、`"atm"`、break-even IV 输出；ticker 模式：上市到期日 / strike / mid、ATM 与 strike 吸附、复用缓存、忽略假设输入、无报价回退、取链前校验、502 且不缓存空链 |
+| `tests/unit/optsim.test.js` | 15 | payload、渲染、margin 开关不重算、style 开关重算、Greek 切换、腿编辑、preset、错误态、Market 开关（锁定 / 恢复输入框、来源说明、Expiry 与 Bid / ask 列）、ticker 模式的 `"atm"`、没有 ticker 时的 empty 态、ticker 变化重算、break-even IV 小图与表 |
+| `tests/e2e/test_optsim.py` | 4 | 首次打开自动运行（含 break-even IV 小图与表）、两个开关、服务端校验错误、ticker 模式（`yf_stub` 的链） |
 
 另有 `tests/unit/coverage.test.js` 导入 `static/optsim.js`，`tests/test_pages_build.py` 检查 `tab-optsim`。
-测试只做已知答案比较（恒等式、规则算术、现有 BSM 实现），不用 mock 数据。
+测试只做已知答案比较（恒等式、规则算术、现有 BSM 实现）。Ticker 模式的 API 测试用按已知 smile 定价的合成期权链
+（patch `services.options.preload.fetch_option_chain`，经过真实的 preload 缓存），e2e 用 `tests/e2e/conftest.py`
+的 `yf_stub`。
 
 ### 1.7 已知限制与技术债
 
@@ -167,11 +196,19 @@ American 精度（400 个随机状态，对 2000-step 树，按行权价 100 计
 5. 没有 skew dynamics、term structure、event vol、离散股息（所以除息日前 American call 的提前行权没有建模）。
 6. American 只做估值：不输出行权边界，网格上也没有指派。
 7. CLI 与 Web 的数值有小差异（树的步数、切片、IV shift 只在 entry），以及 §1.3 的单位不一致。
-8. 标签页输入不持久化，刷新后回到默认 preset。（§5 M1.2）
+8. 标签页输入不持久化，刷新后回到默认 preset 和 Hypothetical 模式。（§5 M1.2）
 9. 手机宽度：`.app-body { align-items: flex-start }` 让 main panel 以内容最小宽度为下限。本标签页用
    `contain: inline-size` 处理了；Option Pricing Matrix 标签页仍有横向溢出（390 px 下页面宽约 3,100 px），
    是既有问题。
-10. GitHub Pages 镜像没有后端，标签页只显示 demo 提示。
+10. GitHub Pages 镜像没有后端，标签页只显示 demo 提示（两种模式都是）。
+11. Ticker 模式：
+    - 依赖 yfinance 当前链的质量：收盘后 bid/ask 常为 0，IV 退回链上报价的 IV（结果表里以 `*` 标出）；
+      报价可能有最多 15 分钟的缓存延迟（页面显示抓取时间）。
+    - 请求的 DTE 换成最近的上市到期日，calendar 的间隔可能变；不在到期日之间插值 term structure。
+    - Rate、dividend yield、margin class 仍取自输入，不从链上推断（§6 Q7）。
+    - IV 曲线用 European 模型从 mid 反解；腿本身的 IV 按所选 style 反解。
+12. Break-even IV 只按腿定义，不按头寸。深度实值、立即行权最优的 American 腿在一段 vol 上价值恒为 intrinsic，
+    此时 break-even IV 不唯一，返回其中最高的一个。
 
 ---
 
@@ -182,6 +219,7 @@ v0.3（[optsim_design.md](optsim_design.md)）是长期设计。已实现的只�
 | v0.3 设计 | 现状 |
 |---|---|
 | 三种模式：Grid、Monte Carlo、Program | 只有 Grid |
+| 场景来源 `hypothetical` / `calibrated` / `observed`（原则 9） | `hypothetical` 与 ticker 模式；ticker 模式接近 `observed`：yfinance 当前链快照，逐个上市 strike 取 IV，不做 SSVI 拟合，也不持久化 |
 | `core/optsim/` 分十几个子包，另有 `services/optsim/`、`data_pipeline/store` 的 optsim 表 | 5 个平铺模块 + `services/options/optsim.py`；无持久化 |
 | American：`table` 引擎为默认，`tree` 为参考，`bs2002` 交叉检查 | 只有 `tree`（CRR + control variate） |
 | 曲面：`σ(k, τ)`，k 相对 forward，skew 按 τ 幂律衰减，SSR 与时间规则 | 单一 smile，k 相对 spot，无期限结构，sticky-strike |
@@ -258,6 +296,8 @@ v0.3（[optsim_design.md](optsim_design.md)）是长期设计。已实现的只�
 ### M3 — 持仓监测（v0.3 Phase 4 子集）
 
 把 Portfolio 里的 `tracked_strategies` 载入模拟器，用当前 spot 看现有持仓的风险随时间和 spot 的变化。
+ticker 模式（2026-10-21）已经提供了 spot、上市合约和链上 IV 的取数（§1.4）；M3 剩下的是载入持仓、
+用实际入场价作 P&L 基准，以及按到期日期而不是 DTE 指定腿。
 
 - **API 扩展**：legs 接受可选的 `iv`（覆盖 smile）和 `premium`（实际入场价，作为 P&L 基准，不再用模型价）。
 - **数据**：dte 由 `expiry` 日期计算；spot 在 services 层取（`fetch_spots_bulk` / `DataService`），core 保持纯计算。
@@ -287,6 +327,9 @@ futu 快照与价差表、PIT 复盘、SQLite run registry 与 `.npz` 产出物�
 4. **CLI 与 API 单位是否统一**（§1.3）：统一会改变 CLI 的 TOML 格式和示例。
 5. **American 引擎是否提升为 `core/options/` 公共模块**：会影响现有 `greeks_vectorized` 的使用方，需要单独 ADR。
 6. **M3 的入口**：Portfolio 里加 "Simulate"，还是在 Position Simulator 里加载持仓。
+7. **Ticker 模式的 dividend yield 与 margin class**：dividend yield 是否从链上隐含（put-call parity）或经 provider 取，
+   而不是手填？margin class 是否按标的类型（指数 / ETF / 个股）自动推断？前者要给 provider seam 加方法（ADR 0011），
+   后者对窄基 ETF 只能近似。
 
 ---
 
@@ -297,3 +340,4 @@ futu 快照与价差表、PIT 复盘、SQLite run registry 与 `.npz` 产出物�
 | 2026-10-19 | 核心：`core/optsim/`、CLI、示例、ADR 0013（commit `fda7011`） |
 | 2026-10-20 | Position Simulator 标签页与 `POST /api/optsim`（commit `fb32ea6`）；PR #19 合并（`b4458e9`） |
 | 2026-10-20 | 本文与 v0.3 参考设计入库，供后续接力开发 |
+| 2026-10-21 | Market 开关（ticker 模式：spot、上市到期日 / strike、mid 反解的 IV 来自 header ticker 的期权链）；每腿 break-even IV 图与表；`implied_vol`、`breakeven_iv`、`core/optsim/market.py`；`strike: "atm"`；preload payload 带 `fetched_at`；ADR 0013 改为 Accepted；修正与代码不一致的文档 |

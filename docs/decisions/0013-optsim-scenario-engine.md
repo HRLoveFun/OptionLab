@@ -1,7 +1,7 @@
 # 0013. optsim：假设头寸的 scenario engine（spot × time × IV）
 
-- **Status**: Proposed
-- **Date**: 2026-10-19（2026-10-20 追加 Web 入口）
+- **Status**: Accepted（2026-10-21，核心、CLI 与标签页均已合并到 main）
+- **Date**: 2026-10-19（2026-10-20 追加 Web 入口；2026-10-21 追加 ticker 模式与 break-even IV）
 - **Deciders**: repo owner
 
 ## Context
@@ -16,7 +16,8 @@ margin 占用，如何随 spot、时间和 IV 变化。现有模块都不覆盖�
 用户约束：European 与 American 同等重要、整个头寸一键切换；Reg-T 与 portfolio margin
 同等重要、一键切换；首要场景是 multi-week VRP 结构（short put / strangle、credit spread、
 iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付，随后（2026-10-20）按用户要求
-加入前端标签页。
+加入前端标签页；2026-10-21 用户又要求一个开关，让整页计算改为基于 header 的 ticker，并加一张
+按日期的 break-even IV 图。
 
 ## Options Considered
 
@@ -28,14 +29,15 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
 
 ## Decision
 
-选 **Option 2**。`core/optsim/` 只有 5 个模块：
+选 **Option 2**。`core/optsim/` 共 6 个模块（`market.py` 为 2026-10-21 新增）：
 
 | 模块 | 职责 |
 |---|---|
-| `pricing.py` | European：BSM + dividend yield q；American：CRR binomial tree（200 steps），以 European tree 为 control variate，Greeks 取自 lattice，vega 用 ±1 vol pt bump |
+| `pricing.py` | European：BSM + dividend yield q；American：CRR binomial tree（200 steps），以 European tree 为 control variate，Greeks 取自 lattice，vega 用 ±1 vol pt bump；`implied_vol` 在 0.5–300 vol pts 内反解两种 style |
 | `models.py` | `Market` / `Smile` / `Position`；`make_leg` 以模型价作为 entry premium；`strike_for_delta` 按 delta 选 strike |
 | `margin.py` | Reg-T strategy-based（defined_risk / naked / conservative 三类）与 portfolio margin（TIMS-style 10 点 spot shock） |
-| `engine.py` | `scenario_grid`：spot × day × IV shift 上的 value、P&L、Greeks、两种 margin；`time_profile`：entry spot 处逐日一行 |
+| `engine.py` | `scenario_grid`：spot × day × IV shift 上的 value、P&L、Greeks、两种 margin；`time_profile`：entry spot 处逐日一行；`breakeven_iv`：每条腿在 day × spot 上的 break-even IV |
+| `market.py` | ticker 模式的上市期权市场：把期权链快照整理成上市到期日、行权价、双边报价和每个到期日的 IV 曲线（纯计算，链由 services 层取） |
 | `charts.py` | 一张 6 panel PNG（P&L by date、P&L under IV shifts、Delta、Gamma、Theta、Vega） |
 
 关键约定：
@@ -56,7 +58,32 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
   American 树用 100 steps（最大误差约 0.02 / 100 strike，CLI 的 200 steps 约 0.007）。
   4 腿 American 一次请求约 1 s，European 约 0.03 s。
 - Margin 开关只重绘（两种 margin 每次都返回），exercise 开关重新请求。
-- Strike 可直接给，或按 |Δ| 从 smile 反解，取整到约 0.1% spot 的 tick。
+- Strike 可直接给、写 `"atm"`，或按 |Δ| 从 smile 反解；按 |Δ| 和 ATM 选出的 strike 取整到固定 tick 阶梯
+  （$0.01–$50）中不超过 0.1% spot 的最粗一档，spot 低于 $10 时为 $0.01。
+
+**Ticker 模式与 break-even IV（2026-10-21）**：
+
+- 标签页在 Exercise 左边加一个 **Market** 开关：`Hypothetical`（默认，即上面的行为）/ `Ticker`。
+  Ticker 模式取 header ticker 输入框的第一个 symbol（与 Option Chain 标签页一致），请求带
+  `market: "ticker"` 和 `ticker`；切换会重新请求，header ticker 变化后，屏幕上的 ticker 模式标签页
+  立即重算，不在屏幕上的在下次打开时重算。
+- 数据：`services/options/optsim.py` 经 `services/options/preload.py` 的期权链 preload 缓存取链
+  （15 分钟 TTL，miss 时现取；空链不缓存），payload 带 `fetched_at` 供页面标注时间。
+  `core/optsim/market.py` 保持纯计算。
+- 每条腿：DTE 换成最近的上市到期日（平手取更晚的）；strike 按 |Δ| 时在该到期日的 IV 曲线上反解，
+  再吸附到最近的上市 strike，直接给的 strike 和 `"atm"` 同样吸附；IV 取该合约自己的 mid 反解
+  （与 exercise style 一致的模型），没有双边报价时读该到期日的 IV 曲线。IV 曲线在每个上市 strike
+  取 OTM 一侧（spot 以下用 put，以上用 call）的 mid 反解 IV（European），没有双边报价时用链上报价的 IV，
+  strike 之间线性插值、两端外推为常数。Premium 是该 IV 下的模型价（有 mid 时就等于 mid），
+  所以入场 P&L 仍为 0。
+- Rate、dividend yield 和 margin class 两种模式都取自输入：它们不是期权链能给出的量（risk-free
+  的全局设置是 ADR 0011/0012 的延后项）。Ticker 模式下 Spot、ATM IV 输入框只读显示链上的值，
+  Skew、Curvature 不使用。
+- **Break-even IV**：每条腿单独计算，即在之后某天、某个 spot 下，使该腿价值仍等于入场 premium 的 IV。
+  日期取 "P&L by date" 图的日期（去掉 entry），spot 用同一网格，rate、dividend yield、style 与页面一致；
+  搜索区间 0.5%–300%，区间内无解记为空。到期日价值只剩 intrinsic，没有 IV 曲线，用到期盈亏平衡点
+  `K ± premium` 的竖线表示。组合层面不定义：多空混合的头寸没有一个统一的 IV 能回答这个问题。
+  American 的反解从 European 解向下做 safeguarded secant，再用 bisection 收尾。
 
 ## Consequences
 
@@ -65,13 +92,19 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
   - Margin 是近似值：没有 broker house add-on、concentration charge、TIMS vol shock 和
     class group offset；Reg-T 不检查 long leg 到期日是否晚于 short leg（reverse calendar 会被低估）。
   - 没有 skew dynamics、term structure 和 event vol；IV 只做平行移动。
-  - CLI 全网格的 American 较慢：单腿 45 DTE 约 2 s，4 腿 iron condor 约 6 s，365 DTE 约 50 s；
-    European 约 0.01–0.05 s。Web 路径靠上面的裁剪控制在约 1 s。
+  - CLI 全网格的 American 较慢：单腿 45 DTE 约 2 s，4 腿 iron condor 约 6 s，4 腿 365 DTE 约 50 s；
+    European 约 0.01–0.05 s。Web 路径靠上面的裁剪控制在约 1 s（break-even IV 另加每腿约 0.1 s）。
+  - Ticker 模式依赖 yfinance 期权链的质量：收盘后 bid/ask 常为 0，这时 IV 退回链上报价的 IV；
+    报价可能有最多 15 分钟的缓存延迟；请求的 DTE 会被换成上市到期日（calendar 的间隔可能变）；
+    不在到期日之间插值 term structure。
+  - 深度实值、立即行权最优的 American 腿，价值在一段 vol 上恒为 intrinsic，break-even IV 不唯一，
+    反解返回其中最高的一个。
 - Follow-up（按需）：variance-swap level 校准接口；MC 路径分析。
 
 ## References
 
-- Code：`core/optsim/`、`scripts/optsim.py`、`services/options/optsim.py`、`static/optsim.js`、
+- Code：`core/optsim/`（含 `market.py`）、`scripts/optsim.py`、`services/options/optsim.py`、
+  `services/options/preload.py`（ticker 模式的期权链缓存）、`static/optsim.js`、
   `templates/partials/tab_optsim.html`、`docs/optsim/examples/`
 - Tests：`tests/test_optsim.py`、`tests/test_optsim_api.py`、`tests/unit/optsim.test.js`、
   `tests/e2e/test_optsim.py`

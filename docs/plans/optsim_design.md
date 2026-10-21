@@ -6,9 +6,12 @@
 - 仓库位置：`docs/plans/optsim_design.md`（2026-10-20 入库）；现状与下一步见 [optsim.md](optsim.md)
 - v0.3 处理了一份计划审查报告的 6 条意见：采纳 4 条，另 2 条修正前提或部分采纳（§11.3）
 
-> **状态（2026-10-20）**：本文是长期设计，**不是现状，也不是工单**。已实现的只是最小的确定性部分：
+> **状态（2026-10-21）**：本文是长期设计，**不是现状，也不是工单**。已实现的只是最小的确定性部分：
 > §5.1 的 European / American 估值（只有 `tree` 引擎）、§5.8 的 Reg-T / PM（简化版）、Grid 模式，
 > 以 `core/optsim/`、CLI `scripts/optsim.py` 和 Position Simulator 标签页（`POST /api/optsim`）交付。
+> 标签页另有本文没有的两项（2026-10-21）：读 header ticker 当前期权链的 ticker 模式（接近 §2 原则 9 的
+> `observed` 场景来源，但不做 §5.2 的 SSVI 拟合），以及按腿计算的 break-even IV 图（隐含波动率口径，
+> 与 §3.2 的盈亏平衡**已实现**波动率 `σ_BE` 不是一回事）。
 > 实现与本文的差异见 [optsim.md](optsim.md) §2，下一步见 [optsim.md](optsim.md) §5。
 > 用户明确要求先实现核心、避免过度设计：按 optsim.md 的顺序增量推进，不要一次实现本文全部内容，
 > 也不要为了对齐本文去重构已实现的模块。
@@ -30,7 +33,7 @@
 | 1 | 行权方式 | European 与 American 同等重要，一键切换 | `style` 开关 + `compare`（§5.1） |
 | 2 | 首要研究周期 | 多周 VRP 结构 | 日频步长；Program 模式提前；intraday 延后（§5.4、§10） |
 | 3 | 保证金制度 | Reg-T 与 portfolio margin 同等重要，一键切换 | `margin.model` 开关，默认并列计算（§5.8） |
-| 4 | futu 买卖价快照 | 延后；模拟器针对假设期权分析 | `MarketScenario` 完全参数化；spread 参数化（§3.1、§5.7） |
+| 4 | futu 买卖价快照 | 延后；模拟器针对假设期权分析 | `MarketScenario` 完全参数化；spread 参数化（§3.1、§5.7）。实现备注（2026-10-21）：标签页另有 ticker 模式读 yfinance 当前链，见 optsim.md §1.4 |
 | 5 | 存储 | 作为 OptionLab 子功能 | `core/optsim` + `services/optsim` + SQLite + `.npz`；CLI 离线运行（§4） |
 | 6 | VRP 校准口径 | ATM IV 优先，variance-swap level 留接口 | `ImpliedMeasure` 协议（§5.6） |
 
@@ -67,7 +70,7 @@
 - 不验证微观结构效应（开盘 IV 在 mid 上的错位、成交概率、逆向选择）。它们只能作为参数进入，参数待买卖价数据采集恢复后估计。
 - 不下单，不写入任何券商系统。
 - v0.2 不做 UI；Monte Carlo 不在 HTTP 请求内运行（OptionLab constraints 第 6 节：计算必须在一个请求内完成，且没有后台任务队列）。
-- 不依赖期权历史数据。OptionLab 通过 yfinance 拿不到期权链历史（ADR 0004），所以 optsim 的输入是假设场景，而不是历史期权价格。
+- 不依赖期权历史数据。OptionLab 通过 yfinance 拿不到期权链历史（ADR 0004），所以 optsim 的输入是假设场景，而不是历史期权价格。（实现备注，2026-10-21：标签页的 ticker 模式读的是 yfinance 的**当前**链快照，仍不用历史。）
 - 研究对象不等于可交易清单。学习期宪章 v1.2 第 3 节目前只允许单腿 long，卖方 VRP 结构属于研究范畴；每份报告都标注宪章状态（F14）。
 
 ---
@@ -1056,7 +1059,7 @@ python scripts/optsim.py program strangle_program.toml
 | 1 | 主要产品 | European 与 American 同等重要，需一键切换 | `style` 与 `product.profile` 两级开关；`compare = "style"`；American 引擎 `table`（默认）、`tree`（参考）、`bs2002`（交叉检查）；行权与指派按边界表判定；Phase 1a / 1b 先后交付两种 style（v0.3） |
 | 2 | 首要研究周期 | 多周 VRP 结构 | 默认日频；Program 模式提前到 Phase 3；intraday 与开盘研究延后到 Phase 4 |
 | 3 | 保证金制度 | Reg-T 与 PM 同等重要，需一键切换 | `margin.model` 定 binding，`margin.compare` 默认并列；Phase 1 同时交付两种 |
-| 4 | futu 买卖价快照 | 延后；模拟器针对假设期权分析 | `MarketScenario` 完全参数化并带来源标签；spread 参数化；futu 适配器移到 Phase 4 |
+| 4 | futu 买卖价快照 | 延后；模拟器针对假设期权分析 | `MarketScenario` 完全参数化并带来源标签；spread 参数化；futu 适配器移到 Phase 4。实现备注（2026-10-21）：futu 仍延后；标签页另有读 yfinance 当前链的 ticker 模式 |
 | 5 | 存储 | 作为 OptionLab 子功能 | `core/optsim` + `services/optsim` + `data_pipeline/store`；SQLite 注册表加 `.npz`；TOML 配置；CLI 离线；ADR 0013 |
 | 6 | VRP 校准口径 | ATM IV 与 variance-swap level 都需要；ATM IV 优先，VS 留接口 | `ImpliedMeasure` 协议；`atm_iv` 实现，`var_swap` 预留并显式报错；文献数值标注 VS 口径 |
 
@@ -1273,6 +1276,15 @@ Kelly（R = 交易 P&L / binding 制度下的资本占用）
 ```
 
 ## 附录 C. 变更记录
+
+### 实现备注（2026-10-21，正文设计不变）
+
+- Position Simulator 标签页加了 Market 开关：`Hypothetical`（假设输入）/ `Ticker`（header ticker 的 yfinance
+  当前链：spot、上市到期日与 strike、mid 反解的 IV）。它接近原则 9 的 `observed` 场景来源，但没有 §5.2 的
+  SSVI 拟合、没有持久化，rate、dividend yield、margin class 仍由用户给定。
+- 新增按腿计算的 break-even IV 图：之后某天、某个 spot 下，使该腿价值等于入场 premium 的隐含波动率。
+  这是隐含波动率口径的单腿量，与 §3.2 的盈亏平衡已实现波动率 `σ_BE`（gamma 收益覆盖 variance decay 的
+  已实现波动率）不同。细节见 ADR 0013 与 optsim.md §1.4。
 
 ### v0.3 入库（2026-10-20）
 

@@ -41,8 +41,9 @@ static/
 │   ├── optionChainState.js    Selected expiry / strike / mode
 │   ├── chainCacheState.js     Per-ticker option chain cache
 │   ├── payoffRatioState.js    Payoff Ratio tab state
-│   └── abortRegistry.js       AbortController registry to cancel in-flight
-│                              requests when the user switches ticker
+│   └── abortRegistry.js       Keyed AbortController registry for raw fetch()
+│                              callsites (a new request aborts the previous one
+│                              under the same key)
 ├── features/               (extension slot for future feature modules)
 └── components/             (extension slot for component partials)
 
@@ -203,7 +204,7 @@ inline as before, since a hover-peek panel is unusable at that width.
 | `tab-option-chain`         | Option Chain                | `oc_chain`, `oc_*` analysis      |
 | `tab-options-chain`        | Volatility Analysis         | `oc_*` metrics and charts        |
 | `tab-payoff-ratio`         | Payoff Ratio                | `payoff_ratio_chart`             |
-| `tab-optsim`               | Position Simulator          | `POST /api/optsim` (hypothetical position, ADR 0013) |
+| `tab-optsim`               | Position Simulator          | `POST /api/optsim` (hypothetical inputs, or the header ticker's chain in ticker mode; ADR 0013) |
 
 ---
 
@@ -324,27 +325,38 @@ spinners and Alpine bindings all derive from it.
 
 ### Tab flags (lazy-load guard)
 
-`tabFlags.has(tabId)` records "this tab has been loaded at least once".
-Tab switches consult the flag to avoid re-firing `/render/<kind>` when the
-fragment is already in the DOM.
+`tabFlags.isLoaded(tab)` / `markLoaded(tab)` record "this tab has been
+loaded at least once"; the tab-switch script in `templates/index.html`
+consults them to avoid re-firing a lazy tab's first load. A ticker change
+calls `reset(tab)` on the tabs that depend on the ticker (the `#ticker`
+`change` handler in `index.html` and `switchTickerContext` in
+`market_review_chart.js`), so they reload on their next visit; each reset
+emits `tab_flags:changed` on the bus (the Position Simulator listens to it
+to re-run a ticker-mode result that is on screen).
 
 ### Abort registry
 
-`abortRegistry` keeps a map from `(panel, ticker)` to an `AbortController`.
-Switching ticker calls `.abort()` on the previous controller so stale
-fragments do not overwrite the new ticker's data.
+Superseded requests are cancelled per panel, not per ticker: `static/api.js`
+keeps one controller per `key` (`api.get` / `api.post` with `key`; a new
+request under the same key aborts the previous one — `optsim`,
+`payoff_ratio`, the `regime_*` calls), `appState.aborts` from
+`state/abortRegistry.js` does the same for raw `fetch()` callsites
+(`begin(key)`, used by the portfolio analysis), and
+`appState.optionChain.beginRequest()` for the Option Chain. The ticker
+switch itself aborts nothing: it resets the tab flags, and the panel's next
+load supersedes whatever was in flight.
 
 ### Form Persistence
 
 ```javascript
-FormManager.saveState()   // On form input changes
+FormManager.saveState()   // On any input/select change and before a submit
 FormManager.loadState()   // On page load
-FormManager.clearState()  // After successful submission
 ```
 
-**Stored Keys**: `ticker`, `frequency`, `side_bias`, `start_time`,
-`end_time`, `risk_threshold`, `rolling_window`, `account_size`,
-`max_risk_pct`, `positions` (JSON array).
+**Stored Keys** (`localStorage['marketAnalysisForm']`): `ticker`,
+`positions` (JSON array). Module parameters live in their own stores
+(`state/marketParamsState.js`, `assessmentParamsState.js`,
+`optionFilterState.js`; batch B7).
 
 ---
 
@@ -367,7 +379,7 @@ FormManager.clearState()  // After successful submission
 | `/api/expiry_probability`               | POST     | Payoff Ratio tab (dormant) | Touch probability + IV per expiry  |
 | `/api/portfolio_analysis`                | POST     | `runPortfolioAnalysis()`  | Portfolio metrics                   |
 | `/api/regime/{current,history,backfill}` | GET/POST | Regime tab                | Macro regime data                   |
-| `/api/optsim`                            | POST     | `runOptsim()`             | Position Simulator grid (value, Greeks, Reg-T / PM over spot × date × IV) |
+| `/api/optsim`                            | POST     | `runOptsim()`             | Position Simulator grid (value, Greeks, Reg-T / PM over spot × date × IV; per-leg break-even IV) |
 
 ---
 

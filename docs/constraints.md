@@ -22,6 +22,7 @@ is usually a workaround for one of the items below.
   - Aggressive rate limiting (HTTP 429) — see §2.
   - **No option-chain history.** `yf.Ticker(...).option_chain(expiry)` only returns the *current snapshot*. There is no API for yesterday's IV smile, last week's OI profile, or 252-day IV history.
   - Therefore: **no IV rank / IV percentile / option backtests** are promised anywhere in this project from yfinance data alone. Use **HV percentile** as the substitute (see [glossary.md](glossary.md)).
+  - **The current snapshot is only as good as Yahoo's quotes.** Outside US trading hours many contracts carry a zero bid / ask, so there is no usable mid, and a last trade can be days old. Anything that prices on the chain must say where a number came from: the Position Simulator's ticker mode (ADR 0013) implies IV from the mid only for two-sided quotes, falls back to the quoted IV otherwise, and marks those legs.
 
 ## 2. yfinance rate limits & curl_cffi quirks
 

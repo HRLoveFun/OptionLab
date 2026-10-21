@@ -41,4 +41,4 @@ and fill in every section. Keep ADRs short — 1 page is ideal, 2 pages max.
 | [0010](0010-payoff-ratio-not-odds.md) | "Expiry Odds" renamed to "Payoff Ratio" | Accepted |
 | [0011](0011-pluggable-data-provider-seam.md) | Pluggable Data-Provider Seam & Canonical Internal Schema | Accepted |
 | [0012](0012-parameter-ownership-and-prefetch.md) | Parameter Ownership & Data-Readiness Prefetch | Accepted |
-| [0013](0013-optsim-scenario-engine.md) | optsim：假设头寸的 scenario engine（spot × time × IV） | Proposed |
+| [0013](0013-optsim-scenario-engine.md) | optsim：假设头寸的 scenario engine（spot × time × IV） | Accepted（2026-10-21，核心、CLI 与标签页均已合并到 main） |

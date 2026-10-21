@@ -9,7 +9,8 @@
  *   appState.tabFlags.reset(tab)      -> reset a single flag (for ticker change)
  *   appState.tabFlags.resetAll()
  *
- * Known tabs: 'market_review', 'option_chain', 'payoff_ratio', 'regime'
+ * Known tabs: 'market_review', 'option_chain', 'payoff_ratio', 'regime',
+ *             'simulation', 'option_pricing_matrix', 'optsim'
  */
 (function (root) {
     'use strict';

@@ -194,12 +194,14 @@ components must not call `fetch` directly. `static/state/` holds tiny observable
 `marketParamsState.js` / `assessmentParamsState.js` / `optionFilterState.js` own the module-scoped
 parameters (one `localStorage` key per group) and re-run exactly the modules that consume a change;
 `panelState.js` enforces the four-phase async contract (`idle → loading → loaded → empty|error`,
-no sixth state), `tabFlagsState.js` is the lazy-load guard, `abortRegistry.js` cancels in-flight
-requests on ticker switch. Charts are server PNGs except `static/market_review_chart.js`,
-`static/components/payoff_chart.js` and `static/optsim.js` (JSON → Chart.js). The **Simulation** and
-**Option Pricing Matrix** tabs are pure client-side (`static/sim/`, zero I/O) and also run standalone
-on GitHub Pages; the **Position Simulator** tab posts a hypothetical position to `POST /api/optsim`
-(`core/optsim`, ADR 0013), so on Pages it only shows a demo notice. Frontend deps are CDN-only —
+no sixth state), `tabFlagsState.js` is the lazy-load guard (a ticker change resets the tabs that
+depend on the ticker), and a superseded request is aborted per panel key (`api.js` `key`;
+`abortRegistry.js` for raw `fetch`) — the ticker switch itself aborts nothing. Charts are server PNGs
+except `static/market_review_chart.js`, `static/components/payoff_chart.js` and `static/optsim.js`
+(JSON → Chart.js). The **Simulation** and **Option Pricing Matrix** tabs are pure client-side
+(`static/sim/`, zero I/O) and also run standalone on GitHub Pages; the **Position Simulator** tab posts
+a position to `POST /api/optsim` (`core/optsim`, ADR 0013) — priced on hypothetical inputs, or in
+ticker mode on the header ticker's option chain — so on Pages it only shows a demo notice. Frontend deps are CDN-only —
 **no build step**, no React/Vue (ADR 0006). UI changes must
 satisfy the P1–P5 contract in `docs/frontend_architecture.md`.
 
