@@ -1280,8 +1280,8 @@ Kelly（R = 交易 P&L / binding 制度下的资本占用）
 ### 实现备注（2026-10-21，正文设计不变）
 
 - Position Simulator 标签页加了 Market 开关：`Hypothetical`（假设输入）/ `Ticker`（header ticker 的 yfinance
-  当前链：spot、上市到期日与 strike、mid 反解的 IV）。它接近原则 9 的 `observed` 场景来源，但没有 §5.2 的
-  SSVI 拟合、没有持久化，rate、dividend yield、margin class 仍由用户给定。
+  当前链：spot、上市到期日与 strike、mid 反解的 IV；rate 取 `^IRX`，dividend yield 取 0，margin class 按标的
+  类型自动选）。它接近原则 9 的 `observed` 场景来源，但没有 §5.2 的 SSVI 拟合，也没有持久化。
 - 新增按腿计算的 break-even IV 图：之后某天、某个 spot 下，使该腿价值等于入场 premium 的隐含波动率。
   这是隐含波动率口径的单腿量，与 §3.2 的盈亏平衡已实现波动率 `σ_BE`（gamma 收益覆盖 variance decay 的
   已实现波动率）不同。细节见 ADR 0013 与 optsim.md §1.4。

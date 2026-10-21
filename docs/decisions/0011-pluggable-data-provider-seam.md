@@ -114,6 +114,7 @@ protocol is not accidentally yfinance-shaped
 | Expiries | `tk.options` list | `get_option_expiration_date()` frame | canonical = `expiries: tuple[str, ...]` (ISO dates) |
 | Greeks | absent | native (`delta`/`gamma`/…) | out of scope for B1; the protocol has no Greek fields yet |
 | History | `yf.download` frame | `get_stock_quote` / history API | canonical `history()` returns `CANONICAL_BAR_COLUMNS` (`open…adj_close, volume`) |
+| Instrument type (added 2026-10-21, ADR 0013) | `fast_info.quote_type` (`INDEX` / `ETF` / `EQUITY` / …) | `get_stock_basicinfo` `stock_type` (`IDX` / `ETF` / `STOCK` / …) | canonical `instrument_type()` returns one of `INSTRUMENT_TYPES` (`index` / `etf` / `equity` / `other`) or `None` |
 
 A provider id is also a first-class value (`MarketDataProvider.name`), because a second
 vendor means two providers coexist rather than one replacing the other.

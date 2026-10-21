@@ -35,7 +35,7 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
 |---|---|
 | `pricing.py` | European：BSM + dividend yield q；American：CRR binomial tree（200 steps），以 European tree 为 control variate，Greeks 取自 lattice，vega 用 ±1 vol pt bump；`implied_vol` 在 0.5–300 vol pts 内反解两种 style |
 | `models.py` | `Market` / `Smile` / `Position`；`make_leg` 以模型价作为 entry premium；`strike_for_delta` 按 delta 选 strike |
-| `margin.py` | Reg-T strategy-based（defined_risk / naked / conservative 三类）与 portfolio margin（TIMS-style 10 点 spot shock） |
+| `margin.py` | Reg-T strategy-based（defined_risk / naked / conservative 三类）与 portfolio margin（TIMS-style 10 点 spot shock）；`margin_class` 按标的的 symbol 和类型选 margin class（ticker 模式） |
 | `engine.py` | `scenario_grid`：spot × day × IV shift 上的 value、P&L、Greeks、两种 margin；`time_profile`：entry spot 处逐日一行；`breakeven_iv`：每条腿在 day × spot 上的 break-even IV |
 | `market.py` | ticker 模式的上市期权市场：把期权链快照整理成上市到期日、行权价、双边报价和每个到期日的 IV 曲线（纯计算，链由 services 层取） |
 | `charts.py` | 一张 6 panel PNG（P&L by date、P&L under IV shifts、Delta、Gamma、Theta、Vega） |
@@ -76,9 +76,16 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
   取 OTM 一侧（spot 以下用 put，以上用 call）的 mid 反解 IV（European），没有双边报价时用链上报价的 IV，
   strike 之间线性插值、两端外推为常数。Premium 是该 IV 下的模型价（有 mid 时就等于 mid），
   所以入场 P&L 仍为 0。
-- Rate、dividend yield 和 margin class 两种模式都取自输入：它们不是期权链能给出的量（risk-free
-  的全局设置是 ADR 0011/0012 的延后项）。Ticker 模式下 Spot、ATM IV 输入框只读显示链上的值，
-  Skew、Curvature 不使用。
+- Rate、dividend yield 和 margin class（用户 2026-10-21 定案）：Ticker 模式下 rate 取 13 周国库券
+  `^IRX`（yfinance，以百分比报价，原值当作年化利率使用，缓存 15 分钟；取不到或超出 −5%–50% 时退回请求里
+  输入的 rate，并在响应的 `rate_source` 标明）；dividend yield 取 0；margin class 按标的类型自动选
+  （`core/optsim/margin.py::margin_class`）：高市值宽基指数（SPX、XSP、NDX、DJX、OEX 等）及跟踪它们的 ETF
+  （SPY、IVV、VOO、QQQ、DIA 等）用 `index` / `etf`，其他宽基 ETF（IWM、MDY、IJH、IJR）和其余指数用
+  `index_small`，其余 ETF（行业、杠杆、单一国家）、个股和类型未知的标的用最保守的 `equity`——窄基 ETF
+  的期权按个股要求计保证金。标的类型经 provider seam 新增的 `instrument_type()` 取（ADR 0011 的协议表已补），
+  由 `services/market/reference_data.py` 缓存一天。Hypothetical 模式下这三项仍取自输入。
+  Ticker 模式下 Spot、Rate、Dividend、Margin class、ATM IV 输入框只读显示服务端用的值（请求仍带输入值，
+  rate 作 `^IRX` 的后备），Skew、Curvature 不使用。
 - **Break-even IV**：每条腿单独计算，即在之后某天、某个 spot 下，使该腿价值仍等于入场 premium 的 IV。
   日期取 "P&L by date" 图的日期（去掉 entry），spot 用同一网格，rate、dividend yield、style 与页面一致；
   搜索区间 0.5%–300%，区间内无解记为空。到期日价值只剩 intrinsic，没有 IV 曲线，用到期盈亏平衡点
@@ -99,16 +106,22 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
     不在到期日之间插值 term structure。
   - 深度实值、立即行权最优的 American 腿，价值在一段 vol 上恒为 intrinsic，break-even IV 不唯一，
     反解返回其中最高的一个。
+  - `^IRX` 是贴现收益率，按原值当连续复利利率用，比模型假设的利率低几个基点（4% 水平约 5–10 bp）。
+  - Ticker 模式的 dividend yield 恒为 0：对派息标的，call 估值偏高、put 偏低（forward 偏高），
+    mid 反解出的 IV 会吸收这部分差异；Hypothetical 模式可手填股息。
+  - Margin class 的名单是有限的：未列出的宽基 ETF 按 `equity` 计，保证金偏保守；杠杆 ETF 的实际要求
+    （按杠杆倍数放大）高于任何一档，仍被低估。
 - Follow-up（按需）：variance-swap level 校准接口；MC 路径分析。
 
 ## References
 
 - Code：`core/optsim/`（含 `market.py`）、`scripts/optsim.py`、`services/options/optsim.py`、
-  `services/options/preload.py`（ticker 模式的期权链缓存）、`static/optsim.js`、
-  `templates/partials/tab_optsim.html`、`docs/optsim/examples/`
-- Tests：`tests/test_optsim.py`、`tests/test_optsim_api.py`、`tests/unit/optsim.test.js`、
-  `tests/e2e/test_optsim.py`
+  `services/options/optsim_ticker.py`（ticker 模式的市场输入）、`services/options/preload.py`（期权链缓存）、
+  `services/market/reference_data.py`（标的类型与 `^IRX` 缓存）、`data_pipeline/providers/`（`instrument_type()`）、
+  `static/optsim.js`、`templates/partials/tab_optsim.html`、`docs/optsim/examples/`
+- Tests：`tests/test_optsim.py`、`tests/test_optsim_api.py`、`tests/test_reference_data.py`、
+  `tests/test_provider_seam.py`（`fetch_instrument_type`）、`tests/unit/optsim.test.js`、`tests/e2e/test_optsim.py`
 - Plan：[`docs/plans/optsim.md`](../plans/optsim.md)（现状、API 契约、路线图）；[`docs/plans/optsim_design.md`](../plans/optsim_design.md)（v0.3 长期设计，参考用）
-- Related ADR：0008
+- Related ADR：0008；0011（provider seam：2026-10-21 加 `instrument_type()`）
 - External：Cboe Margin Manual（strategy-based margin）；FINRA Rule 4210(g) 与 Cboe customer
   portfolio margin（OCC TIMS）
