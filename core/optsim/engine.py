@@ -9,11 +9,15 @@ Context:
     out of the margin calculation.
   - Position-level units: value and P&L in dollars, delta in shares, gamma in
     shares per $1, theta in dollars per calendar day, vega in dollars per vol point.
+  - Break-even IV is per leg, not per position: the IV at which one leg is still
+    worth its entry premium on a later day and spot. A mixed long/short position
+    has no single IV that the question applies to.
 Contracts:
   - default_days(position, step=7) -> np.ndarray
   - scenario_grid(position, market, *, spot_range, n_spots, days, iv_shifts, steps) -> Grid
   - time_profile(grid, iv_shift=0.0) -> list[dict]
   - breakevens(spots, pnl) -> list[float]
+  - breakeven_iv(position, market, spots, days, *, steps) -> list[dict]
 Dependencies UPWARD:
   - numpy, core.optsim.pricing, core.optsim.margin, core.optsim.models
 Dependencies DOWNWARD:
@@ -28,7 +32,7 @@ import numpy as np
 
 from core.optsim.margin import pm_bpr, pm_offsets, regt_bpr
 from core.optsim.models import Market, Position
-from core.optsim.pricing import DEFAULT_STEPS, option_greeks
+from core.optsim.pricing import DEFAULT_STEPS, implied_vol, option_greeks
 
 GREEKS = ("delta", "gamma", "theta", "vega")
 
@@ -180,4 +184,26 @@ def breakevens(spots: np.ndarray, pnl: np.ndarray) -> list[float]:
     for j in np.flatnonzero(s[:-1] * s[1:] < 0):
         x0, x1, y0, y1 = spots[j], spots[j + 1], pnl[j], pnl[j + 1]
         out.append(float(x0 - y0 * (x1 - x0) / (y1 - y0)))
+    return out
+
+
+def breakeven_iv(position: Position, market: Market, spots, days, *, steps: int = DEFAULT_STEPS) -> list[dict]:
+    """Per leg: the IV at which the leg is worth its entry premium, on day × spot.
+
+    One dict per leg: ``iv`` (n_d, n_s) — NaN where no IV in the search range
+    reprices the leg, and on and after its expiry — and ``expiry_breakeven``, the
+    spot at which the expiry payoff equals the premium (strike ± premium). The rate,
+    dividend yield and exercise style are the position's; spots do not move IV.
+    """
+    spots = np.asarray(spots, dtype=float)
+    days = np.asarray(days, dtype=float)
+    S = np.broadcast_to(spots, (len(days), len(spots)))
+    out = []
+    for leg in position.legs:
+        T = np.maximum(leg.dte - days, 0.0)[:, None] / 365.0
+        iv = implied_vol(
+            leg.option_type, leg.premium, S, leg.strike, T, market.rate, market.div_yield, position.style, steps
+        )
+        sign = 1.0 if leg.option_type == "call" else -1.0
+        out.append({"iv": iv, "expiry_breakeven": float(leg.strike + sign * leg.premium)})
     return out

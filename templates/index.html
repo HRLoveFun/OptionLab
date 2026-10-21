@@ -312,7 +312,8 @@
                 if (target === 'tab-option-pricing-matrix' && !window.appState.tabFlags.isLoaded('option_pricing_matrix')) {
                     if (typeof loadOptionPricingMatrix === 'function') { loadOptionPricingMatrix(); window.appState.tabFlags.markLoaded('option_pricing_matrix'); }
                 }
-                // Auto-run the Position Simulator on first visit (hypothetical inputs, POST /api/optsim)
+                // Auto-run the Position Simulator on first visit, and on the next visit after a ticker
+                // change (loadOptsimTab re-runs only a ticker-mode result for another ticker)
                 if (target === 'tab-optsim' && !window.appState.tabFlags.isLoaded('optsim')) {
                     if (typeof loadOptsimTab === 'function') { loadOptsimTab(); window.appState.tabFlags.markLoaded('optsim'); }
                 }
@@ -326,6 +327,8 @@
                 window.appState.tabFlags.reset('option_chain');
                 window.appState.tabFlags.reset('payoff_ratio');
                 window.appState.tabFlags.reset('simulation');
+                // Ticker mode re-runs on the new ticker; hypothetical mode ignores it.
+                window.appState.tabFlags.reset('optsim');
             });
         }
 

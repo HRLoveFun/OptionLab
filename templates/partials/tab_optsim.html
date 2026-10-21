@@ -4,10 +4,12 @@
         <div class="panel-header" style="margin:0;">
             <h2 id="optsim-heading">Position Simulator</h2>
             <p class="panel-desc">
-                Value, Greeks and margin of a hypothetical multi-leg position as spot,
-                time and implied volatility change. Strikes are set directly or picked
-                by delta from the IV smile; every leg keeps its own IV (sticky strike).
-                No market data is loaded.
+                Value, Greeks and margin of a multi-leg position as spot, time and
+                implied volatility change. <strong>Hypothetical</strong> prices it on the
+                inputs below; <strong>Ticker</strong> takes spot, listed expiries and
+                strikes, and each leg's IV from the header ticker's option chain.
+                Strikes are set directly or picked by delta; every leg keeps its own
+                IV (sticky strike).
             </p>
         </div>
         <div class="toolbar-actions">
@@ -59,6 +61,11 @@
     <!-- Market, smile and grid inputs -->
     <div class="content-card">
         <div class="content-card-title">Market &amp; IV smile</div>
+        <p class="field-hint optsim-card-note" id="optsim-market-hint" hidden>
+            Ticker mode: Spot and ATM IV (first leg's expiry) come from the chain and
+            Skew and Curvature are not used — each leg prices at its listed contract's
+            IV. Rate, dividend yield, margin class and the grid still apply.
+        </p>
         <div class="form-grid">
             <div class="form-group">
                 <label for="optsim-spot">Spot</label>
@@ -110,8 +117,17 @@
         </div>
     </div>
 
-    <!-- One-click switches: exercise style re-runs, margin regime re-renders -->
+    <!-- One-click switches: market and exercise style re-run, margin regime re-renders -->
     <div class="optsim-switches">
+        <div class="optsim-switch">
+            <span class="optsim-switch__label" id="optsim-market-label">Market</span>
+            <div class="btn-group" role="group" aria-labelledby="optsim-market-label">
+                <button type="button" class="btn-toggle active" data-optsim-market="hypothetical"
+                        aria-pressed="true">Hypothetical</button>
+                <button type="button" class="btn-toggle" data-optsim-market="ticker"
+                        aria-pressed="false">Ticker</button>
+            </div>
+        </div>
         <div class="optsim-switch">
             <span class="optsim-switch__label" id="optsim-style-label">Exercise</span>
             <div class="btn-group" role="group" aria-labelledby="optsim-style-label">
@@ -131,6 +147,8 @@
             </div>
         </div>
     </div>
+    <!-- Where the ticker-mode inputs came from (filled by static/optsim.js) -->
+    <p class="optsim-market-note" id="optsim-market-note" role="status" aria-live="polite" hidden></p>
 
     <!-- Loading banner — P2 four-state machine -->
     <div class="panel-banner panel-banner--loading" role="status" aria-live="polite"
@@ -217,6 +235,19 @@
                 <canvas id="optsim-chart-greek" role="img"
                         aria-label="Position Greek versus spot on several dates"></canvas>
             </div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-title">Break-even IV by date</div>
+            <p class="field-hint optsim-card-note">
+                The IV at which each leg is still worth its entry premium, by spot and date,
+                at the rate, dividend yield and exercise style above. One chart per leg:
+                above its curve the leg is worth more than it cost, below it less. Dashed
+                lines mark the entry spot and entry IV; the solid vertical line is the
+                spot where the leg's expiry payoff equals its premium.
+            </p>
+            <div class="optsim-beiv-grid" id="optsim-beiv-grid"></div>
+            <div class="table-wrapper" id="optsim-beiv-table"></div>
         </div>
 
         <div class="content-card">

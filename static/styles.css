@@ -3717,11 +3717,65 @@ textarea:focus-visible,
 }
 
 #optsim-resolved .sim-detail th:nth-child(2),
-#optsim-resolved .sim-detail td:nth-child(2) {
+#optsim-resolved .sim-detail td:nth-child(2),
+#optsim-beiv-table .sim-detail th:first-child,
+#optsim-beiv-table .sim-detail td:first-child {
     text-align: left;
 }
 
+/* Ticker mode: fields the chain fills are read-only, and look it in both themes. */
+#tab-optsim .form-group input:disabled {
+    background: var(--slate-50);
+    color: var(--slate-700);
+    border-style: dashed;
+    cursor: not-allowed;
+}
+
+.optsim-card-note {
+    margin: 0;
+    padding: .75rem 1.25rem 0;
+}
+
+.optsim-market-note {
+    margin: -.25rem 0 1rem;
+    font-size: .8rem;
+    color: var(--slate-500);
+}
+
+.optsim-table-note {
+    margin: .5rem 0 0;
+    font-size: .75rem;
+    color: var(--slate-500);
+}
+
+/* Break-even IV: one small chart per leg (small multiples on a shared scale). */
+.optsim-beiv-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem 1rem;
+}
+
+.optsim-beiv-cell {
+    margin: 0;
+    min-width: 0;
+}
+
+.optsim-beiv-cell figcaption {
+    padding: .75rem 1.25rem 0;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+#tab-optsim .optsim-chart-wrapper--beiv {
+    height: 280px;
+}
+
 @media (max-width: 1100px) {
+    .optsim-beiv-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .optsim-chart-grid {
         /* minmax(0, …): a 1fr track's floor is its content, and a Chart.js canvas
            keeps its last pixel width, so the column could never shrink. */
@@ -3732,5 +3786,10 @@ textarea:focus-visible,
 @media (max-width: 720px) {
     .optsim-chart-wrapper {
         height: 280px;
+    }
+
+    /* The legend wraps to three lines at phone width; keep the plot area usable. */
+    #tab-optsim .optsim-chart-wrapper--beiv {
+        height: 340px;
     }
 }

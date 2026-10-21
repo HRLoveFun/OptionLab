@@ -71,6 +71,45 @@ function buildDom() {
     `;
 }
 
+// The header ticker box, the market switch and the break-even IV card (the newer DOM).
+function buildTickerDom(ticker = 'spy, qqq') {
+    buildDom();
+    const tab = document.getElementById('tab-optsim');
+    tab.insertAdjacentHTML('afterbegin', `
+        <button type="button" data-optsim-market="hypothetical" aria-pressed="true" class="active">Hypothetical</button>
+        <button type="button" data-optsim-market="ticker" aria-pressed="false">Ticker</button>
+        <p id="optsim-market-note" hidden></p><p id="optsim-market-hint" hidden></p>
+        <div id="optsim-beiv-grid"></div><div id="optsim-beiv-table"></div>
+    `);
+    document.body.insertAdjacentHTML('afterbegin', `<input id="ticker" value="${ticker}">`);
+}
+
+function tickerResponse() {
+    const listed = (leg, quote) => ({ ...leg, expiry: '2026-12-05', ...quote });
+    const base = fakeResponse();
+    return fakeResponse({
+        market: {
+            source: 'ticker', ticker: 'SPY', spot: 671.24, as_of: '2026-10-21T14:05:00+00:00',
+            atm_expiry: '2026-12-05', atm_iv: 0.139,
+        },
+        legs: [
+            listed(base.legs[0], { iv_source: 'mid', bid: 1.15, ask: 1.25, mid: 1.2 }),
+            listed(base.legs[1], { iv_source: 'curve', bid: null, ask: null, mid: null }),
+        ],
+    });
+}
+
+// Break-even IV for fakeResponse(): chart dates 15 and 30 (the expiry), entry spot at index 1.
+function breakevenIv() {
+    return {
+        days: [15, 30],
+        legs: [
+            { iv: [[0.18, 0.25, null], [null, null, null]], at_spot: [0.25, null], expiry_breakeven: 93.8 },
+            { iv: [[null, 0.21, 0.15], [null, null, null]], at_spot: [0.21, null], expiry_breakeven: 106.3 },
+        ],
+    };
+}
+
 const click = (selector) => document.querySelector(selector).click();
 const text = (id) => document.getElementById(id).textContent;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -197,6 +236,130 @@ describe('optsim.js (Position Simulator tab)', () => {
         const legs = post.mock.calls[1][1].body.legs;
         expect(legs.map((l) => [l.dte, l.strike])).toEqual([[30, 600], [60, 600]]);
         expect(preset.value).toBe('');
+    });
+
+    it('switches to ticker mode: posts the header ticker, locks the market fields, shows the chain', async () => {
+        buildTickerDom();
+        window.loadOptsimTab();
+        await flush();
+        post.mockResolvedValueOnce(tickerResponse());
+        click('[data-optsim-market="ticker"]');
+        await flush();
+        expect(post).toHaveBeenCalledTimes(2);
+        expect(post.mock.calls[1][1].body).toMatchObject({ market: 'ticker', ticker: 'SPY' });
+        const field = (id) => document.getElementById(id);
+        expect(['optsim-spot', 'optsim-atm-iv', 'optsim-skew', 'optsim-curvature'].map((id) => field(id).disabled))
+            .toEqual([true, true, true, true]);
+        expect(field('optsim-spot').value).toBe('671.24');
+        expect(field('optsim-atm-iv').value).toBe('13.9');
+        expect(field('optsim-skew').value).toBe('');
+        expect(field('optsim-skew').placeholder).toBe('not used');
+        expect(field('optsim-market-hint').hidden).toBe(false);
+        const note = field('optsim-market-note');
+        expect(note.hidden).toBe(false);
+        expect(note.textContent).toMatch(/^SPY option chain · spot 671\.24 · as of .+ · ATM IV 13\.9% on 2026-12-05$/);
+        expect(text('optsim-hero-sub').startsWith('SPY · 2 legs')).toBe(true);
+        const head = [...document.querySelectorAll('#optsim-resolved th')].map((th) => th.textContent);
+        expect(head).toEqual(['Leg', 'Position', 'Expiry', 'DTE', 'Strike', 'IV', 'Premium / share', 'Bid / ask',
+            'Delta / share']);
+        const rows = [...document.querySelectorAll('#optsim-resolved tbody tr')]
+            .map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent));
+        expect(rows[0][2]).toBe('2026-12-05');
+        expect(rows[0][7]).toBe('1.15 / 1.25');
+        expect(rows[1][5]).toBe('18.00%*');
+        expect(rows[1][7]).toBe('no quote');
+        expect(document.querySelector('#optsim-resolved .optsim-table-note').textContent).toContain('No two-sided quote');
+
+        click('[data-optsim-market="hypothetical"]');
+        await flush();
+        expect(post).toHaveBeenCalledTimes(3);
+        expect(post.mock.calls[2][1].body.market).toBe('hypothetical');
+        expect(post.mock.calls[2][1].body.ticker).toBeUndefined();
+        expect(field('optsim-spot').disabled).toBe(false);
+        expect(field('optsim-spot').value).toBe('600');
+        expect(field('optsim-skew').value).toBe('-0.77');
+        expect(field('optsim-market-note').hidden).toBe(true);
+    });
+
+    it('sends at-the-money strikes as "atm" in ticker mode', async () => {
+        buildTickerDom();
+        window.loadOptsimTab();
+        await flush();
+        click('[data-optsim-market="ticker"]');
+        await flush();
+        const preset = document.getElementById('optsim-preset');
+        preset.value = 'call_calendar';
+        preset.dispatchEvent(new Event('change'));
+        await flush();
+        expect(post.mock.calls[2][1].body.legs.map((l) => [l.dte, l.strike])).toEqual([[30, 'atm'], [60, 'atm']]);
+        expect(document.querySelector('#optsim-legs-body input[data-field="value"]').placeholder).toBe('ATM');
+    });
+
+    it('waits for a ticker instead of posting when the header has none', async () => {
+        buildTickerDom('');
+        window.loadOptsimTab();
+        await flush();
+        window.api.abort = vi.fn();
+        click('[data-optsim-market="ticker"]');
+        await flush();
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(window.api.abort).toHaveBeenCalledWith('optsim');
+        const state = window.appState.panels.get('optsim');
+        expect(state.phase).toBe('empty');
+        expect(state.message).toContain('needs a ticker');
+    });
+
+    it('re-runs a ticker-mode tab on screen when the ticker changes, and leaves a hypothetical one', async () => {
+        buildTickerDom('SPY');
+        document.getElementById('tab-optsim').classList.add('active');
+        window.loadOptsimTab();
+        await flush();
+        const ticker = document.getElementById('ticker');
+        ticker.value = 'AAPL';
+        window.appState.tabFlags.markLoaded('optsim');
+        window.appState.tabFlags.reset('optsim');
+        await flush();
+        expect(post).toHaveBeenCalledTimes(1); // hypothetical: the ticker does not matter
+
+        click('[data-optsim-market="ticker"]');
+        await flush();
+        expect(post.mock.calls[1][1].body.ticker).toBe('AAPL');
+        ticker.value = 'QQQ';
+        window.appState.tabFlags.markLoaded('optsim');
+        window.appState.tabFlags.reset('optsim');
+        await flush();
+        expect(post).toHaveBeenCalledTimes(3);
+        expect(post.mock.calls[2][1].body.ticker).toBe('QQQ');
+        expect(window.appState.tabFlags.isLoaded('optsim')).toBe(true);
+    });
+
+    it('draws one break-even IV chart per leg on a shared scale, with its table', async () => {
+        buildTickerDom();
+        post.mockResolvedValueOnce(fakeResponse({ breakeven_iv: breakevenIv() }));
+        window.loadOptsimTab();
+        await flush();
+        const canvases = [...document.querySelectorAll('#optsim-beiv-grid canvas')].map((c) => c.id);
+        expect(canvases).toEqual(['optsim-chart-beiv-0', 'optsim-chart-beiv-1']);
+        expect(charts).toHaveLength(5);
+        const [put, call] = charts.slice(3);
+        // Day 30 is the expiry: no curve, only the break-even spot line.
+        expect(put.data.datasets.map((d) => d.label)).toEqual(['Day 15', 'Expiry, day 30: 93.80', 'Entry IV 22.0%']);
+        expect(put.data.datasets[0].data.map((p) => p.y)).toEqual([18, 25, null]);
+        expect(put.config.options.scales.y.max).toBe(70); // 3 × the highest entry IV (22%), shared by both legs
+        expect(call.config.options.scales.y.max).toBe(70);
+        expect(put.config.options.plugins.optsimGuides.hlines[0].y).toBeCloseTo(22);
+        expect(put.config.options.plugins.optsimGuides.vlines[0].x).toBe(93.8);
+        const tick = put.config.options.scales.x.ticks.callback;
+        expect(tick(95, 0, [{ value: 95 }, { value: 100 }])).toEqual(['95', '−5.0%']);
+        expect(tick(100, 1, [{ value: 95 }, { value: 100 }])).toEqual(['100', '0.0%']);
+        expect(document.querySelector('#optsim-beiv-grid figcaption').textContent).toBe('Leg 1 · Short 1 Put 95.00 · 30 DTE');
+
+        const rows = [...document.querySelectorAll('#optsim-beiv-table tbody tr')]
+            .map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent));
+        expect(rows).toEqual([
+            ['1 · Short 1 Put 95.00', '22.0%', '25.0%', '—', '93.80 (day 30)'],
+            ['2 · Short 1 Call 105.00', '18.0%', '21.0%', '—', '106.30 (day 30)'],
+        ]);
     });
 
     it('shows the server message in the error phase', async () => {

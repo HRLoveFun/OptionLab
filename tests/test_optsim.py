@@ -1,9 +1,11 @@
-"""Tests for core/optsim (pricing, margin, scenario grid) and scripts/optsim.py.
+"""Tests for core/optsim (pricing, margin, scenario grid, listed market) and scripts/optsim.py.
 
-Known-answer checks only: closed-form identities, rule arithmetic, and the
-existing OptionLab Black-Scholes implementation as an oracle.
+Known-answer checks only: closed-form identities, rule arithmetic, the existing
+OptionLab Black-Scholes implementation as an oracle, and chains priced with the
+European model on a known smile (so the IVs they imply are known).
 """
 
+import datetime as dt
 import importlib.util
 from pathlib import Path
 
@@ -16,8 +18,15 @@ from core.optsim import (
     Position,
     Smile,
     american,
+    breakeven_iv,
     european,
+    implied_vol,
+    iv_curve,
+    leg_iv,
+    listed_market,
     make_leg,
+    nearest_expiry,
+    nearest_quote,
     pm_bpr,
     pm_offsets,
     regt_bpr,
@@ -202,6 +211,149 @@ def test_render_grid_png_returns_png_bytes():
     pos, mkt = _strangle()
     png = render_grid_png(scenario_grid(pos, mkt, n_spots=21, days=[0, 10, 20, 30]), dpi=60)
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+# ── implied vol and break-even IV ─────────────────────────────────────
+@pytest.mark.parametrize("kind", ["call", "put"])
+def test_implied_vol_inverts_european_prices(kind):
+    S = np.array([80.0, 95.0, 100.0, 105.0, 120.0])
+    sigma = np.array([0.15, 0.25, 0.4, 0.6, 1.2])
+    price = european(kind, S, 100.0, 50 / 365, 0.045, 0.013, sigma)["price"]
+    np.testing.assert_allclose(implied_vol(kind, price, S, 100.0, 50 / 365, 0.045, 0.013), sigma, atol=1e-8)
+
+
+@pytest.mark.parametrize("kind", ["call", "put"])
+def test_implied_vol_inverts_american_tree_prices_below_the_european_root(kind):
+    # Not deeper in the money: where exercising now is optimal the price is flat in vol.
+    S = np.array([85.0, 100.0, 120.0])
+    sigma = np.array([0.2, 0.3, 0.5])
+    price = american(kind, S, 100.0, 120 / 365, 0.045, 0.02, sigma, steps=100)["price"]
+    am = implied_vol(kind, price, S, 100.0, 120 / 365, 0.045, 0.02, "american", 100)
+    np.testing.assert_allclose(am, sigma, atol=1e-5)
+    eu = implied_vol(kind, price, S, 100.0, 120 / 365, 0.045, 0.02)
+    assert np.all(am <= eu + 1e-12)  # an American option is never worth less at the same vol
+
+
+def test_implied_vol_is_nan_when_no_vol_in_range_reprices_the_option():
+    T, r = 30 / 365, 0.045
+    below_floor = implied_vol("call", 15.0, 120.0, 100.0, T, r, 0.0)  # worth over 20 at any vol
+    above_cap = implied_vol("call", 99.0, 100.0, 100.0, T, r, 0.0)  # worth ~33 even at 300%
+    expired = implied_vol("put", 5.0, 95.0, 100.0, 0.0, r, 0.0)
+    free = implied_vol("put", 0.0, 95.0, 100.0, T, r, 0.0)
+    assert all(np.isnan(v) for v in (below_floor, above_cap, expired, free))
+
+
+def test_breakeven_iv_reprices_each_leg_to_its_premium():
+    pos, mkt = _strangle()
+    spots = np.linspace(85.0, 115.0, 31)
+    days = np.array([0.0, 10.0, 20.0, 30.0])
+    for leg, row in zip(pos.legs, breakeven_iv(pos, mkt, spots, days), strict=True):
+        iv = row["iv"]
+        assert iv.shape == (4, 31)
+        assert iv[0, 15] == pytest.approx(leg.iv, abs=1e-8)  # day 0 at the entry spot: the leg's own IV
+        assert np.isnan(iv[-1]).all()  # day 30 is the expiry: no IV moves an expiring option
+        live = np.isfinite(iv[:3])
+        T = ((leg.dte - days[:3]) / 365.0)[:, None]
+        S = np.broadcast_to(spots, (3, 31))
+        value = european(leg.option_type, S, leg.strike, T, mkt.rate, mkt.div_yield, np.where(live, iv[:3], 0.2))
+        np.testing.assert_allclose(value["price"][live], leg.premium, atol=1e-6)
+        sign = 1.0 if leg.option_type == "call" else -1.0
+        assert row["expiry_breakeven"] == pytest.approx(leg.strike + sign * leg.premium)
+
+
+def test_breakeven_iv_rises_as_an_otm_leg_decays_at_the_entry_spot():
+    pos, mkt = _strangle()
+    for row in breakeven_iv(pos, mkt, [100.0], [0.0, 10.0, 20.0, 25.0]):
+        assert np.all(np.diff(row["iv"][:, 0]) > 0)  # holding its value takes ever more IV
+
+
+# ── listed market (ticker mode) ───────────────────────────────────────
+TODAY = dt.date(2026, 10, 21)
+
+
+def _known_smile(K):
+    k = np.log(np.asarray(K, dtype=float) / 100.0)
+    return 0.2 - 0.5 * k + 1.0 * k * k
+
+
+def _priced_rows(kind, strikes, T, spot=100.0, r=0.045, q=0.01, spread=0.1):
+    """Chain rows whose mids are the European price on ``_known_smile``."""
+    strikes = np.asarray(strikes, dtype=float)
+    iv = _known_smile(strikes)
+    mid = european(kind, spot, strikes, T, r, q, iv)["price"]
+    return [
+        {"strike": k, "bid": max(m - spread / 2, 0.0), "ask": m + spread / 2, "iv": v}
+        for k, m, v in zip(strikes, mid, iv, strict=True)
+    ]
+
+
+def test_listed_market_keeps_expiries_a_day_out_with_sorted_unique_quotes():
+    chain = {
+        "2026-10-21": {"calls": [{"strike": 100, "bid": 1.0, "ask": 1.2, "iv": 0.2}]},  # expires today
+        "2026-10-31": {
+            "calls": [
+                {"strike": 105, "bid": 0, "ask": 1.0, "iv": 0.2},
+                {"strike": 95, "bid": 6.0, "ask": 5.0, "iv": None},
+                {"strike": 100, "bid": 2.0, "ask": 2.2, "iv": 0.21},
+                {"strike": 100, "bid": 9.0, "ask": 9.0, "iv": 0.9},
+            ],
+            "puts": [],
+        },
+        "2026-11-30": {"calls": [], "puts": []},  # nothing listed
+        "not-a-date": {"calls": [{"strike": 100}]},
+    }
+    listed = listed_market("TEST", 100.0, chain, today=TODAY, as_of="2026-10-21T14:00:00+00:00")
+    assert [e.expiry for e in listed.expiries] == ["2026-10-31"] and listed.as_of.startswith("2026-10-21")
+    expiry = listed.expiries[0]
+    assert expiry.dte == 10 and [q.strike for q in expiry.calls] == [95.0, 100.0, 105.0]
+    crossed, quoted, one_sided = expiry.calls
+    assert quoted.mid == pytest.approx(2.1) and quoted.iv == 0.21  # the first row of a repeated strike wins
+    assert one_sided.bid is None and one_sided.mid is None  # a zero bid is no bid
+    assert crossed.mid is None  # ask below bid
+    with pytest.raises(ValueError):
+        listed_market("TEST", None, chain, today=TODAY)
+
+
+def test_nearest_expiry_and_quote_break_ties_towards_more_time_and_the_lower_strike():
+    chain = {"2026-10-31": {"puts": [{"strike": 95}, {"strike": 105}]}, "2026-11-10": {"puts": [{"strike": 100}]}}
+    listed = listed_market("TEST", 100.0, chain, today=TODAY)
+    assert nearest_expiry(listed, 15).expiry == "2026-11-10"  # 10 and 20 DTE are both 5 days off
+    assert nearest_quote(listed.expiries[0].puts, 100.0).strike == 95.0
+
+
+def test_iv_curve_recovers_the_smile_a_chain_was_priced_with():
+    T = 30 / 365
+    strikes = np.arange(70.0, 131.0, 5.0)
+    chain = {"2026-11-20": {"calls": _priced_rows("call", strikes, T), "puts": _priced_rows("put", strikes, T)}}
+    expiry = listed_market("TEST", 100.0, chain, today=TODAY).expiries[0]
+    curve = iv_curve(expiry, Market(spot=100.0, rate=0.045, div_yield=0.01))
+    np.testing.assert_allclose(curve.ivs, _known_smile(curve.strikes), atol=1e-6)
+    assert curve.iv(102.5) == pytest.approx(0.5 * float(_known_smile(100.0) + _known_smile(105.0)), abs=1e-6)
+    assert curve.iv(10.0) == pytest.approx(float(_known_smile(70.0)), abs=1e-6)  # flat beyond the ends
+
+
+def test_iv_curve_falls_back_to_the_quoted_iv_without_a_two_sided_quote():
+    chain = {"2026-11-20": {"calls": [{"strike": 110, "bid": 0, "ask": 0, "iv": 0.31}], "puts": [{"strike": 90}]}}
+    expiry = listed_market("TEST", 100.0, chain, today=TODAY).expiries[0]
+    curve = iv_curve(expiry, Market(spot=100.0))
+    assert curve.strikes.tolist() == [110.0] and curve.ivs.tolist() == [0.31]
+    bare = listed_market("TEST", 100.0, {"2026-11-20": {"puts": [{"strike": 90, "iv": 0.0}]}}, today=TODAY)
+    with pytest.raises(ValueError):
+        iv_curve(bare.expiries[0], Market(spot=100.0))
+
+
+@pytest.mark.parametrize("style", ["european", "american"])
+def test_leg_iv_prices_a_quoted_leg_at_its_mid_and_an_unquoted_one_on_the_curve(style):
+    mkt = Market(spot=100.0, rate=0.045, div_yield=0.01)
+    rows = [{"strike": 95, "bid": 1.10, "ask": 1.30, "iv": 0.5}, {"strike": 90, "bid": 0, "ask": 0.4, "iv": 0.33}]
+    expiry = listed_market("TEST", 100.0, {"2026-11-20": {"puts": rows}}, today=TODAY).expiries[0]
+    curve = iv_curve(expiry, mkt)
+    unquoted, quoted = expiry.puts  # sorted by strike: 90, 95
+    iv, source = leg_iv("put", quoted, expiry, mkt, curve, style, 100)
+    premium = make_leg("put", "short", quoted.strike, expiry.dte, mkt, iv=iv, style=style, steps=100).premium
+    assert source == "mid" and premium == pytest.approx(1.20, abs=1e-4)
+    iv, source = leg_iv("put", unquoted, expiry, mkt, curve, style, 100)
+    assert source == "curve" and iv == pytest.approx(0.33)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────

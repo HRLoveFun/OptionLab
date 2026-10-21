@@ -387,8 +387,8 @@ function switchTickerContext(ticker) {
     const tickerInput = document.getElementById('ticker');
     if (tickerInput) tickerInput.value = ticker;
     if (window.appState && window.appState.tabFlags) {
-        // Force re-fetch of lazy-loaded tabs against the new ticker.
-        ['option_chain', 'payoff_ratio', 'regime', 'market_review'].forEach(k => window.appState.tabFlags.reset(k));
+        // Force re-fetch of lazy-loaded tabs against the new ticker ('optsim' re-runs only in ticker mode).
+        ['option_chain', 'payoff_ratio', 'regime', 'market_review', 'optsim'].forEach(k => window.appState.tabFlags.reset(k));
     }
 
     // Reload the JS-driven Market Review chart for the new ticker if its tab

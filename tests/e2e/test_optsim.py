@@ -1,11 +1,12 @@
 """End-to-end smoke for the Position Simulator tab.
 
-The tab posts hypothetical inputs to the REAL /api/optsim — `mock_apis` falls
-back to the live server for it, and the engine is pure computation, so no
-network is involved. Chart.js and Alpine come from CDNs: without network the
-canvases stay blank and the banners stay cloaked, but the hero, KPI strip and
-tables are written by static/optsim.js directly, so the smoke asserts on those
-and reads the panel phase from `appState`.
+The tab posts to the REAL /api/optsim — `mock_apis` falls back to the live
+server for it. Hypothetical inputs need no network (the engine is pure
+computation); ticker mode reads its chain through the backend yfinance stub
+(`yf_stub`). Chart.js and Alpine come from CDNs: without network the canvases
+stay blank and the banners stay cloaked, but the hero, KPI strip, tables and
+the market note are written by static/optsim.js directly, so the smoke asserts
+on those and reads the panel phase from `appState`.
 """
 
 from __future__ import annotations
@@ -50,6 +51,9 @@ def test_optsim_tab_runs_the_default_strangle_on_first_visit(
     # One row per date slice at the entry spot, the last one at expiry.
     expect(page.locator("#optsim-profile tbody tr").last).to_contain_text("(expiry)")
     expect(page.locator("#optsim-chart-pnl")).to_be_attached()
+    # Break-even IV: one chart per leg plus its table view.
+    expect(page.locator("#optsim-beiv-grid canvas")).to_have_count(2)
+    expect(page.locator("#optsim-beiv-table tbody tr")).to_have_count(2)
 
     assert _app_errors(js_errors) == [], f"JS errors in optsim tab: {js_errors}"
 
@@ -83,3 +87,33 @@ def test_optsim_surfaces_server_validation_errors(page: Page, live_server: str, 
     page.locator('[data-action="optsim-run"]').click()
     page.wait_for_function("() => window.appState.panels.get('optsim').phase === 'error'", timeout=10000)
     assert _panel(page)["message"] == "spot is required"
+
+
+@pytest.mark.usefixtures("mock_apis", "yf_stub")
+def test_optsim_ticker_mode_prices_on_the_header_tickers_chain(
+    page: Page, live_server: str, js_errors: list[str], open_tab
+) -> None:
+    from services.options import preload
+
+    preload.clear_cache()
+    page.goto(live_server, wait_until="domcontentloaded")
+    page.fill("#ticker", "AAPL")
+    open_tab("tab-optsim")
+    expect(page.locator("#optsim-hero-value")).to_contain_text("$", timeout=15000)
+
+    page.locator('[data-optsim-market="ticker"]').click()
+    # The stub quotes AAPL at 100 + sum(ord) % 50 = 136 with 21- and 49-day expiries.
+    expect(page.locator("#optsim-market-note")).to_contain_text("AAPL option chain · spot 136.00", timeout=15000)
+    expect(page.locator("#optsim-spot")).to_be_disabled()
+    expect(page.locator("#optsim-spot")).to_have_value("136")
+    expect(page.locator("#optsim-hero-sub")).to_contain_text("AAPL")
+    expect(page.locator("#optsim-resolved thead")).to_contain_text("Expiry")
+    assert _panel(page)["phase"] == "loaded"
+
+    page.locator('[data-optsim-market="hypothetical"]').click()
+    expect(page.locator("#optsim-market-note")).to_be_hidden(timeout=15000)
+    expect(page.locator("#optsim-spot")).to_be_enabled()
+    expect(page.locator("#optsim-spot")).to_have_value("600")
+    preload.clear_cache()
+
+    assert _app_errors(js_errors) == [], f"JS errors in optsim tab: {js_errors}"

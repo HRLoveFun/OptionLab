@@ -1,10 +1,19 @@
-/* Position Simulator tab — value, Greeks and margin of a hypothetical
- * multi-leg position over spot × time × IV.
+/* Position Simulator tab — value, Greeks and margin of a multi-leg position
+ * over spot × time × IV.
  *
  * Consumes POST /api/optsim (services/options/optsim.py → core.optsim). Both
  * margin regimes come back in every response, so the margin switch only
- * re-renders; the exercise switch re-runs, because American legs are priced
- * on a binomial tree server-side.
+ * re-renders; the market and exercise switches re-run, because ticker mode
+ * reprices on the option chain and American legs are priced on a binomial
+ * tree server-side.
+ *
+ * Market: "hypothetical" prices on the inputs typed here; "ticker" sends the
+ * header ticker, and the server takes spot, listed expiries and strikes and
+ * each leg's IV from its option chain. In ticker mode the spot and smile
+ * fields are read-only (showing what the chain gave) and get their typed
+ * values back when the switch returns to Hypothetical. A ticker change re-runs
+ * a ticker-mode tab: at once when it is on screen, else on the next visit
+ * (both ticker-change paths reset the 'optsim' tab flag).
  */
 (function () {
     'use strict';
@@ -12,13 +21,17 @@
     const PANEL = 'optsim';
     const MAX_LEGS = 6;
     const DEFAULT_PRESET = 'short_strangle';
+    // Inputs the chain supplies in ticker mode; their typed values are kept aside meanwhile.
+    const MARKET_FIELDS = ['optsim-spot', 'optsim-atm-iv', 'optsim-skew', 'optsim-curvature'];
+    const UNUSED_IN_TICKER_MODE = ['optsim-skew', 'optsim-curvature'];
 
     function leg(type, side, dte, by, value) {
         return { type, side, qty: 1, dte, by, value };
     }
 
     // Presets are rules, not contracts: the server resolves |Δ| against the smile.
-    // A null strike means "at the money" (the Spot input, rounded).
+    // A null strike means "at the money" (the Spot input, rounded; the nearest
+    // listed strike in ticker mode).
     const PRESETS = {
         short_put: [leg('put', 'short', 45, 'delta', 0.30)],
         short_strangle: [leg('put', 'short', 45, 'delta', 0.16), leg('call', 'short', 45, 'delta', 0.16)],
@@ -48,6 +61,9 @@
     };
 
     let legs = [];
+    let marketMode = 'hypothetical';
+    let typed = null;         // typed values of MARKET_FIELDS while ticker mode is on
+    let lastTicker = null;    // the ticker the last ticker-mode run asked for
     let style = 'european';
     let margin = 'regt';
     let greek = 'delta';
@@ -85,6 +101,13 @@
         return Number.isFinite(v) ? (v * 100).toFixed(digits === undefined ? 1 : digits) + '%' : '—';
     }
 
+    // Spot relative to the entry spot, signed: "+2.5%", "−5.0%", "0.0%".
+    function fmtRel(spot) {
+        if (!data || !Number.isFinite(spot) || !(data.spot > 0)) return '';
+        const x = rounded((spot / data.spot - 1) * 100, 1);
+        return (x > 0 ? '+' : (x < 0 ? '−' : '')) + Math.abs(x).toFixed(1) + '%';
+    }
+
     // Small numbers need decimals, large ones do not: theta +$6.33 vs +$193.
     function adaptiveMoney(v) {
         return fmtMoney(v, Math.abs(v) >= 100 ? 0 : 2);
@@ -92,6 +115,17 @@
 
     function cap(s) {
         return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+    }
+
+    // Expiry dates come from the option chain: print only well-formed ones.
+    function safeDate(s) {
+        return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '—';
+    }
+
+    function fmtAsOf(iso) {
+        const t = new Date(iso);
+        if (Number.isNaN(t.getTime())) return '';
+        return t.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
     function setText(id, text) {
@@ -108,6 +142,62 @@
         }
     }
 
+    /* -- market mode -------------------------------------------------------- */
+    // The first symbol of the header's ticker box — the one the Option Chain tab uses.
+    function currentTicker() {
+        if (typeof getValidTickers === 'function') return getValidTickers()[0] || '';
+        const raw = ((el('ticker') || {}).value || '').toUpperCase();
+        return raw.split(/[,\n]+/)[0].trim();
+    }
+
+    function tickerMode() {
+        return marketMode === 'ticker';
+    }
+
+    // A ticker-mode result is stale once the header ticker moved on.
+    function stale() {
+        return tickerMode() && currentTicker() !== lastTicker;
+    }
+
+    function applyMarketFields() {
+        const on = tickerMode();
+        if (on && typed === null) typed = MARKET_FIELDS.map((id) => (el(id) || {}).value);
+        MARKET_FIELDS.forEach((id, i) => {
+            const node = el(id);
+            if (!node) return;
+            node.disabled = on;
+            if (on) {
+                node.value = '';
+                node.placeholder = UNUSED_IN_TICKER_MODE.includes(id) ? 'not used' : 'from chain';
+            } else {
+                node.placeholder = '';
+                if (typed) node.value = typed[i];
+            }
+        });
+        if (!on) typed = null;
+        const hint = el('optsim-market-hint');
+        if (hint) hint.hidden = !on;
+    }
+
+    // Show what the chain gave in the read-only fields (plain numbers: they are <input type=number>).
+    function fillMarketFields(m) {
+        const spot = el('optsim-spot');
+        if (spot && Number.isFinite(m.spot)) spot.value = String(Math.round(m.spot * 100) / 100);
+        const atm = el('optsim-atm-iv');
+        if (atm && Number.isFinite(m.atm_iv)) atm.value = (m.atm_iv * 100).toFixed(1);
+    }
+
+    function setMarket(next) {
+        if (next === marketMode) return;
+        marketMode = next;
+        syncToggles('data-optsim-market', marketMode);
+        applyMarketFields();
+        // ATM legs show "ATM" in ticker mode and the rounded typed spot otherwise.
+        if (!tickerMode()) legs.forEach((l) => { if (l.atm) l.value = atmStrike(); });
+        renderLegEditor();
+        run();
+    }
+
     /* -- legs editor -------------------------------------------------------- */
     function spotInput() {
         const v = parseFloat((el('optsim-spot') || {}).value);
@@ -119,10 +209,16 @@
         return s === null ? null : Math.round(s);
     }
 
+    // The value an "at the money" strike starts with: none in ticker mode (the server picks
+    // the listed strike nearest spot), else the rounded Spot input.
+    function atmValue() {
+        return tickerMode() ? null : atmStrike();
+    }
+
     function applyPreset(name) {
         const preset = PRESETS[name];
         if (!preset) return false;
-        legs = preset.map((l) => ({ ...l, value: l.value === null ? atmStrike() : l.value }));
+        legs = preset.map((l) => ({ ...l, atm: l.value === null, value: l.value === null ? atmValue() : l.value }));
         renderLegEditor();
         return true;
     }
@@ -134,6 +230,8 @@
     function legRow(l, i) {
         const n = i + 1;
         const valueLabel = l.by === 'delta' ? 'absolute delta' : 'strike';
+        const shown = (tickerMode() && l.atm) || l.value === null ? '' : l.value;
+        const placeholder = l.by === 'delta' ? '' : ' placeholder="ATM"';
         return `<tr data-leg="${i}">`
             + `<td><select data-field="type" aria-label="Leg ${n} type">`
             + option('put', 'Put', l.type) + option('call', 'Call', l.type) + '</select></td>'
@@ -145,7 +243,7 @@
             + ` aria-label="Leg ${n} days to expiry"></td>`
             + `<td><select data-field="by" aria-label="Leg ${n} strike selection">`
             + option('delta', '|Δ|', l.by) + option('strike', 'Strike', l.by) + '</select></td>'
-            + `<td><input type="number" data-field="value" min="0" step="any" value="${l.value === null ? '' : l.value}"`
+            + `<td><input type="number" data-field="value" min="0" step="any" value="${shown}"${placeholder}`
             + ` aria-label="Leg ${n} ${valueLabel}"></td>`
             + `<td><button type="button" class="btn-delete" data-action="optsim-remove-leg"`
             + ` aria-label="Remove leg ${n}"${legs.length <= 1 ? ' disabled' : ''}>Remove</button></td>`
@@ -171,12 +269,15 @@
         } else if (field === 'value') {
             const v = parseFloat(raw);
             l.value = Number.isFinite(v) ? v : null;
+            // A cleared strike means "at the money" again; a typed one is the user's.
+            l.atm = l.by === 'strike' && l.value === null;
         } else {
             l[field] = raw;
         }
         if (field === 'by') {
             // A delta is not a strike: switching the selector resets the value.
-            l.value = raw === 'delta' ? 0.16 : atmStrike();
+            l.atm = raw === 'strike';
+            l.value = raw === 'delta' ? 0.16 : atmValue();
             renderLegEditor();
         }
     }
@@ -202,8 +303,14 @@
         return Number.isFinite(v) ? v : null;
     }
 
+    function legStrike(l) {
+        if (l.value === null || (tickerMode() && l.atm)) return 'atm';
+        return l.value;
+    }
+
     function buildPayload() {
-        return {
+        const body = {
+            market: marketMode,
             spot: numberOf('optsim-spot'),
             rate: numberOf('optsim-rate'),
             div_yield: numberOf('optsim-div'),
@@ -220,17 +327,30 @@
                 side: l.side,
                 qty: l.qty,
                 dte: l.dte,
-                [l.by === 'delta' ? 'delta' : 'strike']: l.value,
+                ...(l.by === 'delta' ? { delta: l.value } : { strike: legStrike(l) }),
             })),
         };
+        if (tickerMode()) body.ticker = currentTicker();
+        return body;
     }
 
     async function run() {
-        window.appState.panels.set(PANEL, 'loading', {
-            message: style === 'american'
-                ? 'Pricing American exercise on a binomial tree…'
-                : 'Revaluing the position…',
-        });
+        let message = style === 'american'
+            ? 'Pricing American exercise on a binomial tree…'
+            : 'Revaluing the position…';
+        if (tickerMode()) {
+            const ticker = currentTicker();
+            lastTicker = ticker;
+            if (!ticker) {
+                if (window.api.abort) window.api.abort('optsim');
+                window.appState.panels.set(PANEL, 'empty', {
+                    message: 'Ticker mode needs a ticker: enter one in the header, or switch Market to Hypothetical.',
+                });
+                return;
+            }
+            message = `Loading the ${ticker} option chain…`;
+        }
+        window.appState.panels.set(PANEL, 'loading', { message });
         try {
             const res = await window.api.post('/api/optsim', { body: buildPayload(), key: 'optsim' });
             data = res;
@@ -245,12 +365,35 @@
     }
 
     /* -- rendering ---------------------------------------------------------- */
+    function listedMarket() {
+        return Boolean(data && data.market && data.market.source === 'ticker');
+    }
+
     function renderAll() {
         if (!data) return;
+        if (listedMarket()) fillMarketFields(data.market);
+        renderMarketNote();
         renderSummary();
         renderResolved();
         renderCharts();
         renderProfile();
+    }
+
+    function renderMarketNote() {
+        const node = el('optsim-market-note');
+        if (!node) return;
+        if (!listedMarket()) {
+            node.hidden = true;
+            node.textContent = '';
+            return;
+        }
+        const m = data.market;
+        const parts = [`${m.ticker} option chain`, `spot ${fmtNum(m.spot, 2)}`];
+        const asOf = m.as_of ? fmtAsOf(m.as_of) : '';
+        if (asOf) parts.push(`as of ${asOf}`);
+        parts.push(`ATM IV ${fmtPct(m.atm_iv, 1)} on ${safeDate(m.atm_expiry)}`);
+        node.textContent = parts.join(' · ');
+        node.hidden = false;
     }
 
     function bindingMargin(row) {
@@ -263,6 +406,7 @@
         setText('optsim-hero-value', fmtUsd(Math.abs(data.entry_value)));
         const n = data.legs.length;
         const sub = [`${n} leg${n > 1 ? 's' : ''}`, cap(data.style), PRODUCT_LABEL[data.product] || data.product];
+        if (listedMarket()) sub.unshift(data.market.ticker);
         if (data.tree_steps) sub.push(`${data.tree_steps}-step tree`);
         setText('optsim-hero-sub', sub.join(' · '));
 
@@ -283,19 +427,38 @@
         setText('optsim-kpi-vega', adaptiveMoney(entry.vega));
     }
 
+    function legName(l) {
+        return `${cap(l.side)} ${l.qty} ${cap(l.type)}`;
+    }
+
     function renderResolved() {
         const host = el('optsim-resolved');
         if (!host) return;
-        const rows = data.legs.map((l, i) => '<tr>'
-            + `<td>${i + 1}</td><td>${cap(l.side)} ${l.qty} ${cap(l.type)}</td><td>${l.dte}</td>`
-            + `<td>${fmtNum(l.strike, 2)}</td><td>${fmtPct(l.iv, 2)}</td>`
-            + `<td>${fmtNum(l.premium, 2)}</td><td>${fmtNum(l.delta, 3)}</td>`
-            + '</tr>').join('');
+        const listed = listedMarket();
+        const head = ['Leg', 'Position'].concat(
+            listed ? ['Expiry'] : [],
+            ['DTE', 'Strike', 'IV', 'Premium / share'],
+            listed ? ['Bid / ask'] : [],
+            ['Delta / share'],
+        );
+        const rows = data.legs.map((l, i) => {
+            const cells = [String(i + 1), legName(l)];
+            if (listed) cells.push(safeDate(l.expiry));
+            cells.push(String(l.dte), fmtNum(l.strike, 2), fmtPct(l.iv, 2) + (l.iv_source === 'curve' ? '*' : ''),
+                fmtNum(l.premium, 2));
+            if (listed) {
+                cells.push(Number.isFinite(l.bid) && Number.isFinite(l.ask)
+                    ? `${fmtNum(l.bid, 2)} / ${fmtNum(l.ask, 2)}` : 'no quote');
+            }
+            cells.push(fmtNum(l.delta, 3));
+            return '<tr>' + cells.map((c) => `<td>${c}</td>`).join('') + '</tr>';
+        }).join('');
+        const note = listed && data.legs.some((l) => l.iv_source === 'curve')
+            ? '<p class="optsim-table-note">* No two-sided quote: the IV is read off the expiry\'s IV curve.</p>'
+            : '';
         host.innerHTML = '<table class="sim-detail" aria-label="Resolved legs at entry"><thead><tr>'
-            + '<th scope="col">Leg</th><th scope="col">Position</th><th scope="col">DTE</th>'
-            + '<th scope="col">Strike</th><th scope="col">IV</th>'
-            + '<th scope="col">Premium / share</th><th scope="col">Delta / share</th>'
-            + `</tr></thead><tbody>${rows}</tbody></table>`;
+            + head.map((h) => `<th scope="col">${h}</th>`).join('')
+            + `</tr></thead><tbody>${rows}</tbody></table>${note}`;
     }
 
     function renderProfile() {
@@ -345,34 +508,56 @@
         return Array.from({ length: n }, (_, i) => ramp[Math.round((i * (ramp.length - 1)) / (n - 1))]);
     }
 
+    // The color a date wears in every chart: its place among the chart dates.
+    function dayColor(pal, day) {
+        const colors = rampColors(pal.ramp, data.chart_days.length);
+        const at = data.chart_days.findIndex((d) => data.days[d] === day);
+        return at >= 0 ? colors[at] : colors[colors.length - 1];
+    }
+
     function dayLabel(day) {
         const lastExpiry = Math.max(...data.legs.map((l) => l.dte));
         if (day === 0) return 'Entry';
         return `Day ${fmtNum(day, 0)}${day === lastExpiry ? ' (expiry)' : ''}`;
     }
 
-    // Spot marker plus a hover guide, drawn on the canvas so neither joins the
-    // legend or the index-mode tooltip.
+    // Spot marker, optional reference lines and a hover guide, drawn on the
+    // canvas so none of them joins the legend or the index-mode tooltip.
     const guides = {
         id: 'optsimGuides',
         afterDatasetsDraw(chart, _args, opts) {
             const { ctx, chartArea } = chart;
             const x = chart.scales.x;
-            const line = (px, color, dash) => {
+            const y = chart.scales.y;
+            const stroke = (x0, y0, x1, y1, color, dash, width) => {
                 ctx.save();
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 1;
-                ctx.setLineDash(dash);
+                ctx.lineWidth = width || 1;
+                ctx.setLineDash(dash || []);
                 ctx.beginPath();
-                ctx.moveTo(px, chartArea.top);
-                ctx.lineTo(px, chartArea.bottom);
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
                 ctx.stroke();
                 ctx.restore();
             };
-            if (Number.isFinite(opts.spot)) line(x.getPixelForValue(opts.spot), opts.color, [5, 4]);
+            const vline = (v, color, dash, width) => {
+                if (!Number.isFinite(v) || v < x.min || v > x.max) return;
+                const px = x.getPixelForValue(v);
+                stroke(px, chartArea.top, px, chartArea.bottom, color, dash, width);
+            };
+            const hline = (v, color, dash, width) => {
+                if (!Number.isFinite(v) || v < y.min || v > y.max) return;
+                const py = y.getPixelForValue(v);
+                stroke(chartArea.left, py, chartArea.right, py, color, dash, width);
+            };
+            vline(opts.spot, opts.color, [5, 4]);
+            (opts.vlines || []).forEach((l) => vline(l.x, l.color, l.dash, l.width));
+            (opts.hlines || []).forEach((l) => hline(l.y, l.color, l.dash, l.width));
             const active = chart.tooltip && chart.tooltip.getActiveElements
                 ? chart.tooltip.getActiveElements() : [];
-            if (active.length) line(active[0].element.x, opts.color, []);
+            if (active.length) {
+                stroke(active[0].element.x, chartArea.top, active[0].element.x, chartArea.bottom, opts.color, []);
+            }
         },
     };
 
@@ -387,6 +572,11 @@
             pointHoverRadius: 3,
             tension: 0,
         };
+    }
+
+    // A dataset with no points: it only puts a canvas-drawn line in the legend.
+    function legendOnly(label, color) {
+        return { label, data: [], borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0 };
     }
 
     // One format per axis: the decimals follow the tick step, not each value.
@@ -411,6 +601,21 @@
         return fmtNum(v, kind === 'gamma' ? 4 : 2);
     }
 
+    function spotAxis(pal, ticks) {
+        return {
+            type: 'linear',
+            min: data.spots[0],
+            max: data.spots[data.spots.length - 1],
+            title: { display: true, text: 'Spot', color: pal.muted },
+            ticks: { color: pal.muted, includeBounds: false, ...ticks },
+            grid: { color: pal.grid },
+        };
+    }
+
+    function legendOptions(pal) {
+        return { position: 'bottom', labels: { color: pal.ink, boxWidth: 16, boxHeight: 2 } };
+    }
+
     function drawChart(id, datasets, yTitle, kind) {
         const canvas = el(id);
         if (!canvas || typeof Chart === 'undefined') return;
@@ -427,18 +632,7 @@
                 animation: false,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: {
-                        type: 'linear',
-                        min: data.spots[0],
-                        max: data.spots[data.spots.length - 1],
-                        title: { display: true, text: 'Spot', color: pal.muted },
-                        ticks: {
-                            color: pal.muted,
-                            includeBounds: false,
-                            callback: (v, _i, ticks) => fmtNum(v, tickDigits(ticks)),
-                        },
-                        grid: { color: pal.grid },
-                    },
+                    x: spotAxis(pal, { callback: (v, _i, ticks) => fmtNum(v, tickDigits(ticks)) }),
                     y: {
                         title: { display: true, text: yTitle, color: pal.muted },
                         ticks: { color: pal.muted, callback: (v, _i, ticks) => axisText(kind, v, ticks) },
@@ -447,10 +641,7 @@
                 },
                 plugins: {
                     optsimGuides: { spot: data.spot, color: pal.muted },
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: pal.ink, boxWidth: 16, boxHeight: 2 },
-                    },
+                    legend: legendOptions(pal),
                     tooltip: {
                         callbacks: {
                             title: (items) => 'Spot ' + fmtNum(items[0] ? items[0].parsed.x : NaN, 2),
@@ -486,11 +677,124 @@
         drawChart('optsim-chart-greek', sets, GREEK_AXIS[greek], kind);
     }
 
+    /* -- break-even IV: one chart per leg, on one IV scale -------------------- */
+    function beivScaleMax() {
+        const top = Math.max(...data.legs.map((l) => l.iv)) * 100;
+        return Math.min(300, Math.max(30, Math.ceil((3 * top) / 10) * 10));
+    }
+
+    function drawBeivChart(canvas, l, be, pal, yMax) {
+        const days = data.breakeven_iv.days;
+        const sets = [];
+        days.forEach((day, t) => {
+            const row = be.iv[t] || [];
+            if (!row.some((v) => v !== null)) return; // expired by this date
+            const pct = row.map((v) => (v === null ? null : v * 100));
+            sets.push(series(pct, dayColor(pal, day), dayLabel(day)));
+        });
+        const expiryColor = dayColor(pal, l.dte);
+        sets.push(legendOnly(`Expiry, day ${fmtNum(l.dte, 0)}: ${fmtNum(be.expiry_breakeven, 2)}`, expiryColor));
+        sets.push(legendOnly(`Entry IV ${fmtPct(l.iv, 1)}`, pal.muted));
+        charts[canvas.id] = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: { datasets: sets },
+            plugins: [guides],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                parsing: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    // Two-line ticks: the price, then its distance from the entry spot.
+                    x: spotAxis(pal, { callback: (v, _i, ticks) => [fmtNum(v, tickDigits(ticks)), fmtRel(v)] }),
+                    y: {
+                        min: 0,
+                        max: yMax,
+                        title: { display: true, text: 'Break-even IV (%)', color: pal.muted },
+                        ticks: { color: pal.muted, callback: (v) => `${fmtNum(v, 0)}%` },
+                        grid: { color: pal.grid },
+                    },
+                },
+                plugins: {
+                    optsimGuides: {
+                        spot: data.spot,
+                        color: pal.muted,
+                        hlines: [{ y: l.iv * 100, color: pal.muted, dash: [5, 4] }],
+                        vlines: [{ x: be.expiry_breakeven, color: expiryColor, width: 2 }],
+                    },
+                    legend: legendOptions(pal),
+                    tooltip: {
+                        filter: (item) => Number.isFinite(item.parsed.y),
+                        callbacks: {
+                            title: (items) => (items[0]
+                                ? `Spot ${fmtNum(items[0].parsed.x, 2)} (${fmtRel(items[0].parsed.x)})` : ''),
+                            label: (ctx) => `${ctx.dataset.label}: ${fmtNum(ctx.parsed.y, 1)}%`,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    function renderBeivCharts(pal) {
+        const host = el('optsim-beiv-grid');
+        if (!host || !data.breakeven_iv) return;
+        Object.keys(charts).filter((id) => id.startsWith('optsim-chart-beiv-')).forEach((id) => {
+            charts[id].destroy();
+            delete charts[id];
+        });
+        host.textContent = '';
+        const yMax = beivScaleMax();
+        data.legs.forEach((l, i) => {
+            const fig = document.createElement('figure');
+            fig.className = 'optsim-beiv-cell';
+            const caption = document.createElement('figcaption');
+            const expiry = l.expiry ? ` · ${safeDate(l.expiry)}` : '';
+            caption.textContent = `Leg ${i + 1} · ${legName(l)} ${fmtNum(l.strike, 2)}${expiry} · ${l.dte} DTE`;
+            const wrap = document.createElement('div');
+            wrap.className = 'chart-wrapper optsim-chart-wrapper optsim-chart-wrapper--beiv';
+            const canvas = document.createElement('canvas');
+            canvas.id = `optsim-chart-beiv-${i}`;
+            canvas.setAttribute('role', 'img');
+            canvas.setAttribute('aria-label', `Break-even IV of leg ${i + 1} versus spot on several dates`);
+            wrap.appendChild(canvas);
+            fig.append(caption, wrap);
+            host.appendChild(fig);
+            if (typeof Chart !== 'undefined') drawBeivChart(canvas, l, data.breakeven_iv.legs[i], pal, yMax);
+        });
+    }
+
+    // The table view of the charts: each leg's break-even IV at the entry spot.
+    function renderBeivTable() {
+        const host = el('optsim-beiv-table');
+        const be = data.breakeven_iv;
+        if (!host || !be) return;
+        const head = '<th scope="col">Leg</th><th scope="col">Entry IV</th>'
+            + be.days.map((d) => `<th scope="col">Day ${fmtNum(d, 0)}</th>`).join('')
+            + '<th scope="col">Expiry break-even</th>';
+        const rows = data.legs.map((l, i) => {
+            const b = be.legs[i];
+            const cells = be.days.map((d, t) => {
+                if (d >= l.dte) return '<td>—</td>';
+                return `<td>${b.at_spot[t] === null ? 'none' : fmtPct(b.at_spot[t], 1)}</td>`;
+            }).join('');
+            return `<tr><td>${i + 1} · ${legName(l)} ${fmtNum(l.strike, 2)}</td><td>${fmtPct(l.iv, 1)}</td>${cells}`
+                + `<td>${fmtNum(b.expiry_breakeven, 2)} (day ${fmtNum(l.dte, 0)})</td></tr>`;
+        }).join('');
+        host.innerHTML = '<table class="sim-detail" aria-label="Break-even IV at the entry spot by date">'
+            + `<thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`
+            + '<p class="optsim-table-note">At the entry spot. “—”: the leg has expired by that date;'
+            + ' “none”: no IV between 0.5% and 300% brings the leg back to its premium.</p>';
+    }
+
     function renderCharts() {
         const pal = palette();
         renderPnlChart(pal);
         renderIvChart(pal);
         renderGreekChart(pal);
+        renderBeivCharts(pal);
+        renderBeivTable();
     }
 
     /* -- switches ------------------------------------------------------------- */
@@ -529,6 +833,7 @@
             if (!t) return;
             if (t.matches('[data-action="optsim-run"]')) run();
             else if (t.matches('[data-action="optsim-add-leg"]')) addLeg();
+            else if (t.hasAttribute('data-optsim-market')) setMarket(t.getAttribute('data-optsim-market'));
             else if (t.hasAttribute('data-optsim-style')) setStyle(t.getAttribute('data-optsim-style'));
             else if (t.hasAttribute('data-optsim-margin')) setMargin(t.getAttribute('data-optsim-margin'));
             else if (t.hasAttribute('data-optsim-greek')) setGreek(t.getAttribute('data-optsim-greek'));
@@ -548,6 +853,14 @@
         if (window.bus && window.bus.on) {
             // Chart colors are read from CSS tokens, which the theme toggle swaps.
             window.bus.on('theme:changed', () => { if (data) renderCharts(); });
+            // Both ticker-change paths reset this tab's flag: re-check it now if it is
+            // on screen (an off-screen tab re-checks on its next visit).
+            window.bus.on('tab_flags:changed', (ev) => {
+                if (!ev || ev.tab !== PANEL || ev.loaded) return;
+                if (!tab.classList.contains('active')) return;
+                window.loadOptsimTab();
+                window.appState.tabFlags.markLoaded(PANEL);
+            });
         }
     }
 
@@ -557,9 +870,9 @@
             applyPreset(DEFAULT_PRESET);
             wired = true;
         }
-        if (!data) run();
+        if (!data || stale()) run();
     };
 
     window.runOptsim = run;
-    window.optsimDebug = () => ({ legs, style, margin, greek, data, buildPayload, charts });
+    window.optsimDebug = () => ({ legs, marketMode, style, margin, greek, data, buildPayload, charts });
 })();

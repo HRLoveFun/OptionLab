@@ -3,7 +3,9 @@
 Domain:    Services — Options Chain Preload
 Context:
   - Fetches an option chain snapshot and converts DataFrames to plain records.
-  - Maintains a short-lived in-memory cache (15 min TTL).
+  - Maintains a short-lived in-memory cache (15 min TTL). The payload carries
+    ``fetched_at`` (UTC, ISO 8601) so a reader of a cached chain can say how old
+    its quotes are — the Position Simulator's ticker mode shows it.
 Contracts:
   - build_preload_payload(ticker) -> dict
   - expiry_df_to_records(df, expiry) -> list[dict]
@@ -70,8 +72,9 @@ def build_preload_payload(ticker: str) -> dict[str, Any]:
     """Build the option-chain preload payload for *ticker*.
 
     Returns a dict with keys:
-        ticker, spot, expiries, chain
+        ticker, spot, expiries, chain, fetched_at
     """
+    fetched_at = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
     analyzer = OptionsChainAnalyzer(ticker, snapshot=fetch_option_chain(ticker))
     chain_out: dict[str, Any] = {}
     for exp in analyzer.expiries:
@@ -89,6 +92,7 @@ def build_preload_payload(ticker: str) -> dict[str, Any]:
         "spot": round(analyzer.spot, 2),
         "expiries": analyzer.expiries,
         "chain": chain_out,
+        "fetched_at": fetched_at,
     }
 
 

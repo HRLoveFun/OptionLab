@@ -69,10 +69,11 @@ def build_strategy_from_chain():
 
 @bp.route("/api/optsim", methods=["POST"])
 def optsim_route():
-    """Value, Greeks and margin of a hypothetical multi-leg position over spot × time × IV.
+    """Value, Greeks, margin and per-leg break-even IV of a multi-leg position over spot × time × IV.
 
-    Body: {spot, rate?, div_yield?, atm_iv?, skew?, curvature?, style?, product?,
-           multiplier?, spot_range?, iv_shift?, legs: [{type, side, qty, dte, strike | delta}]}
+    Body: {market?: "hypothetical" | "ticker", ticker? (ticker mode), spot (hypothetical), rate?,
+           div_yield?, atm_iv?, skew?, curvature?, style?, product?, multiplier?, spot_range?,
+           iv_shift?, legs: [{type, side, qty, dte, strike | "atm" | delta}]}
     """
     data = request.get_json(silent=True) or {}
     return jsonify(run_optsim(data))
