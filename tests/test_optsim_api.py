@@ -2,9 +2,10 @@
 
 Hypothetical inputs are stated in the request; ticker mode reads a fake option
 chain (``fetch_option_chain`` patched in services.options.preload), priced with
-the European model on a known smile, so everything runs offline. Expected values
-come from rule arithmetic (Reg-T), pricing identities and that known smile, the
-same oracles as tests/test_optsim.py.
+the European model on a known smile, and a fake provider answers the ``^IRX``
+rate and the instrument type (services.market.reference_data), so everything runs
+offline. Expected values come from rule arithmetic (Reg-T), pricing identities and
+that known smile, the same oracles as tests/test_optsim.py.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import pandas as pd
 import pytest
 
 from core.optsim import european
+from services.market import reference_data
 from services.options import preload
 from services.options.optsim import N_SPOTS, run_optsim, strike_tick
 
@@ -146,7 +148,32 @@ def test_hypothetical_mode_reports_its_market_and_break_even_iv_on_the_chart_dat
 
 
 # ── ticker mode ───────────────────────────────────────────────────────
-SPOT, RATE, DIV = 500.0, 0.045, 0.01
+# Ticker mode prices with the ^IRX rate and no dividend, so the fake chain does too.
+SPOT, RATE, DIV = 500.0, 0.045, 0.0
+
+
+class _ReferenceProvider:
+    """Answers reference_data's two questions: ^IRX in percent, and instrument types."""
+
+    def __init__(self):
+        self.irx = RATE * 100
+        self.types = {"SPY": "etf", "^RUT": "index", "XLE": "etf"}
+
+    def spot(self, symbol):
+        assert symbol == "^IRX"
+        return self.irx
+
+    def instrument_type(self, symbol):
+        return self.types.get(symbol, "equity")
+
+
+@pytest.fixture(autouse=True)
+def reference(monkeypatch):
+    fake = _ReferenceProvider()
+    reference_data.clear_cache()
+    monkeypatch.setattr(reference_data, "get_provider", lambda: fake)
+    yield fake
+    reference_data.clear_cache()
 
 
 def _true_iv(strike, T):
@@ -244,8 +271,30 @@ def test_ticker_mode_snaps_typed_and_atm_strikes_and_reuses_the_cached_chain(lis
     assert listed_chain == ["TEST"]  # the second request reads the preload cache
 
 
-def test_ticker_mode_ignores_the_hypothetical_spot_and_smile(listed_chain):
-    assert run_optsim(_ticker_payload(spot="junk", atm_iv=-1, skew="x"))["spot"] == SPOT
+def test_ticker_mode_ignores_the_hypothetical_spot_smile_dividend_and_margin_class(listed_chain):
+    body = run_optsim(_ticker_payload(spot="junk", atm_iv=-1, skew="x", div_yield="x", product="crypto"))
+    assert body["spot"] == SPOT and body["market"]["div_yield"] == 0.0 and body["product"] == "equity"
+
+
+def test_ticker_mode_takes_the_rate_from_irx_and_the_margin_class_from_the_type(listed_chain, reference):
+    reference.irx = 3.9
+    body = run_optsim(_ticker_payload(ticker="spy", rate=1.0))
+    market = body["market"]
+    assert market["rate"] == pytest.approx(0.039) and market["rate_source"] == "^IRX" and market["rate_as_of"]
+    assert market["div_yield"] == 0.0
+    assert market["instrument_type"] == "etf" and market["product"] == body["product"] == "etf"
+    for leg in body["legs"]:  # implied from the mid at the ^IRX rate, so the model still reprices the mid
+        assert leg["premium"] == pytest.approx(leg["mid"], abs=1e-4)
+    assert run_optsim(_ticker_payload(ticker="^RUT"))["product"] == "index_small"
+    assert run_optsim(_ticker_payload(ticker="XLE"))["product"] == "equity"  # a narrow-based ETF
+
+
+@pytest.mark.parametrize("irx", [None, 137.0])
+def test_ticker_mode_falls_back_to_the_typed_rate_without_a_usable_irx_quote(listed_chain, reference, irx):
+    reference.irx = irx
+    market = run_optsim(_ticker_payload(rate=4.25))["market"]
+    assert market["rate"] == pytest.approx(0.0425) and market["rate_source"] == "input"
+    assert market["rate_as_of"] is None
 
 
 def test_ticker_mode_falls_back_to_the_quoted_iv_without_a_two_sided_quote(monkeypatch):

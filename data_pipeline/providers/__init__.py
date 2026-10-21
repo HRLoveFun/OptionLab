@@ -24,6 +24,7 @@ from data_pipeline.providers._registry import available_providers, get_provider
 from data_pipeline.providers.base import (
     CANONICAL_BAR_COLUMNS,
     CANONICAL_LEG_COLUMNS,
+    INSTRUMENT_TYPES,
     CanonicalBar,
     MarketDataProvider,
     OptionChainSnapshot,
@@ -34,6 +35,7 @@ from data_pipeline.providers.base import (
 __all__ = [
     "CANONICAL_BAR_COLUMNS",
     "CANONICAL_LEG_COLUMNS",
+    "INSTRUMENT_TYPES",
     "CanonicalBar",
     "MarketDataProvider",
     "OptionChainSnapshot",

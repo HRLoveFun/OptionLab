@@ -15,15 +15,18 @@ Context:
   - Portfolio margin is a TIMS-style proxy: revalue the position at 10 equidistant
     spot points (IV and time held fixed) and take the largest loss, floored at
     0.375 × multiplier per contract. Broker house add-ons are not modelled.
+  - ``margin_class`` picks the product rule for a listed underlying from its
+    instrument type (the ticker mode of the Position Simulator).
 Contracts:
   - PRODUCTS: dict[str, ProductRule]
+  - margin_class(symbol, instrument_type) -> str   # a PRODUCTS key
   - regt_bpr(kinds, strikes, qtys, values, spot, multiplier, product) -> (np.ndarray, str)
   - pm_offsets(product) -> np.ndarray   # 11 spot offsets, index 0 is the unshocked point
   - pm_bpr(values_at_offsets, n_contracts, multiplier, all_long) -> np.ndarray
 Dependencies UPWARD:
   - numpy
 Dependencies DOWNWARD:
-  - core.optsim.engine, tests
+  - core.optsim.engine, services.options.optsim_ticker, tests
 """
 
 from __future__ import annotations
@@ -55,6 +58,36 @@ _NAKED_FLOOR = 0.10
 
 # DOMAIN: portfolio-margin minimum charge per contract, times the contract multiplier.
 _PM_MIN_PER_CONTRACT = 0.375
+
+
+# DOMAIN: high-capitalization broad-based indexes (S&P 500, Mini-SPX, Nasdaq-100 and its micro
+# version, the Dow, S&P 100) — the -8%/+6% portfolio-margin range — and the ETFs that track them.
+HIGH_CAP_INDEXES = frozenset({"^SPX", "^GSPC", "^XSP", "^NDX", "^XND", "^DJX", "^DJI", "^OEX", "^XEO"})
+HIGH_CAP_INDEX_ETFS = frozenset({"SPY", "IVV", "VOO", "SPLG", "QQQ", "QQQM", "DIA", "OEF"})
+# DOMAIN: ETFs on other broad-based indexes (Russell 2000, S&P MidCap 400 / SmallCap 600): 15%, ±10%.
+OTHER_BROAD_INDEX_ETFS = frozenset({"IWM", "MDY", "IJH", "IJR"})
+
+
+def margin_class(symbol: str, instrument_type: str | None) -> str:
+    """The ``PRODUCTS`` key for a listed underlying, from its symbol and instrument type.
+
+    The named broad-based indexes and ETFs above settle it by symbol, so a failed
+    type lookup cannot demote SPY. Otherwise the type decides: any other index
+    (``^`` symbols count as indexes) is ``index_small``; any other ETF (sector,
+    leveraged, single-country) is ``equity``, because options on narrow-based ETFs
+    carry the equity requirement; stocks and unknown types are ``equity``, the most
+    conservative class.
+    """
+    sym = str(symbol or "").strip().upper()
+    if sym in HIGH_CAP_INDEXES:
+        return "index"
+    if sym in HIGH_CAP_INDEX_ETFS:
+        return "etf"
+    if sym in OTHER_BROAD_INDEX_ETFS:
+        return "index_small"
+    if instrument_type == "index" or sym.startswith("^"):
+        return "index_small"
+    return "equity"
 
 
 def _rule(product: str) -> ProductRule:

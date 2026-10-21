@@ -15,6 +15,7 @@ Context:
 Contracts:
   - ``MarketDataProvider``: the minimal acquisition surface.
   - ``CANONICAL_BAR_COLUMNS`` / ``CANONICAL_LEG_COLUMNS``: canonical frame columns.
+  - ``INSTRUMENT_TYPES``: canonical values of ``instrument_type()``.
   - ``CanonicalBar`` / ``OptionLeg`` / ``OptionChainSnapshot``: canonical records.
 Unit conventions — INVARIANT for every provider implementation:
   - ``iv`` is a **decimal** (0.2436 means 24.36 %). futu reports percent,
@@ -26,6 +27,10 @@ Unit conventions — INVARIANT for every provider implementation:
     ``(strike, spot)`` and futu has no equivalent column.
   - OHLCV values are plain floats; ``volume`` / ``open_interest`` are
     non-negative counts.
+  - ``instrument_type`` is one of ``INSTRUMENT_TYPES`` (lower case) or ``None``
+    when unknown. yfinance's ``INDEX`` / ``ETF`` / ``EQUITY`` and futu's
+    ``IDX`` / ``ETF`` / ``STOCK`` map onto ``index`` / ``etf`` / ``equity``;
+    every other kind (funds, currencies, crypto, futures) is ``other``.
 Dependencies UPWARD:
   - (none — no external SDK is imported here; implementations sit beside it)
 Dependencies DOWNWARD:
@@ -57,6 +62,9 @@ CANONICAL_LEG_COLUMNS: tuple[str, ...] = (
     "open_interest",
     "volume",
 )
+
+# INVARIANT: the values ``MarketDataProvider.instrument_type`` may return (besides ``None``).
+INSTRUMENT_TYPES: tuple[str, ...] = ("index", "etf", "equity", "other")
 
 
 @dataclass(frozen=True)
@@ -138,6 +146,10 @@ class MarketDataProvider(Protocol):
 
     def option_chain(self, symbol: str) -> OptionChainSnapshot:
         """Live chain snapshot (spot + expiries + canonical legs)."""
+        ...
+
+    def instrument_type(self, symbol: str) -> str | None:
+        """One of ``INSTRUMENT_TYPES`` for ``symbol``, or ``None`` when unavailable."""
         ...
 
 

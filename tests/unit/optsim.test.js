@@ -53,7 +53,8 @@ function buildDom() {
             <input id="optsim-skew" value="-0.77"><input id="optsim-curvature" value="1">
             <input id="optsim-multiplier" value="100"><input id="optsim-spot-range" value="15">
             <input id="optsim-iv-shift" value="5">
-            <select id="optsim-product"><option value="etf" selected>etf</option></select>
+            <select id="optsim-product"><option value="index">index</option>
+                <option value="etf" selected>etf</option><option value="equity">equity</option></select>
             <button type="button" data-optsim-style="european" aria-pressed="true" class="active">European</button>
             <button type="button" data-optsim-style="american" aria-pressed="false">American</button>
             <button type="button" data-optsim-margin="regt" aria-pressed="true" class="active">Reg-T</button>
@@ -84,13 +85,16 @@ function buildTickerDom(ticker = 'spy, qqq') {
     document.body.insertAdjacentHTML('afterbegin', `<input id="ticker" value="${ticker}">`);
 }
 
-function tickerResponse() {
+function tickerResponse(market = {}) {
     const listed = (leg, quote) => ({ ...leg, expiry: '2026-12-05', ...quote });
     const base = fakeResponse();
     return fakeResponse({
+        product: market.product || 'etf',
         market: {
             source: 'ticker', ticker: 'SPY', spot: 671.24, as_of: '2026-10-21T14:05:00+00:00',
-            atm_expiry: '2026-12-05', atm_iv: 0.139,
+            atm_expiry: '2026-12-05', atm_iv: 0.139, rate: 0.0407, rate_source: '^IRX',
+            rate_as_of: '2026-10-21T14:05:00+00:00', div_yield: 0, instrument_type: 'etf', product: 'etf',
+            ...market,
         },
         legs: [
             listed(base.legs[0], { iv_source: 'mid', bid: 1.15, ask: 1.25, mid: 1.2 }),
@@ -242,22 +246,30 @@ describe('optsim.js (Position Simulator tab)', () => {
         buildTickerDom();
         window.loadOptsimTab();
         await flush();
+        const field = (id) => document.getElementById(id);
+        field('optsim-rate').value = '5';
+        field('optsim-product').value = 'equity';
         post.mockResolvedValueOnce(tickerResponse());
         click('[data-optsim-market="ticker"]');
         await flush();
         expect(post).toHaveBeenCalledTimes(2);
-        expect(post.mock.calls[1][1].body).toMatchObject({ market: 'ticker', ticker: 'SPY' });
-        const field = (id) => document.getElementById(id);
-        expect(['optsim-spot', 'optsim-atm-iv', 'optsim-skew', 'optsim-curvature'].map((id) => field(id).disabled))
-            .toEqual([true, true, true, true]);
+        // The request carries what was typed: the server ignores it, except the rate as ^IRX's fallback.
+        expect(post.mock.calls[1][1].body).toMatchObject({ market: 'ticker', ticker: 'SPY', rate: 5, product: 'equity' });
+        const locked = ['optsim-spot', 'optsim-rate', 'optsim-div', 'optsim-product', 'optsim-atm-iv', 'optsim-skew',
+            'optsim-curvature'];
+        expect(locked.map((id) => field(id).disabled)).toEqual(locked.map(() => true));
         expect(field('optsim-spot').value).toBe('671.24');
+        expect(field('optsim-rate').value).toBe('4.07');
+        expect(field('optsim-div').value).toBe('0');
+        expect(field('optsim-product').value).toBe('etf');
         expect(field('optsim-atm-iv').value).toBe('13.9');
         expect(field('optsim-skew').value).toBe('');
         expect(field('optsim-skew').placeholder).toBe('not used');
         expect(field('optsim-market-hint').hidden).toBe(false);
         const note = field('optsim-market-note');
         expect(note.hidden).toBe(false);
-        expect(note.textContent).toMatch(/^SPY option chain · spot 671\.24 · as of .+ · ATM IV 13\.9% on 2026-12-05$/);
+        expect(note.textContent).toMatch(new RegExp('^SPY option chain · spot 671\\.24 · as of .+ · ATM IV 13\\.9% on '
+            + '2026-12-05 · rate 4\\.07% \\(\\^IRX\\) · dividend 0% · ETF → broad-index ETF margin$'));
         expect(text('optsim-hero-sub').startsWith('SPY · 2 legs')).toBe(true);
         const head = [...document.querySelectorAll('#optsim-resolved th')].map((th) => th.textContent);
         expect(head).toEqual(['Leg', 'Position', 'Expiry', 'DTE', 'Strike', 'IV', 'Premium / share', 'Bid / ask',
@@ -278,7 +290,26 @@ describe('optsim.js (Position Simulator tab)', () => {
         expect(field('optsim-spot').disabled).toBe(false);
         expect(field('optsim-spot').value).toBe('600');
         expect(field('optsim-skew').value).toBe('-0.77');
+        expect(field('optsim-rate').value).toBe('5');
+        expect(field('optsim-div').value).toBe('1.3');
+        expect(field('optsim-product').disabled).toBe(false);
+        expect(field('optsim-product').value).toBe('equity');
         expect(field('optsim-market-note').hidden).toBe(true);
+    });
+
+    it('says when the rate is the typed one and the type is unknown', async () => {
+        buildTickerDom();
+        window.loadOptsimTab();
+        await flush();
+        post.mockResolvedValueOnce(tickerResponse({
+            rate: 0.045, rate_source: 'input', rate_as_of: null, instrument_type: null, product: 'equity',
+        }));
+        click('[data-optsim-market="ticker"]');
+        await flush();
+        const note = document.getElementById('optsim-market-note').textContent;
+        expect(note).toContain('rate 4.50% (typed: ^IRX unavailable)');
+        expect(note.endsWith('type unknown → single stock margin')).toBe(true);
+        expect(document.getElementById('optsim-product').value).toBe('equity');
     });
 
     it('sends at-the-money strikes as "atm" in ticker mode', async () => {

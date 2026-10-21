@@ -9,6 +9,7 @@ Package map:
 - ``form.py``       — raw form payload → typed params
 - ``validation.py`` — validation rules applied before any computation
 - ``health.py``     — market-data cache quality (freshness / NaN / row counts)
+- ``reference_data.py`` — cached instrument type and risk-free rate (``^IRX``)
 - ``dispatch.py``   — the shared ``/render/<kind>`` handler (imported directly;
   it pulls in Flask and the options domain, so it is not re-exported here)
 """

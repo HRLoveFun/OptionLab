@@ -13,6 +13,8 @@ Context:
     ``providers/yfinance_provider.py``.
 Contracts:
   - ``fetch_spot(ticker)`` / ``fetch_spots_bulk(tickers)`` -> ``float`` / ``dict``.
+  - ``fetch_instrument_type(ticker)`` -> canonical ``index`` / ``etf`` / ``equity`` /
+    ``other``, or ``None``.
   - ``fetch_option_chain(ticker)`` keeps the legacy payload contract
     (``ticker`` / ``spot`` / ``expiries`` / ``chain{expiry:{calls,puts}}``) for
     callers that still import it through the ``data_pipeline.providers.yf_client`` shim.
@@ -90,6 +92,26 @@ def fetch_spot(ticker: str) -> float | None:
         logger.warning("fetch_spot history fallback failed for %s: %s", ticker, exc)
         _log_dq("yf_client.fetch_spot", "spot_unavailable", str(exc), ticker=ticker)
     return None
+
+
+# The canonical instrument types of yfinance's ``quoteType`` values; anything else is "other".
+_YF_INSTRUMENT_TYPES = {"INDEX": "index", "ETF": "etf", "EQUITY": "equity"}
+
+
+def fetch_instrument_type(ticker: str) -> str | None:
+    """Return ``ticker``'s canonical instrument type, or ``None`` when Yahoo does not say.
+
+    Reads ``fast_info.quote_type`` (the history metadata's ``instrumentType``).
+    """
+    try:
+        yf_throttle()
+        raw = yf.Ticker(ticker).fast_info.quote_type
+    except Exception as exc:  # noqa: BLE001 — yfinance raises a wide variety
+        logger.debug("fetch_instrument_type failed for %s: %s", ticker, exc)
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    return _YF_INSTRUMENT_TYPES.get(raw.strip().upper(), "other")
 
 
 def fetch_spots_bulk(tickers: list[str]) -> dict[str, float]:

@@ -62,9 +62,10 @@
     <div class="content-card">
         <div class="content-card-title">Market &amp; IV smile</div>
         <p class="field-hint optsim-card-note" id="optsim-market-hint" hidden>
-            Ticker mode: Spot and ATM IV (first leg's expiry) come from the chain and
-            Skew and Curvature are not used — each leg prices at its listed contract's
-            IV. Rate, dividend yield, margin class and the grid still apply.
+            Ticker mode: Spot and ATM IV (first leg's expiry) come from the chain, the
+            risk-free rate from the 13-week T-bill (^IRX), the dividend yield is 0 and the
+            margin class follows the underlying's type; Skew and Curvature are not used —
+            each leg prices at its listed contract's IV. The grid inputs still apply.
         </p>
         <div class="form-grid">
             <div class="form-group">

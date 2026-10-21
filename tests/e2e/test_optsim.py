@@ -93,9 +93,11 @@ def test_optsim_surfaces_server_validation_errors(page: Page, live_server: str, 
 def test_optsim_ticker_mode_prices_on_the_header_tickers_chain(
     page: Page, live_server: str, js_errors: list[str], open_tab
 ) -> None:
+    from services.market import reference_data
     from services.options import preload
 
     preload.clear_cache()
+    reference_data.clear_cache()
     page.goto(live_server, wait_until="domcontentloaded")
     page.fill("#ticker", "AAPL")
     open_tab("tab-optsim")
@@ -106,6 +108,15 @@ def test_optsim_ticker_mode_prices_on_the_header_tickers_chain(
     expect(page.locator("#optsim-market-note")).to_contain_text("AAPL option chain · spot 136.00", timeout=15000)
     expect(page.locator("#optsim-spot")).to_be_disabled()
     expect(page.locator("#optsim-spot")).to_have_value("136")
+    # The stub's ^IRX (137) is implausible and its quote type unknown: typed rate, single-stock margin, no dividend.
+    note = page.locator("#optsim-market-note")
+    expect(note).to_contain_text("rate 4.50% (typed: ^IRX unavailable)")
+    expect(note).to_contain_text("dividend 0%")
+    expect(note).to_contain_text("type unknown → single stock margin")
+    expect(page.locator("#optsim-div")).to_be_disabled()
+    expect(page.locator("#optsim-div")).to_have_value("0")
+    expect(page.locator("#optsim-rate")).to_be_disabled()
+    expect(page.locator("#optsim-product")).to_have_value("equity")
     expect(page.locator("#optsim-hero-sub")).to_contain_text("AAPL")
     expect(page.locator("#optsim-resolved thead")).to_contain_text("Expiry")
     assert _panel(page)["phase"] == "loaded"
@@ -114,6 +125,9 @@ def test_optsim_ticker_mode_prices_on_the_header_tickers_chain(
     expect(page.locator("#optsim-market-note")).to_be_hidden(timeout=15000)
     expect(page.locator("#optsim-spot")).to_be_enabled()
     expect(page.locator("#optsim-spot")).to_have_value("600")
+    expect(page.locator("#optsim-div")).to_have_value("1.3")
+    expect(page.locator("#optsim-product")).to_have_value("etf")
     preload.clear_cache()
+    reference_data.clear_cache()
 
     assert _app_errors(js_errors) == [], f"JS errors in optsim tab: {js_errors}"

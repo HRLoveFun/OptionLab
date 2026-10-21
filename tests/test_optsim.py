@@ -14,6 +14,7 @@ import pytest
 
 from core.options.greeks.black_scholes import greeks_vectorized
 from core.optsim import (
+    PRODUCTS,
     Market,
     Position,
     Smile,
@@ -25,6 +26,7 @@ from core.optsim import (
     leg_iv,
     listed_market,
     make_leg,
+    margin_class,
     nearest_expiry,
     nearest_quote,
     pm_bpr,
@@ -140,6 +142,27 @@ def test_pm_offsets_span_the_product_range():
     assert off[0] == 0.0 and len(off) == 11
     assert off.min() == pytest.approx(-0.08) and off.max() == pytest.approx(0.06)
     assert pm_offsets("equity").min() == pytest.approx(-0.15)
+
+
+@pytest.mark.parametrize(
+    ("symbol", "kind", "product"),
+    [
+        ("^SPX", "index", "index"),
+        ("^NDX", None, "index"),  # named high-cap index: the symbol settles it
+        ("^RUT", "index", "index_small"),
+        ("^VIX", None, "index_small"),  # any other ^ symbol is an index
+        ("SPY", "etf", "etf"),
+        ("SPY", None, "etf"),  # a failed type lookup cannot demote SPY
+        ("IWM", "etf", "index_small"),
+        ("XLE", "etf", "equity"),  # narrow-based ETF: the equity requirement
+        ("TQQQ", "etf", "equity"),
+        ("AAPL", "equity", "equity"),
+        ("BTC-USD", "other", "equity"),
+        ("ABCD", None, "equity"),  # unknown: the most conservative class
+    ],
+)
+def test_margin_class_follows_the_underlying_type(symbol, kind, product):
+    assert margin_class(symbol, kind) == product and product in PRODUCTS
 
 
 def test_pm_takes_worst_loss_with_per_contract_minimum():

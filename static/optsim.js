@@ -9,11 +9,14 @@
  *
  * Market: "hypothetical" prices on the inputs typed here; "ticker" sends the
  * header ticker, and the server takes spot, listed expiries and strikes and
- * each leg's IV from its option chain. In ticker mode the spot and smile
- * fields are read-only (showing what the chain gave) and get their typed
- * values back when the switch returns to Hypothetical. A ticker change re-runs
- * a ticker-mode tab: at once when it is on screen, else on the next visit
- * (both ticker-change paths reset the 'optsim' tab flag).
+ * each leg's IV from its option chain, the rate from ^IRX, a dividend yield of
+ * 0 and the margin class from the underlying's type. In ticker mode those
+ * fields are read-only (showing what the server used); the request still
+ * carries the typed values (the typed rate is the fallback when ^IRX is
+ * missing), and the fields get them back when the switch returns to
+ * Hypothetical. A ticker change re-runs a ticker-mode tab: at once when it is
+ * on screen, else on the next visit (both ticker-change paths reset the
+ * 'optsim' tab flag).
  */
 (function () {
     'use strict';
@@ -21,9 +24,19 @@
     const PANEL = 'optsim';
     const MAX_LEGS = 6;
     const DEFAULT_PRESET = 'short_strangle';
-    // Inputs the chain supplies in ticker mode; their typed values are kept aside meanwhile.
-    const MARKET_FIELDS = ['optsim-spot', 'optsim-atm-iv', 'optsim-skew', 'optsim-curvature'];
-    const UNUSED_IN_TICKER_MODE = ['optsim-skew', 'optsim-curvature'];
+    // Inputs ticker mode supplies itself; their typed values are kept aside meanwhile.
+    const MARKET_FIELDS = [
+        'optsim-spot', 'optsim-rate', 'optsim-div', 'optsim-product',
+        'optsim-atm-iv', 'optsim-skew', 'optsim-curvature',
+    ];
+    // What a locked field shows until the server answers.
+    const TICKER_PLACEHOLDER = {
+        'optsim-spot': 'from chain',
+        'optsim-atm-iv': 'from chain',
+        'optsim-rate': 'from ^IRX',
+        'optsim-skew': 'not used',
+        'optsim-curvature': 'not used',
+    };
 
     function leg(type, side, dte, by, value) {
         return { type, side, qty: 1, dte, by, value };
@@ -52,6 +65,8 @@
         index_small: 'other broad index',
         equity: 'single stock',
     };
+
+    const TYPE_LABEL = { index: 'index', etf: 'ETF', equity: 'stock', other: 'other instrument' };
 
     const GREEK_AXIS = {
         delta: 'Delta (shares)',
@@ -166,9 +181,11 @@
             const node = el(id);
             if (!node) return;
             node.disabled = on;
-            if (on) {
-                node.value = '';
-                node.placeholder = UNUSED_IN_TICKER_MODE.includes(id) ? 'not used' : 'from chain';
+            if (node.tagName === 'SELECT') {
+                if (!on && typed) node.value = typed[i];
+            } else if (on) {
+                node.value = id === 'optsim-div' ? '0' : '';
+                node.placeholder = TICKER_PLACEHOLDER[id] || '';
             } else {
                 node.placeholder = '';
                 if (typed) node.value = typed[i];
@@ -179,12 +196,21 @@
         if (hint) hint.hidden = !on;
     }
 
-    // Show what the chain gave in the read-only fields (plain numbers: they are <input type=number>).
+    // The value a field stands for in the request: in ticker mode, what was typed before.
+    function fieldValue(id) {
+        const at = MARKET_FIELDS.indexOf(id);
+        if (tickerMode() && typed && at >= 0) return typed[at];
+        return (el(id) || {}).value;
+    }
+
+    // Show what the server used in the read-only fields (plain numbers: they are <input type=number>).
     function fillMarketFields(m) {
-        const spot = el('optsim-spot');
-        if (spot && Number.isFinite(m.spot)) spot.value = String(Math.round(m.spot * 100) / 100);
-        const atm = el('optsim-atm-iv');
-        if (atm && Number.isFinite(m.atm_iv)) atm.value = (m.atm_iv * 100).toFixed(1);
+        const set = (id, v) => { const node = el(id); if (node && v !== null) node.value = v; };
+        set('optsim-spot', Number.isFinite(m.spot) ? String(Math.round(m.spot * 100) / 100) : null);
+        set('optsim-atm-iv', Number.isFinite(m.atm_iv) ? (m.atm_iv * 100).toFixed(1) : null);
+        set('optsim-rate', Number.isFinite(m.rate) ? (m.rate * 100).toFixed(2) : null);
+        set('optsim-div', '0');
+        set('optsim-product', PRODUCT_LABEL[m.product] ? m.product : null);
     }
 
     function setMarket(next) {
@@ -299,7 +325,7 @@
 
     /* -- request ------------------------------------------------------------ */
     function numberOf(id) {
-        const v = parseFloat((el(id) || {}).value);
+        const v = parseFloat(fieldValue(id));
         return Number.isFinite(v) ? v : null;
     }
 
@@ -320,7 +346,7 @@
             multiplier: numberOf('optsim-multiplier'),
             spot_range: numberOf('optsim-spot-range'),
             iv_shift: numberOf('optsim-iv-shift'),
-            product: (el('optsim-product') || {}).value || 'etf',
+            product: fieldValue('optsim-product') || 'etf',
             style,
             legs: legs.map((l) => ({
                 type: l.type,
@@ -392,6 +418,10 @@
         const asOf = m.as_of ? fmtAsOf(m.as_of) : '';
         if (asOf) parts.push(`as of ${asOf}`);
         parts.push(`ATM IV ${fmtPct(m.atm_iv, 1)} on ${safeDate(m.atm_expiry)}`);
+        parts.push(`rate ${fmtPct(m.rate, 2)} (${m.rate_source === '^IRX' ? '^IRX' : 'typed: ^IRX unavailable'})`);
+        parts.push('dividend 0%');
+        const kind = TYPE_LABEL[m.instrument_type] || 'type unknown';
+        parts.push(`${kind} → ${PRODUCT_LABEL[m.product] || m.product} margin`);
         node.textContent = parts.join(' · ');
         node.hidden = false;
     }

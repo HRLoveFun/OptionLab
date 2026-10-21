@@ -10,6 +10,7 @@ Contracts:
   - Only production code under ``data_pipeline/providers/`` imports yfinance.
   - ``to_canonical_bars`` / ``to_option_chain_snapshot`` apply the unit rules in
     ``providers/base.py`` (decimal IV, nullable bid/ask, no ``inTheMoney``).
+  - ``fetch_instrument_type`` maps yfinance's quote types onto ``INSTRUMENT_TYPES``.
   - ``get_provider`` defaults to yfinance and rejects unknown names loudly.
   - ``data_pipeline.providers.yf_client`` still re-exports the legacy callables unchanged.
 Dependencies UPWARD:
@@ -232,6 +233,34 @@ def test_to_option_chain_snapshot_tolerates_empty_payload():
     assert isinstance(snap, OptionChainSnapshot)
     assert snap.expiries == ()
     assert snap.spot is None
+
+
+@pytest.mark.parametrize(
+    ("quote_type", "expected"),
+    [("INDEX", "index"), ("ETF", "etf"), ("EQUITY", "equity"), ("MUTUALFUND", "other"), ("", None), (None, None)],
+)
+def test_fetch_instrument_type_maps_yfinance_quote_types(monkeypatch, quote_type, expected):
+    from types import SimpleNamespace
+
+    from data_pipeline.providers import INSTRUMENT_TYPES, yf_snapshot
+
+    monkeypatch.setattr(yf_snapshot, "yf_throttle", lambda: None)
+    monkeypatch.setattr(
+        yf_snapshot.yf, "Ticker", lambda sym: SimpleNamespace(fast_info=SimpleNamespace(quote_type=quote_type))
+    )
+    kind = yf_snapshot.fetch_instrument_type("ANY")
+    assert kind == expected and (kind is None or kind in INSTRUMENT_TYPES)
+
+
+def test_fetch_instrument_type_is_none_when_yfinance_raises(monkeypatch):
+    from data_pipeline.providers import yf_snapshot
+
+    def boom(sym):
+        raise RuntimeError("metadata unavailable")
+
+    monkeypatch.setattr(yf_snapshot, "yf_throttle", lambda: None)
+    monkeypatch.setattr(yf_snapshot.yf, "Ticker", boom)
+    assert yf_snapshot.fetch_instrument_type("ANY") is None
 
 
 # ---------------------------------------------------------------------------

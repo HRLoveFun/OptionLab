@@ -12,7 +12,7 @@ Contracts:
   - Market, Smile, Position, make_leg, strike_for_delta
   - scenario_grid, time_profile, breakevens, breakeven_iv, Grid
   - european, american, option_greeks, implied_vol
-  - regt_bpr, pm_bpr, pm_offsets, PRODUCTS
+  - regt_bpr, pm_bpr, pm_offsets, margin_class, PRODUCTS
   - listed_market, nearest_expiry, nearest_quote, iv_curve, leg_iv
   - render_grid_png
 Dependencies UPWARD:
@@ -24,7 +24,7 @@ Dependencies DOWNWARD:
 
 from core.optsim.charts import render_grid_png
 from core.optsim.engine import Grid, breakeven_iv, breakevens, default_days, scenario_grid, time_profile
-from core.optsim.margin import PRODUCTS, pm_bpr, pm_offsets, regt_bpr
+from core.optsim.margin import PRODUCTS, margin_class, pm_bpr, pm_offsets, regt_bpr
 from core.optsim.market import iv_curve, leg_iv, listed_market, nearest_expiry, nearest_quote
 from core.optsim.models import Market, Position, Smile, make_leg, strike_for_delta
 from core.optsim.pricing import american, european, implied_vol, option_greeks
@@ -45,6 +45,7 @@ __all__ = [
     "leg_iv",
     "listed_market",
     "make_leg",
+    "margin_class",
     "nearest_expiry",
     "nearest_quote",
     "option_greeks",

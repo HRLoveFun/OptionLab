@@ -42,7 +42,12 @@ import yfinance as yf
 
 from data_pipeline.providers._log import _log_dq
 from data_pipeline.providers.base import CANONICAL_BAR_COLUMNS, OptionChainSnapshot
-from data_pipeline.providers.yf_snapshot import fetch_option_chain, fetch_spot, to_option_chain_snapshot
+from data_pipeline.providers.yf_snapshot import (
+    fetch_instrument_type,
+    fetch_option_chain,
+    fetch_spot,
+    to_option_chain_snapshot,
+)
 from utils.network import yf_throttle
 
 logger = logging.getLogger(__name__)
@@ -262,3 +267,7 @@ class YFinanceProvider:
     def option_chain(self, symbol: str) -> OptionChainSnapshot:
         """Canonical live option-chain snapshot for ``symbol``."""
         return to_option_chain_snapshot(fetch_option_chain(symbol), provider=self.name)
+
+    def instrument_type(self, symbol: str) -> str | None:
+        """Canonical instrument type of ``symbol`` (``index`` / ``etf`` / ``equity`` / ``other``)."""
+        return fetch_instrument_type(symbol)

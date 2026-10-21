@@ -5,12 +5,12 @@ Context:
   - Validates the JSON payload of ``POST /api/optsim`` — a multi-leg position
     (legs, rates, exercise style, margin class, grid) and the market it is
     priced in — and hands the maths to :mod:`core.optsim`.
-  - Two markets (``market``). ``hypothetical`` (default) takes spot and an IV
-    smile from the payload and reads no market data. ``ticker`` takes spot,
-    listed expiries and strikes and each leg's IV from the option chain of
-    ``ticker``, through the option-chain preload cache (15-minute TTL, fetched
-    on a miss). Rate, dividend yield and margin class come from the payload in
-    both, so the two modes differ only in what the chain can tell.
+  - Two markets (``market``). ``hypothetical`` (default) takes spot, an IV
+    smile, rate, dividend yield and margin class from the payload and reads no
+    market data. ``ticker`` takes spot, listed expiries and strikes and each leg's
+    IV from the option chain of ``ticker``, the rate from the 13-week T-bill
+    (``^IRX``; the typed rate only as a fallback), a dividend yield of 0 and the
+    margin class from the underlying's type — see services/options/optsim_ticker.py.
   - Bounds each request so one call stays interactive: at most 6 legs,
     DTE <= 730, at most 8 evenly spaced date slices plus every expiry, IV shifts
     revalued at entry only, break-even IV on the chart dates only.
@@ -22,7 +22,7 @@ Contracts:
   - run_optsim(payload) -> dict
   - strike_tick(spot) -> float
 Dependencies UPWARD:
-  - numpy, core.optsim, services.options.preload, utils.api_errors, utils.ticker_utils
+  - numpy, core.optsim, services.options.optsim_ticker, utils.api_errors
 Dependencies DOWNWARD:
   - routes.strategies, tests
 """
@@ -45,7 +45,6 @@ from core.optsim import (
     default_days,
     iv_curve,
     leg_iv,
-    listed_market,
     make_leg,
     nearest_expiry,
     nearest_quote,
@@ -57,9 +56,8 @@ from core.optsim import (
 from core.optsim.charts import chart_days
 from core.optsim.engine import GREEKS
 from core.optsim.market import IvCurve, ListedMarket
-from services.options import preload
+from services.options.optsim_ticker import ticker_market
 from utils.api_errors import ApiError
-from utils.ticker_utils import normalize_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +79,6 @@ MAX_SLICES = 8
 # error is about 0.02 per $100 of strike (0.007 at the CLI's 200 steps), for a
 # third of the time per request.
 WEB_TREE_STEPS = 100
-# CONSTRAINT: longer than any Yahoo or futu symbol; keeps junk out of the chain cache keys.
-MAX_TICKER_LEN = 20
-
 _TICKS = (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0)
 
 
@@ -120,38 +115,6 @@ def _choice(raw: Any, name: str, options: tuple[str, ...], code: str) -> str:
     if value not in options:
         raise ApiError(f"{name} must be one of: {', '.join(options)}", code=code)
     return value
-
-
-def _listed(raw: Any) -> ListedMarket:
-    """The ticker's listed market, from the option-chain preload cache (fetched on a miss)."""
-    ticker = str(raw or "").strip().upper()
-    if not ticker:
-        raise ApiError("ticker mode needs a ticker", code="ticker_required")
-    if len(ticker) > MAX_TICKER_LEN or any(c.isspace() for c in ticker):
-        raise ApiError("ticker is not a valid symbol", code="invalid_ticker", details={"value": raw})
-    try:
-        ticker, _ = normalize_ticker(ticker)
-    except ValueError:
-        pass
-    snap = preload.get_cached(ticker)
-    if snap is None:
-        try:
-            snap = preload.build_preload_payload(ticker)
-        except Exception as exc:  # noqa: BLE001 — the provider fails in many ways; all mean "no chain"
-            logger.warning("optsim: option chain for %s unavailable: %s", ticker, exc)
-            raise ApiError(
-                f"could not load the option chain for {ticker}", code="chain_unavailable", status=502
-            ) from None
-        # WHY: an empty chain is usually a transient Yahoo failure; caching it would pin the miss for 15 minutes.
-        if snap.get("chain"):
-            preload.set_cached(ticker, snap)
-    try:
-        listed = listed_market(ticker, snap.get("spot"), snap.get("chain") or {}, as_of=snap.get("fetched_at"))
-    except ValueError:
-        raise ApiError(f"no spot price for {ticker}", code="chain_unavailable", status=502) from None
-    if not listed.expiries:
-        raise ApiError(f"{ticker} has no listed options a day or more out", code="chain_unavailable", status=502)
-    return listed
 
 
 def _hypothetical_extras() -> dict:
@@ -263,8 +226,9 @@ def run_optsim(payload: dict | None) -> dict:
         if payload.get("spot") in (None, ""):
             raise ApiError("spot is required", code="spot_required")
         spot = _field(payload, "spot", None, 0.01, 1e7, "invalid_spot")
+    # Ticker mode takes the rate from ^IRX (the typed rate is its fallback) and a 0 dividend yield.
     rate = _field(payload, "rate", 4.5, -5, 50, "invalid_rate") / 100
-    div_yield = _field(payload, "div_yield", 0.0, 0, 20, "invalid_div_yield") / 100
+    div_yield = 0.0 if ticker_mode else _field(payload, "div_yield", 0.0, 0, 20, "invalid_div_yield") / 100
     smile = None
     if not ticker_mode:
         smile = Smile(
@@ -273,7 +237,11 @@ def run_optsim(payload: dict | None) -> dict:
             curvature=_field(payload, "curvature", 0.0, -20, 50, "invalid_smile"),
         )
     style = _choice(payload.get("style") or "european", "style", ("european", "american"), "invalid_style")
-    product = _choice(payload.get("product") or "index", "product", tuple(PRODUCTS), "invalid_product")
+    product = (
+        None
+        if ticker_mode
+        else _choice(payload.get("product") or "index", "product", tuple(PRODUCTS), "invalid_product")
+    )
     multiplier = _integer(payload.get("multiplier", 100), "multiplier", 1, 10_000, "invalid_multiplier")
     spot_range = _field(payload, "spot_range", 15.0, 5, 50, "invalid_spot_range") / 100
     iv_shift = _field(payload, "iv_shift", 5.0, 0, 20, "invalid_iv_shift") / 100
@@ -286,9 +254,10 @@ def run_optsim(payload: dict | None) -> dict:
     parsed = [_leg_spec(spec, i + 1) for i, spec in enumerate(specs)]
     # The chain is fetched last, so a malformed request never costs a provider call
     # (only the strike window waits for the chain's spot).
-    listed = _listed(payload.get("ticker")) if ticker_mode else None
-    if listed is not None:
-        spot = listed.spot
+    ticker = ticker_market(payload.get("ticker"), rate) if ticker_mode else None
+    listed = ticker.listed if ticker is not None else None
+    if ticker is not None:
+        spot, rate, div_yield, product = listed.spot, ticker.rate, ticker.div_yield, ticker.product
     market = Market(spot=spot, rate=rate, div_yield=div_yield)
     curves: dict[str, IvCurve] = {}
     resolved = [_leg(spec, i + 1, market, smile, listed, style, curves) for i, spec in enumerate(parsed)]
@@ -337,7 +306,7 @@ def run_optsim(payload: dict | None) -> dict:
         )
 
     market_row: dict[str, Any] = {"source": source}
-    if listed is not None:
+    if ticker is not None:
         first = resolved[0][1]["expiry"]
         market_row.update(
             ticker=listed.ticker,
@@ -345,6 +314,12 @@ def run_optsim(payload: dict | None) -> dict:
             as_of=listed.as_of,
             atm_expiry=first,
             atm_iv=round(float(curves[first].iv(spot)), 6),
+            rate=round(rate, 6),
+            rate_source=ticker.rate_source,
+            rate_as_of=ticker.rate_as_of,
+            div_yield=div_yield,
+            instrument_type=ticker.instrument_type,
+            product=product,
         )
 
     profile = [{k: (v if isinstance(v, str) else round(v, 4)) for k, v in row.items()} for row in time_profile(main)]
