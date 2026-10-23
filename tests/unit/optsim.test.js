@@ -123,6 +123,8 @@ describe('optsim.js (Position Simulator tab)', () => {
     let post;
 
     beforeEach(() => {
+        vi.restoreAllMocks();
+        window.localStorage.clear(); // the tab persists its state; every test starts from none
         buildDom();
         loadStateBundle();
         HTMLCanvasElement.prototype.getContext = () => ({});
@@ -391,6 +393,89 @@ describe('optsim.js (Position Simulator tab)', () => {
             ['1 · Short 1 Put 95.00', '22.0%', '25.0%', '—', '93.80 (day 30)'],
             ['2 · Short 1 Call 105.00', '18.0%', '21.0%', '—', '106.30 (day 30)'],
         ]);
+    });
+
+    it('saves the legs, the typed inputs and the switches whenever they change', async () => {
+        window.loadOptsimTab();
+        await flush();
+        const saved = () => JSON.parse(window.localStorage.getItem('optsim.v1'));
+        expect(saved().legs.map((l) => [l.type, l.side, l.by, l.value])).toEqual([
+            ['put', 'short', 'delta', 0.16], ['call', 'short', 'delta', 0.16],
+        ]);
+        const spot = document.getElementById('optsim-spot');
+        spot.value = '650';
+        spot.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(saved().inputs['optsim-spot']).toBe('650');
+        click('[data-optsim-margin="pm"]');
+        expect(saved().margin).toBe('pm');
+        click('[data-action="optsim-add-leg"]');
+        expect(saved().legs).toHaveLength(3);
+        const dte = document.querySelector('#optsim-legs-body tr[data-leg="2"] input[data-field="dte"]');
+        dte.value = '60';
+        dte.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(saved().legs[2].dte).toBe(60);
+        post.mockResolvedValueOnce(fakeResponse({ style: 'american', tree_steps: 100 }));
+        click('[data-optsim-style="american"]');
+        await flush();
+        expect(saved().style).toBe('american');
+    });
+
+    it('restores the saved state on the next load instead of the default preset', async () => {
+        window.localStorage.setItem('optsim.v1', JSON.stringify({
+            v: 1,
+            legs: [
+                { type: 'call', side: 'short', qty: 2, dte: 30, by: 'strike', value: 620, atm: false },
+                { type: 'call', side: 'long', qty: 2, dte: 60, by: 'strike', value: null, atm: true },
+                { type: 'straddle', side: 'long', qty: 1, dte: 30, by: 'delta', value: 0.5 }, // not a leg: dropped
+            ],
+            inputs: { 'optsim-spot': '640', 'optsim-rate': '4', 'optsim-product': 'crypto' },
+            market: 'hypothetical',
+            style: 'american',
+            margin: 'pm',
+        }));
+        window.loadOptsimTab();
+        await flush();
+        expect(document.querySelectorAll('#optsim-legs-body tr')).toHaveLength(2);
+        const body = post.mock.calls[0][1].body;
+        expect(body).toMatchObject({ spot: 640, rate: 4, product: 'etf', style: 'american' }); // unknown option kept out
+        expect(body.legs).toEqual([
+            { type: 'call', side: 'short', qty: 2, dte: 30, strike: 620 },
+            { type: 'call', side: 'long', qty: 2, dte: 60, strike: 'atm' },
+        ]);
+        expect(document.querySelector('[data-optsim-style="american"]').getAttribute('aria-pressed')).toBe('true');
+        expect(text('optsim-kpi-margin-label')).toBe('Portfolio margin');
+    });
+
+    it('restores ticker mode with the typed values set aside', async () => {
+        buildTickerDom();
+        window.localStorage.setItem('optsim.v1', JSON.stringify({
+            v: 1,
+            legs: [{ type: 'put', side: 'short', qty: 1, dte: 45, by: 'delta', value: 0.2, atm: false }],
+            inputs: { 'optsim-spot': '610', 'optsim-rate': '3.5' },
+            market: 'ticker',
+        }));
+        window.loadOptsimTab();
+        await flush();
+        expect(document.getElementById('optsim-spot').disabled).toBe(true);
+        expect(post.mock.calls[0][1].body).toMatchObject({ market: 'ticker', ticker: 'SPY', spot: 610, rate: 3.5 });
+        expect(JSON.parse(window.localStorage.getItem('optsim.v1')).inputs['optsim-rate']).toBe('3.5');
+    });
+
+    it('falls back to the default preset for junk and keeps working when storage throws', async () => {
+        window.localStorage.setItem('optsim.v1', '{not json');
+        window.loadOptsimTab();
+        await flush();
+        expect(document.querySelectorAll('#optsim-legs-body tr')).toHaveLength(2);
+
+        buildDom();
+        loadScript('static/optsim.js');
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError'); });
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+        window.loadOptsimTab();
+        await flush();
+        click('[data-action="optsim-add-leg"]');
+        expect(document.querySelectorAll('#optsim-legs-body tr')).toHaveLength(3);
+        expect(window.appState.panels.get('optsim').phase).toBe('loaded');
     });
 
     it('shows the server message in the error phase', async () => {

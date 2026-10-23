@@ -17,6 +17,10 @@
  * Hypothetical. A ticker change re-runs a ticker-mode tab: at once when it is
  * on screen, else on the next visit (both ticker-change paths reset the
  * 'optsim' tab flag).
+ *
+ * The tab keeps its own state across reloads under one localStorage key: the
+ * legs, the typed inputs and the market / exercise / margin switches. Storage
+ * that throws (private windows, blocked site data) only means no persistence.
  */
 (function () {
     'use strict';
@@ -29,6 +33,9 @@
         'optsim-spot', 'optsim-rate', 'optsim-div', 'optsim-product',
         'optsim-atm-iv', 'optsim-skew', 'optsim-curvature',
     ];
+    // Inputs saved with the legs: the typed market fields plus the grid.
+    const SAVED_FIELDS = MARKET_FIELDS.concat(['optsim-multiplier', 'optsim-spot-range', 'optsim-iv-shift']);
+    const STORE_KEY = 'optsim.v1';
     // What a locked field shows until the server answers.
     const TICKER_PLACEHOLDER = {
         'optsim-spot': 'from chain',
@@ -281,6 +288,68 @@
         if (body) body.innerHTML = legs.map(legRow).join('');
         const add = document.querySelector('[data-action="optsim-add-leg"]');
         if (add) add.disabled = legs.length >= MAX_LEGS;
+        save();
+    }
+
+    /* -- persistence ---------------------------------------------------------- */
+    function save() {
+        const state = {
+            v: 1,
+            legs: legs.map((l) => ({
+                type: l.type, side: l.side, qty: l.qty, dte: l.dte, by: l.by, value: l.value, atm: Boolean(l.atm),
+            })),
+            inputs: Object.fromEntries(SAVED_FIELDS.map((id) => [id, fieldValue(id)])),
+            market: marketMode,
+            style,
+            margin,
+        };
+        try {
+            window.localStorage.setItem(STORE_KEY, JSON.stringify(state));
+        } catch (_e) { /* no storage: the tab just forgets on reload */ }
+    }
+
+    function validLeg(l) {
+        return Boolean(l) && ['put', 'call'].includes(l.type) && ['long', 'short'].includes(l.side)
+            && Number.isInteger(l.qty) && l.qty >= 1 && Number.isInteger(l.dte) && l.dte >= 1
+            && ['delta', 'strike'].includes(l.by) && (l.value === null || Number.isFinite(l.value));
+    }
+
+    function readSaved() {
+        let state = null;
+        try {
+            state = JSON.parse(window.localStorage.getItem(STORE_KEY) || 'null');
+        } catch (_e) {
+            return null;
+        }
+        if (!state || state.v !== 1 || !Array.isArray(state.legs)) return null;
+        const saved = state.legs.filter(validLeg).slice(0, MAX_LEGS);
+        return saved.length ? { ...state, legs: saved } : null;
+    }
+
+    // Inputs go back first, so ticker mode can set them aside as the typed values.
+    function restore() {
+        const state = readSaved();
+        if (!state) return false;
+        const inputs = state.inputs || {};
+        SAVED_FIELDS.forEach((id) => {
+            const node = el(id);
+            const v = inputs[id];
+            if (!node || typeof v !== 'string') return;
+            if (node.tagName === 'SELECT' && ![...node.options].some((o) => o.value === v)) return;
+            node.value = v;
+        });
+        if (['european', 'american'].includes(state.style)) style = state.style;
+        if (['regt', 'pm'].includes(state.margin)) margin = state.margin;
+        syncToggles('data-optsim-style', style);
+        syncToggles('data-optsim-margin', margin);
+        if (state.market === 'ticker') {
+            marketMode = 'ticker';
+            syncToggles('data-optsim-market', marketMode);
+            applyMarketFields();
+        }
+        legs = state.legs.map((l) => ({ ...l, atm: Boolean(l.atm) }));
+        renderLegEditor();
+        return true;
     }
 
     function onLegChange(ev) {
@@ -306,6 +375,7 @@
             l.value = raw === 'delta' ? 0.16 : atmValue();
             renderLegEditor();
         }
+        save();
     }
 
     function onLegClick(ev) {
@@ -376,6 +446,7 @@
             }
             message = `Loading the ${ticker} option chain…`;
         }
+        save();
         window.appState.panels.set(PANEL, 'loading', { message });
         try {
             const res = await window.api.post('/api/optsim', { body: buildPayload(), key: 'optsim' });
@@ -846,6 +917,7 @@
     function setMargin(next) {
         margin = next;
         syncToggles('data-optsim-margin', margin);
+        save();
         if (data) { renderSummary(); renderProfile(); }
     }
 
@@ -873,6 +945,7 @@
             body.addEventListener('change', onLegChange);
             body.addEventListener('click', onLegClick);
         }
+        tab.addEventListener('change', (ev) => { if (SAVED_FIELDS.includes(ev.target.id)) save(); });
         const preset = el('optsim-preset');
         if (preset) {
             preset.addEventListener('change', () => {
@@ -897,7 +970,7 @@
     window.loadOptsimTab = function () {
         if (!wired) {
             wire();
-            applyPreset(DEFAULT_PRESET);
+            if (!restore()) applyPreset(DEFAULT_PRESET);
             wired = true;
         }
         if (!data || stale()) run();

@@ -131,3 +131,19 @@ def test_optsim_ticker_mode_prices_on_the_header_tickers_chain(
     reference_data.clear_cache()
 
     assert _app_errors(js_errors) == [], f"JS errors in optsim tab: {js_errors}"
+
+
+@pytest.mark.usefixtures("mock_apis")
+def test_optsim_keeps_its_legs_across_a_reload(page: Page, live_server: str, js_errors: list[str], open_tab) -> None:
+    _open(page, live_server, open_tab)
+    page.locator('[data-action="optsim-add-leg"]').click()
+    page.locator('[data-optsim-margin="pm"]').click()
+    expect(page.locator("#optsim-legs-body tr")).to_have_count(3)
+
+    page.reload(wait_until="domcontentloaded")
+    open_tab("tab-optsim")
+    expect(page.locator("#optsim-legs-body tr")).to_have_count(3)
+    expect(page.locator('[data-optsim-margin="pm"]')).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#optsim-kpi-margin-label")).to_have_text("Portfolio margin", timeout=15000)
+
+    assert _app_errors(js_errors) == [], f"JS errors in optsim tab: {js_errors}"
