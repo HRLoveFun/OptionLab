@@ -58,6 +58,8 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
   American 树用 100 steps（最大误差约 0.02 / 100 strike，CLI 的 200 steps 约 0.007）。
   4 腿 American 一次请求约 1 s，European 约 0.03 s。
 - Margin 开关只重绘（两种 margin 每次都返回），exercise 开关重新请求。
+- 标签页把 legs、输入（ticker 模式下为用户原先输入的值）和 Market / Exercise / Margin 三个开关存进一个
+  localStorage key（`optsim.v1`），刷新后恢复；存储不可用时不持久化（2026-10-23）。
 - Strike 可直接给、写 `"atm"`，或按 |Δ| 从 smile 反解；按 |Δ| 和 ATM 选出的 strike 取整到固定 tick 阶梯
   （$0.01–$50）中不超过 0.1% spot 的最粗一档，spot 低于 $10 时为 $0.01。
 
@@ -97,7 +99,8 @@ iron condor）；输入是假设期权，不读行情。核心先以 CLI 交付�
 - Positive：style 和 margin regime 各一个开关；纯函数 + 测试，结果可复现；不影响现有模块。
 - Negative / accepted trade-offs：
   - Margin 是近似值：没有 broker house add-on、concentration charge、TIMS vol shock 和
-    class group offset；Reg-T 不检查 long leg 到期日是否晚于 short leg（reverse calendar 会被低估）。
+    class group offset。Reg-T 只把到期不早于 short 的同类型 long 算作 cover（2026-10-23 起；之前 reverse
+    calendar 被当成 defined_risk，占用被低估）。
   - 没有 skew dynamics、term structure 和 event vol；IV 只做平行移动。
   - CLI 全网格的 American 较慢：单腿 45 DTE 约 2 s，4 腿 iron condor 约 6 s，4 腿 365 DTE 约 50 s；
     European 约 0.01–0.05 s。Web 路径靠上面的裁剪控制在约 1 s（break-even IV 另加每腿约 0.1 s）。

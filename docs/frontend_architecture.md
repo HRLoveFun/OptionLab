@@ -356,7 +356,10 @@ FormManager.loadState()   // On page load
 **Stored Keys** (`localStorage['marketAnalysisForm']`): `ticker`,
 `positions` (JSON array). Module parameters live in their own stores
 (`state/marketParamsState.js`, `assessmentParamsState.js`,
-`optionFilterState.js`; batch B7).
+`optionFilterState.js`; batch B7). The Position Simulator keeps its own
+state — legs, typed inputs and its market / exercise / margin switches —
+under `localStorage['optsim.v1']`, every read and write wrapped so a blocked
+storage only means no persistence.
 
 ---
 

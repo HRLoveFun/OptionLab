@@ -187,11 +187,11 @@ American 精度（400 个随机状态，对 2000-step 树，按行权价 100 计
 
 | 文件 | 数量 | 覆盖 |
 |---|---|---|
-| `tests/test_optsim.py` | 49 | margin class 按标的类型、pricing（parity、American 界限与收敛、到期）、implied vol（两种 style 往返、无解为 NaN）、break-even IV（重新定价到 premium、随时间上升）、上市市场（到期日 / 报价解析、平手规则、IV 曲线还原已知 smile、报价 IV 回退、mid 定价）、Reg-T / PM 规则、网格不变量、style 切换、`strike_for_delta`、PNG、CLI |
+| `tests/test_optsim.py` | 52 | margin class 按标的类型、Reg-T cover 看到期日（calendar / reverse calendar、多腿匹配）、pricing（parity、American 界限与收敛、到期）、implied vol（两种 style 往返、无解为 NaN）、break-even IV（重新定价到 premium、随时间上升）、上市市场（到期日 / 报价解析、平手规则、IV 曲线还原已知 smile、报价 IV 回退、mid 定价）、Reg-T / PM 规则、网格不变量、style 切换、`strike_for_delta`、PNG、CLI |
 | `tests/test_optsim_api.py` | 37 | route 正常路径、Reg-T 规则、American ≥ European、零 IV shift、长期限切片、18 个 400 错误用例、strike tick、`"atm"`、break-even IV 输出；ticker 模式：上市到期日 / strike / mid、ATM 与 strike 吸附、复用缓存、忽略假设输入（含股息与 margin class）、`^IRX` 利率与按类型的 margin class、`^IRX` 不可用时退回输入 rate、无报价回退、取链前校验、502 且不缓存空链 |
 | `tests/test_reference_data.py` | 7 | `^IRX` 百分比转小数并缓存、缺失 / 异常 / 超范围报价为 None 且不缓存、标的类型规范化与缓存（不缓存失败） |
-| `tests/unit/optsim.test.js` | 16 | payload、渲染、margin 开关不重算、style 开关重算、Greek 切换、腿编辑、preset、错误态、Market 开关（锁定 / 恢复输入框、来源说明、Expiry 与 Bid / ask 列）、ticker 模式锁定 rate / dividend / margin class 且请求带输入值、`^IRX` 不可用与类型未知的说明、ticker 模式的 `"atm"`、没有 ticker 时的 empty 态、ticker 变化重算、break-even IV 小图与表 |
-| `tests/e2e/test_optsim.py` | 4 | 首次打开自动运行（含 break-even IV 小图与表）、两个开关、服务端校验错误、ticker 模式（`yf_stub` 的链；其 `^IRX` 不合理、类型未知，验证退回输入 rate 与 single stock margin） |
+| `tests/unit/optsim.test.js` | 20 | 状态持久化（保存、恢复含 ticker 模式、垃圾数据与存储抛错时回退）、payload、渲染、margin 开关不重算、style 开关重算、Greek 切换、腿编辑、preset、错误态、Market 开关（锁定 / 恢复输入框、来源说明、Expiry 与 Bid / ask 列）、ticker 模式锁定 rate / dividend / margin class 且请求带输入值、`^IRX` 不可用与类型未知的说明、ticker 模式的 `"atm"`、没有 ticker 时的 empty 态、ticker 变化重算、break-even IV 小图与表 |
+| `tests/e2e/test_optsim.py` | 5 | 刷新后保留腿数与开关、首次打开自动运行（含 break-even IV 小图与表）、两个开关、服务端校验错误、ticker 模式（`yf_stub` 的链；其 `^IRX` 不合理、类型未知，验证退回输入 rate 与 single stock margin） |
 
 另外 `tests/test_provider_seam.py` 覆盖 `fetch_instrument_type` 对 yfinance quote type 的映射。
 
@@ -203,13 +203,15 @@ American 精度（400 个随机状态，对 2000-step 树，按行权价 100 计
 ### 1.7 已知限制与技术债
 
 1. Margin 是近似：没有 broker house add-on、concentration、TIMS vol shock、class group offset。
-2. Reg-T 按类型数腿数判断 cover，不看到期日：long 腿早于 short 腿到期（reverse calendar）会被当成 defined_risk，占用被低估。（§5 M1.1）
+2. ~~Reg-T 不看到期日判断 cover~~ —— 已修（2026-10-23，M1.1）：long 腿只有在到期不早于 short 时才算 cover，
+   reverse calendar 按 naked short + long 计（`conservative`），long 到期后按 naked。
 3. Reg-T 的 conservative 档（比例价差等混合结构）是保守近似：未被覆盖的 short 按裸卖，long 按全额。
 4. PM 只在每个日期的 entry spot 处计算，不覆盖整个 spot 网格。
 5. 没有 skew dynamics、term structure、event vol、离散股息（所以除息日前 American call 的提前行权没有建模）。
 6. American 只做估值：不输出行权边界，网格上也没有指派。
 7. CLI 与 Web 的数值有小差异（树的步数、切片、IV shift 只在 entry），以及 §1.3 的单位不一致。
-8. 标签页输入不持久化，刷新后回到默认 preset 和 Hypothetical 模式。（§5 M1.2）
+8. ~~标签页输入不持久化~~ —— 已修（2026-10-23，M1.2）：legs、输入和三个开关存在 `localStorage['optsim.v1']`；
+   Greek 图的选择不保存。
 9. 手机宽度：`.app-body { align-items: flex-start }` 让 main panel 以内容最小宽度为下限。本标签页用
    `contain: inline-size` 处理了；Option Pricing Matrix 标签页仍有横向溢出（390 px 下页面宽约 3,100 px），
    是既有问题。
@@ -280,12 +282,12 @@ v0.3（[optsim_design.md](optsim_design.md)）是长期设计。已实现的只�
 
 ### M1 — 小步加固（相互独立，可先做）
 
-**M1.1 Reg-T：cover 要求 long 腿到期不早于 short 腿**
+**M1.1 Reg-T：cover 要求 long 腿到期不早于 short 腿** —— ✅ 2026-10-23
 - 改动：`core/optsim/margin.py::regt_bpr` 增加每腿 dte 参数；同类型的 long 只有在到期日 ≥ 被覆盖的 short 时才计入 cover；`engine.py` 传参。
 - 验收：reverse calendar（short 60 DTE / long 30 DTE）不再是 `defined_risk`；正常 calendar 与现有测试结果不变。
 - 不做：house 规则、covered call / collar。
 
-**M1.2 标签页输入持久化**
+**M1.2 标签页输入持久化** —— ✅ 2026-10-23（另外保存了 Market / Exercise / Margin 开关）
 - 改动：`static/optsim.js` 把 legs 与市场输入存进一个 `localStorage` key（读写都包 try/catch，存储不可用时退化为不持久化）；首次打开先恢复，没有记录才用默认 preset。
 - 验收：vitest 覆盖保存 / 恢复 / 存储抛错三种情况；e2e 刷新后腿数不变。
 
@@ -356,3 +358,4 @@ futu 快照与价差表、PIT 复盘、SQLite run registry 与 `.npz` 产出物�
 | 2026-10-20 | 本文与 v0.3 参考设计入库，供后续接力开发 |
 | 2026-10-21 | Market 开关（ticker 模式：spot、上市到期日 / strike、mid 反解的 IV 来自 header ticker 的期权链）；每腿 break-even IV 图与表；`implied_vol`、`breakeven_iv`、`core/optsim/market.py`；`strike: "atm"`；preload payload 带 `fetched_at`；ADR 0013 改为 Accepted；修正与代码不一致的文档 |
 | 2026-10-21 | Ticker 模式：rate 取 `^IRX`（不可用时退回输入）、dividend yield = 0、margin class 按标的类型自动选（`margin_class`）；provider seam 加 `instrument_type()`；`services/market/reference_data.py`、`services/options/optsim_ticker.py` |
+| 2026-10-23 | M1.1：Reg-T cover 要求 long 腿到期不早于 short（`regt_bpr(..., dtes)`，Hall 条件匹配）；M1.2：标签页状态存进 `localStorage['optsim.v1']` |
