@@ -8,10 +8,12 @@ Context:
     max(pct·S − OTM, 10%) and a credit spread needs width − credit; under
     portfolio margin the requirement is the worst modelled loss.
   - Reg-T covers three cases exactly or conservatively:
-      defined_risk  every short covered by a long of the same type
-                    (verticals, condors, butterflies, calendars, long options)
+      defined_risk  every short covered by a long of the same type that expires
+                    no earlier (verticals, condors, butterflies, calendars, long options)
       naked         no long legs (short puts/calls, straddles, strangles)
       conservative  anything else: each side priced alone, uncovered shorts as naked
+    A long that expires before the short it would cover covers nothing: a reverse
+    calendar (short far, long near) is margined as a naked short plus a long.
   - Portfolio margin is a TIMS-style proxy: revalue the position at 10 equidistant
     spot points (IV and time held fixed) and take the largest loss, floored at
     0.375 × multiplier per contract. Broker house add-ons are not modelled.
@@ -20,7 +22,7 @@ Context:
 Contracts:
   - PRODUCTS: dict[str, ProductRule]
   - margin_class(symbol, instrument_type) -> str   # a PRODUCTS key
-  - regt_bpr(kinds, strikes, qtys, values, spot, multiplier, product) -> (np.ndarray, str)
+  - regt_bpr(kinds, strikes, qtys, values, spot, multiplier, product, dtes=None) -> (np.ndarray, str)
   - pm_offsets(product) -> np.ndarray   # 11 spot offsets, index 0 is the unshocked point
   - pm_bpr(values_at_offsets, n_contracts, multiplier, all_long) -> np.ndarray
 Dependencies UPWARD:
@@ -113,28 +115,41 @@ def _naked_base(is_call, strikes, spot, pct):
     return np.maximum(pct * spot - otm, floor)
 
 
-def regt_bpr(kinds, strikes, qtys, values, spot, multiplier: int, product: str) -> tuple[np.ndarray, str]:
+def _covered(qtys: np.ndarray, dtes: np.ndarray, side: np.ndarray) -> bool:
+    """Every short contract on ``side`` has a long on ``side`` expiring no earlier.
+
+    Hall's condition for this ordering: at every short expiry t, the longs expiring
+    on or after t must number at least the shorts expiring on or after t.
+    """
+    shorts, longs = side & (qtys < 0), side & (qtys > 0)
+    return all(qtys[longs & (dtes >= t)].sum() >= -qtys[shorts & (dtes >= t)].sum() for t in np.unique(dtes[shorts]))
+
+
+def regt_bpr(kinds, strikes, qtys, values, spot, multiplier: int, product: str, dtes=None) -> tuple[np.ndarray, str]:
     """Reg-T buying-power reduction in dollars over the cells of ``spot``.
 
     ``values`` has shape (n_legs, n_cells): current option value per share;
-    ``qtys`` are signed contract counts (+long, −short).
+    ``qtys`` are signed contract counts (+long, −short); ``dtes`` are the legs'
+    days to expiry, which decide what can cover what (all equal when omitted).
     """
     pct = _rule(product).naked_pct
     is_call = np.array([k == "call" for k in kinds])
     strikes = np.asarray(strikes, dtype=float)
     qtys = np.asarray(qtys, dtype=float)
+    dtes = np.zeros(len(qtys)) if dtes is None else np.asarray(dtes, dtype=float)
     spot = np.atleast_1d(np.asarray(spot, dtype=float))
     values = np.asarray(values, dtype=float).reshape(len(qtys), -1)
     short, long_ = qtys < 0, qtys > 0
     n_short = {c: -qtys[(is_call == c) & short].sum() for c in (True, False)}
     n_long = {c: qtys[(is_call == c) & long_].sum() for c in (True, False)}
+    covered = {c: _covered(qtys, dtes, is_call == c) for c in (True, False)}
 
     def defined(mask):
         loss = _max_intrinsic_loss(is_call[mask], strikes[mask], qtys[mask])
         return np.maximum(loss + (qtys[mask, None] * values[mask]).sum(axis=0), 0.0)
 
     base = _naked_base(is_call, strikes, spot, pct)
-    if all(n_long[c] >= n_short[c] for c in (True, False)):
+    if all(covered.values()):
         bpr, method = defined(np.ones(len(qtys), dtype=bool)), "defined_risk"
     elif n_long[True] + n_long[False] == 0:
         req = {
@@ -156,7 +171,7 @@ def regt_bpr(kinds, strikes, qtys, values, spot, multiplier: int, product: str) 
             side = is_call == c
             if n_short[c] == 0:
                 bpr = bpr + (qtys[side, None] * values[side]).sum(axis=0)
-            elif n_long[c] >= n_short[c]:
+            elif covered[c]:
                 bpr = bpr + defined(side)
             else:
                 shorts, longs = side & short, side & long_

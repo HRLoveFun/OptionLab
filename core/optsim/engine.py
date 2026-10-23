@@ -108,6 +108,7 @@ def scenario_grid(
     q = np.array([_qty(leg) for leg in position.legs], dtype=float)
     kinds = [leg.option_type for leg in position.legs]
     strikes = np.array([leg.strike for leg in position.legs])
+    dtes = np.array([leg.dte for leg in position.legs], dtype=float)
     entry_value = float(m * sum(qi * leg.premium for qi, leg in zip(q, position.legs, strict=True)))
 
     shape = (len(shifts), len(days), n_spots)
@@ -132,7 +133,7 @@ def scenario_grid(
                 continue
             kinds_live = [k for k, keep in zip(kinds, live, strict=True) if keep]
             regt[v, d], methods[d] = regt_bpr(
-                kinds_live, strikes[live], q[live], prices[live, d, :], spots, m, position.product
+                kinds_live, strikes[live], q[live], prices[live, d, :], spots, m, position.product, dtes=dtes[live]
             )
             pm_live = m * np.tensordot(q[live], pm_prices[live, d], axes=1)  # (11,)
             pm[v, d] = pm_bpr(pm_live, float(np.abs(q[live]).sum()), m, all_long=bool((q[live] > 0).all()))

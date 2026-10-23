@@ -137,6 +137,52 @@ def test_regt_long_option_costs_its_premium():
     assert _regt([("call", 100.0, 2, 3.0)], 100.0) == (pytest.approx(600.0), "defined_risk")
 
 
+def test_regt_calendar_is_defined_risk_but_a_reverse_calendar_is_not():
+    spot = np.array([100.0])
+    # Calendar: the long 60-day call covers the short 30-day call; Reg-T is the net debit.
+    bpr, method = regt_bpr(
+        ["call", "call"], [100.0, 100.0], [-1, 1], [[2.0], [3.5]], spot, 100, "equity", dtes=[30, 60]
+    )
+    assert (float(bpr[0]), method) == (pytest.approx(150.0), "defined_risk")
+    # Reverse calendar: the long expires first and covers nothing — a naked short (20% x 100) plus the long.
+    bpr, method = regt_bpr(
+        ["call", "call"], [100.0, 100.0], [-1, 1], [[3.5], [2.0]], spot, 100, "equity", dtes=[60, 30]
+    )
+    assert (float(bpr[0]), method) == (pytest.approx(2200.0), "conservative")
+
+
+def test_regt_cover_matches_shorts_to_longs_by_expiry():
+    kinds, strikes, qtys, values, spot = (
+        ["put"] * 4,
+        [100.0, 100.0, 95.0, 95.0],
+        [-1, -1, 1, 1],
+        np.ones((4, 1)),
+        [100.0],
+    )
+    # Longs at 45 and 60 days cover shorts at 30 and 60 days...
+    assert regt_bpr(kinds, strikes, qtys, values, spot, 100, "equity", dtes=[30, 60, 45, 60])[1] == "defined_risk"
+    # ...longs at 30 and 60 leave one of two 60-day shorts covered only by a long that expires first.
+    assert regt_bpr(kinds, strikes, qtys, values, spot, 100, "equity", dtes=[60, 60, 30, 60])[1] == "conservative"
+
+
+def test_scenario_grid_margins_a_reverse_calendar_as_naked_until_the_long_expires():
+    mkt = Market(spot=100.0, rate=0.045, div_yield=0.0)
+    legs = [
+        make_leg("call", "short", 100.0, 60, mkt, iv=0.25),
+        make_leg("call", "long", 100.0, 30, mkt, iv=0.25),
+    ]
+    rows = time_profile(
+        scenario_grid(Position(legs, product="equity"), mkt, n_spots=11, days=[0, 15, 45], iv_shifts=(0.0,))
+    )
+    assert [r["regt_method"] for r in rows] == ["conservative", "conservative", "naked"]
+    normal = [make_leg("call", "short", 100.0, 30, mkt, iv=0.25), make_leg("call", "long", 100.0, 60, mkt, iv=0.25)]
+    rows = time_profile(
+        scenario_grid(Position(normal, product="equity"), mkt, n_spots=11, days=[0, 15], iv_shifts=(0.0,))
+    )
+    assert [r["regt_method"] for r in rows] == ["defined_risk", "defined_risk"]
+    assert rows[0]["regt"] == pytest.approx(rows[0]["value"])  # the net debit
+
+
 def test_pm_offsets_span_the_product_range():
     off = pm_offsets("index")
     assert off[0] == 0.0 and len(off) == 11
