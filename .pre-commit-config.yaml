@@ -1,6 +1,15 @@
 repos:
   - repo: local
     hooks:
+      # FAIL-only for now: WARN stays advisory until it has been zero for two
+      # weeks, then add `--strict` here and in .github/workflows/doc-guard.yml.
+      - id: doc-check
+        name: doc-check (doc map / vocabulary / file reconciliation)
+        entry: bash scripts/doc-check.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: doc-guard
         name: doc-guard (tag/architecture/link checks)
         entry: python3 scripts/doc_guard.py --files
