@@ -1,5 +1,7 @@
 # Automation: Keeping AI-Context Artefacts Fresh
 
+> L2 | 权威：文档自动化的三层机制与失败模式 | 不权威：当前是否通过（看 CI）、约定条文
+
 > **Goal**: Keep the comment tags, docstrings, project docs, ADRs, glossary
 > accurate as the codebase iterates — with the
 > minimum possible human babysitting.

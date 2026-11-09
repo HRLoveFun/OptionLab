@@ -1,5 +1,7 @@
 # Architecture Review — Scorecard, Debt Registry & Guardrails
 
+> L2 | 权威：8 维评分、债务登记与守卫机制 | 不权威：批次状态（见 STATUS.md）、逐模块职责
+
 > **Audience**: contributors and AI code reviewers. This is the standing record
 > of the 2026-09 architecture review: the scoring framework, the registered
 > tech-debt whitelist, and how the guardrails keep the score from regressing.
@@ -27,7 +29,7 @@ good, 5.5–6.9 passing but fragile, < 5.5 refactor needed.
 The dominant finding was not the structure itself but D7: the layer rule in
 `scripts/doc_guard.py` had three blind spots (routes layer entirely unpoliced,
 utils exempted, core→data_pipeline treated as legal), which let the code drift
-from the architecture documented in [CODEBUDDY.md](../CODEBUDDY.md).
+from the architecture documented in [docs/architecture.md](architecture.md).
 
 **After remediation (same day): ≈ 8.3 / 10.** All layer violations are either
 fixed or registered in §2, cycles are zero, and the guardrails cover every
@@ -112,6 +114,8 @@ utils         → (leaf: nothing upward)
 
 ## 4. Completed in the 2026-09 remediation
 
+> 本节是历史记录（L3 性质）；批次状态与证据以 `STATUS.md` 为准。
+
 1. `doc_guard.py`: routes/utils brought under `import-direction`; new rules
    `core-purity`, `db-access`, `single-yf-exit`; suppression is now per-line.
 2. `OptionsChainAnalyzer` made I/O-free — snapshot injected by services.
@@ -150,6 +154,8 @@ utils         → (leaf: nothing upward)
    `Dependencies:` blocks and docs were re-pointed in the same batch.
 
 ## 5. Open items (next batches)
+
+> 未完成项列表以 `STATUS.md` 为准；本节只保留债务与守卫的说明性上下文。
 
 1. **§2 debt paydown** (easiest first): `_query.get_latest_spot` → `yf_client` — **done
    2026-09-03**; `health`/`portfolio` SQL → `repos.py` — **done 2026-09-03**; `market_review`

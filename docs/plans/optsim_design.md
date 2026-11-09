@@ -1,5 +1,7 @@
 # optsim — 期权组合模拟器（Option Portfolio Simulator）
 
+> L3 | 权威：optsim v0.3 长期设计参考 | 不权威：当前状态（见 STATUS.md）；它不是工单
+
 **架构与功能设计 · v0.3 · 暂不含 UI**
 
 - 归属：OptionLab（`HRLoveFun/OptionLab`）子功能；2026-10-19；取代 v0.2
@@ -1009,14 +1011,14 @@ python scripts/optsim.py program strangle_program.toml
 - `docs/glossary.md`：VRP（measure 与 basis）、SSR、variance clock、EEP、Reg-T、portfolio margin、ATM IV vs variance-swap level、edge ledger 与残差；同时更新 Greeks 条目中「假设 European exercise」的说明，指出 optsim 支持 American。（Reg-T、PM、BPR、sticky-strike 与 Greeks 条目已在 2026-10-19 更新。）
 - `docs/constraints.md`：MC 只在 CLI 离线运行；假设场景必须带来源标签。
 - `docs/architecture_review.md` §3 层表、`docs/l0_architecture.md`（`data/optsim/`）、`.gitignore`。
-- `AGENTS.md`、`CLAUDE.md`、`CODEBUDDY.md` 的摘要镜像；最后运行 `doc_guard.py` 与 `arch_metrics.py --check`。
+- `AGENTS.md` 的指针在 `DOC_MAP.md` / `STATUS.md` 登记（`CLAUDE.md`、`CODEBUDDY.md` 已软链到 `AGENTS.md`）；最后运行 `doc_guard.py`、`doc-check.sh` 与 `arch_metrics.py --check`。
 
 ---
 
 ## 10. 路线图
 
 > 现状（2026-10-20）：Phase 1 的最小子集（European + American grid、两种 margin、CLI）与 Phase 5 的 Grid 标签页
-> 已完成；其余未开始。实际执行顺序以 [optsim.md](optsim.md) §5 为准。
+> 已完成；其余未开始。**当前状态以 `STATUS.md` 为准**，实际执行顺序以 [optsim.md](optsim.md) §5 为准。
 
 | 阶段 | 范围 | 退出标准 |
 |---|---|---|

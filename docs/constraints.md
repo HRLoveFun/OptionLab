@@ -1,5 +1,7 @@
 # Project Constraints
 
+> L1 | 权威：外部与历史约束、故意保留的领域常数 | 不权威：模块结构、批次进度、代码约定
+
 > **Audience**: humans and AI code reviewers. Read this before suggesting refactors.
 > Items here are **deliberate** — not bugs, not tech debt. Changing them requires an ADR (see [docs/decisions/](decisions/)).
 

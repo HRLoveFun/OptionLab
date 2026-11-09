@@ -1,5 +1,7 @@
 # Reorganization Plan: Business Lines, Parameter Ownership & Data-Pipeline Seams
 
+> L3 | 权威：2026-09 业务线重组的方案与验收口径 | 不权威：当前状态（见 STATUS.md）
+
 **Date**: 2026-09-10 (plan) | **Owner**: repo owner
 **ADRs**: [0011](../decisions/0011-pluggable-data-provider-seam.md) (data-provider seam + canonical schema — **Accepted**),
 [0012](../decisions/0012-parameter-ownership-and-prefetch.md) (parameter ownership + readiness prefetch — **Accepted**)
@@ -30,9 +32,10 @@
 5. **Resolve the batch's §8 decision gate first.** Each open question names the
    batch it blocks; fold the answer into this doc or a new ADR *before* writing
    that batch's code.
-6. **Docs move first.** Update `docs/` then mirror into `CLAUDE.md` /
-   `CODEBUDDY.md` / `.github/copilot-instructions.md` — same PR. Run
-   `python scripts/doc_guard.py` and `python scripts/regen_adr_index.py`.
+6. **Docs move first.** Update `docs/` (single source), then the rows it affects in
+   `DOC_MAP.md` / `STATUS.md`. `CLAUDE.md` / `CODEBUDDY.md` are symlinks to `AGENTS.md` and
+   `.github/copilot-instructions.md` only routes, so there is nothing to mirror into them.
+   Run `python scripts/doc_guard.py`, `bash scripts/doc-check.sh` and `python scripts/regen_adr_index.py`.
 7. **Scope discipline.** If you find something worth doing that is not in a §6
    row, add a row (or a note under §8) — do not fold it into the batch in hand.
 
@@ -263,7 +266,7 @@ Rules:
 - **Persistence**: one `state/` store per module param-group (e.g.
   `state/marketParamsState.js`, `state/optionFilterState.js`), each backed by its
   own `localStorage` key, replacing the single `marketAnalysisConfig` blob and
-  the hidden-field bridge. Follows `docs/frontend_convergence.md` ("new features
+  the hidden-field bridge. Follows `docs/plans/frontend_convergence.md` ("new features
   read/write through `state/`").
 - **Submit contract change**: `POST /` no longer carries the market-analysis
   parameters as hidden fields. Instead:
@@ -858,7 +861,7 @@ watch-list item / F7b.)
 - Data layer: `data_pipeline/read/facade.py`, `orchestrate/{update,backfill}.py`, `providers/`, `store/{db,repos}.py`, `ingest/ohlcv.py`
 - Frontend: `templates/partials/parameters_bar.html`, the module toolbars in `templates/partials/tab_*.html`, `static/main.js`, `static/moduleParams.js`, `static/option-chain.js`
 - `docs/decisions/0002-yfinance-as-sole-data-source.md`, `0004-no-iv-history-from-yfinance.md`, `0005-token-bucket-throttle.md`
-- `docs/constraints.md` §1–§6, `docs/frontend_architecture.md`, `docs/frontend_convergence.md`
+- `docs/constraints.md` §1–§6, `docs/frontend_architecture.md`, `docs/plans/frontend_convergence.md`
 - `archive/futu_integration/field_mapping.md`,
   [`futu_provider_integration.md`](futu_provider_integration.md) (futu second-provider exploration)
 

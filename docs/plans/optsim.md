@@ -1,5 +1,7 @@
 # Development Plan: optsim — 期权组合情景模拟（Position Simulator）
 
+> L3 | 权威：optsim 的 as-built 现状、接口契约与路线图 | 不权威：全局进度（见 STATUS.md）、v0.3 长期设计（见 optsim_design.md）
+
 **Status**: 核心 + 标签页已合并（PR #19，2026-10-20，merge `b4458e9`）；ticker 模式与 break-even IV 图（2026-10-21）｜ **ADR**: [0013](../decisions/0013-optsim-scenario-engine.md)（Accepted）｜ **长期设计**: [optsim_design.md](optsim_design.md)（v0.3，参考用，不是工单）
 
 > 给接手的开发者 / Claude Code：先读 §0，再从 §5 挑下一个 PR。§1–§4 是现状，动代码前对照；
@@ -35,7 +37,7 @@
 
 - **精简优先**：每个 PR 一个可验证的增量；不要一次性实现 v0.3 设计的全部内容。v0.3 是方向和参考，
   不是工单。产品层面的取舍不确定时，先问用户（§6 列了已知的问题）。
-- **语言**：文档中文正文、英文术语（项目约定）；代码、注释、日志、标识符用英文（仓库约定，见 `CLAUDE.md`）。
+- **语言**：文档中文正文、英文术语（项目约定）；代码、注释、日志、标识符用英文（仓库约定，见 `AGENTS.md` 与 `docs/CONVENTIONS.md`）。
 - **流程**：每个任务一个 worktree（ADR 0009：`python scripts/worktree.py create <task>`）；
   commit 用 conventional commit 英文标题；PR 描述中文，按 `.github/PULL_REQUEST_TEMPLATE.md`，
   动了 UI 就附上 `docs/frontend_architecture.md` 末尾的 P1–P5 checklist。

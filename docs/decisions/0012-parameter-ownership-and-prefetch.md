@@ -157,7 +157,7 @@ and an `input`+`change` double-emit race — and are pinned by `tests/unit/param
 - Follow-up: batches B5–B8 in
   [`docs/plans/business_line_reorg.md`](../plans/business_line_reorg.md) §6;
   update `docs/frontend_architecture.md` (layout diagram, tab table, streaming
-  section) and `docs/frontend_convergence.md` in the same batches.
+  section) and `docs/plans/frontend_convergence.md` in the same batches.
 
 ## References
 
