@@ -13,6 +13,11 @@ jobs:
         with:
           fetch-depth: 0  # need full history for diff
 
+      # FAIL-only for now: WARN stays advisory until it has been zero for two
+      # weeks, then switch to `bash scripts/doc-check.sh --strict`.
+      - name: Reconcile DOC_MAP with the files
+        run: bash scripts/doc-check.sh
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
