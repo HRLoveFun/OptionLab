@@ -1,5 +1,7 @@
 # Exploration: futu-api as a Second Data Provider
 
+> L3 | 权威：旧的 Futu provider 接入方案记录 | 不权威：当前 provider 实现（见 docs/architecture.md）
+
 **Date**: 2026-09-11, updated 2026-09-11 (Part F + mainstream-vs-plan pass;
 §3.6 module-split pass; §2.5 HV-field check) | **Owner**: repo owner |
 **Status**: EXPLORATION — no futu code, no new ADR

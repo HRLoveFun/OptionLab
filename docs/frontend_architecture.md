@@ -1,5 +1,7 @@
 # Frontend Architecture
 
+> L2 | 权威：前端契约 P1–P5、状态机与 tab 规则 | 不权威：后端分层、批次进度
+
 > Architecture overview of the OptionView Market Dashboard frontend.
 
 ---

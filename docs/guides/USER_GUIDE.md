@@ -1,5 +1,7 @@
 # Market Dashboard — User Guide
 
+> L2 | 权威：各 tab 的用法、公式与解读 | 不权威：实现细节与接口契约
+
 This guide explains every tab in the Market Dashboard, covering the concepts, formulas, and interpretation of each analytical component.
 
 ---

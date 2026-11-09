@@ -1,5 +1,7 @@
 # static/state/
 
+> L2 | 权威：state 模块的契约与迁移规则 | 不权威：完整前端口径（见 docs/frontend_architecture.md）
+
 Centralized client-side state, replacing ad-hoc globals like
 `window._chainCache`, `window._mrLoaded`, `let _ocChainData`, etc.
 

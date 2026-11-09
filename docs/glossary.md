@@ -1,5 +1,7 @@
 # Glossary
 
+> L1 | 权威：领域术语与常数的含义 | 不权威：实现位置与配置项
+
 > Domain terms used throughout this codebase. When AI or new contributors encounter
 > a term they're unsure about, check here before assuming.
 

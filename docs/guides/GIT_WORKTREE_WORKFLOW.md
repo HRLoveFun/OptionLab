@@ -1,5 +1,7 @@
 # Git Worktree Workflow — Per-Task Isolation (ADR 0009)
 
+> L2 | 权威：worktree 的创建、使用与清理流程 | 不权威：为什么这样隔离（见 ADR 0009）、其他约定
+
 Every development task runs in its **own git worktree**: an independent checkout
 directory with its own branch and its own `.venv`. The main workspace stays on
 `main`, clean, and is never used for task edits.

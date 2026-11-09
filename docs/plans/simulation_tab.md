@@ -1,6 +1,8 @@
 # Development Plan: Simulation Tab (Client-Side Payoff Simulator)
 
-**Branch**: `feat/simulation-tab` | **Date**: 2026-09-02 | **ADR**: [0007](decisions/0007-public-github-pages.md)
+> L3 | 权威：Simulation tab 当时的方案与阶段划分 | 不权威：当前实现（见 docs/frontend_architecture.md）
+
+**Branch**: `feat/simulation-tab` | **Date**: 2026-09-02 | **ADR**: [0007](../decisions/0007-public-github-pages.md)
 
 **Input**: User requirement — a "Simulation" tab that, given implied volatility,
 expiration dates, and strikes, simulates the expiry payoff of options. Running it on

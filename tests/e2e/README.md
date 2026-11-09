@@ -1,5 +1,7 @@
 # OptionLab E2E Tests (Playwright)
 
+> L2 | 权威：E2E 怎么跑、覆盖什么 | 不权威：其余测试约定（见 docs/CONVENTIONS.md）
+
 Browser-based smoke tests that exercise the real Flask app rendered in
 Chromium via Playwright. These complement the existing pytest unit and
 integration tests by catching the failure modes that only surface in

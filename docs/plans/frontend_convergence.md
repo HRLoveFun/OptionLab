@@ -1,5 +1,7 @@
 # Frontend Architecture Convergence Plan
 
+> L3 | 权威：前端收敛计划与当时的落地记录 | 不权威：当前 UI 契约（见 docs/frontend_architecture.md）
+
 The frontend currently mixes three styles inherited from incremental
 refactors:
 

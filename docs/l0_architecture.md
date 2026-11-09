@@ -1,8 +1,10 @@
 # L0 File Architecture — 顶层骨架清单与整改批次
 
+> L2 | 权威：顶层目录骨架与当年整改批次的方案 | 不权威：批次状态（见 STATUS.md）、运行时请求流（见 docs/architecture.md）
+
 > **Audience**: AI reviewers + contributors who need the "shape" of the repo before
 > touching any module. L1 (per-package internals) is documented in
-> [`CODEBUDDY.md`](../CODEBUDDY.md) §Architecture and
+> [`docs/architecture.md`](architecture.md) and
 > [`docs/architecture_review.md`](architecture_review.md).
 >
 > **Snapshot**: 2026-09-08 · commands to refresh the numbers are in §6.
@@ -60,9 +62,10 @@ app.py → routes/ → services/ → core/ → data_pipeline/ → utils/
 
 | File | Audience | Note |
 |---|---|---|
-| `README.md` (440 lines) | humans | duplicate architecture source (P2-1) |
-| `CODEBUDDY.md` (226 lines) | AI | duplicate architecture source (P2-1) |
-| `docs/` (19 md) | contributors | `architecture_review.md` (scorecard + debt registry), `automation.md`, `constraints.md`, `frontend_architecture.md`, `glossary.md`, `decisions/` (10 ADRs) |
+| `README.md` | humans | entry point: identity, limits, quick start (architecture moved to `docs/architecture.md`, 2026-11) |
+| `AGENTS.md` | agent + AI | the single entry point; `CLAUDE.md` / `CODEBUDDY.md` are symlinks to it (2026-11) |
+| `DOC_MAP.md` / `STATUS.md` | agent + humans | document map (tags) and the only progress home (2026-11) |
+| `docs/` (33 md) | contributors | `architecture.md`, `CONVENTIONS.md`, `architecture_review.md` (scorecard + debt registry), `automation.md`, `constraints.md`, `frontend_architecture.md`, `glossary.md`, `decisions/` (13 ADRs) |
 
 ### D. Generated artefacts & local data (the "dust zone" of L0)
 
@@ -148,7 +151,7 @@ read     → orchestrate           # the read path triggers refreshes
 |---|---|---|
 | ~~P1-1~~ | 严重 · **已整改 2026-09-08** | generated Pages mirror untracked + git-ignored (42 files) |
 | ~~P1-2~~ | 严重 · **已整改 2026-09-08** | `static/sidebar.js` committed (`7ef2a33`) + guard test added (`65c01f6`); the 8 favicon/webmanifest assets referenced by `templates/index.html:8-13` were committed by the same work stream, so the guard is green |
-| ~~P2-1~~ | 建议 · **已整改 2026-09-08** | `README`/`CODEBUDDY.md` architecture sections now point at `docs/` as the source of truth (policy note; content still summarized in place) |
+| ~~P2-1~~ | 建议 · **已整改 2026-09-08，2026-11 收口** | architecture summary now lives only in `docs/architecture.md`; `CLAUDE.md` / `CODEBUDDY.md` are symlinks to `AGENTS.md` |
 | ~~P2-2~~ | 建议 · **已整改 2026-09-08** | charter moved to `docs/options_learning_charter_v1_2.md`; default `DB_PATH` → `data/market_data.sqlite` (`db.py`, `scheduler.py`, `.env.example`); `test.ipynb` deleted. Local `.env` still points at the root file — move `market_data.sqlite` into `data/` whenever convenient |
 | ~~P2-3~~ | 建议 · **已整改 2026-09-08** | `flask==3.1.3`, `gunicorn==26.2.0` (exact pins, matching the verified install); pip-side lock file still absent — acceptable for a 9-dependency file |
 | ~~P3-1~~ | 提示 · **已整改 2026-09-08** | vitest `coverage.include` widened to `static/**/*.js` so untested tab files show as 0% instead of disappearing |
@@ -158,6 +161,8 @@ read     → orchestrate           # the read path triggers refreshes
 ---
 
 ## 5. Remediation batches (P1-1 / P1-2)
+
+> 批次状态与证据以 `STATUS.md` 为准；本节保留当时的顺序与回滚方案（L3 性质）。
 
 Ordering matters: **P1-2 first, then P1-1** — the generated-copy cleanup must
 not be performed while `static/sidebar.js` is still untracked, otherwise the
